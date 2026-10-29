@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "providers": {
+    "weixin": {
+      "name": "微信公众号",
+      "default_platform": "wechat_article",
+      "identity_lookup": "checkAuth",
+      "login_url": "https://mp.weixin.qq.com/"
+    },
+    "juejin": {
+      "name": "掘金",
+      "default_platform": "juejin_article",
+      "login_url": "https://juejin.cn/editor/drafts"
+    },
+    "zhihu": {
+      "name": "知乎",
+      "default_platform": "zhihu_article",
+      "login_url": "https://www.zhihu.com/"
+    },
+    "csdn": {
+      "name": "CSDN",
+      "default_platform": "csdn_article",
+      "login_url": "https://www.csdn.net/"
+    },
+    "cnblogs": {
+      "name": "博客园",
+      "default_platform": "cnblogs_article",
+      "login_url": "https://www.cnblogs.com/"
+    },
+    "xiaohongshu": {
+      "name": "小红书",
+      "default_platform": "xiaohongshu_note",
+      "login_url": "https://creator.xiaohongshu.com/"
+    },
+    "douyin": {
+      "name": "抖音图文",
+      "default_platform": null,
+      "identity_note": "当前同步助手只报告登录状态，未提供账号标识"
+    },
+    "kuaishou": {
+      "name": "快手视频",
+      "default_platform": null,
+      "login_url": "https://cp.kuaishou.com/"
+    },
+    "channels": {
+      "name": "微信视频号",
+      "default_platform": null,
+      "login_url": "https://channels.weixin.qq.com/"
+    },
+    "bilibili": {
+      "name": "B站视频",
+      "default_platform": null,
+      "login_url": "https://member.bilibili.com/"
+    }
+  },
+  "platforms": [
+    {
+      "id": "wechat_article",
+      "provider": "weixin",
+      "name": "微信公众号文章",
+      "channel_id": "wechat",
+      "content_kinds": [
+        "article"
+      ],
+      "draft": true
+    },
+    {
+      "id": "wechat_image_post",
+      "provider": "weixin",
+      "name": "微信公众号贴图",
+      "channel_id": "wechat",
+      "content_kinds": [
+        "image_post"
+      ],
+      "draft": false,
+      "reason": "connector_has_no_image_post_method"
+    },
+    {
+      "id": "xiaohongshu_note",
+      "provider": "xiaohongshu",
+      "name": "小红书笔记",
+      "channel_id": "xiaohongshu",
+      "content_kinds": [
+        "note",
+        "video"
+      ],
+      "draft": false,
+      "reason": "connector_supports_longform_article_only"
+    },
+    {
+      "id": "juejin_article",
+      "provider": "juejin",
+      "name": "掘金文章",
+      "channel_id": "juejin",
+      "content_kinds": [
+        "article"
+      ],
+      "draft": true
+    },
+    {
+      "id": "zhihu_article",
+      "provider": "zhihu",
+      "name": "知乎文章",
+      "channel_id": "zhihu",
+      "content_kinds": [
+        "article"
+      ],
+      "draft": true
+    },
+    {
+      "id": "csdn_article",
+      "provider": "csdn",
+      "name": "CSDN文章",
+      "channel_id": "csdn",
+      "content_kinds": [
+        "article"
+      ],
+      "draft": true
+    },
+    {
+      "id": "cnblogs_article",
+      "provider": "cnblogs",
+      "name": "博客园文章",
+      "channel_id": "cnblogs",
+      "content_kinds": [
+        "article"
+      ],
+      "draft": true
+    },
+    {
+      "id": "douyin_video",
+      "provider": "douyin",
+      "name": "抖音视频",
+      "channel_id": "douyin",
+      "content_kinds": [
+        "video"
+      ],
+      "draft": false
+    },
+    {
+      "id": "kuaishou_video",
+      "provider": "kuaishou",
+      "name": "快手视频",
+      "channel_id": "kuaishou",
+      "content_kinds": [
+        "video"
+      ],
+      "draft": false
+    },
+    {
+      "id": "channels_video",
+      "provider": "channels",
+      "name": "微信视频号",
+      "channel_id": "channels",
+      "content_kinds": [
+        "video"
+      ],
+      "draft": false
+    },
+    {
+      "id": "bilibili_video",
+      "provider": "bilibili",
+      "name": "B站视频",
+      "channel_id": "bilibili",
+      "content_kinds": [
+        "video"
+      ],
+      "draft": false
+    }
+  ]
+}

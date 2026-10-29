@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "sources": {
+    "60028244fb76": {"kind": "daily", "times": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"]},
+    "8a49eef93fe5": {"kind": "daily", "times": ["00:00", "06:00", "12:00", "18:00"]},
+    "cc09dbccc795": {"kind": "daily", "times": ["10:00", "22:00"]},
+    "f2d271fe6e04": {"kind": "daily", "times": ["08:30", "18:30"]},
+    "xinquji": {"kind": "daily", "times": ["09:30", "19:30"]},
+    "github-trending": {"kind": "daily", "times": ["09:30"]},
+    "product-hunt": {"kind": "daily", "times": ["09:30"]},
+    "hacker-news": {"kind": "daily", "times": ["09:30"]},
+    "ruanyf-weekly": {"kind": "weekly", "weekdays": [4], "times": ["18:30"]}
+  }
+}

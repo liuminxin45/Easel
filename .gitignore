@@ -27,6 +27,14 @@ docker/data/
 # IDE
 .idea/
 *.swp
+
+# Private workbench deployment artifacts and owner data.
+native-releases/
+workbench-releases/
+data/
+.runtime/
+evidence/
+releases/
 *.swo
 *~
 

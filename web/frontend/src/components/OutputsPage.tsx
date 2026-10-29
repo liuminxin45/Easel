@@ -84,6 +84,8 @@ interface OutputsPageProps {
 export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProps) {
   const [roots, setRoots] = useState<OutputNode[]>([]);
   const [treeError, setTreeError] = useState('');
+  const [treeLoading, setTreeLoading] = useState(true);
+  const treeSeq = useRef(0);
   const [stack, setStack] = useState<string[]>([]);   // 当前所在的文件夹名称路径
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<OutputNode | null>(null);
@@ -92,8 +94,12 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
   const reqSeq = useRef(0);
 
   const load = useCallback(() => {
+    const seq = ++treeSeq.current;
     setTreeError('');
-    fetchOutputs().then(setRoots).catch(() => setTreeError('加载产物列表失败'));
+    setTreeLoading(true);
+    fetchOutputs().then((data) => { if (seq === treeSeq.current) setRoots(data); })
+      .catch((error: unknown) => { if (seq === treeSeq.current) setTreeError(error instanceof Error ? error.message : '加载产物列表失败'); })
+      .finally(() => { if (seq === treeSeq.current) setTreeLoading(false); });
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -253,15 +259,16 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
             ))}
           </h1>
           <p className="page-subtitle">
-            {atTop
+            {treeLoading && roots.length === 0 ? '正在读取项目与素材…' : treeError && roots.length === 0 ? '项目数量暂未取得' : atTop
               ? `按项目归档，共 ${roots.length} 个项目。点项目进去看成品与素材。`
               : `${dirs.length} 个文件夹 · ${files.length} 个文件（可继续点开子文件夹）`}
           </p>
         </div>
-        <button className="btn btn-sm" onClick={load}><IconRefresh size={14} /> 刷新</button>
+        <button className="btn btn-sm" onClick={load} disabled={treeLoading}><IconRefresh size={14} /> {treeLoading ? '读取中…' : '刷新'}</button>
       </div>
 
-      {treeError && <div className="notice-error">{treeError}</div>}
+      {treeError && <div className="notice-error" role="alert">内容读取失败：{treeError} <button className="btn btn-sm" onClick={load}>重试</button></div>}
+      {treeLoading && roots.length === 0 && <div className="loading" role="status">正在读取内容库…</div>}
 
       {/* 项目主题标签（进入项目根时展示） */}
       {atProjectRoot && projectMeta?.tags && projectMeta.tags.length > 0 && (
@@ -282,7 +289,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
         </div>
       )}
 
-      {empty && !treeError ? (
+      {empty && !treeError && !treeLoading ? (
         <div className="empty-state" style={{ height: 300 }}>
           <div className="empty-icon"><IconOutputs size={44} /></div>
           <p>{atTop ? '还没有产物——去对话或技能库生成第一条内容吧' : '这个文件夹是空的'}</p>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
   fetchAnalyticsPlatforms, fetchAccountAnalytics,
@@ -44,6 +44,16 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const [trends, setTrends] = useState<TrendGroup[]>([]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [outputs, setOutputs] = useState<OutputNode[]>([]);
+  const [outputsLoading, setOutputsLoading] = useState(true);
+  const [outputsError, setOutputsError] = useState('');
+  const outputsSeq = useRef(0);
+  const loadOutputs = useCallback(() => {
+    const seq = ++outputsSeq.current;
+    setOutputsLoading(true);setOutputsError('');
+    fetchOutputs().then((data) => { if (seq === outputsSeq.current) setOutputs(data); })
+      .catch((error: unknown) => { if (seq === outputsSeq.current) setOutputsError(error instanceof Error ? error.message : '读取失败'); })
+      .finally(() => { if (seq === outputsSeq.current) setOutputsLoading(false); });
+  }, []);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   // 归因层：账号创作数据
@@ -72,7 +82,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   useEffect(() => {
     fetchTrends(undefined, 6).then((d) => setTrends(d.trends)).catch(() => {});
     fetchSchedule().then(setSchedule).catch(() => {});
-    fetchOutputs().then(setOutputs).catch(() => {});
+    loadOutputs();
     fetchAccounts().then(setAccounts).catch(() => {});
     fetchIdeas().then(setIdeas).catch(() => {});
     fetchAnalyticsPlatforms().then((ps) => {
@@ -140,7 +150,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const stats: { label: string; value: string; page: Page; Icon: typeof IconChat }[] = [
     { label: '待做选题', value: String(pendingIdeas.length), page: 'ideas', Icon: IconIdea },
     { label: '待发排期', value: String(upcoming.length), page: 'calendar', Icon: IconCalendar },
-    { label: '内容项目', value: String(outputs.length), page: 'outputs', Icon: IconOutputs },
+      { label: '内容项目', value: outputsLoading && outputs.length === 0 ? '…' : outputsError && outputs.length === 0 ? '—' : String(outputs.length), page: 'outputs', Icon: IconOutputs },
     { label: '已登录账号', value: `${loggedIn}/${accounts.length}`, page: 'accounts', Icon: IconAccounts },
   ];
 
@@ -236,7 +246,9 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconOutputs size={16} /> 最近产物</span>
             <button className="dash-more" onClick={() => onNavigate('outputs')}>内容库 →</button>
           </div>
-          {recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
+            {outputsLoading && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
+            {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={loadOutputs}>重试</button></div>}
+            {!outputsLoading && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
           {recent.map((g) => (
             <div key={g.name} className="dash-output" onClick={() => onNavigate('outputs')}>
               <span className="dash-output-name">{g.meta?.title || g.name}</span>

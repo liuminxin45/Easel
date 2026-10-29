@@ -11,6 +11,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   // 缓存住旧响应（曾表现为“扫码登录后卡片仍显示未登录”）。调用方可用 options.cache 覆盖。
   const res = await fetch(`${BASE}${url}`, { cache: 'no-store', ...options });
   if (!res.ok) {
+    if (res.status === 401) throw new Error('登录已失效，请重新登录后重试。');
     // 优先显示后端返回的实质错误信息（FastAPI 的 {detail}），而不是无意义的 "API error: 400"
     let detail = '';
     try {

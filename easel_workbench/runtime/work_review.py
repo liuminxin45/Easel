@@ -117,14 +117,18 @@ def mutate(box,wid,vid,value):
         if getattr(box,'learning',None):box.learning.index_database(c)
     return result
 
-def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,format_hint=None,pending_request=None,pending_material=None,origin=None):
+def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,format_hint=None,pending_request=None,pending_material=None,origin=None,execution_task=None,creator_snapshot=None):
     """Attach a frozen data file readable even by the already-running worker."""
     if c.execute('SELECT 1 FROM toolbox_review_inputs WHERE job_id=?',(jid,)).fetchone():return
+    if creation is not None and not isinstance(creation,dict):raise ValueError('创作输入格式无效')
+    if creation is not None and 'creator' in creation and not isinstance(creation['creator'],dict):raise ValueError('执行技能选择无效')
     current=revision(c,wid,vid) if vid else 0
     if expected is not None and type(expected) is not int:raise ValueError('批注修订无效')
     if expected is not None and expected!=current:raise ReviewConflict('批注已有更新，请核对后重新提交；不会混入未看过的意见')
     current_job=c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
     requested_kind=current_job['kind'] if current_job else kind_hint
+    if execution_task is not None and (requested_kind!='discuss' or execution_task not in ('discuss','analysis')):
+        raise ValueError('只读执行任务须绑定讨论记录')
     # A revision keeps the creator and pinned capability versions of its
     # actual parent. Switching the drawer's active persona cannot re-own it.
     if vid:
@@ -167,7 +171,7 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
     # or production configuration. Unavailable skills cannot block a decision.
     studio=getattr(box,'studio',None) if origin!='human_edit' and requested_kind in ('create','change','discuss') else None
     if studio:
-        context=studio.context(wid,{**(creation or {}),**({'format':format_hint} if format_hint else {})},connection=c,candidate_id=vid,exclude_job_id=jid,task_kind=requested_kind)
+        context=studio.context(wid,{**(creation or {}),**({'format':format_hint} if format_hint else {})},connection=c,candidate_id=vid,exclude_job_id=jid,task_kind=execution_task or requested_kind,creator_snapshot=creator_snapshot)
         kind_row=c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
         kind=kind_row['kind'] if kind_row else kind_hint
         if kind in ('create','change') and context.get('blockers'):
@@ -230,7 +234,7 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
     if kind not in ('create','change'):document['creation_instructions']='本次是'+kind+'，只处理当前动作的讨论、反馈或指定范围归档；不生成、改写或重做作品。原文、参数与成品路径仅供核对。'
     if kind in ('create','change','discuss') and origin!='human_edit':
         from easel_workbench.runtime.task_runtime import freeze as freeze_task
-        snapshot=freeze_task(c,box,wid,jid,document['creation_options'],task='discuss' if kind=='discuss' else format)
+        snapshot=freeze_task(c,box,wid,jid,document['creation_options'],task=execution_task or ('discuss' if kind=='discuss' else format),creator_snapshot=creator_snapshot)
         if snapshot:
             document['creator_snapshot']=snapshot
             if kind in ('create','change'):

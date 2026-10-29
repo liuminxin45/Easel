@@ -56,6 +56,18 @@ def idle(database=None):
                     value=json.loads(raw)
                     if value.get('status') in ('running','dispatching','requested','sending'):
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
+    # The historical audit is anchored to the retained original evidence. New
+    # model receipts belong to the authoritative database's data directory.
+    # Do not inspect only the retired project's cache during later upgrades.
+    if database.parent.resolve()!=(OLD/'data').resolve():
+        retained={row['id']:row for row in status.get('retained_collection_unknown',[])}
+        for path in (database.parent/'collection/model-cache').glob('*.json'):
+            value=read(path)
+            if value.get('status') not in ('requested','uncertain'):continue
+            previous=retained.get(path.stem)
+            if previous and sha(path)==previous['cache_sha256']:continue
+            status['busy']=True
+            status.setdefault('additional',[]).append({'table':'collection_model_receipt','id':path.stem,'status':value['status']})
     return status
 
 

@@ -29,7 +29,13 @@ def combine(prefix,output,browser_output=None):
         assert result['passed'] is True
         assert result['real_AI_calls']==result['real_platform_writes']==0
     assert contracts['tests']>=184
-    assert len(browser['checks'])>=17 and len(browser['simulated_executions'])==8
+    assert len(browser['checks'])>=29 and len(browser['simulated_executions'])==10
+    for profile in ('windows-1280','android-390'):
+        names={check['check'] for check in browser['checks'] if check['profile']==profile}
+        assert 'skill-entry-candidate-exact-version-profile-pin-and-preserved-input' in names
+        assert 'discussion-to-same-work-confirmed-first-production-keeps-exact-discussion-snapshot' in names
+        for task in ('discuss','reference','learning','analysis'):
+            assert task+'-skill-card-exact-candidate-version-frozen-in-real-queue' in names
     assert len(surfaces['checks'])>=30 and len(upgrade['checks'])>=8
     isolation=browser.get('namespace_isolation') or {}
     if isolation.get('enabled'):
@@ -45,6 +51,7 @@ def combine(prefix,output,browser_output=None):
                   'simulated_native_executions':len(browser['simulated_executions'])},
         'real_AI_calls':0,'real_platform_writes':0,'mobile_validation':'browser simulation',
         'namespace_isolation':isolation,
+        'report_harness_sha256':sha(__file__),
         'harness_sha256_by_mode':{mode:v['harness_sha256'] for mode,v in validations.items()},'runtime_inputs_sha256':reference['runtime_inputs_sha256'],
         'evidence':files}
     output=Path(output);output.parent.mkdir(parents=True,exist_ok=True)

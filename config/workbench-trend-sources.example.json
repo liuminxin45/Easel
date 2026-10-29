@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "include_builtin": false,
+  "sources": [
+    {
+      "id": "60028244fb76",
+      "label": "AIHOT",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "60028244fb76"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "8a49eef93fe5",
+      "label": "NewsNow",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "8a49eef93fe5"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "cc09dbccc795",
+      "label": "AI工具集",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "cc09dbccc795"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "f2d271fe6e04",
+      "label": "观猹",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "f2d271fe6e04"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "xinquji",
+      "label": "新趣集",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "xinquji"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "github-trending",
+      "label": "GitHub Trending",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "github-trending"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "product-hunt",
+      "label": "Product Hunt",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "product-hunt"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "hacker-news",
+      "label": "Hacker News",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "hacker-news"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    },
+    {
+      "id": "ruanyf-weekly",
+      "label": "阮一峰科技爱好者周刊",
+      "type": "python",
+      "script": "../easel_workbench/collector_worker.py",
+      "args": [
+        "--source",
+        "ruanyf-weekly"
+      ],
+      "default": true,
+      "timeout_seconds": 120,
+      "refresh_seconds": 300,
+      "max_stale_seconds": 86400,
+      "env": {
+        "AI_DESK_PROJECT_ROOT": "${AI_DESK_PROJECT_ROOT}"
+      }
+    }
+  ]
+}

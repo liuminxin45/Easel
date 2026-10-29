@@ -1,0 +1,1 @@
+Derived from Easel 0.3.0, Apache-2.0. Original files are kept byte-for-byte under scripts/. SOURCE.json records source hashes. ai-news-desk adapters live outside this directory. Easel runtime, credentials, profiles and databases are not shared.

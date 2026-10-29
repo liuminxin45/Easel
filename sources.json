@@ -1,0 +1,23 @@
+{
+  "60028244fb76": {
+    "name": "AIHOT",
+    "feed": "aihot"
+  },
+  "8a49eef93fe5": {
+    "name": "NewsNow",
+    "feed": "newsnow"
+  },
+  "cc09dbccc795": {
+    "name": "AI工具集",
+    "feed": "ai-tools"
+  },
+  "f2d271fe6e04": {
+    "name": "观猹",
+    "feed": "watcha"
+  },
+  "xinquji": {"name": "新趣集", "feed": "xinquji"},
+  "github-trending": {"name": "GitHub Trending", "feed": "github-trending", "order": "rank-prefix"},
+  "product-hunt": {"name": "Product Hunt", "feed": "product-hunt"},
+  "hacker-news": {"name": "Hacker News", "feed": "hacker-news", "order": "rank-prefix"},
+  "ruanyf-weekly": {"name": "阮一峰科技爱好者周刊", "feed": "ruanyf-weekly", "kind": "periodical"}
+}

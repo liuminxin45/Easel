@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": [
+      "vite/client"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@workbench/core": [
+        "./src/workbench/core/index.ts"
+      ],
+      "@workbench/platform": [
+        "./src/workbench/platform/index.ts"
+      ],
+      "@workbench/ui-easel": [
+        "./src/workbench/ui/index.tsx"
+      ]
+    },
+    "ignoreDeprecations": "6.0"
+  },
+  "include": [
+    "src/workbench/**/*.ts",
+    "src/workbench/**/*.tsx"
+  ]
+}

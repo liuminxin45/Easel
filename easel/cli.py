@@ -205,6 +205,10 @@ def cmd_chat(_args) -> int:
 
 def cmd_web(args) -> int:
     """启动 Web 工作台（FastAPI + React），默认 http://localhost:7860。"""
+    if getattr(args, 'profile', 'easel') == 'workbench':
+        private_python=PROJECT_ROOT/'.runtime/workbench-python/Scripts/python.exe'
+        return subprocess.run([str(private_python) if private_python.is_file() else sys.executable, '-m', 'easel_workbench.entry', 'server',
+            '--root', str(PROJECT_ROOT), '--port', str(args.port)], cwd=PROJECT_ROOT).returncode
     from easel.runtime_env import web_environment
 
     port = getattr(args, "port", 7860)
@@ -260,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
     # web
     p_web = sub.add_parser("web", help="启动 Web UI")
     p_web.add_argument("--port", type=int, default=7860, help="端口（默认 7860）")
+    p_web.add_argument("--profile", choices=("easel", "workbench"), default="easel", help="Application profile")
     p_web.set_defaults(func=cmd_web)
 
     args = parser.parse_args(argv)

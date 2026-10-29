@@ -1,0 +1,18 @@
+{
+  "instance": "https://newsnow.busiyi.world",
+  "enabled_sources": [
+    "ithome",
+    "36kr-quick",
+    "solidot",
+    "hackernews",
+    "v2ex-share",
+    "juejin",
+    "sspai",
+    "producthunt",
+    "github-trending-today",
+    "chongbuluo-latest",
+    "cls-telegraph",
+    "wallstreetcn-news"
+  ],
+  "notes": "Fixed instance and source whitelist; project canonical documents provide cross-source context. Bounded requests, candidate queue, retries and acknowledgment are owned by the project."
+}

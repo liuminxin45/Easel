@@ -28,12 +28,20 @@ def production_token(c,wid):
     return json.loads(row['document']).get('discussion_token',EMPTY_TOKEN) if row else EMPTY_TOKEN
 
 
-def enqueue(box,wid,value):
+def enqueue(box,wid,value,*,execution_task='discuss',creator_snapshot=None):
+    if execution_task not in ('discuss','analysis'):
+        raise ValueError('不支持的只读讨论任务')
     wid=ident(wid);jid=ident(value.get('id'));question=text(value.get('text',''),20000,True)
     revision=value.get('revision');candidate=value.get('candidate_id') or None
     if type(revision) is not int or revision<0:raise ValueError('草稿版本无效')
     if candidate:ident(candidate)
-    signature=pack({'discussion':wid,'request':value});now=stamp()
+    identity={'discussion':wid,'request':value}
+    if execution_task!='discuss':identity['execution_task']=execution_task
+    if creator_snapshot is not None:
+        from easel_workbench.runtime.task_runtime import validated_snapshot
+        prepared=validated_snapshot(creator_snapshot,execution_task,(value.get('creative') or {}).get('creator'))
+        identity['creator_snapshot_sha256']=prepared['snapshot_sha256']
+    signature=pack(identity);now=stamp()
     with box.store.connect() as c:
         c.execute('BEGIN IMMEDIATE')
         old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
@@ -53,7 +61,7 @@ def enqueue(box,wid,value):
         c.execute('INSERT INTO toolbox_article_inputs VALUES(?,?,?)',(jid,revision,pack(document)))
         c.execute('UPDATE toolbox_works SET updated_at=? WHERE id=?',(now,wid))
         from easel_workbench.runtime.work_review import freeze as freeze_review
-        freeze_review(box,c,wid,jid,candidate,creation=value.get('creative',draft.get('creative')))
+        freeze_review(box,c,wid,jid,candidate,creation=value.get('creative',draft.get('creative')),execution_task=execution_task,creator_snapshot=creator_snapshot)
     return {'id':jid,'work_id':wid,'status':'queued'}
 
 

@@ -10,33 +10,6 @@ export interface ExtensionDiscoveryResult {accounts:ExtensionAccountObservation[
 export interface ExtensionDiscoveryProps {onImported?:()=>void;onObserved?:(accounts:ExtensionAccountObservation[])=>void;connections?:DistributionConnection[];onManage?:(connectionId:string)=>void}
 export interface ComputerExtensionObservation {accounts:ExtensionAccountObservation[];checked_at:string;source:'saved_observation'|'computer_bridge'|'computer_check'}
 export interface ReadOnlyAccountCheck {check_id:string;id?:string;status:'pending'|'running'|'completed'|'failed'|'expired';phase:string;created_at:string;updated_at?:string;expires_at:string;completed_at?:string|null;observation?:unknown;code?:string;error?:string}
-export interface AccountAutoCheckState {
- enabled:boolean;phase:string;current_check_id:string|null;current_check:ReadOnlyAccountCheck|null;
- last_check_id?:string|null;last_success_at:string|null;last_success_observation:unknown;
- next_check_at:string|null;next_retry_at:string|null;retry_count:number;server_now:string;
- retry_allowed:boolean;error_code?:string|null;last_error?:{code:string;message:string;at:string}|null;
- worker?:{online?:boolean;state?:string};runtime?:Record<string,unknown>;
-}
-export function accountAutoCheckMessage(state:AccountAutoCheckState|null):string{
- if(!state)return '正在读取自动检测状态…';
- if(!state.enabled)return '自动检测已暂停';
- return ({scheduled:'等待后台开始检测',launch_requested:'正在连接电脑检测页',page_ready:'电脑检测页已连接',extension_started:'正在读取同步助手账号',launch_uncertain:'等待电脑检测页响应',recovering:'正在恢复自动检测',waiting_next:'最近一次检测已完成',retry_wait:'本次检测未完成，将自动重试',disabled:'自动检测已暂停'} as Record<string,string>)[state.phase]||'正在核对自动检测状态';
-}
-export function accountAutoCheckCountdown(state:AccountAutoCheckState|null,serverNow:number):string{
- if(!state?.enabled)return '';
- const retry=!!state.next_retry_at,target=state.next_retry_at||state.next_check_at;
- if(!target||!['retry_wait','recovering','waiting_next'].includes(state.phase))return '';
- const remaining=Math.max(0,Math.ceil((Date.parse(target)-serverNow)/1000));if(!Number.isFinite(remaining))return '';
- if(!remaining)return retry?'等待后台自动重试':'等待后台开始下次检测';
- const time=remaining>=60?Math.floor(remaining/60)+'分'+String(remaining%60).padStart(2,'0')+'秒':remaining+'秒';
- return retry?time+'后自动重试':time+'后再次检测';
-}
-export function accountAutoCheckError(state:AccountAutoCheckState|null):string{
- if(!state?.last_error||!['retry_wait','recovering','launch_uncertain'].includes(state.phase))return '';
- const code=state.last_error.code;
- return ({extension_timeout:'同步助手尚未返回结果',extension_failed:'本次未能读取同步助手',extension_unavailable:'同步助手暂不可用',launch_failed:'电脑检测页暂未连接',launch_uncertain:'尚未确认电脑检测页响应',network_error:'本次检测连接中断',expired:'本次检测已过期',page_failed:'电脑检测页暂不可用'} as Record<string,string>)[code]||'本次检测尚未完成，保留最近成功结果';
-}
-export {useAccountAutoCheck,accountAutoCheckScopes} from './auto-check';
 export type ReadOnlyCheckEvent='page_ready'|'extension_started'|'result'|'extension_timeout'|'failed';
 export function accountCheckId(value:unknown):string{if(!value||typeof value!=='object'||Array.isArray(value))return '';const id=cleanText(own(value,'check_id')||own(value,'id'),160);return /^[A-Za-z0-9_-]{1,160}$/.test(id)?id:''}
 export function accountCheckMessage(value:Pick<ReadOnlyAccountCheck,'phase'|'status'>):string{if(value.status==='completed')return '本次电脑检测已完成';return ({launch_requested:'已请求电脑检测，等待检测页响应',page_ready:'电脑检测页已连接',checking_extension:'电脑正在读取同步助手账号',extension_started:'电脑正在读取同步助手账号',result_received:'已收到本次电脑检测结果',extension_timeout:'同步助手未在限定时间内返回账号结果',launch_failed:'电脑检测页未能启动',failed:'本次电脑检测未完成',expired:'本次检测已过期，请重新发起'} as Record<string,string>)[value.phase]||'正在核对本次电脑检测状态'}

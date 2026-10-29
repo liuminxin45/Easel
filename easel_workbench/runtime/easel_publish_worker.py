@@ -43,7 +43,7 @@ def readonly(payload,session,revision,directory,source):
     if len(matches)!=1:return {'readback':{'outcome':'unverified'},'account':account}
     return {'readback':{'outcome':'verified','matched':matches[0].as_dict()},'account':account}
 
-from easel_workbench.runtime.easel_media_worker import safe_env
+from easel_workbench.runtime.easel_connection_support import safe_env
 
 
 def main():

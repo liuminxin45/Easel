@@ -75,7 +75,31 @@ def workflow_template(task='poster'):
     return {'id':'explicit','name':'显式任务流程','source':'task_runtime.workflow_template','task':task,'steps':steps}
 
 
-def freeze(c, box, work_id, job_id, creation_options, task=None):
+def validated_snapshot(snapshot, task, selection=None):
+    """Internal prepared context: verify identity without resolving it again.
+
+    HTTP payloads cannot supply this argument. An accepted operation may retain
+    a candidate trial after the same version has subsequently been published.
+    """
+    if not isinstance(snapshot,dict) or snapshot.get('task')!=task:
+        raise ValueError('冻结执行上下文与本次任务不一致')
+    expected=snapshot.get('snapshot_sha256')
+    if not isinstance(expected,str) or digest({k:v for k,v in snapshot.items() if k!='snapshot_sha256'})!=expected:
+        raise ValueError('冻结执行上下文字节已变化')
+    selection=selection or {}
+    if selection.get('profile_id',snapshot['profile']['id'])!=snapshot['profile']['id']:
+        raise ValueError('冻结执行画像不一致')
+    if selection.get('profile_revision',snapshot['profile']['revision'])!=snapshot['profile']['revision']:
+        raise ValueError('冻结执行画像修订不一致')
+    refs=selection.get('skills')
+    if refs is not None and refs!=[{'id':r['id'],'version':r['version']} for r in snapshot['skills']]:
+        raise ValueError('冻结执行技能版本不一致')
+    if 'trial' in selection and selection['trial'] is not snapshot.get('trial',False):
+        raise ValueError('冻结执行试用身份不一致')
+    return copy.deepcopy(snapshot)
+
+
+def freeze(c, box, work_id, job_id, creation_options, task=None, *, creator_snapshot=None):
     """Called only while accepting a new operation, never to backfill old jobs."""
     initialize(c)
     old = read_run(c, job_id)
@@ -101,9 +125,10 @@ def freeze(c, box, work_id, job_id, creation_options, task=None):
             raise
         return None
     try:
-        snapshot = service.resolve(profile_id=profile_id, task=task or creation.get('format', 'poster'),
-            skill_refs=selection.get('skills'), allow_trial=selection.get('trial') is True,
-            profile_revision=selection.get('profile_revision'), c=c, allow_historical_profile=prior is not None or owner is not None)
+        execution_task=task or creation.get('format','poster')
+        snapshot = validated_snapshot(creator_snapshot,execution_task,selection) if creator_snapshot is not None else service.resolve(
+            profile_id=profile_id,task=execution_task,skill_refs=selection.get('skills'),allow_trial=selection.get('trial') is True,
+            profile_revision=selection.get('profile_revision'),c=c,allow_historical_profile=prior is not None or owner is not None)
     except FileNotFoundError:
         if creation.get('creator'):
             raise
@@ -563,15 +588,24 @@ def observed_call(box, task, payload, prompt, snapshot=None, task_id=None):
         finish_call(box, call_id, 'completed', output[-1] if output else None)
 
 
+def request_snapshot(box, value, task, c, *, fallback_profile='oil-pig'):
+    """Resolve explicit execution choices, separate from a method being revised."""
+    selection=value.get('creator')
+    if selection is None:selection={}
+    if not isinstance(selection,dict) or set(selection)-{'profile_id','profile_revision','skills','trial'}:
+        raise ValueError('执行技能选择无效')
+    if 'trial' in selection and type(selection['trial']) is not bool:
+        raise ValueError('执行技能试用标记无效')
+    profile_id=selection.get('profile_id') or value.get('profile_id') or fallback_profile
+    if value.get('profile_id') and value['profile_id']!=profile_id:
+        raise ValueError('执行画像与所选材料画像不一致')
+    return registry(box,c).resolve(profile_id=profile_id,task=task,skill_refs=selection.get('skills'),
+        allow_trial=selection.get('trial') is True,profile_revision=selection.get('profile_revision'),c=c)
+
+
 def enqueue_experience(box, value, c):
     """Explicit command: freeze a bounded, persona-scoped pack, then queue once."""
     initialize(c)
-    profile_id = value.get('profile_id') or 'oil-pig'
-    target = value.get('skill_id') or 'content-writing'
-    runtime = registry(box, c)
-    creator = runtime.resolve(profile_id=profile_id, task='learning', c=c)
-    skills = runtime.resolve(profile_id=profile_id, task='learning', skill_refs=[{'id': target}], c=c)
-    base = skills['skills'][0]
     operation = value.get('operation_id') or value.get('id')
     if not isinstance(operation, str) or not operation:
         raise ValueError('整理经验需要稳定操作标识')
@@ -582,6 +616,17 @@ def enqueue_experience(box, value, c):
         if receipt['signature'] != signature:
             raise ValueError('同一整理操作不能改变范围')
         return receipt['result']
+    creator=request_snapshot(box,value,'learning',c)
+    profile_id=creator['profile']['id']
+    from easel_workbench.runtime.creator_runtime import key
+    target=key(value.get('skill_id','content-writing'))
+    from easel_workbench.runtime.toolbox_store import text as bounded_text
+    goal=bounded_text(value.get('goal',''),10000)
+    runtime=registry(box,c)
+    # The target is source material to improve, never a learning executor.
+    base=runtime._skill(c,target,creator['profile'].get('skill_versions',{}).get(target))
+    if base['status']!='published':
+        raise ValueError('请先选择已有发布版本作为待改进技能')
     learning = getattr(box, 'learning', None)
     if learning is None:
         raise ValueError('反馈索引服务尚未连接；没有启动模型')
@@ -599,7 +644,7 @@ def enqueue_experience(box, value, c):
     members = []
     images=[]
     image_bytes=0
-    total = len(base['prompt']) + len(value.get('goal') or '')
+    total = len(base['prompt']) + len(goal)
     candidates=list(reversed(learning._all(c, 'learning_evidence')))
     order={'work_feedback':0,'annotation':0,'direct_turn':0,'guidance':1,'sample':2,'reader_comment':3}
     candidates.sort(key=lambda row:order.get(row.get('kind'),100))
@@ -651,17 +696,22 @@ def enqueue_experience(box, value, c):
     task_id = 'experience-' + hashlib.sha256(operation.encode()).hexdigest()[:40]
     payload = {'schema_version': 1, 'profile_id': profile_id, 'work_ids': work_ids,
                'skill_id': target, 'base_version': base['version'], 'base_prompt': base['prompt'],
-               'goal': value.get('goal') or '减少有原话支持的重复问题，提出可执行且有适用范围的技能修改。',
+               'goal': goal or '减少有原话支持的重复问题，提出可执行且有适用范围的技能修改。',
                'members': members,'images':images,'image_bytes':image_bytes, 'creator_snapshot': creator, 'manual': True,
                'input_characters': total, 'max_model_calls': 1, 'operation_id': operation}
     payload['split_profile_skill']=True
-    scope_signature=digest({'profile_id':profile_id,'target':target,'base_version':base['version'],
-                            'sources':[r['source_key'] for r in members],'goal':payload['goal']})
+    scope={'profile_id':profile_id,'target':target,'base_version':base['version'],
+           'sources':[r['source_key'] for r in members],'goal':payload['goal']}
+    legacy_scope_signature=digest(scope)
+    scope_signature=digest({**scope,'creator_snapshot_sha256':creator['snapshot_sha256']})
     payload['scope_signature']=scope_signature
     for active in c.execute("SELECT id,status,payload,started_at FROM learning_analysis_queue WHERE kind='skill_distillation' AND status IN ('queued','running','blocked')"):
         prior_payload=json.loads(active['payload'])
         known_unknown=c.execute("SELECT 1 FROM creator_model_calls WHERE task_id=? AND json_extract(document,'$.status') IN ('running','unknown','completed') LIMIT 1",(active['id'],)).fetchone()
-        if prior_payload.get('scope_signature')==scope_signature and (active['status'] in ('queued','running') or known_unknown):
+        same_scope=prior_payload.get('scope_signature')==scope_signature or (
+            prior_payload.get('scope_signature')==legacy_scope_signature and
+            prior_payload.get('creator_snapshot',{}).get('snapshot_sha256')==creator['snapshot_sha256'])
+        if same_scope and (active['status'] in ('queued','running') or known_unknown):
             result={'task_id':active['id'],'status':active['status'],'profile_id':profile_id,'skill_id':target,
                     'evidence_count':len(members),'reused_active_task':True,'model_calls':0}
             c.execute('INSERT INTO creator_experience_receipts VALUES(?,?,?)',(operation,packed({'signature':signature,'result':result}),stamp()))
@@ -711,8 +761,16 @@ def enqueue_reference(box, value, c):
     operation = value.get('operation_id') or value.get('id')
     if not isinstance(operation, str) or not operation:
         raise ValueError('分析参考需要稳定操作标识')
-    profile_id = value.get('profile_id') or 'oil-pig'
-    snapshot = registry(box, c).resolve(profile_id=profile_id, task='reference', c=c)
+    signature=digest(value)
+    old=c.execute('SELECT document FROM creator_experience_receipts WHERE id=?',(operation,)).fetchone()
+    if old:
+        previous=json.loads(old[0])
+        if previous['signature']!=signature:raise ValueError('同一参考分析不能改变材料或目标')
+        return previous['result']
+    snapshot=request_snapshot(box,value,'reference',c)
+    profile_id=snapshot['profile']['id']
+    from easel_workbench.runtime.toolbox_store import text as bounded_text
+    goal=bounded_text(value.get('goal',''),10000)
     learning = getattr(box, 'learning', None)
     if learning is None:
         raise ValueError('参考索引服务尚未连接')
@@ -723,18 +781,11 @@ def enqueue_reference(box, value, c):
         raise ValueError('参考原文超过本次24000字元范围，请明确选段；原件保留')
     task_id = 'reference-' + hashlib.sha256(operation.encode()).hexdigest()[:40]
     payload = {'evidence_id': evidence['id'], 'sha256': evidence['sha256'], 'profile_id': profile_id,
-               'goal': value.get('goal') or '拆解可复用方法、适用条件和不能照搬的部分。',
+               'goal': goal or '拆解可复用方法、适用条件和不能照搬的部分。',
                'content':evidence.get('content'),'source':evidence.get('verified_source'),'images':[],
                'creator_snapshot': snapshot, 'manual': True, 'operation_id': operation}
     if evidence.get('content') is None:
         original=learning.original_file(evidence['id']);image,_=freeze_image(box,original,evidence['id']);payload['images']=[image]
-    signature = digest(value)
-    old = c.execute('SELECT document FROM creator_experience_receipts WHERE id=?', (operation,)).fetchone()
-    if old:
-        previous = json.loads(old[0])
-        if previous['signature'] != signature:
-            raise ValueError('同一参考分析不能改变材料或目标')
-        return previous['result']
     scope_signature=digest({'profile_id':profile_id,'evidence_id':evidence['id'],'sha256':evidence['sha256'],
                             'goal':payload['goal'],'creator_snapshot_sha256':snapshot['snapshot_sha256']})
     payload['scope_signature']=scope_signature

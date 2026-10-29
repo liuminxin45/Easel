@@ -1,5 +1,4 @@
 export * from './models';
-export * from './media';
 export * from './transport';
 export * from './persistence';
 export * from './client';

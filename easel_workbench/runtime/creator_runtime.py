@@ -19,25 +19,15 @@ import warnings
 import zipfile
 
 from easel_workbench.runtime.desk import PROJECT, stamp
+from easel_workbench.skills import (
+    RETIRED_EASEL_SKILLS, RETIRED_TASKS, TASK_DEFAULTS, launch_metadata,
+    require_selection, require_task, task_policy,
+)
 
 DEFAULT_PROFILE = 'oil-pig'
 MANIFEST = '.agents/skills/capabilities.json'
 MAX_PROMPT = 160000
 MAX_RESOURCE = 40 * 1024 * 1024
-TASK_DEFAULTS = {
-    'poster': ['content-writing', 'image-production', 'delivery-review'],
-    'article': ['content-writing', 'image-production', 'delivery-review'],
-    'change': ['content-writing', 'image-production', 'delivery-review'],
-    'discuss': ['topic-research'], 'research': ['topic-research'],
-    'reference': ['reference-analysis'], 'review': ['delivery-review'],
-    'analysis': ['publication-analysis'], 'learning': ['experience-distillation'],
-    'news_enhancement': ['topic-research'], 'image': ['image-production', 'delivery-review'],
-    'media': [], 'speech': [], 'video': [], 'music': [], 'transcribe': [], 'compose': [],
-}
-
-
-RETIRED_EASEL_SKILLS = frozenset(('easel-voiceover','easel-image','easel-video','easel-music','easel-transcribe','easel-compose'))
-
 class CreatorConflict(ValueError):
     """Concurrent edits or an operation identity with different content."""
 
@@ -395,9 +385,11 @@ class CreatorRuntime:
                 item.pop('prompt', None)
                 item.pop('base_prompt', None)
                 item.pop('history', None)
+                item.update(launch_metadata(item))
                 skills.append(item)
             return {'schema_version': 1, 'default_profile_id': DEFAULT_PROFILE, 'profiles': profiles,
                     'skills': skills, 'accounts': self.accounts(c), 'task_defaults': copy.deepcopy(TASK_DEFAULTS),
+                    'task_policy': task_policy(skills),
                     'learning': {'mode': 'manual', 'automatic_model_learning': False}}
 
     def detail(self, kind, item_id, version=None):
@@ -414,6 +406,7 @@ class CreatorRuntime:
                 return result
             if kind == 'skill':
                 result = self._skill(c, item_id, version)
+                result.update(launch_metadata(result))
                 result['uses'] = self._uses(c, item_id, result['version'])
                 result['usage_coverage'] = {'source': 'creator_task_runs', 'historical_inference': False,
                                           'limit': 100, 'notice': '仅统计已有显式技能快照的作品；旧稿未记录不等于未使用。'}
@@ -458,10 +451,11 @@ class CreatorRuntime:
             raise ValueError('默认技能任务类型无效')
         result = {}
         for task, skills in value.items():
-            if not isinstance(skills, list) or not skills and task not in ('media','speech','video','music','transcribe','compose') or len(skills) > 8 or any(not isinstance(sid, str) for sid in skills) or len(skills) != len(set(skills)):
+            if not isinstance(skills, list) or not skills and task not in RETIRED_TASKS or len(skills) > 8 or any(not isinstance(sid, str) for sid in skills) or len(skills) != len(set(skills)):
                 raise ValueError('每项任务选择1至8个不同技能')
             for sid in skills:
                 if not self._published(c, sid):raise ValueError('候选技能不能成为画像默认')
+                require_task(self._skill(c, sid, self._published(c, sid), False), task)
             result[task] = skills
         return copy.deepcopy(result)
 
@@ -599,6 +593,7 @@ class CreatorRuntime:
                 if changed_version:
                     for task, skills in result['default_skills'].items():
                         if sid in skills:
+                            require_task(release, task)
                             task_pins[task][sid] = release['version']
         if 'task_skill_versions' in document:
             pins = document['task_skill_versions']
@@ -611,6 +606,7 @@ class CreatorRuntime:
                     release = self._skill(c, sid, version, False)
                     if release['status'] != 'published':
                         raise ValueError('候选技能不能成为画像默认')
+                    require_task(release, task)
                     task_pins.setdefault(task, {})[sid] = release['version']
         if 'active' in document:
             if not isinstance(document['active'], bool):
@@ -712,6 +708,7 @@ class CreatorRuntime:
             if not isinstance(tasks, list) or not tasks or any(not isinstance(t, str) or t not in TASK_DEFAULTS for t in tasks):
                 raise ValueError('技能适用任务无效')
             for task in tasks:
+                require_task(release, task)
                 defaults = profile['default_skills'].setdefault(task, [])
                 if sid not in defaults:
                     defaults.append(sid)
@@ -795,18 +792,14 @@ class CreatorRuntime:
             if selected_version is None:
                 selected_version = profile.get('task_skill_versions', {}).get(task, {}).get(sid, profile.get('skill_versions', {}).get(sid))
             release = self._skill(c, sid, selected_version)
+            require_task(release, task)
             if release['status'] != 'published' and not allow_trial:
                 raise ValueError('候选技能需要明确选择本次试用')
             for resource in release.get('resources', []):
                 if resource.get('required') and not resource.get('available'):
                     raise ValueError('技能必要资源缺失')
             skills.append({k: copy.deepcopy(v) for k, v in release.items() if k not in ('history', 'diff', 'base_prompt', 'published_version', 'is_current')})
-        if task in ('poster', 'article', 'change', 'image'):
-            if 'delivery-review' not in seen:
-                raise ValueError('制作任务须保留交付核验技能；尚未启动制作')
-            producers = {'content-writing'} if task == 'article' else {'image-production'} if task == 'image' else {'content-writing', 'image-production'}
-            if not producers.intersection(seen):
-                raise ValueError('请选择能完成本次任务的写作或配图技能；尚未启动制作')
+        require_selection(task, seen)
         lines = ['以下是本次已选技能版本的完整冻结正文；磁盘入口用于发现，不得用当前磁盘或最新默认版本替换已冻结指令。已提供冻结规范与资产时使用该版本，原路径只是来源索引。本轮明确要求优先于技能默认；保留事实、原字和授权边界。', '## 本次创作画像：' + profile['name'],
                  '\n'.join(label + '：' + profile.get(field, '') for field, label in [('identity', '身份'), ('audience', '读者'), ('voice', '表达'), ('boundaries', '边界')])]
         if profile['id'] == DEFAULT_PROFILE and profile.get('source', {}).get('content'):
@@ -823,6 +816,10 @@ class CreatorRuntime:
                 refs.append({k: copy.deepcopy(resource[k]) for k in ('path', 'sha256', 'available', 'required', 'role', 'label', 'kind') if k in resource})
             lines.append('## 当前画像明确绑定的参考资产\n' + packed(refs) + '\n仅在本轮用途适用时使用；原件字节不符时使用本任务的冻结副本，不借用其他画像的角色或署名。')
         for skill in skills:
+            if skill.get('executor') == 'workflow':
+                skill['execution_role'] = 'workflow_entry'
+                lines.append('## 程序编排入口\n' + skill['name'] + ' v' + str(skill['version']) + ' 已冻结登记；由工作流服务编排所选子技能，本入口不新增模型调用。')
+                continue
             reserved = task in ('poster', 'article', 'change', 'image') and skill['id'] == 'delivery-review'
             skill['execution_role'] = 'reserved_independent' if reserved else 'active'
             if reserved:

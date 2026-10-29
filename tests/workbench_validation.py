@@ -116,17 +116,30 @@ def contract_tests(out):
                 self.assertIsNone(c.execute("SELECT status FROM notification_events WHERE task_id='work'").fetchone())
             with self.assertRaises(ValueError):self.box.action('work',{'id':'accept','kind':'accept','candidate_id':'work','scope':['images']})
             with self.assertRaises(ValueError):self.box.retry('work')
+    from test_creator_runtime import CreatorRuntimeTests
+    class ExactLearningExecutor(CreatorRuntimeTests):
+        def test_required_review_and_actual_producer_are_checked_before_cost(self):
+            for task,refs in [('poster',['content-writing']),('article',['image-production','delivery-review']),
+                              ('image',['content-writing','delivery-review']),('change',['delivery-review'])]:
+                with self.assertRaises(ValueError):self.runtime.resolve(task=task,skill_refs=refs)
+            # The improvement target never becomes the learning executor.
+            with self.assertRaises(ValueError):self.runtime.resolve(task='learning',skill_refs=['content-writing'])
+            self.assertEqual(len(self.runtime.resolve(task='learning',skill_refs=['experience-distillation'])['skills']),1)
     def flatten(item):
         for case in item:
             if isinstance(case,unittest.TestSuite):yield from flatten(case)
             else:yield case
-    cases=[case for case in flatten(suite) if not case.id().endswith('OutcomeTests.test_terminal_reply_without_products_is_not_review')]
+    replaced=('OutcomeTests.test_terminal_reply_without_products_is_not_review',
+              'CreatorRuntimeTests.test_required_review_and_actual_producer_are_checked_before_cost')
+    cases=[case for case in flatten(suite) if not case.id().endswith(replaced)]
     cases.append(RetiredNotificationOutcome('test_terminal_reply_without_products_is_not_review'))
+    cases.append(ExactLearningExecutor('test_required_review_and_actual_producer_are_checked_before_cost'))
     suite=unittest.TestSuite(cases)
     with (out/'contracts.log').open('w',encoding='utf-8') as stream:
         result=unittest.TextTestRunner(stream=stream,verbosity=2).run(suite)
     report={'passed':result.wasSuccessful(),'tests':result.testsRun,'modules':names,
             'failures':[str(t) for t,_ in result.failures],'errors':[str(t) for t,_ in result.errors],
+            'legacy_contract_adjustments':['notifications remain retired','learning target is not its executor'],
             'real_AI_calls':0,'real_platform_writes':0,'temporary_business_state_only':True}
     (out/'contracts.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(report,ensure_ascii=False),flush=True)
@@ -220,7 +233,7 @@ def simulate_execution(f,jid,image,records):
     return title
 
 
-def browser_tests(native,out):
+def browser_tests(native,out,only_entries=False):
     from playwright.sync_api import sync_playwright,expect
     import native_browser as h
     from creator_browser import prepare_project
@@ -241,7 +254,7 @@ def browser_tests(native,out):
             browser=pw.chromium.launch(executable_path='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless=True,args=['--ignore-certificate-errors'])
             image=h.poster_bytes(browser)
             with patch.object(h,'prepare_project',prepare_project),h.isolated_service(native,manifest,image) as f:
-                seed(f,image)
+                seeded=seed(f,image)
                 from test_completion_service import FixtureRuntime
                 distribution=f['box'].completion.distribution
                 distribution.runtime=FixtureRuntime()
@@ -250,6 +263,33 @@ def browser_tests(native,out):
                 profile=f['box'].creator.detail('profile','oil-pig')
                 f['box'].creator.command({'id':'synthetic-bind-target','action':'bind-account','profile_id':'oil-pig',
                     'base_revision':profile['revision'],'connection_id':connection['id']})
+                # The real registry defines the workflow; do not teach the UI
+                # its ID. Publish a newer writer globally while preserving the
+                # profile pin, and explicitly try a separate workflow candidate.
+                bootstrap=f['box'].creator.bootstrap()
+                entry_id=bootstrap['task_policy']['poster']['entry_skills'][0]
+                entry=f['box'].creator.detail('skill',entry_id)
+                trial=f['box'].creator.command({'id':'policy-workflow-candidate','action':'skill-draft',
+                    'skill_id':entry_id,'base_version':entry['version'],'prompt':entry['prompt']+'\n合成候选版本验收。',
+                    'reason':'仅TEMP合成入口验收，不发布或修改默认。'})['result']['skill']
+                trial=f['box'].creator.detail('skill',entry_id,trial['version'])
+                workflow_launch=next(a for a in trial['launch_actions'] if a['task']=='poster')
+                writer=f['box'].creator.detail('skill','content-writing')
+                pinned_writer=profile['task_skill_versions']['poster']['content-writing']
+                newer=f['box'].creator.command({'id':'policy-writer-candidate','action':'skill-draft',
+                    'skill_id':writer['id'],'base_version':writer['version'],'prompt':writer['prompt']+'\n合成发布版本验收。',
+                    'reason':'仅TEMP验证画像固定版本不随全局指针变化。'})['result']['skill']
+                f['box'].creator.command({'id':'policy-writer-publish','action':'skill-publish','skill_id':writer['id'],
+                    'version':newer['version'],'expected_published_version':writer['published_version'],'confirm':True})
+                assert pinned_writer!=newer['version']
+                entry_trials={}
+                for task in ('discuss','reference','learning','analysis'):
+                    sid=bootstrap['task_defaults'][task][0]
+                    base=f['box'].creator.detail('skill',sid)
+                    draft=f['box'].creator.command({'id':'policy-candidate-'+task,'action':'skill-draft','skill_id':sid,
+                        'base_version':base['version'],'prompt':base['prompt']+'\n合成任务入口候选。',
+                        'reason':'仅TEMP验证界面入口与实际执行快照一致。'})['result']['skill']
+                    entry_trials[task]=f['box'].creator.detail('skill',sid,draft['version'])
                 state=h.authenticate(browser,f,out,report['errors'])
                 with namespace_guard(NAMESPACE_ISOLATION) as isolation:
                     report['namespace_isolation']=isolation
@@ -272,14 +312,26 @@ def browser_tests(native,out):
                             assert r.value.status==200,r.value.text()
                             return r.value.json()
                         try:
-                            for format in ('poster','article'):
+                            for format in (() if only_entries else ('poster','article')):
                                 endpoint='/articles' if format=='article' else '/posters'
                                 title='合成制作 '+format+' '+profile
-                                go(endpoint+'/new?draft=full-flow-'+format+'-'+profile)
+                                if format=='poster':
+                                    go('/posters/new')
+                                    page.get_by_label('素材与目标',exact=True).fill('技能入口前的本机原始草稿。')
+                                    go('/toolbox?section=skills&item='+entry_id+'&version='+str(trial['version']))
+                                    page.get_by_role('button',name='本次试用 · '+workflow_launch['label'],exact=True).click()
+                                    expect(page.get_by_label('素材与目标',exact=True)).to_have_value('技能入口前的本机原始草稿。')
+                                else:go(endpoint+'/new?draft=full-flow-'+format+'-'+profile)
                                 page.get_by_label('主题',exact=True).fill(title)
                                 material='隔离原始材料：解释一个实际问题；保留来源、限制条件和本次明确要求。'
                                 page.get_by_label('素材与目标',exact=True).fill(material)
                                 preview=post('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
+                                snapshot=preview['execution_prompt']['creator_snapshot']
+                                selected={s['id']:s['version'] for s in snapshot['skills']}
+                                assert selected[writer['id']]==pinned_writer,selected
+                                if format=='poster':
+                                    assert selected[entry_id]==trial['version'] and snapshot['trial'],snapshot
+                                    check(profile,'skill-entry-candidate-exact-version-profile-pin-and-preserved-input')
                                 created=post('/api/works',lambda:page.get_by_role('button',name='确认并开始制作',exact=True).click())
                                 wid=created.get('work_id') or created['id']
                                 expect(page.get_by_role('heading',level=1,name=title,exact=True)).to_be_visible()
@@ -327,6 +379,64 @@ def browser_tests(native,out):
                                         assert selected and selected[-1]['action']=='draft',deliveries
                                 check(profile,format+'-adoption-exact-child-and-archive-authority')
                                 page.screenshot(path=str(out/(profile+'-'+format+'-complete.png')),animations='disabled')
+                            with f['store'].connect() as c:before_entry_model_calls=c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]
+                            for task in ('discuss','reference','learning','analysis'):
+                                entry=entry_trials[task]
+                                launch=next(a for a in entry['launch_actions'] if a['task']==task)
+                                go('/toolbox?section=skills&item='+entry['id']+'&version='+str(entry['version']))
+                                page.get_by_role('button',name='本次试用 · '+launch['label'],exact=True).click()
+                                if task=='discuss':
+                                    page.get_by_label('主题',exact=True).fill('合成候选讨论 '+profile)
+                                    page.get_by_label('素材与目标',exact=True).fill('只讨论这份材料的制作方向，绑定当前明确试用版本。')
+                                    response=post('/discussions',lambda:page.get_by_role('button',name='发送讨论',exact=True).click())
+                                elif task=='reference':
+                                    page.get_by_label('参考链接、正文或拆解材料',exact=True).fill('合成参考原文 '+profile+'：先回答具体问题，再保留限制条件。')
+                                    page.get_by_label('希望学什么',exact=True).fill('只拆解这段结构 '+profile)
+                                    response=post('/api/creator/commands',lambda:page.get_by_role('button',name='拆解参考',exact=True).click())
+                                elif task=='learning':
+                                    page.get_by_label('希望改善什么 · 可不填',exact=True).fill('合成整理范围 '+profile)
+                                    response=post('/api/creator/commands',lambda:page.get_by_role('button',name='整理经验',exact=True).last.click())
+                                else:
+                                    page.get_by_label('准确发布实例').select_option(seeded['publication'])
+                                    page.get_by_label('想核对的复盘问题',exact=True).fill('只解释现有证据 '+profile)
+                                    response=post('/api/studio/commands',lambda:page.get_by_role('button',name='按实际证据发起复盘',exact=True).click())
+                                with f['store'].connect() as c:
+                                    if task in ('reference','learning'):
+                                        payload=json.loads(c.execute('SELECT payload FROM learning_analysis_queue WHERE id=?',
+                                            (response['result']['task_id'],)).fetchone()[0]);snapshot=payload['creator_snapshot']
+                                    else:
+                                        row=c.execute("SELECT document FROM creator_task_runs WHERE json_extract(document,'$.snapshot.task')=? ORDER BY rowid DESC",(task,)).fetchone()
+                                        assert row,(task,response)
+                                        run=json.loads(row[0]);snapshot=run['snapshot']
+                                    refs={s['id']:s['version'] for s in snapshot['skills']}
+                                    assert refs[entry['id']]==entry['version'] and snapshot['trial'] and snapshot['profile']['id']=='oil-pig',snapshot
+                                    assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==before_entry_model_calls
+                                    if task=='analysis':
+                                        # End this labelled synthetic read-only
+                                        # task before the other browser profile
+                                        # uses the same TEMP publication.
+                                        c.execute("UPDATE toolbox_jobs SET status='completed',reply=?,finished_at=? WHERE id=?",
+                                            ('合成复盘答复，仅用于队列与页面验收。',time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),run['id']))
+                                check(profile,task+'-skill-card-exact-candidate-version-frozen-in-real-queue')
+                                if task=='discuss':
+                                    # A labelled synthetic answer unblocks the
+                                    # same work's first-production action. The
+                                    # prior discussion's frozen snapshot stays.
+                                    with f['store'].connect() as c:
+                                        c.execute("UPDATE toolbox_jobs SET status='completed',reply=?,finished_at=? WHERE id=?",
+                                            ('合成讨论答复：选择清楚的具体问题，并保留原始来源。',time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),response['id']))
+                                    go('/posters/'+response['work_id'])
+                                    if mobile:page.locator('#easel-main').get_by_role('button',name='成品',exact=True).click()
+                                    preview=post('/api/creative/preview',lambda:page.get_by_role('button',name='按当前草稿制作',exact=True).click())
+                                    first=post('/finalize',lambda:page.get_by_role('button',name='确认并开始制作',exact=True).click())
+                                    simulate_execution(f,first['id'],image,report['simulated_executions'])
+                                    with f['store'].connect() as c:
+                                        original=json.loads(c.execute('SELECT document FROM creator_task_runs WHERE id=?',(response['id'],)).fetchone()[0])['snapshot']
+                                        production=json.loads(c.execute('SELECT document FROM creator_task_runs WHERE id=?',(first['id'],)).fetchone()[0])['snapshot']
+                                    assert original['task']=='discuss' and original['skills'][0]['version']==entry['version']
+                                    assert production['task']=='poster' and {s['id']:s['version'] for s in production['skills']}[writer['id']]==pinned_writer
+                                    before_entry_model_calls+=1
+                                    check(profile,'discussion-to-same-work-confirmed-first-production-keeps-exact-discussion-snapshot')
                             go('/posters/new?draft=authentication-'+profile)
                             page.get_by_label('素材与目标',exact=True).fill('401 后仍须保留的原字长草稿。'*200)
                             box=page.get_by_label('素材与目标',exact=True)
@@ -413,12 +523,13 @@ def upgrade_tests(native,out):
 def surface_tests(native,out):
     import native_browser as h
     from easel_workbench.application import create_app as composition
-    import easel_workbench_browser
+    import workbench_surfaces
     h.candidate_directory=candidate
     h.BACKEND={'kind':'easel-namespaced-extension','directory':str(RUNTIME_ROOT/'easel_workbench/runtime')}
     h.create_app=lambda store,auth,box,root,studio:composition(root=root,store=store,auth=auth,box=box,studio=studio)
     target=out/'surfaces';target.mkdir(exist_ok=True)
-    easel_workbench_browser.run(argparse.Namespace(candidate=native,backend='',evidence=str(target),
+    (target/'harness.py').write_bytes(Path(workbench_surfaces.__file__).read_bytes())
+    workbench_surfaces.run(argparse.Namespace(candidate=native,backend='',evidence=str(target),
         profiles='windows-1280,android-390',headed=False,browser='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'))
 
 
@@ -426,16 +537,18 @@ if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--native',required=True);p.add_argument('--output',required=True)
     p.add_argument('--backend',help='Frozen release directory containing easel_workbench and easel')
     p.add_argument('--isolate-namespace',action='store_true',help='Reject all legacy flat runtime imports during actual browser workflows')
-    p.add_argument('--mode',choices=('contracts','browser','surfaces','upgrade','all'),default='all')
+    p.add_argument('--mode',choices=('contracts','browser','entries','surfaces','upgrade','all'),default='all')
     args=p.parse_args();out=Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
+    (out/'harness.py').write_bytes(Path(__file__).read_bytes())
     # Clear fixture-loader options before importing the historical harness.
     sys.argv=[sys.argv[0]];setup_runtime(args.backend);NAMESPACE_ISOLATION=args.isolate_namespace
     initial=fingerprints();(out/'source-inputs.json').write_text(json.dumps(initial,indent=2),encoding='utf-8')
     if args.mode in ('contracts','all'):contract_tests(out)
-    if args.mode in ('browser','all'):browser_tests(args.native,out)
+    if args.mode in ('browser','entries','all'):browser_tests(args.native,out,only_entries=args.mode=='entries')
     if args.mode in ('surfaces','all'):surface_tests(args.native,out)
     if args.mode in ('upgrade','all'):upgrade_tests(args.native,out)
     assert initial==fingerprints(),'Runtime sources changed during acceptance; rerun against the final frozen candidate'
+    assert sha(out/'harness.py')==sha(__file__),'Acceptance harness changed during the run'
     if BACKEND_SELECTION:
         manifest=RUNTIME_ROOT/'workbench-release.json'
         assert sha(manifest)==BACKEND_SELECTION['manifest_sha256']

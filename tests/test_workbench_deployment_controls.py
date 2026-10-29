@@ -47,6 +47,114 @@ def test_release_rejects_escaping_member(tmp_path):
     with pytest.raises(ValueError):module.verify(directory)
 
 
+def upgrade_fixture(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(PROJECT/'scripts'))
+    upgrade=load('workbench_upgrade_controls_test',PROJECT/'scripts/upgrade_workbench_runtime.py')
+    release=release_module()
+    state=tmp_path/'.local/workbench-deployment';state.mkdir(parents=True)
+    runtime=tmp_path/'workbench-releases/workbench-next';runtime.mkdir(parents=True)
+    native=tmp_path/'native-releases/native-next';native.mkdir(parents=True)
+    (native/'index.html').write_text('reviewed frontend',encoding='utf-8')
+    release.atomic(native/'native-manifest.json',{'release':native.name,'files':{'index.html':release.sha(native/'index.html')}})
+    frontend={'release':native.name,'manifest_sha256':release.sha(native/'native-manifest.json')}
+    (runtime/'launch.py').write_text('# fixture',encoding='utf-8')
+    canonical=tmp_path/'canonical-capabilities.json';canonical.write_text('{"skills":[]}',encoding='utf-8')
+    monkeypatch.setattr(upgrade,'CAPABILITIES',canonical)
+    release.atomic(runtime/'workbench-release.json',{'release':runtime.name,'native':frontend,'capabilities_sha256':release.sha(canonical),'files':{'launch.py':release.sha(runtime/'launch.py')}})
+    choice={'release':runtime.name,'manifest_sha256':release.sha(runtime/'workbench-release.json'),'native':frontend}
+    release.atomic(state/'candidate.json',choice)
+    (state/'evidence.json').write_text('{"passed":true}',encoding='utf-8')
+    acceptance=state/'upgrade-acceptance.json'
+    release.atomic(acceptance,{'passed':True,'candidate':choice,'evidence':{(state/'evidence.json').relative_to(tmp_path).as_posix():release.sha(state/'evidence.json')}})
+    return upgrade,state,native,acceptance,choice
+
+
+def test_upgrade_verifies_new_runtime_and_frontend_as_one_pair(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    assert upgrade.validate_candidate(tmp_path,state,acceptance)[0]==choice
+    assert not (state/'admission.json').exists()
+    assert not (tmp_path/'data').exists()
+
+
+def test_upgrade_rejects_changed_frontend_before_fencing(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    (native/'index.html').write_text('unreviewed frontend',encoding='utf-8')
+    with pytest.raises(ValueError,match='Frontend member changed'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+    assert not (state/'admission.json').exists()
+
+
+def test_upgrade_rejects_skill_source_drift_before_fencing(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    upgrade.CAPABILITIES.write_text('{"skills":["unreviewed"]}',encoding='utf-8')
+    with pytest.raises(ValueError,match='Skill source changed'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+    assert not (state/'admission.json').exists()
+
+
+def test_upgrade_rejects_evidence_from_different_frontend(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    document=json.loads(acceptance.read_text(encoding='utf-8'))
+    document['candidate']['native']['release']='native-unreviewed'
+    acceptance.write_text(json.dumps(document),encoding='utf-8')
+    with pytest.raises(ValueError,match='Acceptance does not match'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+
+
+def test_upgrade_rejects_evidence_path_outside_project(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    outside=tmp_path.parent/(tmp_path.name+'-outside.json');outside.write_text('{}',encoding='utf-8')
+    document=json.loads(acceptance.read_text(encoding='utf-8'))
+    document['evidence']={'../'+outside.name:release_module().sha(outside)}
+    acceptance.write_text(json.dumps(document),encoding='utf-8')
+    with pytest.raises(ValueError,match='Acceptance evidence changed'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+
+
+@pytest.mark.parametrize('receipt_status',['requested','uncertain'])
+def test_idle_scans_authoritative_model_receipts_after_migration(tmp_path,monkeypatch,receipt_status):
+    from types import SimpleNamespace
+    import sqlite3
+    monkeypatch.syspath_prepend(str(PROJECT/'scripts'))
+    module=load('workbench_idle_controls_test',PROJECT/'scripts/activate_workbench.py')
+    old=tmp_path/'retained-old';evidence=old/'evidence/simplify-workbench-20261029';evidence.mkdir(parents=True)
+    audit=evidence/'audit.json';audit.write_text('{}',encoding='utf-8')
+    reference={'path':audit.relative_to(old).as_posix(),'sha256':module.sha(audit)}
+    module.atomic(evidence/'activation-evidence.json',{'historical_unknown_audit':reference,'collection_historical_unknown_audit':reference})
+    root=tmp_path/'authoritative';database=root/'data/desk.sqlite';database.parent.mkdir(parents=True)
+    sqlite3.connect(database).close()
+    cache=database.parent/'collection/model-cache';cache.mkdir(parents=True)
+    module.atomic(cache/'new-receipt.json',{'status':receipt_status})
+    monkeypatch.setattr(module,'OLD',old)
+    monkeypatch.setattr(module,'legacy',lambda:(SimpleNamespace(exists_table=lambda *_:False),
+        SimpleNamespace(busy_state=lambda *_:{'busy':False,'retained_collection_unknown':[]})))
+    result=module.idle(database)
+    assert result['busy'] and result['additional']==[
+        {'table':'collection_model_receipt','id':'new-receipt','status':receipt_status}]
+
+
+def test_idle_retains_only_byte_identical_audited_historical_receipt(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    import sqlite3
+    monkeypatch.syspath_prepend(str(PROJECT/'scripts'))
+    module=load('workbench_idle_retention_test',PROJECT/'scripts/activate_workbench.py')
+    old=tmp_path/'retained-old';evidence=old/'evidence/simplify-workbench-20261029';evidence.mkdir(parents=True)
+    audit=evidence/'audit.json';audit.write_text('{}',encoding='utf-8')
+    reference={'path':audit.relative_to(old).as_posix(),'sha256':module.sha(audit)}
+    module.atomic(evidence/'activation-evidence.json',{'historical_unknown_audit':reference,'collection_historical_unknown_audit':reference})
+    database=tmp_path/'authoritative/data/desk.sqlite';database.parent.mkdir(parents=True)
+    sqlite3.connect(database).close()
+    receipt=database.parent/'collection/model-cache/historical.json'
+    module.atomic(receipt,{'status':'uncertain','input':'synthetic frozen input'})
+    retained={'id':'historical','cache_sha256':module.sha(receipt)}
+    monkeypatch.setattr(module,'OLD',old)
+    monkeypatch.setattr(module,'legacy',lambda:(SimpleNamespace(exists_table=lambda *_:False),
+        SimpleNamespace(busy_state=lambda *_:{'busy':False,'retained_collection_unknown':[retained]})))
+    assert module.idle(database)['busy'] is False
+    module.atomic(receipt,{'status':'uncertain','input':'changed input'})
+    assert module.idle(database)['busy'] is True
+
+
 class StopSupervisor(BaseException):
     pass
 

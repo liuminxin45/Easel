@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
+CAPABILITIES=Path('D:/Projects/neo-content/.agents/skills/capabilities.json')
 
 
 def sha(path):
@@ -63,7 +64,7 @@ main()
         'easel_base':'514caf8089f89b4793063aeae867690cc69bf8b8','files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,
-        'capabilities_sha256':sha('D:/Projects/neo-content/.agents/skills/capabilities.json'),
+        'capabilities_sha256':sha(CAPABILITIES),
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     atomic(target/'workbench-release.json',value)
     selection={'release':name,'manifest_sha256':sha(target/'workbench-release.json'),'native':value['native']}

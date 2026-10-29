@@ -131,18 +131,18 @@ CREATE TABLE IF NOT EXISTS studio_operations(operation_id TEXT PRIMARY KEY,actio
    {'id':'archive','name':'按明确决定归档','status':'configured','evidence':[str(self.project/'工具/内容工作流/poster_review.py')],'description':'沿用既有归档任务，是否完成以实际任务回执为准','read_only':True},
    {'id':'platform-data','name':'平台数据','status':'manual','evidence':['手工核对或用户导出文件'],'note':'公众号与小红书未接自动取数接口','read_only':True}]
   return rows
- def context(self,work_id,options=None,connection=None,candidate_id=None,exclude_job_id=None,request_text=None,task_kind=None):
+ def context(self,work_id,options=None,connection=None,candidate_id=None,exclude_job_id=None,request_text=None,task_kind=None,creator_snapshot=None):
   with self.store.connect() if connection is None else contextlib.nullcontext(connection) as c:
    sources=[{'id':key,**self._file(path)} for key,(_,path) in SECTIONS.items()];dependencies=[{'id':key,**self._file(path)} for key,path in CONTEXT_FILES.items()];settings=self._get(c,'contexts',work_id,False) if work_id else None;settings=settings or {'id':work_id,'revision':0,'channel_id':'wechat','workflow_id':None,'overrides':{},'round':{}}
    incoming=creative_options(options);workspace=incoming.get('workspace') or {}
+   actual_format=(options or {}).get('format') or (self.box.options(work_id,c)['format'] if work_id else 'poster')
+   execution_task=task_kind if task_kind in ('discuss','analysis','research','reference','learning','image') else actual_format
    explicit_runtime=bool(incoming.get('creator') or getattr(self.box,'creator',None) is not None)
    if explicit_runtime:
     from easel_workbench.runtime.task_runtime import workflow_template
     from easel_workbench.runtime.creator_runtime import read_owner
     owner=read_owner(c,work_id) if work_id else None
     if not incoming.get('creator') and owner:incoming['creator']={'profile_id':owner['profile_id'],'profile_revision':owner['profile_revision']}
-    actual_format=(options or {}).get('format') or (self.box.options(work_id,c)['format'] if work_id else 'poster')
-    execution_task=task_kind if task_kind in ('discuss','analysis','research','reference','learning','image') else actual_format
     if task_kind is None:
      selected_ids={r['id'] for r in incoming.get('creator',{}).get('skills',[])}
      for sid,alias in [('topic-research','discuss'),('reference-analysis','reference'),('publication-analysis','analysis'),('experience-distillation','learning')]:
@@ -154,11 +154,15 @@ CREATE TABLE IF NOT EXISTS studio_operations(operation_id TEXT PRIMARY KEY,actio
    else:configuration=self._configuration()
    config=configuration['document']
    creator=incoming.get('creator') or {};creator_id=creator.get('profile_id','oil-pig')
+   prepared=None
+   if creator_snapshot is not None:
+    from easel_workbench.runtime.task_runtime import validated_snapshot
+    prepared=validated_snapshot(creator_snapshot,execution_task,creator)
    if creator_id!='oil-pig':
     from easel_workbench.runtime.creator_runtime import service as creator_service
-    creator_snapshot=creator_service(self.box,c).resolve(creator_id,task=execution_task,skill_refs=creator.get('skills'),
+    profile_snapshot=prepared if prepared is not None else creator_service(self.box,c).resolve(creator_id,task=execution_task,skill_refs=creator.get('skills'),
       allow_trial=creator.get('trial') is True,profile_revision=creator.get('profile_revision'),c=c,allow_historical_profile=bool(work_id))
-    profile=creator_snapshot['profile']
+    profile=profile_snapshot['profile']
     sources=[r for r in sources if r['id'] not in ('position','audience','style','capabilities','workflow')]
     dependencies=[r for r in dependencies if r['id'] not in ('creative_strategy','image_rules','poster_rules','project_rules')]
     for key,label in [('position','identity'),('audience','audience'),('style','voice')]:
@@ -213,11 +217,11 @@ CREATE TABLE IF NOT EXISTS studio_operations(operation_id TEXT PRIMARY KEY,actio
    if incoming.get('creator') or getattr(self.box,'creator',None) is not None:
     from easel_workbench.runtime.creator_runtime import service as creator_service
     choice=incoming.get('creator') or {}
-    result['creator_snapshot']=creator_service(self.box,c).resolve(choice.get('profile_id','oil-pig'),task=execution_task,skill_refs=choice.get('skills'),
+    result['creator_snapshot']=prepared if prepared is not None else creator_service(self.box,c).resolve(choice.get('profile_id','oil-pig'),task=execution_task,skill_refs=choice.get('skills'),
       allow_trial=choice.get('trial') is True,profile_revision=choice.get('profile_revision'),c=c,allow_historical_profile=bool(work_id),context={'format':result['format']})
     result['capabilities']=[{'id':row['id'],'name':row['name'],'version':row['version'],'status':'registered','release_status':row['status'],
       'execution_role':row.get('execution_role'),'description':'能力已登记；实际执行与结果见任务回执。'} for row in result['creator_snapshot']['skills']]
-   if incoming.get('recipe') is not None and getattr(self.box,'learning',None):
+   if execution_task in ('poster','article','change','image') and incoming.get('recipe') is not None and getattr(self.box,'learning',None):
     from easel_workbench.runtime.creative_recipes import service as recipes
     result['prompt_preview']=recipes(self.box).context(result,incoming['recipe'],result['format'])
    result['token']=fingerprint(result);return result
@@ -619,17 +623,22 @@ CREATE TABLE IF NOT EXISTS studio_operations(operation_id TEXT PRIMARY KEY,actio
     if not intent:
      pub=self._get(c,'publications',value.get('publication_id'));report=self.review_evidence(pub['id'],c);question=text(value.get('question',''),10000,True);draft=read_draft(self.box,pub['work_id'],c)
      intent=self._put(c,'analyses',{'id':oid,'job_id':job_id,'publication_id':pub['id'],'work_id':pub['work_id'],'version_id':pub['version_id'],'question':question,'signature':report['signature'],'snapshot':report['evidence'],'draft_revision':draft['revision'],'status':'pending'},True)
+    if not intent.get('creator_snapshot'):
+     from easel_workbench.runtime.content_studio import frozen_options
+     from easel_workbench.runtime.task_runtime import request_snapshot
+     prior=frozen_options(c,intent['version_id']) or {};owner=(prior.get('creator') or {}).get('profile_id','oil-pig')
+     selection=value.get('creator') or {}
+     if not isinstance(selection,dict) or (selection.get('profile_id') or value.get('profile_id') or owner)!=owner:
+      raise StudioConflict('复盘须使用该作品的创作画像')
+     intent['creator_snapshot']=request_snapshot(self.box,value,'analysis',c,fallback_profile=owner)
+     intent=self._put(c,'analyses',intent)
     c.execute('INSERT OR IGNORE INTO studio_operations VALUES(?,?,?,?,?,?)',(oid,value['action'],value['_signature'],'pending',None,stamp()))
    attachment_id='studio-analysis-evidence-'+sha(oid.encode())[:40];self.box.upload(attachment_id,'发布复盘冻结证据.json',pack({'schema_version':1,'analysis_id':oid,'question':intent['question'],'evidence_signature':intent['signature'],'evidence':intent['snapshot']}).encode())
-   from easel_workbench.runtime.content_studio import frozen_options
-   from easel_workbench.runtime.creator_runtime import service as creator_service
-   with self.store.connect() as c:
-    prior=frozen_options(c,intent['version_id']) or {};selection=prior.get('creator',{})
-    selected=creator_service(self.box,c).resolve(selection.get('profile_id','oil-pig'),task='analysis',c=c)
+   selected=intent['creator_snapshot']
    creative={'creator':{'profile_id':selected['profile']['id'],'profile_revision':selected['profile']['revision'],
-     'skills':[{'id':r['id'],'version':r['version']} for r in selected['skills']]}}
+     'skills':[{'id':r['id'],'version':r['version']} for r in selected['skills']],'trial':bool(selected.get('trial'))}}
    prompt='发布复盘问题原话：\n'+intent['question']+'\n准确发布实例：'+intent['publication_id']+'\n实际证据附件：发布复盘冻结证据.json'
-   try:job=enqueue(self.box,intent['work_id'],{'id':job_id,'candidate_id':intent['version_id'],'revision':intent['draft_revision'],'text':prompt,'files':[attachment_id],'creative':creative})
+   try:job=enqueue(self.box,intent['work_id'],{'id':job_id,'candidate_id':intent['version_id'],'revision':intent['draft_revision'],'text':prompt,'files':[attachment_id],'creative':creative},execution_task='analysis',creator_snapshot=selected)
    except (ValueError,OSError) as error:
     with self.store.connect() as c:
      current=self._get(c,'analyses',oid);current.update(status='blocked',error=str(error));self._put(c,'analyses',current)

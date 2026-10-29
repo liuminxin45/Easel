@@ -26,6 +26,8 @@ import urllib.request
 import urllib.parse
 import base64
 
+from easel_workbench.runtime.easel_connection_support import safe_env
+
 
 class TaskPending(RuntimeError):
     pass
@@ -92,15 +94,6 @@ def atomic(path, value):
         out.flush()
         os.fsync(out.fileno())
     os.replace(temporary, path)
-
-
-def safe_env(values, directory):
-    # No inherited provider credentials, .env discovery, or Easel paths.
-    allowed = {'PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'}
-    env = {k: v for k, v in os.environ.items() if k.upper() in {a.upper() for a in allowed}}
-    env.update({k: str(v) for k, v in values.items()})
-    env.update(PYTHONUTF8='1', PYTHONIOENCODING='utf-8', EASEL_ROOT=str(directory), HOME=str(directory), USERPROFILE=str(directory), EASEL_CONFIG_DIR=str(directory))
-    return env
 
 
 def run_vendor(name, args, source, images=None):

@@ -8,12 +8,13 @@ import os
 import pathlib
 import queue
 import re
+import sqlite3
 import threading
 import time
 import traceback
 
 _sink=None
-FIELDS={'trace_id','route','method','status','duration_ms','error_type','operation_ref','resource_ref','phase','count','pid','exit_code','dropped','phases_ms','reads','commands','failures','frames','origin_state','android','webview','login_cookie_present'}
+FIELDS={'trace_id','route','method','status','duration_ms','error_type','operation_ref','resource_ref','phase','count','pid','exit_code','dropped','phases_ms','reads','commands','failures','frames','origin_state','android','webview','login_cookie_present','sqlite_errorcode','sqlite_errorname'}
 NAME=re.compile(r'^(server|worker|feedback|learning|local|supervisor|auth)-\d{10}-[a-f0-9]+-\d+\.jsonl$')
 
 def reference(value):return hashlib.sha256(str(value).encode()).hexdigest()[:24]
@@ -63,6 +64,10 @@ class Journal:
                 data[key]=[{k:v for k,v in frame.items() if k in {'file','line','function'}} for frame in value[:12]]
             elif key=='phases_ms':
                 data[key]={k:round(v,3) for k,v in value.items() if re.fullmatch(r'[a-z_]{1,50}',k) and isinstance(v,(int,float))} if isinstance(value,dict) else {}
+            elif key=='sqlite_errorcode':
+                if type(value) is int and 0<=value<=0x7fffffff:data[key]=value
+            elif key=='sqlite_errorname':
+                if isinstance(value,str) and re.fullmatch(r'SQLITE_[A-Z0-9_]{1,64}',value):data[key]=value
             elif isinstance(value,(int,float,bool)) or value is None:data[key]=value
             elif key in {'operation_ref','resource_ref','trace_id'} and re.fullmatch(r'[a-f0-9]{16,64}',str(value)):data[key]=value
             elif key=='route':data[key]=route(value)
@@ -81,6 +86,8 @@ class Journal:
             stamp=dt.datetime.strptime(hour,'%Y%m%d%H').replace(tzinfo=dt.timezone.utc).timestamp()
             if stamp+3600<=cutoff and (self.handle is None or pathlib.Path(self.handle.name)!=path):
                 try:path.unlink()
+                # Another process may have pruned the same expired file.
+                except FileNotFoundError:pass
                 except OSError:self.failures+=1
 
     def _write(self,data):
@@ -137,6 +144,10 @@ def install_exception_hooks():
 
 def exception(event,error,**fields):
     frames=[{'file':pathlib.Path(f.filename).name,'line':f.lineno,'function':f.name} for f in traceback.extract_tb(error.__traceback__)[-12:]]
+    if isinstance(error,sqlite3.Error):
+        code=getattr(error,'sqlite_errorcode',None);name=getattr(error,'sqlite_errorname',None)
+        if type(code) is int and 0<=code<=0x7fffffff:fields['sqlite_errorcode']=code
+        if isinstance(name,str) and re.fullmatch(r'SQLITE_[A-Z0-9_]{1,64}',name):fields['sqlite_errorname']=name
     emit(event,error_type=type(error).__name__,frames=frames,**fields)
 
 def emit(event,**fields):

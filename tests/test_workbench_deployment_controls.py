@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
 import sys
 
 import pytest
@@ -117,12 +118,26 @@ def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,m
     module=release_module();monkeypatch.setattr(module,'ROOT',tmp_path)
     for folder in ('easel_workbench','easel','config'):
         (tmp_path/folder).mkdir()
+    git=shutil.which('git')
+    assert git,'Git is required to verify the frozen source revision'
+    def git_run(*args):
+        return subprocess.check_output([git,*args],cwd=tmp_path,text=True).strip()
+    git_run('init','--quiet')
+    git_run('config','--local','user.name','Easel TEMP Validation')
+    git_run('config','--local','user.email','temp-validation@example.invalid')
+    git_run('config','--local','commit.gpgsign','false')
+    git_run('config','--local','core.hooksPath',str(tmp_path/'.git/no-hooks'))
+    git_run('add','--all')
+    git_run('commit','--quiet','-m','Freeze TEMP validation inputs')
+    source_commit=git_run('rev-parse','HEAD')
     selected=module.freeze(native.name)
     frozen=tmp_path/'workbench-releases'/selected['release']
     manifest=module.verify(frozen,selected['manifest_sha256'])
     assert manifest['capabilities_type']=='easel_project_builtin'
     assert manifest['capabilities_sha256']==module.capabilities_revision(tmp_path)==module.capabilities_revision(frozen)
     assert manifest['workspace_sha256']==module.workspace_revision(frozen)
+    assert manifest['source_commit']==source_commit
+    assert manifest['upstream_commit']==json.loads((PROJECT/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))['upstream_commit']
     assert 'agents/workspace/AGENTS.md' in manifest['files']
     assert 'skills/builtin/content-production/SKILL.md' in manifest['files']
     assert any(name.endswith('认可母版.png') for name in manifest['files'])

@@ -788,16 +788,10 @@ def test_zhihu_runner_handles_launch_failure_or_login_during_capture(tmp_path, m
 
 
 def web_functions():
-    tree = ast.parse((ROOT / "web/app.py").read_text(encoding="utf-8"))
-    names = {"api_login_start", "_start_login", "_login_status"}
-    nodes = [node for node in tree.body
-             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names]
-    for node in nodes:
-        node.decorator_list = []
-    env = {"json": json, "subprocess": subprocess, "sys": sys, "asyncio": asyncio,
-           "_LOGIN_START_LOCKS": {}}
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), "web/app.py", "exec"), env)
-    return env
+    from easel.web_services import accounts
+
+    return accounts.bind({"json": json, "subprocess": subprocess, "sys": sys,
+                          "asyncio": asyncio, "_LOGIN_START_LOCKS": {}}).namespace
 
 
 @pytest.mark.parametrize("state", ["starting", "qr_ready", "scanned", "window_login", "verifying"])

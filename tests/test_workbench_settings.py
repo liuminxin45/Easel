@@ -182,16 +182,21 @@ def test_interrupted_installer_only_rechecks_dependencies_and_never_replays(sett
     assert recovered['recovered_by']=='read_only_dependency_check'
 
 
-def test_settings_projection_tracks_actual_upstream_functions():
-    import ast
+def test_settings_hosts_share_native_function_code_and_isolate_revisions(settings,tmp_path):
+    from easel.web_services import settings as native
+    one=tmp_path/'one';two=tmp_path/'two';one.mkdir();two.mkdir()
+    first,_=settings._module(one,{'OPENAI_API_KEY':'first'},settings.current())
+    second,_=settings._module(two,{'OPENAI_API_KEY':'second'},settings.current())
+    default=native.bind(into={'_read_env':lambda:{},'_harness_settings':lambda:{'runtime':'api'}})
+    for name in ('_model_channels','api_settings_models_save','api_models_available','api_models_selftest'):
+        assert getattr(first,name).__code__ is getattr(native,name).__code__
+        assert getattr(default,name).__code__ is getattr(first,name).__code__
+    assert first._read_env()['OPENAI_API_KEY']=='first'
+    assert second._read_env()['OPENAI_API_KEY']=='second'
+    assert first.api_models_available.__globals__ is not second.api_models_available.__globals__
     root=Path(__file__).resolve().parents[1]
-    upstream=ast.parse((root/'web/app.py').read_text(encoding='utf-8'))
-    projection=ast.parse((root/'easel_workbench/runtime/settings_upstream.py').read_text(encoding='utf-8'))
-    original={n.name:n for n in upstream.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef))}
-    for node in projection.body:
-        if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef)):
-            expected=copy.deepcopy(original[node.name]);expected.decorator_list=[]
-            assert ast.dump(node)==ast.dump(expected),node.name
+    assert not (root/'easel_workbench/runtime/settings_upstream.py').exists()
+    assert not (root/'scripts/extract_workbench_settings.py').exists()
 
 
 @pytest.mark.parametrize('mode',['normal','slow-cancel'])

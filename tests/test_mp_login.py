@@ -12,14 +12,9 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 
 def load_web_functions():
-    tree = ast.parse((ROOT / 'web/app.py').read_text(encoding='utf-8'))
-    names = {'api_mp_login_start', '_stop_mp_login_on_shutdown'}
-    nodes = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in names]
-    for node in nodes:
-        node.decorator_list = []
-    env = {'subprocess': subprocess}
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), 'web/app.py', 'exec'), env)
-    return env
+    from easel.web_services import accounts
+
+    return accounts.bind({'subprocess': subprocess}).namespace
 
 class MpLoginTests(unittest.TestCase):
     def test_repeated_start_preserves_existing_session(self):

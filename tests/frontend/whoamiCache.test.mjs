@@ -29,6 +29,16 @@ function setup() {
   return { exports, pending, entries };
 }
 
+test('verification from an old host cannot populate the next authentication cache',async()=>{
+ const view=setup(),first=new Map(),second=new Map();
+ const store=map=>({getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)});
+ const release=view.exports.bindWhoamiStorage(store(first));
+ view.exports.verifyStale(['xiaohongshu']);
+ release();const releaseNext=view.exports.bindWhoamiStorage(store(second));
+ view.pending[0].resolve({loggedIn:true,name:'old account',avatar:''});
+ await settle();assert.equal(second.size,0);assert.equal(first.size,0);releaseNext();
+});
+
 test('legacy and previously incorrect account identity caches are ignored', () => {
   const view = setup();
   view.entries.set('easel_whoami', JSON.stringify({

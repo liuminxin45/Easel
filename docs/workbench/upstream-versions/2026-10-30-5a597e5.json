@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "record_id": "2026-10-30-5a597e5",
+  "record_kind": "integrated_upstream_baseline",
+  "observed_at": "2026-10-30T21:31:00+08:00",
+  "current_baseline_source": "docs/workbench/upstream-base.json",
+  "upstream": {
+    "remote": "upstream",
+    "url": "https://github.com/ZJU-REAL/Easel.git",
+    "ref": "refs/heads/main",
+    "observed_head": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+    "integrated_commit": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+    "tree": "c5446b3af710318f2c30ce7a7df39b91fe16e31d",
+    "subject": "fix: resolve media, harness, chat lifecycle and skill visibility issues",
+    "authored_at": "2026-10-25T14:24:13+08:00",
+    "committed_at": "2026-10-25T14:24:13+08:00",
+    "commit_url": "https://github.com/ZJU-REAL/Easel/commit/5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+    "release_tag_describe": "v0.3.0-77-g5a597e5",
+    "release_tag_match": "v[0-9]*",
+    "verification": [
+      "git ls-remote upstream refs/heads/main",
+      "git show -s 5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+      "git describe --tags --match 'v[0-9]*' 5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+      "git merge-base --is-ancestor 5a597e5f3ef5b01098b53f36caf719dd9a32b7bf HEAD"
+    ]
+  },
+  "pin": {
+    "ref": "refs/tags/easel-upstream/2026-10-30-5a597e5",
+    "kind": "annotated_tag",
+    "tag_object": "50cf6b7a394048b784e2f7c74fc09fbcd36bd7f8",
+    "target_commit": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+    "published_remote": "origin",
+    "immutable": true
+  },
+  "fork_at_recording": {
+    "remote": "origin",
+    "url": "https://github.com/liuminxin45/Easel.git",
+    "branch": "codex/easel-base-alignment",
+    "delivered_commit": "cc9d4858ae561640dc83ec3f32591ee672711448",
+    "runtime_source_commit": "59026d2250783b5d64c706134465ca58b8588fb5",
+    "validation_commit": "a7c4cbddbfdcf45e864ee2155de9f3be62dd3b23"
+  },
+  "deployment_at_recording": {
+    "runtime": {
+      "release": "workbench-20261030-125044",
+      "manifest_sha256": "287732da2bcafd4e7174f03e6f021fc8241fe4a0dd4ee74ebac313eee4b666f9"
+    },
+    "native": {
+      "release": "native-easel-workbench-20261030125003",
+      "manifest_sha256": "31158a97214b9c1c783a65665a94e63327d086da6e3a1c90a63e2d87e957eade"
+    }
+  },
+  "acceptance_record": "docs/workbench/EASEL-BASE-ALIGNMENT-20261030.md",
+  "adapter_record": "docs/workbench/ADAPTATION-POINTS.md",
+  "policy": {
+    "append_only_history": true,
+    "observing_new_head_does_not_advance_integrated_baseline": true,
+    "upstream_push_allowed": false,
+    "private_delivery_remote": "origin"
+  }
+}

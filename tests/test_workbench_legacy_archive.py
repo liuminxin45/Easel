@@ -295,9 +295,10 @@ def test_historical_exception_never_ignores_mutation_wal_or_process(environment,
     assert snapshot.exists()
 
 
-def test_obsolete_candidate_control_is_archived_exactly_without_touching_primary(environment):
+@pytest.mark.parametrize('relative', ['.local/workbench-deployment/news-old-candidate.json', 'data/cache-hint-candidate.json'])
+def test_obsolete_candidate_control_is_archived_exactly_without_touching_primary(environment, relative):
     root, legacy = environment
-    obsolete = root / '.local/workbench-deployment/news-old-candidate.json'
+    obsolete = root / relative
     write(obsolete, {'release': 'workbench-old'})
     original = obsolete.read_bytes(); primary = root / '.local/workbench-deployment/candidate.json'
     primary_bytes = primary.read_bytes()
@@ -306,13 +307,16 @@ def test_obsolete_candidate_control_is_archived_exactly_without_touching_primary
                              retire_candidate_controls=[{'path': str(obsolete), 'sha256': archive.digest(obsolete)}])
     archive.retire(plan['archive_directory'], review, processes=[])
     assert not obsolete.exists() and primary.read_bytes() == primary_bytes
-    assert (Path(plan['archive_directory']) / 'retirement/obsolete-controls/news-old-candidate.json').read_bytes() == original
+    assert (Path(plan['archive_directory']) / 'retirement/obsolete-controls' / obsolete.name).read_bytes() == original
 
 
-def test_primary_candidate_cannot_be_retired_as_obsolete(environment):
+@pytest.mark.parametrize('relative', ['.local/workbench-deployment/candidate.json', 'data/candidate.json',
+                                      'data/active-native-candidate.json', 'data/active-native.json'])
+def test_primary_or_active_selector_cannot_be_retired_as_obsolete(environment, relative):
     root, legacy = environment
     plan = archive.create_plan(root, legacy, 'test-primary-control'); archive.backup(plan)
-    primary = root / '.local/workbench-deployment/candidate.json'
+    primary = root / relative
+    if not primary.exists():write(primary, {'release': 'workbench-old'})
     review = deployed_review(root, plan, ['project/workbench-releases/workbench-old'],
                              retire_candidate_controls=[{'path': str(primary), 'sha256': archive.digest(primary)}])
     with pytest.raises(ValueError, match='non-primary'):

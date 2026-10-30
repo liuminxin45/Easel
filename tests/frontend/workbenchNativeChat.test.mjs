@@ -11,15 +11,17 @@ const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value
 function module(file,imports,globals={}){const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
-function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search=''}={}){
+function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride}={}){
  let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
  const react={useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
- const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft},invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
- const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:resources,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:()=>({busy:false,error:'',run:async fn=>fn()}),draftFingerprint:JSON.stringify,array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
- const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{}};
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan}});
- const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan).props}};
- return {calls,resources,lib,vm,render,effects,get draft(){return draft},set draft(next){draft=next}};
+ const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft},invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
+ const hookSource=readFileSync(new URL('workbench/core/react.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
+ runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,Error});
+ const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:resources,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
+ const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{}};
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
+ return {calls,resources,lib,vm,components,render,effects,get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 test('native commands come from exact server releases and contextual actions route to their business page',()=>{
@@ -49,11 +51,24 @@ test('a done event with unknown receipt retains the frozen turn and only GET rec
  assert.equal(f.calls.stream.length,2);assert.equal(f.calls.stream[1][10],true);assert.equal(f.calls.stream[1][9],'exact-turn');
  assert.equal(f.calls.post.length,0);
 });
-test('native production plans before sending, and confirmation sends the exact plan token and selected version',async()=>{
+test('one production send freezes the exact plan and immediately streams without a confirmation dialog',async()=>{
  const command={skill_id:'content-production',version:2,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true,trial:true},f=fixture({draft:{text:'原字贴图',files:[{id:'attached',name:'素材.txt'}],command}});
- f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'原字贴图');
+ f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.text,'原字贴图','input stays until real acceptance');
  const plan=f.calls.post[0];assert.equal(plan.path,'/api/chat/plan');assert.equal(plan.body.context.version,2);assert.equal(plan.body.context.trial,true);assert.deepEqual(plain(plan.body.attachments),[{id:'attached',name:'素材.txt',path:'attached'}]);
- f.render().plan.onConfirm();assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][16].context.plan_token,'exact-plan-token');
+ assert.equal(f.calls.stream[0][9],plan.body.turnId);assert.equal(f.calls.stream[0][16].context.plan_token,'exact-plan-token');assert.equal(f.render().plan,undefined,'a read-only plan must not open another confirmation modal');
+});
+test('rapid production sends share one in-flight plan and one native turn',async()=>{
+ let releasePlan;const held=new Promise(resolve=>{releasePlan=resolve}),command={skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true},f=fixture({draft:{text:'只发一次原字',files:[],command},postOverride:()=>held});
+ const view=f.render();view.chat.onSend();view.chat.onSend();await tick();assert.equal(f.calls.post.length,1);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'只发一次原字');
+ releasePlan({plan_token:'same-plan',plan:{}});await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][16].context.plan_token,'same-plan');
+});
+test('a plan failure leaves the production input and attachments intact without streaming',async()=>{
+ const initial={text:'保留失败原字',files:[{id:'original',name:'素材.txt'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}},f=fixture({draft:initial,postOverride:async()=>{throw Error('TEMP plan rejected')}});
+ f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,initial.text);assert.deepEqual(plain(f.draft.files),initial.files);assert.equal(f.draft.pending,undefined);
+});
+test('a definite unaccepted 403 409 or 422 lets the user correct and send again while unknown stays blocked',async()=>{
+ for(const status of [403,409,422]){const f=fixture();f.render().chat.onSend();await tick();const error=Object.assign(Error('TEMP definite rejection'),{status});f.calls.stream[0][5](error);assert.equal(f.draft.pending.state,'rejected');f.render().chat.composer.onTextChange('修正后的原字 '+status);f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,2,'definite '+status+' must release the owner');assert.equal(f.calls.stream[1][0],'修正后的原字 '+status);assert.equal(f.calls.stream[1][10],false)}
+ const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}});f.render().chat.onSend();await tick();f.calls.stream[0][16].onAccepted();f.calls.stream[0][4]();await tick();await tick();f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.pending.state,'unknown');
 });
 test('news provenance belongs to the frozen turn and clears with the accepted input',async()=>{
  const f=fixture({draft:{text:'新闻原字',files:[],article_id:'exact-news',article_mode:'product'}});f.render().chat.onSend();await tick();
@@ -70,7 +85,14 @@ test('business-only skill selection preserves chat input and navigates without c
 });
 test('historical turn products use registered file IDs and open the exact business version',()=>{
  const f=fixture(),tree=f.lib.NativeTurnOutputs({message:{turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}}}),output=nodes(tree).find(n=>n.props?.file);
- assert.equal(output.props.file.id,'registered');nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
+ assert.equal(output.props.file.id,'registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters)?.props.versionId,'exact-version');nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
+});
+test('production parameters load only when opened and show the exact version profile skills and frozen bytes',()=>{
+ let opened=false;const paths=[],parameters={execution_prompt:{body:'  本轮冻结原字\n保留全部内容  ',sha256:'a'.repeat(64),creator_snapshot:{profile:{id:'history-profile',name:'历史作者',revision:9},skills:[{id:'content-production',name:'内容生产',version:2}],trial:true}}};
+ const TextRecord=()=>{},lib=module('workbench/ui/ProductionParameters.tsx',{react:{useState:()=>[opened,next=>{opened=next}]},'@workbench/core':{useResource:path=>{paths.push(path);return {data:path?parameters:null,error:'',reload:async()=>parameters}},array,record,string},'./common':{Notice:()=>{},TextRecord}});
+ const initial=lib.ProductionParameters({versionId:'exact-version'});assert.equal(paths[0],null);assert.equal(nodes(initial).find(n=>n.type==='summary').props.children,'制作参数');initial.props.onToggle({currentTarget:{open:true}});
+ const shown=lib.ProductionParameters({versionId:'exact-version'}),text=nodes(shown).flatMap(n=>array(n.props?.children).filter(v=>typeof v==='string')).join(' '),records=nodes(shown).filter(n=>n.type===TextRecord);
+ assert.equal(paths.at(-1),'/api/creative/prompts/exact-version');assert.match(text,/历史作者/);assert.match(text,/v9/);assert.match(text,/内容生产 · v2/);assert.match(text,/本次试用/);assert.ok(records.some(n=>n.props.value===parameters.execution_prompt.body));assert.ok(records.some(n=>n.props.value===parameters.execution_prompt.sha256));
 });
 
 function transport(fetchImpl){const source=readFileSync(new URL('lib/api.ts',sourceRoot),'utf8'),ast=ts.createSourceFile('api.ts',source,ts.ScriptTarget.Latest,true),fn=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='streamChat'),exports={};runInNewContext(ts.transpileModule(fn.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports,BASE:'/native',window:{location:{pathname:'/native/chat/session'}},AbortController,TextDecoder,fetch:fetchImpl,setTimeout:(fn,ms)=>setTimeout(fn,Math.min(ms||0,2)),clearTimeout});return exports.streamChat}

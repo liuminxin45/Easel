@@ -40,6 +40,35 @@
 工作台构建执行交互与基座检查；新增架构负对照验证重复实现、反向依赖及共通样式覆盖会被拒绝。
 真实模型、真实扫码完成和平台发布不由 TEMP 假执行器或模拟手机结果推定。
 
-最终配对、测试报告、截图、远端提交和正式切换结果在全部检查完成后补充。
+集中适配点、采用的端口/适配器、组装入口、扩展槽与边界装饰模式，以及后续同步顺序见 [ADAPTATION-POINTS.md](ADAPTATION-POINTS.md)。新增共通功能必须先改原模块；私有业务不进入原模块。当前分支包含私有历史，不整体提交给官方；以后仅整理通用模块的独立补丁。
 
 公众号手工包复用原 `build_package`；Markdown 3.11.2 经既有持久安装队列进入项目 media-tools 环境，未改变固定服务 Python 或上游 .venv。本地大文件登记与原上传共用同一原子写入，HTTP 仍限 20MB，本地导出流式上限 2GB。
+
+## 最终交付
+
+最终运行源码为 `59026d2250783b5d64c706134465ca58b8588fb5`，补充浏览器验收提交为 `a7c4cbddbfdcf45e864ee2155de9f3be62dd3b23`；两者之间只增加测试。代码已推送到 [自有 fork 的集成分支](https://github.com/liuminxin45/Easel/tree/codex/easel-base-alignment)。2026-10-30 复查官方 main 仍为上述固定 `5a597e5`。
+
+| 正式配对 | release | manifest SHA256 |
+|---|---|---|
+| 后端 | `workbench-20261030-125044` | `287732da2bcafd4e7174f03e6f021fc8241fe4a0dd4ee74ebac313eee4b666f9` |
+| 前端 | `native-easel-workbench-20261030125003` | `31158a97214b9c1c783a65665a94e63327d086da6e3a1c90a63e2d87e957eade` |
+
+最终冻结候选通过 454 项工作台回归、24 项基座与共享服务补充检查，136 个运行模块全部来自此候选；1,098 个后端文件测试后重核无变化。前端 244 项通过，原 Easel 与工作台检查、独立构建均通过。原生后端专项 390 项通过、14 项按环境跳过。
+
+冻结浏览器 72 项通过，含 Windows 桌面与模拟手机、明暗主题、官方同数据样式对照、扫码所有状态、准确修订冲突恢复、真实 HTTP 401 保稿及未知操作不重放。56 张截图保存 SHA。私有账号页初始不发 whoami，手动核验与扫码成功仍调用原 `force=true` 服务。模拟手机保留官方固定侧栏的布局限制，不能称为已解决移动适配或实体手机验收。
+
+首轮上线复核发现原账号页自动 whoami 会恢复已退役行为，已通过共享缓存端口的可选策略修正；原页面、样式和官方默认行为保持。最终候选重新冻结并完整回归，首轮配对及失败/修正证据没有覆盖。正式 Windows Edge 只读复查显示七个平台均未登录、原生登录按钮可见、无额外账号操作，账号自动核验和业务写请求均为零。
+
+切换使用既有准入围栏、空闲/原生队列、进程创建时间和完整参数检查。最终 manager 与七个角色身份匹配，18 张历史表原有 1,291 行的整行哈希及重数全部保留；没有复制/恢复数据库、重放历史未知请求或激活新技能版本。真实扫码完成、真实模型制作与平台发布没有由本轮合成验收推定。
+
+远端干净克隆使用固定 Node 24.19.0、锁文件及 `npm ci --ignore-scripts`，原生与私有三项检查/构建全部通过，构建前后 Git 干净。fork 的 [Easel 基座 CI](https://github.com/liuminxin45/Easel/actions/runs/41058882631) 与 [自定义采集协议 CI](https://github.com/liuminxin45/Easel/actions/runs/41058123670) 均通过。
+
+准确证据根目录：`.local/workbench-validation/easel-base-alignment-20261030/`。
+
+- `final-acceptance-r2.json`：最终候选、当前发布基线和 115 份验收文件 SHA。
+- `frozen-backend-r2/final-backend-summary-r2.json`：完整冻结回归与源码/模块身份。
+- `base-browser-frozen-r2/report.json`：72 项浏览器检查、测试脚本和截图 SHA。
+- `remote-reproduction-r2.json`：远端新检出的源码与可复现构建。
+- `after-live.json`、`history-after.json`、`live-after-summary.json`：原行哈希、队列及准确进程身份。
+- `owner-live-r2.json`：正式 owner HTTP 与 Windows Edge 只读账号页；认证状态未写盘。
+- `.local/workbench-deployment/upgrades/workbench-20261030-125044.json`：实际正式切换回执（此路径相对于仓库根目录）。

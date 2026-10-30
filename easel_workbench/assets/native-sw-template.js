@@ -6,12 +6,12 @@ async function saveShell(response){
 }
 async function warmShell(){try{return await saveShell(await fetch('/native/',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)}))}catch{return false}}
 async function retainedShell(){
- const names=await caches.keys(),ordered=[SHELL,...names.filter(n=>n.startsWith('native-shell-')&&n!==SHELL).reverse()];
+ const names=await caches.keys(),ordered=[SHELL];
  for(const name of ordered){if(!names.includes(name))continue;const response=await (await caches.open(name)).match('/native/');if(response)return response}
 }
 async function prune(){
- const names=await caches.keys(),prior=names.filter(n=>n.startsWith('native-shell-')&&n!==SHELL),keep=new Set([VERSION,...prior.slice(-2).map(n=>n.slice('native-shell-'.length))]);
- // A retained old shell still needs its own immutable scripts and styles.
+ const names=await caches.keys(),keep=new Set([VERSION]);
+ // Retire compiled old UI shells only. Draft/attachment stores are untouched.
  for(const name of names){const prefix=name.startsWith('native-static-')?'native-static-':name.startsWith('native-shell-')?'native-shell-':null;if(prefix&&!keep.has(name.slice(prefix.length)))await caches.delete(name)}
 }
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(ASSETS);await warmShell();await self.skipWaiting()})()));

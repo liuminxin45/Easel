@@ -68,6 +68,7 @@ test('trends only collect on explicit refresh and preserve the complete source l
  const trends=pages.NativeTrends({onUseTopic:()=>{}});
  assert.equal(collections,0);
  assert.equal(trends.props.listLimit,1000);
+ assert.equal(trends.props.quietBackgroundRefresh,true);
  await trends.props.refreshAll();
  assert.equal(collections,1);
 });

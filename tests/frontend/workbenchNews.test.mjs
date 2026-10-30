@@ -8,6 +8,21 @@ const root=new URL('../../web/frontend/src/',import.meta.url),jsx={jsx:(type,pro
 function load(file,imports={}){const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,root),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,Date,Set,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(id==='./InteractionNotice'?{InteractionNotice:()=>null}:assert.fail(id))});return exports}
 const context=load('workbench/platform/news-context.ts'),navigation=load('workbench/platform/navigation.ts',{'./news-context':context});
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
+
+test('quiet trend retries keep layout and prior errors until success; native defaults retain progress',async()=>{
+ for(const quiet of [true,undefined]){
+  const changes=[];let slot=0,loadRead,release;
+  const react={Component:class {},useState:initial=>{const index=slot++,value=index===5?'上次读取失败':initial;return [value,next=>changes.push([index,next])]},useEffect(){},useCallback:fn=>{loadRead??=fn;return fn},useRef:value=>({current:value})};
+  const api={fetchTrends:()=>new Promise(resolve=>release=resolve)};
+  const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./TrendsView':()=>null,'./TrendSourcesDialog':()=>null});
+  const panel=Page({onUseTopic(){},quietBackgroundRefresh:quiet}).props.children;panel.type(panel.props);
+  loadRead(['source'],true);
+  assert.equal(changes.some(([index,value])=>index===4&&value===true),!quiet);
+  assert.equal(changes.some(([index,value])=>index===5&&value===''),!quiet);
+  release({trends:[],updated:1,warnings:[]});await Promise.resolve();await Promise.resolve();
+  assert.ok(changes.some(([index,value])=>index===5&&value===''));
+ }
+});
 test('multi-source return context survives old deep links and shell validation',()=>{
  const windows=Object.fromEntries(Array.from({length:73},(_,i)=>['custom-'+i,{day:'2026-10-29',section:'分类',theme:'主题'}]));
  const selected={source:'custom-3',day:'2026-10-29',sources:Object.keys(windows).join(','),windows:JSON.stringify(windows)};

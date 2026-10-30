@@ -54,7 +54,7 @@ export function NativeTopics({onUseTopic}:{onUseTopic:(title:string)=>void}){
 export function NativeTrends({onUseTopic}:{onUseTopic:(title:string)=>void}){
  const vm=useWorkbench();
  const refreshAll=useCallback(()=>vm.service.collectAll(),[vm.service]);
- return <TrendsPage onUseTopic={onUseTopic} refreshAll={refreshAll} listLimit={1000}/>;
+ return <TrendsPage onUseTopic={onUseTopic} refreshAll={refreshAll} listLimit={1000} quietBackgroundRefresh/>;
 }
 
 export function NativeCalendar(){return <CalendarPage/>}

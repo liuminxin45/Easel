@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "date": "2026-10-31",
+  "passed": true,
+  "application_source_commit": "bb4d612e222be793f079204e15e742476d9debbb",
+  "prior_full_review_source": "253c2bd9a35e0a221ba4ccbf3d2a3c85adbb37d1",
+  "prior_full_review_inventory_sha256": "06e55fd7261ec198e661360c99cdce888c97c43660b3a186c405697caa622ce8",
+  "prior_QA_commit": "74b7e6fe089eb7f356f22e843b453cbd7b272819",
+  "native": {
+    "release": "native-easel-workbench-20261030202458",
+    "manifest_sha256": "3e7d44b1f89398a14b7f3924b526fb378ed0f22f60da012ed78ae948c4bce5f8"
+  },
+  "backend": {
+    "release": "workbench-20261030-202529",
+    "manifest_sha256": "d34e02d8a1428ea144341567b4e6be340abf0b887c7de40f1e74db408604ce65"
+  },
+  "change": {
+    "file": "web/frontend/src/workbench/ui/styles/mobile.css",
+    "added_lines": 1,
+    "selector": "html[data-native-platform] .accounts-page > div:first-child > .btn",
+    "declarations": "flex-shrink: 0; white-space: nowrap",
+    "frontend_inputs": 144,
+    "unchanged_frontend_inputs": 143,
+    "runtime_payload_equal_files": 1103,
+    "official_UI_source_changed": false
+  },
+  "direct_final_pair_validation": {
+    "account_checks": 120,
+    "viewport_theme_cases": 12,
+    "account_screenshots_reviewed": 36,
+    "upgrade_checks": 8,
+    "node_tests": 282,
+    "live_browser_checks": 7,
+    "tables_preserved": 18,
+    "original_rows_preserved": 1291,
+    "historical_full_616_and_705_browser_reports_relabelled_as_final_bundle": false
+  },
+  "evidence": {
+    ".local/workbench-validation/mobile-audit-20261031/account-header-final/account-header.json": "fa1b6673c110676ddcce8d9b3f8a6dcf1ede1de1bae2a795317a61236a966030",
+    ".local/workbench-validation/mobile-audit-20261031/account-header-final/visual-review.json": "cec03474e2e434a794624830dfad2920f6b007f4355f6e1565456a02ded978a9",
+    ".local/workbench-validation/mobile-audit-20261031/account-header-acceptance.json": "fb94d21550311f93805eea1950e79798b531648e5d6e0e79cf3683d69fe2b263",
+    ".local/workbench-validation/mobile-audit-20261031/live-final-browser.json": "33e216b473a22b5020b28568c9c919e7544c3fea593eed57d0f77d0c45241e6f",
+    ".local/workbench-validation/mobile-audit-20261031/after-live.json": "be6f29a6de53095b72d42ffc6b7ad7bbdc9dbc20a28cb09164165eca05fec502",
+    ".local/workbench-validation/mobile-audit-20261031/archive-final-live-static-after.json": "11b345fc3b32b5a0c0cd35d9ff7d566e6fb902264b7d82708a5b1c3d7f3d2636",
+    ".local/workbench-validation/mobile-audit-20261031/public-entry-final.json": "398ce24bb1c8d00006f0876cb44407b53109626c6dd1967e11fdc689775a5311"
+  },
+  "archives": {
+    "newly_retired_packages": 10,
+    "files_verified": 5111,
+    "original_bytes": 121839590,
+    "zip_bytes": 88970402,
+    "live_database_copied_or_restored": false,
+    "only_final_pair_left_in_active_release_directories": true
+  },
+  "scope": {
+    "browser": "Actual Windows Edge, simulated mobile and trusted touch events",
+    "physical_vivo_tested": false,
+    "real_AI_calls": 0,
+    "real_platform_writes": 0,
+    "public_direct_and_existing_proxy": "Both HTTP200 after one303 redirect; current observation only, no long-term reliability claim",
+    "CI_final_success_claimed": false
+  }
+}

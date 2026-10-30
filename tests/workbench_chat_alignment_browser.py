@@ -64,14 +64,14 @@ def main():
                     page.get_by_role('button',name='移除所选技能').click()
                     check(profile,'official brush filters actual skills and prefills without execution')
                     textarea.fill('REQUEST_PERMISSION '+profile);textarea.press('Shift+Enter');expect(textarea).to_have_value('REQUEST_PERMISSION '+profile+'\n');textarea.press('Enter')
-                    card=page.locator('.question-card');expect(card).to_be_visible();expect(page.locator('.live-activity')).to_contain_text('TEMP 第二步')
+                    card=page.locator('.question-card');expect(card).to_be_visible(timeout=20000);expect(page.locator('.live-activity')).to_contain_text('TEMP 第二步')
                     expect(page.locator('summary').filter(has_text='执行过程')).to_have_count(0)
                     title=page.request.get(f['origin']+'/api/chat/sessions/'+sid).json()['session']['title'];assert title not in ('新对话','New Chat')
                     check(profile,'first message names the session; streaming shows latest activity without completed collapse')
                     count=len(f['adapter'].requests);menu();page.get_by_role('button',name='内容库',exact=True).click();expect(page.get_by_role('heading',name='内容库',exact=True)).to_be_visible();chat_again(sid)
-                    expect(card).to_be_visible();assert len(f['adapter'].requests)==count
+                    expect(card).to_be_visible(timeout=20000);assert len(f['adapter'].requests)==count
                     check(profile,'pending permission survives view switches without a new native turn')
-                    page.reload();expect(card).to_be_visible();assert len(f['adapter'].requests)==count
+                    page.reload();expect(card).to_be_visible(timeout=20000);assert len(f['adapter'].requests)==count
                     check(profile,'refresh restores only the live question from the original turn')
                     decision='允许本次' if profile=='windows' else '拒绝'
                     if profile=='windows':

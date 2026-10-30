@@ -38,12 +38,12 @@ export class SessionRuntime {
   this.state.setState({running:true,accepted:resumeOnly||turn.state==='accepted',error:'',stream:emptyStream()});
   this.patch({pending:{...turn,state:resumeOnly?turn.state:'connecting'}});
   const active=()=>this.owner===token;
-  const change=(update:(stream:StreamState)=>StreamState)=>{if(active())this.state.setState({stream:update(this.state.getState().stream||emptyStream())})};
+  const change=(update:(stream:StreamState)=>StreamState)=>{if(active())this.state.setState({error:'',stream:update(this.state.getState().stream||emptyStream())})};
   let finalizing=false;
   const verify=()=>void(async()=>{if(finalizing||!active())return;finalizing=true;try{
    const receipt=await this.client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(this.id)+'?turn_id='+encodeURIComponent(turn.turnId));if(!active())return;
    const terminal=string(receipt.execution_status)||string(receipt.stop_reason),known=string(receipt.turn_id)===turn.turnId&&['completed','stopped','failed'].includes(terminal)&&receipt.delivery_state!=='unknown';
-   if(known){this.acknowledge(turn);this.completed.add(turn.turnId);this.patch({pending:undefined});if(receipt.error)this.state.setState({error:string(receipt.error)});if(['failed','unknown'].includes(string(receipt.hook_status)))this.state.setState({error:string(receipt.hook_error)||'模型回复已保留，作品记录仍待核对；不会重新制作。'})}
+   if(known){this.state.setState({error:''});this.acknowledge(turn);this.completed.add(turn.turnId);this.patch({pending:undefined});if(receipt.error)this.state.setState({error:string(receipt.error)});if(['failed','unknown'].includes(string(receipt.hook_status)))this.state.setState({error:string(receipt.hook_error)||'模型回复已保留，作品记录仍待核对；不会重新制作。'})}
    else{this.blocked.add(turn.turnId);this.state.setState({error:string(receipt.error)||'原回合结果尚未核对，已保留原请求，不会重复发送。'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}})}
    await this.reload();if(!active())return;this.owner=undefined;this.state.setState({running:false,stream:undefined});const linked=string(record(receipt.work).work_id);void this.client.invalidate(['chat','works','studio',...(linked?['work:'+linked]:[])]);
   }catch(error){if(!active())return;this.owner=undefined;this.blocked.add(turn.turnId);this.state.setState({running:false,error:error instanceof Error?error.message:'暂未取得原回执，输入仍保留'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}})}})();

@@ -648,7 +648,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             vary.update(item.strip() for item in encoding.get('Vary',encoding.get('vary','')).split(',') if item.strip())
             result.body=payload;result.headers.update(encoding);result.headers['Content-Length']=str(len(payload))
             if vary:result.headers['Vary']=', '.join(sorted(vary))
-        result.headers.update({'X-Desk-Trace':trace,'X-Desk-Architecture':'toolbox','X-Desk-Workspace':'integrated-v1','Strict-Transport-Security':'max-age=31536000','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY'})
+        from easel_workbench.runtime.native_api import is_html_preview_response
+        frame_policy='SAMEORIGIN' if request.method in ('GET','HEAD') and is_html_preview_response(result) else 'DENY'
+        result.headers.update({'X-Desk-Trace':trace,'X-Desk-Architecture':'toolbox','X-Desk-Workspace':'integrated-v1','Strict-Transport-Security':'max-age=31536000','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':frame_policy})
         journal.emit('request_finished',trace_id=trace,route=request.url.path,method=request.method,status=result.status_code,duration_ms=round((time.monotonic()-start)*1000,3))
         if request.method=='HEAD':return Response(status_code=result.status_code,headers=dict(result.headers))
         return result

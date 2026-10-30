@@ -316,6 +316,13 @@ def main():
                             modal.get_by_role('button', name='完成', exact=True).click()
                         assert explicit_verification.value.method=='GET'
                         expect(card.get_by_role('button', name='退出登录', exact=True)).to_be_visible()
+                        manual_verification=card.get_by_role('button',name='校验账号',exact=True)
+                        expect(manual_verification).to_be_enabled()
+                        with page.expect_request(lambda request:urlsplit(request.url).path=='/api/accounts/wechat-oa/whoami' and parse_qs(urlsplit(request.url).query).get('force')==['true']) as manual_request:
+                            manual_verification.click()
+                        assert manual_request.value.method=='GET'
+                        expect(manual_verification).to_be_enabled()
+                        check(label+': manual account verification and successful QR login retain explicit force requests')
                         capture('account-success')
                         page.once('dialog', lambda dialog: dialog.accept())
                         card.get_by_role('button', name='退出登录', exact=True).click()

@@ -24,6 +24,7 @@ STATE=ROOT/'.local/workbench-deployment'
 PYTHON=ROOT/'.runtime/workbench-python/Scripts/pythonw.exe'
 sys.path.insert(0,str(ROOT))
 from workbench_release import atomic,sha,verify,validate_source_binding
+from archived_evidence import archived_reads
 from easel_workbench.runtime.scripts.windows_process_identity import ProcessIdentity
 from easel_workbench.processes import checked_identity
 
@@ -64,7 +65,8 @@ def idle(database=None):
     database=Path(database or OLD/'data/desk.sqlite').resolve()
     with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row
-        status=automation.busy_state(HistoricalAuditConnection(c),audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
+        with archived_reads(ROOT,OLD,base,automation):
+            status=automation.busy_state(HistoricalAuditConnection(c),audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
         for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}

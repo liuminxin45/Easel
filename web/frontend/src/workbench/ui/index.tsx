@@ -37,7 +37,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  else if(['/posters/new','/articles/new','/works/new'].includes(p))page=<NativeNewChat key={path} format={p==='/articles/new'?'article':'poster'} profileId={profile} search={q} onCreate={createChat}/>;
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkPage id={decodeURIComponent(p.split('/')[2]!)} search={q}/>;
  else if(['/posters','/articles','/works'].includes(p)||p.endsWith('/history'))page=q.get('drafts')==='1'?<LocalInputs/>:<Library format={p==='/articles'?'article':q.get('format')||''} history={p.endsWith('/history')}/>;
- else if(p==='/settings'||p==='/account')page=<Settings theme={theme} onThemeChange={onThemeChange} panel={p==='/account'?'account':q.get('panel')||''}/>;
+ else if(p==='/settings'||p==='/account')page=<Settings/>;
  else if(q.get('section')==='skills')page=q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item')?<Skills profileId={profile} search={q}/>:<NativeSkills profileId={profile} onUse={async(command,text)=>{if(!await createChat(profile,command,text))throw Error('会话暂未创建，输入仍保留在这里。')}}/>;
  else if(q.get('section')==='profiles')page=<Profiles search={q}/>;
  else if(q.get('section')==='distribution'&&q.get('pane')==='connections')page=<Accounts/>;

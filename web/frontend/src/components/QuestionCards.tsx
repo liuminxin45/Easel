@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatQuestion, ChatQuestionItem } from '../lib/api';
 import { answerQuestion, questionStatus } from '../lib/api';
+export interface QuestionServices {answer:typeof answerQuestion;status:typeof questionStatus}
 
 /**
  * ask_user 问答题卡片。
@@ -14,8 +15,8 @@ import { answerQuestion, questionStatus } from '../lib/api';
  * （gateway 对 multiSelect=false 的多值直接报 "does not allow multiple answers"，
  * 前端只按数据渲染，不绕过校验）。
  */
-function QuestionCard({ question, onAnswered, onClosed }: { question: ChatQuestion; onAnswered: () => void;
-  onClosed?: (status: string) => void }) {
+function QuestionCard({ question, onAnswered, onClosed,services }: { question: ChatQuestion; onAnswered: () => void;
+  onClosed?: (status: string) => void;services?:QuestionServices }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -30,13 +31,14 @@ function QuestionCard({ question, onAnswered, onClosed }: { question: ChatQuesti
   const locked = busy || expired;
   const closedCallback = useRef(onClosed);
   closedCallback.current = onClosed;
+  const serviceRef=useRef(services);serviceRef.current=services;
 
   useEffect(() => {
     if (status !== 'pending' || deadlineReached) return;
     let active = true;
     const tick = () => {
       setNow(Date.now());
-      void questionStatus([question.id]).then(states => {
+      void (serviceRef.current?.status||questionStatus)([question.id]).then(states => {
         const next = states[question.id]?.status;
         if (active && next && next !== 'pending' && next !== 'unknown') {
           setClosed(next);
@@ -87,7 +89,7 @@ function QuestionCard({ question, onAnswered, onClosed }: { question: ChatQuesti
     const answers: Record<string, string[]> = {};
     for (const it of items) answers[it.questionId] = valsOf(it);
     try {
-      const res = await answerQuestion({ questionId: question.id, answers });
+      const res = await (serviceRef.current?.answer||answerQuestion)({ questionId: question.id, answers });
       if (!res.ok && (res.expired || (res.status && res.status !== 'pending'))) {
         setClosed(res.status || 'expired');
         onClosed?.(res.status || 'expired');
@@ -192,8 +194,8 @@ function QuestionCard({ question, onAnswered, onClosed }: { question: ChatQuesti
 }
 
 /** 流式中的 ask_user 问答题列表（一次性卡片，答完即从当前流移除）。 */
-export default function QuestionCards({ questions, onDone, onClosed }: { questions: ChatQuestion[];
-  onDone?: (questionId: string) => void; onClosed?: (id: string, status: string) => void }) {
+export default function QuestionCards({ questions, onDone, onClosed,services }: { questions: ChatQuestion[];
+  onDone?: (questionId: string) => void; onClosed?: (id: string, status: string) => void;services?:QuestionServices }) {
   const [answered, setAnswered] = useState<Record<string, boolean>>({});
   const visible = useMemo(
     () => questions.filter((q) => !answered[q.id] && q.status !== 'answered' && q.status !== 'resolved'),
@@ -203,7 +205,7 @@ export default function QuestionCards({ questions, onDone, onClosed }: { questio
   return (
     <>
       {visible.map((q) => (
-        <QuestionCard key={q.id} question={q} onClosed={status => onClosed?.(q.id, status)} onAnswered={() => {
+        <QuestionCard key={q.id} question={q} services={services} onClosed={status => onClosed?.(q.id, status)} onAnswered={() => {
           setAnswered((a) => ({ ...a, [q.id]: true }));
           onDone?.(q.id);   // 通知 App：此题已答，重放/恢复不再出现
         }} />

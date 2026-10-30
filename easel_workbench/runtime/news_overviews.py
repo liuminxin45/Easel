@@ -62,26 +62,35 @@ def record_upstream(store,root,document):
             c.execute('INSERT OR REPLACE INTO overview_sources VALUES(?,?,?,?)',(row['id'],fingerprint(row),'editorial_same_call',document.get('run_id','')));accepted+=1
     return accepted
 
-def analyze(rows,root=ROOT):
+def analyze(rows,root=ROOT,*,native_allowed=True):
     env={k:v for k,v in os.environ.items() if k not in ('OPENAI_API_KEY','CODEX_API_KEY')}
     options={'capture_output':True,'text':True,'encoding':'utf-8','errors':'replace','creationflags':subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,'env':env}
-    login=subprocess.run([str(CODEX),'login','status'],timeout=30,**options)
-    if login.returncode or 'Logged in using ChatGPT' not in login.stdout+login.stderr:raise RuntimeError('需要现有 ChatGPT 订阅登录；未启用付费API')
     runtime=pathlib.Path(root)/'data/news-overview-runtime';runtime.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='overview-',dir=runtime) as tmp:
         directory=pathlib.Path(tmp);(directory/'schema.json').write_text(json.dumps(SCHEMA),encoding='utf-8')
         material=[{k:r[k] for k in ('id','title','body','url','source_job')} for r in rows]
         for r in material:r['body']=r['body'][:6000]
         from easel_workbench.runtime.task_runtime import contract_prompt,observed_call
+        from easel_workbench.readonly_runner import run,recorded_output,project_snapshot,ReadonlyOutputInvalid
         prompt,binding=contract_prompt(root,'news_enhancement','references/news-summary.md',material)
+        native_binding=binding if native_allowed and project_snapshot(binding) else None
+        if native_binding is None:
+            login=subprocess.run([str(CODEX),'login','status'],timeout=30,**options)
+            if login.returncode or 'Logged in using ChatGPT' not in login.stdout+login.stderr:raise RuntimeError('需要现有 ChatGPT 订阅登录；未启用付费API')
         with observed_call(root,'news_enhancement',material,prompt,binding) as record_result:
-            result=subprocess.run(overview_command(directory),input=prompt,timeout=360,**options)
-            answer=directory/'answer.json'
-            if result.returncode or not answer.is_file():raise RuntimeError('本机Codex未返回概述；原文已保留')
-            if answer.stat().st_size>100000:raise ValueError('概述响应过大')
-            items=json.loads(answer.read_text(encoding='utf-8'))['items']
-            if len(items)!=len(rows) or {i['id'] for i in items}!={r['id'] for r in rows}:raise ValueError('概述ID不匹配')
-            record_result({i['id']:validate(i['summary']) for i in items})
+            result=run(native_binding,overview_command(directory),input=prompt,timeout=360,cwd=directory,runtime_root=root,**options)
+            try:
+                answer=directory/'answer.json'
+                if result.returncode or not answer.is_file():raise RuntimeError('本机Codex未返回概述；原文已保留')
+                if answer.stat().st_size>100000:raise ValueError('概述响应过大')
+                items=json.loads(answer.read_text(encoding='utf-8'))['items']
+                if len(items)!=len(rows) or {i['id'] for i in items}!={r['id'] for r in rows}:raise ValueError('概述ID不匹配')
+                summaries={i['id']:validate(i['summary']) for i in items}
+            except Exception:
+                receipt=getattr(result,'execution_receipt',None)
+                if receipt:raise ReadonlyOutputInvalid(receipt) from None
+                raise
+            record_result(recorded_output(result,summaries))
             return {i['id']:validate(i['summary']) for i in items}
 
 class Overviews:
@@ -119,12 +128,12 @@ class Overviews:
                         c.execute("UPDATE overviews SET status='error',error='后台曾中断，原文已保留',updated_at=? WHERE article_id=?",(stamp(),row['id']))
                     if record and (record['status']=='ready' or record['attempts']>=3 or record['retry_at']>now):continue
                     # A running row surviving a process interruption waits at most six minutes.
-                    pending.append(row)
+                    pending.append({**row,'_native_first_send':not record or record['attempts']==0})
                     if len(pending)>=limit:break
                 for row in pending:c.execute("UPDATE overviews SET status='running',attempts=attempts+1,retry_at=?,updated_at=? WHERE article_id=?",(now+420,stamp(),row['id']))
             if not pending:return 0
             try:
-                result=(runner or (lambda batch:analyze(batch,self.root)))(pending)
+                result=(runner or (lambda batch:analyze(batch,self.root,native_allowed=all(row['_native_first_send'] for row in batch))))(pending)
                 if set(result)!={r['id'] for r in pending}:raise ValueError('概述ID不匹配')
                 result={aid:validate(value) for aid,value in result.items()}
                 with self.store.connect() as c:current={r['id']:fingerprint(dict(r)) for r in c.execute('SELECT * FROM articles')}
@@ -134,9 +143,11 @@ class Overviews:
                         c.execute("UPDATE overviews SET status='ready',summary=?,error=NULL,retry_at=0,updated_at=? WHERE article_id=? AND input_hash=?",(result[row['id']],stamp(),row['id'],fingerprint(row)))
                         c.execute('INSERT OR REPLACE INTO overview_sources VALUES(?,?,?,?)',(row['id'],fingerprint(row),'overview_model',''))
             except Exception as exc:
+                from easel_workbench.readonly_runner import ReadonlyExecutionUnknown,ReadonlyOutputInvalid
+                held=isinstance(exc,(ReadonlyExecutionUnknown,ReadonlyOutputInvalid))
                 # Never persist model output, credentials, prompt or arbitrary exception text as an error.
                 with self.connect() as c:
-                    for row in pending:c.execute("UPDATE overviews SET status='error',summary=NULL,error=?,retry_at=?,updated_at=? WHERE article_id=?",('中文概述未完成（'+type(exc).__name__+'），原始资料已保留',time.time()+300,stamp(),row['id']))
+                    for row in pending:c.execute("UPDATE overviews SET status='error',summary=NULL,error=?,retry_at=?,updated_at=? WHERE article_id=?",('中文概述回执待核对，未自动重跑，原始资料已保留' if held else '中文概述未完成（'+type(exc).__name__+'），原始资料已保留',253402300799.0 if held else time.time()+300,stamp(),row['id']))
                 raise
             return len(pending)
     def status(self):

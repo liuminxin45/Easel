@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType,ReactNode } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
 import SkillDrawer from './SkillDrawer';
@@ -11,6 +11,9 @@ import {
 
 interface SkillPageProps {
   persona: string;
+  catalog?:{items:SkillItem[];error?:string;reload?:()=>void};
+  renderDrawer?:(name:string,onClose:()=>void)=>ReactNode;
+  headerActions?:ReactNode;subtitle?:ReactNode;
 }
 
 type IconC = ComponentType<{ size?: number }>;
@@ -53,16 +56,18 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona }: SkillPageProps) {
-  const [skills, setSkills] = useState<SkillItem[]>([]);
-  const [error, setError] = useState('');
+export default function SkillPage({ persona,catalog,renderDrawer,headerActions,subtitle }: SkillPageProps) {
+  const [localSkills, setSkills] = useState<SkillItem[]>([]);
+  const [localError, setError] = useState('');
+  const skills=catalog?.items||localSkills,error=catalog?.error||localError;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
   const load = () => {
+    if(catalog){catalog.reload?.();return}
     fetchSkills().then(setSkills).catch(() => setError('加载 SKILL 列表失败'));
   };
-  useEffect(load, []);
+  useEffect(()=>{if(!catalog)load()}, [!!catalog]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,11 +91,11 @@ export default function SkillPage({ persona }: SkillPageProps) {
   return (
     <div className="skills-page">
       <div className="skills-page-head">
-        <h1 className="page-title">技能库</h1>
+        <h1 className="page-title">技能库</h1>{headerActions}
         <p className="page-subtitle">
-          共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
+          {subtitle||<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
           标 <span className="badge badge-warn" style={{ padding: '1px 7px' }}>需 API</span> 的需先配置密钥
-          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。
+          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。</>}
         </p>
         <div className="skill-search">
           <span className="skill-search-ic"><IconSearch size={16} /></span>
@@ -151,14 +156,14 @@ export default function SkillPage({ persona }: SkillPageProps) {
         ))}
       </div>
 
-      {selected && (
+      {selected && (renderDrawer?renderDrawer(selected,()=>setSelected(null)):(
         <SkillDrawer
           skillName={selected}
           persona={persona}
           onClose={() => setSelected(null)}
           onConfigured={load}
         />
-      )}
+      ))}
     </div>
   );
 }

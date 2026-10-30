@@ -11,13 +11,14 @@ const url=(path:string)=>new URL(path,'https://workbench.invalid');
 export function resourceCacheable(path:string):boolean{return !/^\/api\/(?:config(?:\?|$)|mobile\/|auth(?:\/|$)|distribution\/credentials(?:\/|\?|$))/.test(path)}
 export function dynamicResource(path:string,data:unknown):boolean{
  const root=record(data),state=string(root.status)||string(root.state)||string(root.phase);
+ if(record(root.session).pendingTurnId)return true;
  if(active.has(state)||array(root.pending).length||array(root.active_runs).length)return true;
  if(active.has(string(record(root.recovery).phase)))return true;
  if(array<JsonRecord>(record(root.tasks).processing).length)return true;
  if(active.has(string(record(record(root.batch_learning).latest_cycle).status)))return true;
  for(const key of ['works','items','deliveries','jobs','analyses','tasks','cycles','sessions'])for(const item of array<JsonRecord>(root[key])){
   if(item.current===false)continue;
-  if(active.has(string(item.status))||array(item.pending).length||active.has(string(record(item.recovery).phase)))return true;
+  if(item.pendingTurnId||active.has(string(item.status))||array(item.pending).length||active.has(string(record(item.recovery).phase)))return true;
   const archive=record(item.project_archive);
   if(active.has(string(archive.phase)))return true;
  }
@@ -26,6 +27,8 @@ export function dynamicResource(path:string,data:unknown):boolean{
 export const resourceFreshMs=(path:string,data:unknown):number=>resourceCacheable(path)?dynamicResource(path,data)?DYNAMIC_FRESH_MS:url(path).pathname==='/api/learning/bootstrap'?15_000:RESOURCE_FRESH_MS:0;
 export function resourceTags(path:string):string[]{
  const target=url(path),p=target.pathname,work=p.match(/^\/api\/works\/([^/]+)/)?.[1];
+ if(p.startsWith('/api/chat/'))return ['chat'];
+ if(p==='/api/skills'||p.startsWith('/api/skill/'))return ['native-skills'];
  if(p.startsWith('/api/easel/'))return ['easel-plans'];
  if(p.startsWith('/api/platform-accounts'))return ['platform-accounts'];
  if(p.startsWith('/api/creator/'))return ['creator'];
@@ -47,6 +50,7 @@ export function resourceTags(path:string):string[]{
 
 /** null means unknown mutation and requires conservative global invalidation. */
 export function mutationTags(path:string,input:JsonRecord,result:unknown):string[]|null{
+ if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/chat/'))return ['chat'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/platform-accounts'))return ['platform-accounts','distribution','creator'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/creator/'))return ['creator','creative','foundation','learning'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/creative/'))return ['creative','learning','foundation',...(input.work_id?['work:'+string(input.work_id)]:[])];

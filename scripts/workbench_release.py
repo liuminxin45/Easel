@@ -9,7 +9,32 @@ import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-CAPABILITIES=Path('D:/Projects/neo-content/.agents/skills/capabilities.json')
+sys.path.insert(0,str(ROOT))
+
+
+def capabilities_revision(root):
+    from easel_workbench.skill_catalog import ProjectSkillCatalog
+    catalog=ProjectSkillCatalog(root)
+    if not catalog.available():raise ValueError('Project builtin capability catalog is missing')
+    return catalog.revision()
+
+
+def workspace_revision(root):
+    root=Path(root).resolve();directory=root/'agents/workspace'
+    if not (directory/'AGENTS.md').is_file():raise ValueError('Project workspace instructions are missing')
+    paths=[*directory.glob('*.md')]
+    if (root/'AGENTS.md').is_file():paths.append(root/'AGENTS.md')
+    value={p.relative_to(root).as_posix():sha(p) for p in sorted(paths)}
+    return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+
+
+def validate_source_binding(package,root):
+    if package.get('capabilities_type')!='easel_project_builtin':
+        raise ValueError('New runtime candidates must use project builtin skills')
+    if package.get('capabilities_sha256')!=capabilities_revision(root):
+        raise ValueError('Skill source changed after candidate validation')
+    if package.get('workspace_sha256')!=workspace_revision(root):
+        raise ValueError('Workspace instructions changed after candidate validation')
 
 
 def sha(path):
@@ -41,10 +66,17 @@ def freeze(native):
     n=json.loads((native/'native-manifest.json').read_text(encoding='utf-8'))
     for name,digest in n['files'].items():
         if sha(native/name)!=digest:raise ValueError('Frontend bytes changed')
+    capabilities=capabilities_revision(ROOT);workspace=workspace_revision(ROOT)
     name='workbench-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')
     target=ROOT/'workbench-releases'/name;target.mkdir(parents=True,exist_ok=False)
-    for folder in ('easel_workbench','easel','config'):
+    for folder in ('easel_workbench','easel','config','skills'):
         shutil.copytree(ROOT/folder,target/folder,ignore=shutil.ignore_patterns('__pycache__','*.pyc','trend-sources.json','workbench-trend-sources.json','trend-collectors'))
+    shutil.copytree(ROOT/'agents/workspace',target/'agents/workspace',ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+    if (ROOT/'AGENTS.md').is_file():shutil.copy2(ROOT/'AGENTS.md',target/'AGENTS.md')
+    if capabilities_revision(target)!=capabilities or capabilities_revision(ROOT)!=capabilities:
+        raise ValueError('Project skill source changed while freezing')
+    if workspace_revision(target)!=workspace or workspace_revision(ROOT)!=workspace:
+        raise ValueError('Project workspace changed while freezing')
     (target/'launch.py').write_text('''from pathlib import Path
 import os,sys,json,hashlib
 root=Path(__file__).resolve().parent
@@ -64,7 +96,8 @@ main()
         'easel_base':'514caf8089f89b4793063aeae867690cc69bf8b8','files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,
-        'capabilities_sha256':sha(CAPABILITIES),
+        'capabilities_type':'easel_project_builtin','capabilities_sha256':capabilities,
+        'workspace_sha256':workspace,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     atomic(target/'workbench-release.json',value)
     selection={'release':name,'manifest_sha256':sha(target/'workbench-release.json'),'native':value['native']}

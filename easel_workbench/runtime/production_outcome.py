@@ -15,11 +15,8 @@ def initialize(connection):
 
 def declared(reply):
     """Only consume the bounded receipt schema, never instructions/paths in it."""
-    for block in [reply, *re.findall(r'```(?:json)?\s*\n(.*?)\n```', reply, re.S)]:
-        try:
-            value = json.loads(block)
-        except (ValueError, TypeError):
-            continue
+    from .delivery_receipts import structured_receipts
+    for value in structured_receipts(reply):
         result = value.get('production_result') if isinstance(value, dict) else None
         if not isinstance(result, dict) or result.get('schema_version') != 1:
             continue

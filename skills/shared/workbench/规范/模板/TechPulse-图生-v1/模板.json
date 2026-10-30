@@ -1,0 +1,15 @@
+{
+  "approval": "user_approved_style_and_layout",
+  "approval_evidence": "内容/技术晚报-2026-10-09/用户指导-采用图生母版与常规归档.md",
+  "aspect_ratio": "3:4",
+  "assets": [
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/认可母版.png",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/生成指引.txt",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md"
+  ],
+  "height": 1448,
+  "id": "tech-pulse-imagegen",
+  "reference_sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4",
+  "version": "1.0.0",
+  "width": 1086
+}

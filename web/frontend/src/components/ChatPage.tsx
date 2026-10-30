@@ -1,12 +1,32 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import MessageBubble from './MessageBubble';
 import QuestionCards from './QuestionCards';
+import type {QuestionServices} from './QuestionCards';
 import BrushEntry from './BrushEntry';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
 import { IconArrowUp, IconStop, IconPlus, IconFile } from './icons';
 
+export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; }
+export interface ChatComposerBindings {
+  text: string;
+  attachments: UploadedFile[];
+  onTextChange: (value: string) => void;
+  onUpload: (files: File[]) => Promise<void>;
+  onRemoveAttachment: (id: string) => void;
+  commands?: ChatCommand[];
+  selectedCommand?: ChatCommand;
+  onCommandSelect?: (id: string | null, remainingText?: string) => void;
+  busy?: boolean;
+  disabled?: boolean;
+  canSend?: boolean;
+  label?: string;
+  placeholder?: string;
+  sendLabel?: string;
+  status?: string;
+  registerLayer?: (close: () => void) => (() => void) | undefined;
+}
 interface ChatPageProps {
   apiDirect: boolean;
   session: ChatSession;
@@ -21,6 +41,15 @@ interface ChatPageProps {
   ) => void; // 重试：仅对最后一轮
   onQuestionAnswered?: (questionId: string) => void;   // 某道问答题提交成功（App 记录答过，重放不再出现）
   onQuestionClosed?: (id: string, status: string) => void;
+  composer?: ChatComposerBindings;
+  header?: ReactNode;
+  footer?: ReactNode;
+  notice?: ReactNode;
+  emptyState?: { title?: string; subtitle?: string; brand?: string; icon?: ReactNode; suggestions?: typeof SUGGESTIONS };
+  canResend?: (message: ChatMessage, index: number) => boolean;
+  renderMessageExtra?: (message: ChatMessage, index: number) => ReactNode;
+  linkifyArtifactPaths?: boolean;
+  questionServices?:QuestionServices;
 }
 
 // 空态推荐（贴合 Easel 社媒创作场景）
@@ -37,28 +66,66 @@ function greeting(): string {
   return `${g}，想创作点什么？`;
 }
 
-export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered, onQuestionClosed }: ChatPageProps) {
-  const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<UploadedFile[]>([]);
+export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered, onQuestionClosed,
+  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices }: ChatPageProps) {
+  const [localInput, setLocalInput] = useState('');
+  const [localAttachments, setLocalAttachments] = useState<UploadedFile[]>([]);
+  const input = composer?.text ?? localInput;
+  const attachments = composer?.attachments ?? localAttachments;
+  const setInput = (value: string) => composer ? composer.onTextChange(value) : setLocalInput(value);
+  const [commandMenu, setCommandMenu] = useState(false);
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [maxMb, setMaxMb] = useState(50);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
 
   const isStreaming = !!stream;
   const isEmpty = session.messages.length === 0 && !isStreaming;
+  const busy = isStreaming || !!composer?.busy;
+  const slash = input.startsWith('/') && !slashDismissed;
+  const commandQuery = slash ? input.slice(1).split(/[\s]/, 1)[0].toLowerCase() : '';
+  const commands = (composer?.commands || []).filter(command => !commandQuery ||
+    `${command.label} ${command.description || ''} ${command.id}`.toLowerCase().includes(commandQuery));
+  const showCommands = !!composer?.commands && (commandMenu || slash);
+  const pickCommand = (id: string | null) => {
+    if (busy || composer?.disabled || composer?.commands?.find(command=>command.id===id)?.disabled) return;
+    const match = slash ? /^\/[^\s]*(?:[ \t]|\r?\n)?([\s\S]*)$/.exec(input) : null;
+    composer?.onCommandSelect?.(id, match?.[1]);
+    setCommandMenu(false); setSlashDismissed(true); setCommandIndex(0);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+  useEffect(() => {
+    if (!showCommands) return;
+    const close = () => { setCommandMenu(false); setSlashDismissed(true); textareaRef.current?.focus(); };
+    const outside = (event: PointerEvent) => { if (!composerRef.current?.contains(event.target as Node)) { setCommandMenu(false); setSlashDismissed(true); } };
+    document.addEventListener('pointerdown', outside);
+    const release = composer?.registerLayer?.(close);
+    return () => { document.removeEventListener('pointerdown', outside); release?.(); };
+  }, [showCommands, composer?.registerLayer]);
 
   useEffect(() => {
+    if (composer) return;
     fetch('/api/upload/limits').then((r) => r.json())
       .then((d) => { if (d?.max_mb) setMaxMb(d.max_mb); }).catch(() => {});
-  }, []);
+  }, [!!composer]);
 
   const doUpload = async (fs: FileList | File[]) => {
     const arr = Array.from(fs);
     if (!arr.length) return;
+    if (composer) {
+      setUploading(true); setUploadError('');
+      try { await composer.onUpload(arr); }
+      catch (error) { setUploadError(error instanceof Error ? error.message : '素材未添加，原输入仍保留。'); }
+      finally { setUploading(false); }
+      return;
+    }
     const cap = maxMb * 1024 * 1024;
     const big = arr.filter((f) => f.size > cap);
     const small = arr.filter((f) => f.size <= cap);
@@ -68,7 +135,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       setUploading(true);
       try {
         const saved = await adoptOversize(big, session.id);
-        setAttachments((a) => [...a, ...saved]);
+        setLocalAttachments((a) => [...a, ...saved]);
       } catch (err) {
         alert((err as Error).message || '超限文件处理失败');
       } finally {
@@ -79,7 +146,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     setUploading(true);
     try {
       const saved = await uploadFiles(small, session.id);
-      setAttachments((a) => [...a, ...saved]);
+      setLocalAttachments((a) => [...a, ...saved]);
     } catch (err) {
       alert((err as Error).message || '上传失败');
     } finally {
@@ -93,7 +160,8 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const onPaste = (e: React.ClipboardEvent) => {
     if (e.clipboardData.files?.length) { e.preventDefault(); doUpload(e.clipboardData.files); }
   };
-  const removeAttachment = (path: string) => setAttachments((a) => a.filter((x) => x.path !== path));
+  const removeAttachment = (file: UploadedFile) => composer ? composer.onRemoveAttachment(file.id)
+    : setLocalAttachments(a => a.filter(x => x.path !== file.path));
 
   useEffect(() => {
     if (!isEmpty) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -109,17 +177,24 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if ((!trimmed && attachments.length === 0) || isStreaming || uploading) return;
+    if ((!trimmed && attachments.length === 0 && composer?.canSend !== true) || busy || uploading || composer?.disabled || composer?.canSend === false) return;
     // 附件通过结构化字段发送；用户消息气泡只显示用户实际输入的文字。
     onSend(trimmed, attachments);
-    setInput('');
-    setAttachments([]);
+    // A controlled host clears its draft only after an authoritative receipt.
+    if (!composer) { setLocalInput(''); setLocalAttachments([]); }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 输入法确认候选词/英文的回车交给输入法处理，不能触发发送。
     // 部分浏览器先触发 compositionend，此时仍需用 229 识别输入法按键。
     if (isComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+    if (showCommands) {
+      if (e.key === 'Escape') { e.preventDefault(); setCommandMenu(false); setSlashDismissed(true); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); setCommandIndex(index => Math.max(0, Math.min(commands.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))); return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey && commands.length) { e.preventDefault(); pickCommand(commands[Math.min(commandIndex, commands.length - 1)]!.id); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -127,29 +202,34 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   };
 
   const inputBox = (hero: boolean) => (
-    <div className={`composer ${hero ? 'composer-hero' : ''} ${dragOver ? 'composer-drag' : ''}`}
+    <div ref={composerRef} className={`composer ${hero ? 'composer-hero' : ''} ${dragOver ? 'composer-drag' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
       onDrop={onDrop}>
+      {composer?.selectedCommand && <div className="composer-attachments"><span className="attach-chip" data-chat-command={composer.selectedCommand.id}>
+        <span>/{composer.selectedCommand.label}</span><button className="attach-x" disabled={busy || composer.disabled}
+          aria-label="移除所选技能" onClick={() => pickCommand(null)}>×</button>
+      </span></div>}
       {attachments.length > 0 && (
         <div className="composer-attachments">
           {attachments.map((a) => (
             <span key={a.path} className="attach-chip" title={a.path}>
               <IconFile size={12} /> <span className="attach-name">{a.name}</span>
-              <button className="attach-x" onClick={() => removeAttachment(a.path)} title="移除">×</button>
+              <button className="attach-x" onClick={() => removeAttachment(a)} title="移除">×</button>
             </span>
           ))}
         </div>
       )}
       <div className="composer-top">
-        {apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
+        {composer ? null : apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
           : <BrushEntry onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
         <textarea
           ref={textareaRef}
           className="chat-input"
-          placeholder={dragOver ? '松手上传素材…' : hero ? '把你的想法告诉我，选题 / 文案 / 卡片 / 视频 / 发布都行…（可拖入图片/文档当素材）' : '发消息…（Enter 发送，Shift+Enter 换行，可拖入/粘贴素材）'}
+          aria-label={composer?.label}
+          placeholder={dragOver ? '松手上传素材…' : composer?.placeholder || (hero ? '把你的想法告诉我，选题 / 文案 / 卡片 / 视频 / 发布都行…（可拖入图片/文档当素材）' : '发消息…（Enter 发送，Shift+Enter 换行，可拖入/粘贴素材）')}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => { setInput(e.target.value); setSlashDismissed(false); setCommandIndex(0); }}
           onCompositionStart={() => { isComposingRef.current = true; }}
           onCompositionEnd={() => { isComposingRef.current = false; }}
           onBlur={() => { isComposingRef.current = false; }}
@@ -162,17 +242,27 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       <input ref={fileInputRef} type="file" multiple hidden
         onChange={(e) => { if (e.target.files) doUpload(e.target.files); e.target.value = ''; }} />
       <div className="composer-bar">
-        <button className="composer-attach-btn" onClick={() => fileInputRef.current?.click()}
-          disabled={isStreaming || uploading} title={`添加素材（图片/文档）；超过 ${maxMb}MB 的大文件将自动存为本地素材（不走上传）`}>
+        <button className="composer-attach-btn" onClick={() => composer?.commands ? setCommandMenu(value => !value) : fileInputRef.current?.click()}
+          aria-label={composer?.commands ? '添加素材或选择技能' : undefined} aria-expanded={composer?.commands ? showCommands : undefined}
+          disabled={busy || uploading || composer?.disabled} title={composer ? '添加素材或选择技能' : `添加素材（图片/文档）；超过 ${maxMb}MB 的大文件将自动存为本地素材（不走上传）`}>
           <IconPlus size={15} /> {uploading ? '上传中…' : '素材'}
         </button>
-        <span className="composer-hint">{isStreaming ? '生成中…' : 'Enter 发送 · Shift+Enter 换行'}</span>
+        <span className="composer-hint">{composer?.status || (isStreaming ? '生成中…' : 'Enter 发送 · Shift+Enter 换行')}</span>
         {isStreaming ? (
           <button className="send-btn" onClick={onStop} title="停止生成"><IconStop size={15} /></button>
         ) : (
-          <button className="send-btn" onClick={handleSend} disabled={(!input.trim() && !attachments.length) || uploading} title="发送"><IconArrowUp size={17} /></button>
+          <button className="send-btn" onClick={handleSend} disabled={(!input.trim() && !attachments.length && composer?.canSend !== true) || uploading || busy || composer?.disabled || composer?.canSend === false}
+            title={composer?.sendLabel || '发送'} aria-label={composer?.sendLabel || '发送'}><IconArrowUp size={17} /></button>
         )}
       </div>
+      {uploadError && <p className="notice-error" role="alert">{uploadError}</p>}
+      {showCommands && <div className="chat-command-menu" role="menu" aria-label="选择技能">
+        <button type="button" role="menuitem" onClick={() => { setCommandMenu(false); fileInputRef.current?.click(); }}>上传素材</button>
+        {commands.map((command, index) => <button type="button" role="menuitem" key={command.id}
+          className={index === commandIndex ? 'active' : ''} disabled={command.disabled} onClick={() => pickCommand(command.id)}>
+          <strong>/{command.label}</strong>{command.description && <span>{command.description}</span>}
+        </button>)}{!commands.length && <p>没有匹配的可用技能</p>}
+      </div>}
     </div>
   );
 
@@ -180,17 +270,18 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   if (isEmpty) {
     return (
       <div className="chat-page">
+        {header}{notice}
         <div className="chat-hero">
           <div className="chat-hero-brand">
-            <img src="./static/easel-icon-transparent.png" alt="" />
-            <span>Easel</span>
+            {emptyState?.icon || <img src="./static/easel-icon-transparent.png" alt="" />}
+            <span>{emptyState?.brand || 'Easel'}</span>
           </div>
-          <h1 className="chat-hero-title">{greeting()}</h1>
-          <p className="chat-hero-sub">{apiDirect ? 'API 直连：写文案、策划选题、分析附件。本机工具和自动发布未启用。'
-            : '从选题到发布，一站式帮你把想法做成能发的内容。'}</p>
+          <h1 className="chat-hero-title">{emptyState?.title || greeting()}</h1>
+          <p className="chat-hero-sub">{emptyState?.subtitle || (apiDirect ? 'API 直连：写文案、策划选题、分析附件。本机工具和自动发布未启用。'
+            : '从选题到发布，一站式帮你把想法做成能发的内容。')}</p>
           {inputBox(true)}
           <div className="suggestions">
-            {SUGGESTIONS.filter((s) => !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
+            {(emptyState?.suggestions || SUGGESTIONS).filter((s) => !!composer || !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
               <button key={s.title} className="card card-hover suggestion-card"
                 onClick={() => { if (!isStreaming) onSend(s.prompt); }}>
                 <span className="suggestion-icon">{s.icon}</span>
@@ -201,6 +292,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
               </button>
             ))}
           </div>
+          {footer}
         </div>
       </div>
     );
@@ -212,6 +304,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
 
   return (
     <div className="chat-page">
+      {header}{notice}
       <div className="chat-messages">
         <div className="chat-thread">
           {displayMessages.map((msg, i) => {
@@ -226,7 +319,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
               if (msg.role === 'user') {
                 actions = {
                   onCopy: copy,
-                  onRetry: isLastFinal
+                  onRetry: isLastFinal && (canResend?.(msg, i) ?? true)
                     ? () => onResend(i, msg.content, msg.attachments, msg.agentContent)
                     : undefined,
                   canModify: !isStreaming,
@@ -236,7 +329,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
                 const prevUser = pi >= 0 && session.messages[pi]?.role === 'user' ? session.messages[pi] : null;
                 actions = {
                   onCopy: copy,
-                  onRetry: (isLastFinal && prevUser)
+                  onRetry: (isLastFinal && prevUser && (canResend?.(prevUser, pi) ?? true))
                     ? () => onResend(pi, prevUser.content, prevUser.attachments, prevUser.agentContent)
                     : undefined,
                   canModify: !isStreaming,
@@ -253,13 +346,15 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
                 activity={live ? stream!.activity : ''}
                 stillWorking={live ? stream!.stillWorking : ''}
                 actions={actions}
+                linkifyArtifactPaths={linkifyArtifactPaths}
               />
-              {!live && msg.questions && <QuestionCards questions={msg.questions} onDone={onQuestionAnswered} onClosed={onQuestionClosed} />}
+              {renderMessageExtra?.(msg, i)}
+              {!live && msg.questions && <QuestionCards questions={msg.questions} onDone={onQuestionAnswered} onClosed={onQuestionClosed} services={questionServices} />}
               </div>
             );
           })}
           {isStreaming && (stream!.questions?.length ?? 0) > 0 && (
-            <QuestionCards questions={stream!.questions || []} onDone={(qid) => onQuestionAnswered?.(qid)} onClosed={onQuestionClosed} />
+            <QuestionCards questions={stream!.questions || []} onDone={(qid) => onQuestionAnswered?.(qid)} onClosed={onQuestionClosed} services={questionServices} />
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -267,6 +362,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
 
       <div className="chat-input-area">
         <div className="chat-input-inner">{inputBox(false)}</div>
+        {footer}
       </div>
     </div>
   );

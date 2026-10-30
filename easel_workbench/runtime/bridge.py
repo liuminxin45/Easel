@@ -45,28 +45,49 @@ def target():
     if not row or pathlib.Path(row[1].removeprefix('\\\\?\\')).resolve()!=PROJECT.resolve(): raise RuntimeError('fixed thread/project verification failed')
     return pathlib.Path(row[2].removeprefix('\\\\?\\'))
 
-def allowed_artifact(p):
+def allowed_artifact(p,product_roots=None):
     try:
         p=pathlib.Path(p).resolve()
         name=p.name.lower(); label=re.sub(r'^\d+[-_. ]*','',p.stem.lower())
         process_file=label.startswith(('检查','check','验收','验证')) or any(x in name for x in ('检查记录','检查报告','检查结果'))
-        return p.is_file() and (p.suffix.lower() in EXTENSIONS or p.name in ('文章交付.json','风格权重.json','设计说明.json')) and any(p.is_relative_to(root.resolve()) for root in PRODUCT_ROOTS) and not process_file and not any(x in name for x in ('reference','prompt','source','参考','原图','证据','原始'))
+        roots=PRODUCT_ROOTS if product_roots is None else product_roots
+        return p.is_file() and (p.suffix.lower() in EXTENSIONS or p.name in ('文章交付.json','风格权重.json','设计说明.json')) and any(p.is_relative_to(root.resolve()) for root in roots) and not process_file and not any(x in name for x in ('reference','prompt','source','参考','原图','证据','原始'))
     except OSError: return False
 
-def capture_artifacts(store,tid,reply):
+def _product_roots(root,product_roots):
+    if not isinstance(product_roots,(list,tuple)) or not product_roots or len(product_roots)>8:
+        raise ValueError('本轮成品目录范围无效')
+    outputs=root/'outputs';result=[]
+    for value in product_roots:
+        path=pathlib.Path(value)
+        for parent in (path,*path.parents):
+            if parent==root:break
+            if parent.is_symlink() or getattr(parent,'is_junction',lambda:False)():
+                raise ValueError('成品目录不能经链接跳转')
+        path=path.resolve()
+        try:relative=path.relative_to(outputs)
+        except ValueError:raise ValueError('本轮成品必须位于该对话输出目录') from None
+        if len(relative.parts)!=3 or relative.parts[-1]!='products':
+            raise ValueError('成品范围必须准确绑定对话与回合')
+        result.append(path)
+    return result
+
+
+def capture_artifacts(store,tid,reply,*,product_roots=None,root=None):
     # Only explicit delivered file links or delivered directories, not global newest files.
-    paths=re.findall(r'\]\(((?:D:|d:)/[^)\n]+)\)',reply)
-    json_candidates=[reply]+re.findall(r'```(?:json)?\s*\n(.*?)\n```',reply,re.S)
+    destination_root=pathlib.Path(root).resolve() if root is not None else ROOT
+    roots=_product_roots(destination_root,product_roots) if product_roots is not None else None
+    paths=[value.strip('<>') for value in re.findall(r'\]\((<?(?:[A-Za-z]:[/\\]|/)[^)\n]+)\)',reply)]
+    from .delivery_receipts import structured_receipts
     def collect(value):
-        if isinstance(value,str) and re.match(r'^[dD]:[/\\\\]',value): paths.append(value.replace('\\\\','/'))
+        if isinstance(value,str) and re.match(r'^(?:[A-Za-z]:[/\\]|/)',value): paths.append(value.replace('\\\\','/'))
         elif isinstance(value,list):
             for x in value: collect(x)
         elif isinstance(value,dict):
             for key in ('artifacts','deliverables','files','path','file','final_path','output_path'): 
                 if key in value: collect(value[key])
-    for candidate in json_candidates:
-        try: collect(json.loads(candidate))
-        except ValueError: pass
+    for candidate in structured_receipts(reply):
+        collect(candidate)
     discovered=[]
     for value in paths:
         p=pathlib.Path(value)
@@ -74,10 +95,21 @@ def capture_artifacts(store,tid,reply):
         # A directory link is not an authorization to expose every neighboring file.
         # Executor must enumerate exact final products in its delivery Markdown/JSON.
     for p in dict.fromkeys(discovered):
-        if not allowed_artifact(p): continue
+        if not allowed_artifact(p,roots): continue
         import hashlib
         content_hash=hashlib.sha256(p.read_bytes()).hexdigest()
-        aid=hashlib.sha256((tid+'\0'+str(p.resolve())+'\0'+content_hash).encode('utf-8')).hexdigest(); dest=ROOT/'data/artifacts'/aid/p.name; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,dest)
+        aid=hashlib.sha256((tid+'\0'+str(p.resolve())+'\0'+content_hash).encode('utf-8')).hexdigest(); dest=destination_root/'data/artifacts'/aid/p.name; dest.parent.mkdir(parents=True,exist_ok=True)
+        if dest.exists():
+            if hashlib.sha256(dest.read_bytes()).hexdigest()!=content_hash:raise ValueError('已保存的成品原件字节已变化，未覆盖')
+        else:
+            import uuid
+            temporary=dest.with_name(dest.name+'.'+uuid.uuid4().hex+'.tmp')
+            try:
+                shutil.copy2(p,temporary)
+                if hashlib.sha256(temporary.read_bytes()).hexdigest()!=content_hash or hashlib.sha256(p.read_bytes()).hexdigest()!=content_hash:
+                    raise ValueError('接收时成品发生变化，请核对准确文件')
+                temporary.replace(dest)
+            finally:temporary.unlink(missing_ok=True)
         mime=mimetypes.guess_type(p.name)[0] or 'application/octet-stream'
         with store.connect() as c:
             c.execute('insert or ignore into artifacts values(?,?,?,?,?)',(aid,tid,p.name,str(dest),mime))
@@ -86,7 +118,7 @@ def capture_artifacts(store,tid,reply):
                 product_origin(c,aid,tid,str(p.resolve()),content_hash)
 
     from easel_workbench.runtime.content_studio import apply_locked_text
-    apply_locked_text(store,tid,ROOT)
+    apply_locked_text(store,tid,destination_root)
 
 def correlate(es,token):
     seen=False; pending=False; turn=None; result=None; final=''

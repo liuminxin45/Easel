@@ -18,7 +18,7 @@ export function safePath(value:string,origin='https://workbench.invalid'):string
   if(u.pathname==='/settings'&&['devices','production'].includes(u.searchParams.get('panel')||''))return '/settings';
   if(u.pathname==='/settings'&&u.searchParams.get('panel')==='environment')return '/toolbox?section=distribution&pane=connections';
   if(/^\/wiki(?:\/|$)/.test(u.pathname)||u.pathname==='/toolbox'&&(['wiki','knowledge','library','notes','ideas'].includes(u.searchParams.get('section')||'')||u.searchParams.get('panel')==='experience'&&['wiki','note','notes','library','knowledge'].includes(u.searchParams.get('screen')||''))||u.pathname==='/settings'&&['wiki','knowledge','library','obsidian','llm-wiki'].includes(u.searchParams.get('panel')||''))return '/toolbox';
-  if(!/^\/(?:toolbox|news|posters|articles|works|settings|messages|account)(?:\/[^?#]*)?$/.test(u.pathname))return null;
+  if(!/^\/chat(?:\/[A-Za-z0-9_-]{1,200})?$/.test(u.pathname)&&!/^\/(?:toolbox|news|posters|articles|works|settings|messages|account)(?:\/[^?#]*)?$/.test(u.pathname))return null;
   return u.pathname+u.search;
  }catch{return null}
 }
@@ -26,6 +26,7 @@ export function parentPath(path:string):string|null {
  const u=new URL(path,'https://workbench.invalid'),p=u.pathname,q=u.searchParams;
  if(p==='/toolbox'){if(q.has('item')){q.delete('item');return p+'?'+q}if(q.get('pane')&&q.get('pane')!=='overview'){q.delete('pane');return p+'?'+q}return q.has('section')?'/toolbox':null}
  if(p==='/settings'&&q.has('panel'))return '/settings';
+ if(p.startsWith('/chat/'))return '/chat';
  if(p.startsWith('/works/'))return '/works';
  if(p.startsWith('/posters/')||p.startsWith('/articles/'))return p.startsWith('/articles/')?'/articles':'/posters';
  if(p.startsWith('/news/a/'))return '/news?'+new URLSearchParams([...q].filter(([k])=>['source','day','issue','section','theme'].includes(k)));
@@ -34,7 +35,7 @@ export function parentPath(path:string):string|null {
 }
 const same=(a:string,b:string)=>navigationIdentity(a)===navigationIdentity(b);
 const clonePosition=(value:ScrollPosition):ScrollPosition=>({top:Math.max(0,Math.min(1e7,Number(value?.top)||0)),left:Math.max(0,Number(value?.left)||0),...(value?.anchor&&typeof value.anchor.id==='string'?{anchor:{id:value.anchor.id.slice(0,400),offset:Number(value.anchor.offset)||0}}:{})});
-const moduleRoot=(path:string)=>{const u=new URL(path,'https://workbench.invalid');return ['/news','/posters','/articles','/works','/messages','/account'].includes(u.pathname)||u.pathname==='/settings'&&!u.searchParams.has('panel')||u.pathname==='/toolbox'&&!['item','work','version','register'].some(key=>u.searchParams.has(key))&&(!u.searchParams.has('pane')||u.searchParams.get('pane')==='overview')};
+const moduleRoot=(path:string)=>{const u=new URL(path,'https://workbench.invalid');return ['/chat','/news','/posters','/articles','/works','/messages','/account'].includes(u.pathname)||u.pathname==='/settings'&&!u.searchParams.has('panel')||u.pathname==='/toolbox'&&!['item','work','version','register'].some(key=>u.searchParams.has(key))&&(!u.searchParams.has('pane')||u.searchParams.get('pane')==='overview')};
 const newsPage=(path:string)=>/^\/news(?:\/a\/[^/]+)?$/.test(new URL(path,'https://workbench.invalid').pathname);
 function cleanTarget(value:ReturnTarget|undefined,depth=0):ReturnTarget|undefined {if(!value||depth>3)return;const path=value.shell==='legacy'&&value.path==='/'?'/':safePath(value.path);if(!path)return;return {path,...(typeof value.id==='string'?{id:value.id}:{}),...(value.shell==='legacy'?{shell:'legacy' as const}:{}),...(Number.isFinite(value.index)&&Number(value.index)>=0?{index:Number(value.index)}:{}),position:path===value.path?clonePosition(value.position):zero(),returnTo:cleanTarget(value.returnTo,depth+1)}}
 /** The sole history owner; object/flow sources are distinct from module switches. */

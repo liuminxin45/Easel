@@ -70,6 +70,10 @@ async def _handle_native(request,root,authenticated):
     if path=='/native/version':return response(json.dumps({'release':manifest['release']}),content_type='application/json')
     if path=='/native/sw.js':return response(member(root,manifest['release'],'sw.js'),content_type='text/javascript',**{'Service-Worker-Allowed':'/native/'})
     if path=='/native/manifest.webmanifest':return response(member(root,manifest['release'],'manifest.webmanifest'),content_type='application/manifest+json')
+    if re.fullmatch(r'/native/chat(?:/[A-Za-z0-9_.-]{1,128})?',path):
+        import urllib.parse
+        target=path.removeprefix('/native')+('?' + request.url.query if request.url.query else '')
+        return response('',303,Location='/native/?'+urllib.parse.urlencode({'path':target}))
     if path=='/native/':return page(root,directory,manifest)
     return response('not found',404,'text/plain')
 

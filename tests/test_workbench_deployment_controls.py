@@ -2,6 +2,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import sqlite3
 import sys
 
 import pytest
@@ -58,9 +60,18 @@ def upgrade_fixture(tmp_path, monkeypatch):
     release.atomic(native/'native-manifest.json',{'release':native.name,'files':{'index.html':release.sha(native/'index.html')}})
     frontend={'release':native.name,'manifest_sha256':release.sha(native/'native-manifest.json')}
     (runtime/'launch.py').write_text('# fixture',encoding='utf-8')
-    canonical=tmp_path/'canonical-capabilities.json';canonical.write_text('{"skills":[]}',encoding='utf-8')
-    monkeypatch.setattr(upgrade,'CAPABILITIES',canonical)
-    release.atomic(runtime/'workbench-release.json',{'release':runtime.name,'native':frontend,'capabilities_sha256':release.sha(canonical),'files':{'launch.py':release.sha(runtime/'launch.py')}})
+    for sid in ('content-production','topic-research','content-writing','image-production',
+                'reference-analysis','delivery-review','publication-analysis','experience-distillation'):
+        shutil.copytree(PROJECT/'skills/builtin'/sid,tmp_path/'skills/builtin'/sid)
+    shutil.copytree(PROJECT/'skills/shared/workbench',tmp_path/'skills/shared/workbench')
+    shutil.copytree(PROJECT/'agents/workspace',tmp_path/'agents/workspace')
+    shutil.copytree(tmp_path/'skills',runtime/'skills')
+    shutil.copytree(tmp_path/'agents',runtime/'agents')
+    upgrade._fixture_skill_source=tmp_path/'skills/builtin/content-writing/SKILL.md'
+    release.atomic(runtime/'workbench-release.json',{'release':runtime.name,'native':frontend,
+        'capabilities_type':'easel_project_builtin','capabilities_sha256':release.capabilities_revision(tmp_path),
+        'workspace_sha256':release.workspace_revision(tmp_path),
+        'files':{p.relative_to(runtime).as_posix():release.sha(p) for p in runtime.rglob('*') if p.is_file()}})
     choice={'release':runtime.name,'manifest_sha256':release.sha(runtime/'workbench-release.json'),'native':frontend}
     release.atomic(state/'candidate.json',choice)
     (state/'evidence.json').write_text('{"passed":true}',encoding='utf-8')
@@ -86,10 +97,108 @@ def test_upgrade_rejects_changed_frontend_before_fencing(tmp_path,monkeypatch):
 
 def test_upgrade_rejects_skill_source_drift_before_fencing(tmp_path,monkeypatch):
     upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
-    upgrade.CAPABILITIES.write_text('{"skills":["unreviewed"]}',encoding='utf-8')
+    with upgrade._fixture_skill_source.open('a',encoding='utf-8') as stream:stream.write('\nUnreviewed skill instructions.\n')
     with pytest.raises(ValueError,match='Skill source changed'):
         upgrade.validate_candidate(tmp_path,state,acceptance)
     assert not (state/'admission.json').exists()
+
+
+def test_upgrade_rejects_workspace_source_drift_before_fencing(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    with (tmp_path/'agents/workspace/AGENTS.md').open('a',encoding='utf-8') as stream:
+        stream.write('\nUnreviewed workspace instruction.\n')
+    with pytest.raises(ValueError,match='Workspace instructions changed'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+    assert not (state/'admission.json').exists()
+
+
+def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,monkeypatch):
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    module=release_module();monkeypatch.setattr(module,'ROOT',tmp_path)
+    for folder in ('easel_workbench','easel','config'):
+        (tmp_path/folder).mkdir()
+    selected=module.freeze(native.name)
+    frozen=tmp_path/'workbench-releases'/selected['release']
+    manifest=module.verify(frozen,selected['manifest_sha256'])
+    assert manifest['capabilities_type']=='easel_project_builtin'
+    assert manifest['capabilities_sha256']==module.capabilities_revision(tmp_path)==module.capabilities_revision(frozen)
+    assert manifest['workspace_sha256']==module.workspace_revision(frozen)
+    assert 'agents/workspace/AGENTS.md' in manifest['files']
+    assert 'skills/builtin/content-production/SKILL.md' in manifest['files']
+    assert any(name.endswith('认可母版.png') for name in manifest['files'])
+
+
+@pytest.mark.parametrize('status,hook,start_hook,expected',[
+    ('accepted','not_started',None,True),('submitting','not_started',None,True),
+    ('running','not_started','completed',True),('unknown','unknown',None,True),
+    ('completed','pending','completed',True),('completed','completed','pending',True),
+    ('completed','completed','completed',False),('failed','failed',None,False),
+    ('stopped','completed','completed',False),
+])
+def test_idle_observes_chat_native_and_business_hook_lifecycle(tmp_path,monkeypatch,status,hook,start_hook,expected):
+    from types import SimpleNamespace
+    monkeypatch.syspath_prepend(str(PROJECT/'scripts'))
+    module=load('workbench_chat_idle_test',PROJECT/'scripts/activate_workbench.py')
+    old=tmp_path/'old';directory=old/'evidence/simplify-workbench-20261029';directory.mkdir(parents=True)
+    module.atomic(directory/'audit.json',{})
+    reference={'path':'evidence/simplify-workbench-20261029/audit.json','sha256':module.sha(directory/'audit.json')}
+    module.atomic(directory/'activation-evidence.json',{'historical_unknown_audit':reference,'collection_historical_unknown_audit':reference})
+    database=tmp_path/'data/desk.sqlite';database.parent.mkdir()
+    with sqlite3.connect(database) as connection:
+        connection.execute('CREATE TABLE easel_chat_turns(id TEXT PRIMARY KEY,document TEXT)')
+        connection.execute('INSERT INTO easel_chat_turns VALUES(?,?)',('turn-synthetic',json.dumps({'status':status,'hook_status':hook,'start_hook_status':start_hook})))
+    monkeypatch.setattr(module,'OLD',old)
+    monkeypatch.setattr(module,'legacy',lambda:(SimpleNamespace(exists_table=lambda connection,table:connection.execute("SELECT 1 FROM sqlite_master WHERE name=?",(table,)).fetchone() is not None),
+        SimpleNamespace(busy_state=lambda *_:{'busy':False,'retained_collection_unknown':[]})))
+    result=module.idle(database)
+    assert result['busy'] is expected
+    if expected:assert result['additional']==[{'table':'easel_chat_turns','id':'turn-synthetic'}]
+
+
+def test_reviewed_builtin_plan_and_upgrade_order_only_activate_after_stop(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
+    release=release_module();package=upgrade.validate_candidate(tmp_path,state,acceptance)[1]
+    plan_path=state/'builtin-plan.json';expected='reviewed-plan-hash'
+    release.atomic(plan_path,{'plan_sha256':expected,'source_revision':'source-revision',
+        'source':{'catalog_revision':package['capabilities_sha256']},'conflicts':[],'busy':[]})
+    document=json.loads(acceptance.read_text(encoding='utf-8'))
+    document['evidence'][plan_path.relative_to(tmp_path).as_posix()]=release.sha(plan_path)
+    release.atomic(acceptance,document)
+    binding=upgrade.reviewed_builtin_plan(tmp_path,package,acceptance,plan_path,expected)
+    assert binding['plan_sha256']==expected
+    with pytest.raises(ValueError,match='exact idle'):
+        upgrade.reviewed_builtin_plan(tmp_path,package,acceptance,plan_path,'other')
+    data=tmp_path/'data';data.mkdir();sqlite3.connect(data/'desk.sqlite').close()
+    previous={'release':'workbench-before','manifest_sha256':'previous-runtime'}
+    release.atomic(data/'active-workbench.json',previous)
+    release.atomic(data/'active-native.json',{'release':'native-before','manifest_sha256':'previous-frontend'})
+    release.atomic(data/'migration-owner.json',{'target_root':str(tmp_path),**previous})
+    release.atomic(state/'deployment.json',{'candidate':previous})
+    order=[]
+    monkeypatch.setattr(upgrade,'ROOT',tmp_path);monkeypatch.setattr(upgrade,'STATE',state)
+    monkeypatch.setattr(upgrade,'idle',lambda *_:{'busy':False})
+    monkeypatch.setattr(upgrade,'queue_idle',lambda:order.append('queue_read'))
+    monkeypatch.setattr(upgrade,'authenticate',lambda:SimpleNamespace(close=lambda:None))
+    def stopped():
+        assert json.loads((state/'admission.json').read_text())['workers'] is False
+        (state/'paused').write_text('synthetic stop',encoding='utf-8');order.append('stopped')
+    monkeypatch.setattr(upgrade,'stop_new_profile',stopped)
+    def activate(root,selected):
+        assert order[-1]=='stopped' and selected['plan_sha256']==expected
+        assert (state/'paused').is_file()
+        assert json.loads((data/'active-workbench.json').read_text())==previous
+        order.append('skills_applied');return {'applied':True,'jobs_requeued':0}
+    monkeypatch.setattr(upgrade,'activate_builtin_after_stop',activate)
+    monkeypatch.setattr(upgrade.subprocess,'Popen',lambda *args,**kwargs:SimpleNamespace(pid=9999))
+    monkeypatch.setattr(upgrade.subprocess,'CREATE_NO_WINDOW',getattr(upgrade.subprocess,'CREATE_NO_WINDOW',0),raising=False)
+    monkeypatch.setattr(upgrade,'smoke',lambda *_:{'ready':True})
+    monkeypatch.setattr(sys,'argv',['upgrade','--acceptance',str(acceptance),'--builtin-plan',str(plan_path),'--builtin-plan-sha256',expected])
+    upgrade.main()
+    assert order==['queue_read','stopped','skills_applied']
+    result=json.loads((state/'runtime-upgrade.json').read_text(encoding='utf-8'))
+    assert result['builtin_activation']['applied'] and result['database_restored'] is False
+    assert json.loads((state/'admission.json').read_text())['workers'] is True
 
 
 def test_upgrade_rejects_evidence_from_different_frontend(tmp_path,monkeypatch):

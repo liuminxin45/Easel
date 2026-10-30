@@ -352,11 +352,12 @@ def independent_review(service,request):
   submitted['attached_images']=[{'role':'output','artifact_name':r['artifact_name'],'sha256':r['sha256']} for r in outputs]+[{'role':'reference','evidence_id':r['evidence_id'],'sha256':r['sha256']} for r in references]
   prompt,binding=contract_prompt(service.box,'review','references/independent-check.md',submitted,snapshot=request.get('creator_snapshot'))
   with observed_call(service.box,'review',submitted,prompt,binding,request.get('job_id')) as record_result:
-      proc=subprocess.run(args,input=prompt.encode('utf-8'),capture_output=True,timeout=180,cwd=directory,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+      from easel_workbench.readonly_runner import run,recorded_output,project_snapshot
+      proc=run(binding if project_snapshot(request.get('creator_snapshot')) else None,args,input=prompt.encode('utf-8'),capture_output=True,timeout=180,cwd=directory,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),runtime_root=service.box,task_id=request.get('job_id'))
       output=directory/'answer.json'
       if proc.returncode or not output.is_file():raise ValueError('独立核验未取得有效结果')
       result=json.loads(output.read_text(encoding='utf-8-sig'))
-      result['checker']='independent_ai';record_result(result);return result
+      result['checker']='independent_ai';record_result(recorded_output(proc,result));return result
 
 def _supplement(box,c,job,doc,snap,observations):
  """Evidence-based checker supplement; never attributed to the original producer."""
@@ -373,8 +374,10 @@ def _supplement(box,c,job,doc,snap,observations):
  from easel_workbench.runtime.semantic_style import applicability
  applicable=applicability(doc.get('creation_options',{}))
  for identity in ('image','text','title','tone','structure','style'):
-  basis=[row for row in requirements if row.get('dimension')==identity];refs=[r for row in responses if row['basis_id'] in {b['id'] for b in basis} for r in row['deliverables']]
-  if doc.get('creation_options',{}).get('recipe') and not basis:basis=[row for row in requirements if row.get('kind')=='readable_prompt']
+  basis=[row for row in requirements if row.get('dimension')==identity]
+  if (doc.get('creation_options',{}).get('recipe') or doc.get('creator_snapshot')) and not basis:
+   basis=[row for row in requirements if row.get('kind') in ('readable_prompt','creator_skill_prompt')]
+  refs=[r for row in responses if row['basis_id'] in {b['id'] for b in basis} for r in row['deliverables']]
   active=applicable.get(identity,{}).get('applicable',True) if isinstance(applicable,dict) else True
   complete=bool(basis) and all(findings.get(row['id'],{}).get('status')=='pass' for row in basis)
   dimensions.append({'id':identity,'applicable':active,'intent':intents.get(identity) if active and not doc.get('creation_options',{}).get('recipe') else None,'outcome':'applied' if complete and active else 'deferred' if active else 'not_applicable',
@@ -398,6 +401,13 @@ def queue_correction(service,c,job,quality):
  if later:return {'attempt':0,'status':'superseded_by_user'}
  issues=quality.get('subjective_disagreements',[])
  if not issues:return {'attempt':0,'status':'not_required'}
+ from easel_workbench.native_corrections import enqueue as native_correction
+ try:native=native_correction(service,c,job,quality)
+ except (ValueError,OSError,KeyError,TypeError) as error:
+  from easel_workbench.runtime import server_logging as journal
+  journal.exception('native_correction_prepare_failed',error,operation_ref=journal.reference(job['id']))
+  return {'attempt':0,'status':'blocked','code':'native_correction_evidence_unavailable','message':'内部修正冻结依据或原件待核对，未发送，也不转交旧制作器。'}
+ if native is not None:return native
  child='learning-fix-'+sha(root_id.encode())[:32];now=stamp();doc,_=snapshot(c,job['id']);frozen=copy.deepcopy(doc)
  frozen['internal_correction']={'root_job_id':root_id,'parent_job_id':job['id'],'attempt':1,'issues':issues}
  message='交付前内部修正（本次唯一一次）。保留原版，只修以下有实际成品证据的问题；沿用冻结依据，不混入后来反馈。\n'+'\n'.join(row['message'] for row in issues)
@@ -540,11 +550,13 @@ def run_review(service,task,runner=None):
  with box.store.connect() as c:cached=c.execute('SELECT * FROM learning_observation_cache WHERE input_hash=?',(cache_key,)).fetchone()
  reused=dict(cached) if cached else None
  try:observations=json.loads(reused['observations']) if reused else (runner or independent_review)(service,request)
- except Exception:
+ except Exception as error:
   with box.store.connect() as c:
    quality['status']='needs_objective_fix' if quality['objective_missing'] else 'unverified';quality['checks'].append({'id':'independent_review','status':'unverified','checker':'independent_ai','evidence':'未取得有效核验结果；不推定为已通过。'})
    service.update_run(c,run_id,{'status':'reviewed','quality':quality,'review':{'status':'unverified'},'finished_at':stamp()})
    step(c,jid,'review','unknown',reason='未取得有效独立核验结果')
+  from easel_workbench.readonly_runner import ReadonlyExecutionUnknown
+  if isinstance(error,ReadonlyExecutionUnknown):raise
   return quality
  expected={row['id'] for row in snap.get('required_evidence',[])};findings=observations.get('findings',[]);names={row['artifact_name']:row for row in artifacts};seen=set();valid=[]
  outputs,reference_inputs=image_selection(request)

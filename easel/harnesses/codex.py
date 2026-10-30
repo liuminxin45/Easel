@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from easel import __version__
 
@@ -18,6 +19,14 @@ class CodexAdapter:
     async def run(self, request: RunRequest, emit, ask, bind):
         if request.sandbox not in ("read-only", "workspace-write"):
             raise HarnessError("Codex 只允许只读或工作区写入权限")
+        if request.reasoning_effort is not None and (not isinstance(request.reasoning_effort,str) or not request.reasoning_effort.strip()):
+            raise HarnessError('推理强度必须为明确的原生字符串')
+        if request.output_schema is not None and not isinstance(request.output_schema,dict):
+            raise HarnessError('结构化输出合同必须为对象')
+        if request.input_images is not None and (not isinstance(request.input_images,tuple) or any(not isinstance(path,str) or not Path(path).is_absolute() or not Path(path).is_file() for path in request.input_images)):
+            raise HarnessError('图片输入必须为已取得的绝对文件路径')
+        if request.ephemeral is not None and (type(request.ephemeral) is not bool or request.native_id):
+            raise HarnessError('临时会话选项仅适用于新建原生会话')
         completion = asyncio.get_running_loop().create_future()
         thread_id = request.native_id
         turn_id = ""
@@ -54,12 +63,19 @@ class CodexAdapter:
                     emit("activity", f"工具：{item.get('type', 'tool')}")
             elif method == "item/completed":
                 item = params.get("item") or {}
-                if item.get("type") == "agentMessage" and item.get("id") not in streamed:
-                    emit("token", item.get("text", ""))
+                if item.get("type") == "agentMessage":
+                    if request.on_agent_message is not None:
+                        request.on_agent_message(thread_id, turn_id, dict(item))
+                    if item.get("id") not in streamed:
+                        emit("token", item.get("text", ""))
             elif method == "turn/completed":
                 turn = params.get("turn") or {}
                 if turn.get("id") != turn_id or completion.done():
                     return
+                if request.on_agent_message is not None:
+                    for item in turn.get("items") or []:
+                        if item.get("type") == "agentMessage":
+                            request.on_agent_message(thread_id, turn_id, dict(item))
                 if turn.get("status") == "completed":
                     completion.set_result(None)
                 else:
@@ -104,6 +120,8 @@ class CodexAdapter:
                        "developerInstructions": harness_instructions(request)}
             if request.model:
                 options["model"] = request.model
+            if request.ephemeral is not None:
+                options['ephemeral']=request.ephemeral
             if thread_id and rpc.native_id == thread_id:
                 result = {"thread": {"id": thread_id}}
             elif thread_id:
@@ -125,6 +143,12 @@ class CodexAdapter:
                       "approvalPolicy": "on-request", "sandboxPolicy": policy}
             if request.model:
                 params["model"] = request.model
+            if request.input_images is not None:
+                params['input'].extend({'type':'localImage','path':path} for path in request.input_images)
+            if request.reasoning_effort is not None:
+                params['effort']=request.reasoning_effort
+            if request.output_schema is not None:
+                params['outputSchema']=request.output_schema
             early: list[tuple[str, dict]] = []
             original_notify = rpc.notify
             rpc.notify = lambda method, data: early.append((method, data))
@@ -132,6 +156,8 @@ class CodexAdapter:
             turn_id = (result.get("turn") or {}).get("id", "")
             if not turn_id:
                 raise HarnessError("Codex 未返回本轮 ID")
+            if request.on_native_turn is not None:
+                request.on_native_turn(thread_id, turn_id)
             rpc.notify = original_notify
             for method, data in early:
                 notify(method, data)
@@ -142,6 +168,9 @@ class CodexAdapter:
                     await rpc.call("turn/interrupt", {"threadId": thread_id, "turnId": turn_id}, timeout=2)
                 except HarnessError:
                     pass
+                else:
+                    if request.on_native_interrupt is not None:
+                        request.on_native_interrupt(thread_id, turn_id)
                 raise
             finally:
                 if completion.done() and not completion.cancelled():

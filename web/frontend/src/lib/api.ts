@@ -679,6 +679,12 @@ export function stopChat(sessionId: string): Promise<{ stopped: boolean }> {
   });
 }
 
+export interface StreamChatOptions {
+  context?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  basePath?:string;
+  onAccepted?: (value: {sessionId:string;turnId?:string}) => void;
+}
 export function streamChat(
   message: string,
   persona: string | undefined,
@@ -696,16 +702,20 @@ export function streamChat(
   onQuestion?: (q: ChatQuestion) => void,
   onHeartbeat?: (note: string) => void,
   onQuestionClosed?: (q: ChatQuestionClosed) => void,
+  options?: StreamChatOptions,
 ): AbortController {
   const controller = new AbortController();
+  const base=options?.basePath??BASE;
   let lastEventId = 0;
+  let accepted=false;
+  const acknowledge=()=>{if(!accepted){accepted=true;options?.onAccepted?.({sessionId,turnId});}};
 
   const consume = async (res: Response): Promise<boolean> => {
       if (!res.ok) {
         let detail = `Stream error: ${res.status}`;
         try {
-          const payload = await res.json() as { detail?: string };
-          if (payload.detail) detail = payload.detail;
+          const payload = await res.json() as { detail?: string; error?: string; message?: string };
+          detail=payload.detail||payload.error||payload.message||detail;
         } catch { /* non-JSON error */ }
         const error = new Error(detail) as Error & { status?: number };
         error.status = res.status;
@@ -724,7 +734,8 @@ export function streamChat(
         if (!currentEvent || dataLines.length === 0) return false;
         if (currentId > lastEventId) lastEventId = currentId;
         const data = dataLines.join('\n');
-        if (currentEvent === 'token') {
+        if (currentEvent === 'accepted') { acknowledge();
+        } else if (currentEvent === 'token') {
           try { onToken(JSON.parse(data) as string); } catch { onToken(data); }
         } else if (currentEvent === 'thinking' && onThinking) {
           try { onThinking(JSON.parse(data) as string); } catch { onThinking(data); }
@@ -749,7 +760,7 @@ export function streamChat(
         } else if (currentEvent === 'error') {
           let msg = '执行失败';
           try { msg = JSON.parse(data) as string; } catch { msg = data; }
-          onError(new Error(msg));
+          onError(Object.assign(new Error(msg), {terminal:true}));
           return true;
         } else if (currentEvent === 'done') {
           try { onDone((JSON.parse(data) as { sessionKey?: string }).sessionKey); } catch { onDone(); }
@@ -792,13 +803,13 @@ export function streamChat(
     while (!controller.signal.aborted) {
       try {
         const res = first
-          ? await fetch(`${BASE}/api/chat/stream`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message, persona: persona || undefined, sessionId, turnId, attachments }),
+          ? await fetch(`${base}/api/chat/stream`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', ...options?.headers },
+              body: JSON.stringify({ message, persona: persona || undefined, sessionId, turnId, attachments, ...(options?.context?{context:options.context}:{}) }),
               signal: controller.signal,
             })
-          : await fetch(`${BASE}/api/chat/jobs/${encodeURIComponent(turnId || '')}/stream?after=${lastEventId}`, {
-              signal: controller.signal,
+          : await fetch(`${base}/api/chat/jobs/${encodeURIComponent(turnId || '')}/stream?after=${lastEventId}`, {
+              signal: controller.signal, headers:options?.headers,
             });
         // jobs 流 404 = 任务记录不存在（后端重启丢日志 / 首发请求 5xx 没起 supervisor）。
         // 必须终结：旧逻辑依赖 onRecoveryUnavailable（新发送不传），不传时静默落进
@@ -808,11 +819,12 @@ export function streamChat(
           else onError(new Error('任务记录不存在或已失效，无法续接；请重新发送'));
           return;
         }
+        if(res.ok)acknowledge();
         if (await consume(res)) return;
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') return;
         const status = (err as Error & { status?: number })?.status;
-        if (first && status && status >= 400 && status < 500) {
+        if (status && status >= 400 && status < 500) {
           onError(err instanceof Error ? err : new Error('请求失败'));
           return;
         }

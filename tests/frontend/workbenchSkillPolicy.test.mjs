@@ -18,10 +18,14 @@ function load(file, imports = {}, suffix = '') {
   }});
   const exports = {};
   if (file.startsWith('core/')) cache.set(file, exports);
-  runInNewContext(outputText, {exports, URL, URLSearchParams,
+  runInNewContext(outputText, {exports, URL, URLSearchParams, requestAnimationFrame: fn => fn(),
     require: id => {
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
+      if (id === './ChatAdapter') return load('ui/ChatAdapter.tsx', {
+        react: imports.react || {}, '@workbench/core': imports['@workbench/core'],
+        'react/jsx-runtime': jsx, '../../components/ChatPage': () => {}, './components/icons': {},
+      });
       throw Error('Unexpected module: ' + id);
     },
   });
@@ -173,8 +177,8 @@ test('actual new discussion submits the saved server draft revision and exact tr
   const {Production} = load('ui/production.tsx', {'react': react,
     'react/jsx-runtime': jsx, '@workbench/core': core, './components/icons': {}, './common': {}});
   const tree = Production({format: 'poster', profileId: 'p', search: new URLSearchParams('mode=research')});
-  const send = nodes(tree).find(node => node.type === 'button' && node.props.children.includes?.('发送讨论'));
-  await send.props.onClick();
+  const send = nodes(tree).find(node => node.type?.name === 'ChatAdapter');
+  await send.props.onSend();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'saved-work');
@@ -184,7 +188,7 @@ test('actual new discussion submits the saved server draft revision and exact tr
 
 test('same-work first production selects production pins while preserving its discussion input', async () => {
   const work = {id: 'draft-work', title: '讨论后制作', format: 'poster', creator: {id: 'p'},
-    versions: [], history: [], draft: {revision: 3, discussion_token: 'frozen-discussion',
+    versions: [], history: [], pending: [], draft: {revision: 3, discussion_token: 'frozen-discussion',
       title: '原字标题', material: '原字材料', files: [], creative: {recipe: {pack_id: 'editorial-poster'},
         creator: {profile_id: 'p', profile_revision: 7, trial: true, skills: [ref('research-new', 2)]}}}};
   const before = JSON.stringify(work);
@@ -194,6 +198,7 @@ test('same-work first production selects production pins while preserving its di
       service: {prepareProduction: async (...args) => {previews.push(args); return {};}}}),
     useResource: path => ({data: path === '/api/creator/bootstrap' ? data() : null}),
     useDraft: (key, initial) => [initial, () => {}, () => {}],
+    useOperation: () => ({}),
     useAsyncAction: () => ({busy: false, run: fn => fn()})};
   const react = {useState: value => [value, () => {}], useEffect: () => {}, useRef: value => ({current: value})};
   const {WorkCanvas} = load('ui/production.tsx', {'react': react,

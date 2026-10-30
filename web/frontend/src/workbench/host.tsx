@@ -1,6 +1,6 @@
 import React,{Suspense,lazy,useEffect,useLayoutEffect,useMemo,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {CoreProvider,useWorkbench,useUsage} from '@workbench/core';
-import {ActivityCoordinator,NavigationService,bindViewport,bindNavigationLinks,browserProfile,type PlatformProfile} from '@workbench/platform';
+import {ActivityCoordinator,NavigationService,bindViewport,bindNavigationLinks,browserProfile,prepareNativeWorker,type PlatformProfile} from '@workbench/platform';
 import './host.css';
 const EaselRoot=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselWorkbench}))),EaselAuth=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselAuth})));
 const nonce=()=>document.querySelector<HTMLMetaElement>('meta[name="style-nonce"]')?.content||'';
@@ -14,8 +14,9 @@ function RuntimeServices({activities,path,direction}:{activities:ActivityCoordin
  useEffect(()=>{if(ready)usage.view(path,direction)},[ready,path,direction,usage]);
  useEffect(()=>{if(!ready)return;let stopped=false;const release=document.querySelector<HTMLMetaElement>('meta[name="native-release"]')?.content;
   const cacheShell=()=>navigator.serviceWorker?.controller?.postMessage({type:'CACHE_SHELL'});
-  if('serviceWorker' in navigator){navigator.serviceWorker.addEventListener('controllerchange',cacheShell);void navigator.serviceWorker.register('/native/sw.js',{scope:'/native/',updateViaCache:'none'}).then(async registration=>{await navigator.serviceWorker.ready;cacheShell();registration.active?.postMessage({type:'CACHE_SHELL'})}).catch(()=>{/* The online app remains usable if service workers are unavailable. */})}
-  const check=async()=>{if(stopped||document.hidden||!activities.canUpgrade||persistenceError)return;try{const response=await fetch('/native/version',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});if(!response.ok)return;const value:unknown=await response.json();if(value&&typeof value==='object'&&'release' in value&&typeof value.release==='string'&&value.release!==release&&activities.canUpgrade)location.reload()}catch{/* A failed check does not replay a command. */}};
+  let registration:Promise<ServiceWorkerRegistration>|undefined,checking=false;
+  if('serviceWorker' in navigator){navigator.serviceWorker.addEventListener('controllerchange',cacheShell);registration=navigator.serviceWorker.register('/native/sw.js',{scope:'/native/',updateViaCache:'none'});void registration.then(async current=>{if(release)await prepareNativeWorker(current,release);if(!stopped){cacheShell();current.active?.postMessage({type:'CACHE_SHELL'})}}).catch(()=>{/* The online app remains usable if service workers are unavailable. */})}
+  const check=async()=>{if(stopped||checking||document.hidden||!activities.canUpgrade||persistenceError)return;checking=true;try{const response=await fetch('/native/version',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});if(!response.ok)return;const value:unknown=await response.json();if(value&&typeof value==='object'&&'release' in value&&typeof value.release==='string'&&value.release!==release){if(registration&&!await prepareNativeWorker(await registration,value.release))return;if(!stopped&&activities.canUpgrade&&!persistenceError)location.reload()}}catch{/* A failed check does not replay a command. */}finally{checking=false}};
   const timer=setInterval(()=>void check(),30000),resume=()=>void check();window.addEventListener('online',resume);window.addEventListener('focus',resume);return()=>{stopped=true;clearInterval(timer);navigator.serviceWorker?.removeEventListener('controllerchange',cacheShell);window.removeEventListener('online',resume);window.removeEventListener('focus',resume)};
  },[ready,activities,persistenceError]);return null;
 }

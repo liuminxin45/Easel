@@ -12,7 +12,8 @@ def verified_calls(box,c,jid):
  elif read_run(c,jid):
   thread=thread_id_for(c,jid)
   if not thread:return []
-  path=target_for_thread(thread)
+  run=read_run(c,jid)
+  path=target_for_thread(thread,expected_project=box.root) if run.get('engine')=='easel.harnesses.codex' else target_for_thread(thread)
  else:
   current=target();path=current.get('path') if isinstance(current,dict) else current
  if not path:return []

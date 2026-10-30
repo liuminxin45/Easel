@@ -16,7 +16,15 @@ async function prune(){
 }
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(ASSETS);await warmShell();await self.skipWaiting()})()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{await warmShell();await prune();await self.clients.claim()})()));
-self.addEventListener('message',event=>{if(event.data?.type==='CACHE_SHELL')event.waitUntil(warmShell())});
+self.addEventListener('message',event=>{
+ if(event.data?.type==='CACHE_SHELL')event.waitUntil(warmShell());
+ if(event.data?.type==='NATIVE_VERSION')event.waitUntil((async()=>{
+  const cached=await (await caches.open(SHELL)).match('/native/');
+  let ready=!!cached&&(await cached.clone().text()).includes('name="native-release" content="'+VERSION+'"');
+  if(!ready)ready=await warmShell();
+  event.ports[0]?.postMessage({release:VERSION,shell_ready:ready});
+ })());
+});
 self.addEventListener('fetch',event=>{
  const request=event.request,url=new URL(request.url);
  if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/')||url.pathname.includes('/login'))return;

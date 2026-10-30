@@ -62,8 +62,12 @@ def validate_package(release):
         metadata = yaml.safe_load(match.group(1))
     except yaml.YAMLError:
         raise ValueError('技能头部格式无效，尚未发布') from None
-    if not isinstance(metadata, dict) or set(metadata) - {'name', 'description', 'license', 'allowed-tools', 'metadata'}:
+    if not isinstance(metadata, dict) or set(metadata) - {'name', 'description', 'license', 'allowed-tools', 'metadata','layer'}:
         raise ValueError('技能头部只能包含支持的能力元信息')
+    if 'layer' in metadata and metadata['layer'] not in ('discover','plan','produce','publish','attribute','general'):
+        raise ValueError('项目技能分层无效')
+    if release.get('entry','').startswith('skills/builtin/') and 'layer' not in metadata:
+        raise ValueError('Easel 项目内置技能须保留分层元信息')
     name = metadata.get('name')
     description = metadata.get('description')
     if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', name) or len(name) > 64:
@@ -106,6 +110,10 @@ class CreatorRuntime:
         self.store = box.store
         self.root = pathlib.Path(box.root)
         self.project = pathlib.Path(project or getattr(getattr(box, 'studio', None), 'project', PROJECT)).resolve()
+        from easel_workbench.skill_catalog import ProjectSkillCatalog
+        local=ProjectSkillCatalog(self.root)
+        self.catalog=local if local.available() else None
+        if self.catalog is not None:self.project=self.root.resolve()
         if c is not None:
             initialize(c)
             self._seed(c)
@@ -118,9 +126,11 @@ class CreatorRuntime:
         if not isinstance(relative, str) or not relative or len(relative) > 2000 or '\x00' in relative or '\\' in relative or pathlib.PurePosixPath(relative).is_absolute():
             raise ValueError('资源路径无效')
         path = (self.project / relative).resolve()
+        if self.catalog is not None and not path.exists() and pathlib.PurePosixPath(relative).parts[0] in ('规范','资料'):
+            path=(self.project/'skills/shared/workbench'/relative).resolve()
         if not path.is_relative_to(self.project) or '..' in pathlib.PurePosixPath(relative).parts:
             raise ValueError('资源不能离开内容项目')
-        if pathlib.PurePosixPath(relative).parts[0] not in ('规范', '资料', '工具', '内容', '.agents'):
+        if pathlib.PurePosixPath(relative).parts[0] not in ('规范', '资料', '工具', '内容', '.agents', 'skills'):
             raise ValueError('技能只引用创作规范、材料、工具和技能资源')
         return path
 
@@ -184,10 +194,12 @@ class CreatorRuntime:
                        'content': raw.decode('utf-8-sig') if raw else '', 'available': bool(raw)},
                        'created_at': stamp(), 'updated_at': stamp()}
             self._put_profile(c, profile)
-        manifest = self._safe(MANIFEST)
-        if not manifest.is_file():
-            return
-        document = json.loads(manifest.read_text(encoding='utf-8-sig'))
+        if self.catalog is not None:
+            document=self.catalog.document()
+        else:
+            manifest = self._safe(MANIFEST)
+            if not manifest.is_file():return
+            document = json.loads(manifest.read_text(encoding='utf-8-sig'))
         if document.get('schema_version') != 1 or not isinstance(document.get('skills'), list):
             raise ValueError('技能目录无效')
         for skill in document['skills'] + [s for s in document.get('candidates', []) if self._safe(s['entry']).is_file()]:
@@ -259,7 +271,7 @@ class CreatorRuntime:
                                       'available': True, 'required': False, 'sha256': digest(raw), 'size': len(raw),
                                       'derived': True, 'creator_profile_id': DEFAULT_PROFILE,
                                       'provenance': {'path': '规范/创作策略.json', 'sha256': digest(policy_raw), 'ids': [r['id'] for r in baselines]}})
-            metadata = {name: copy.deepcopy(skill.get(name)) for name in ('id', 'name', 'description', 'entry', 'tasks', 'executor', 'input_contract', 'output_contract', 'acceptance_cases')}
+            metadata = {name: copy.deepcopy(skill.get(name)) for name in ('id', 'name', 'description', 'entry', 'tasks', 'executor', 'input_contract', 'output_contract', 'acceptance_cases','composition','layer')}
             metadata['created_at'] = stamp()
             metadata['variants'] = variants
             release = {**metadata, 'version': 1, 'prompt': body, 'resources': resources,
@@ -696,6 +708,8 @@ class CreatorRuntime:
                 if not blob or digest(bytes(blob['bytes'])) != resource['sha256']:
                     raise CreatorConflict('冻结资源字节缺失或不符，不能发布')
         validation['checks'].append('resource_bytes')
+        from easel_workbench.project_skill_sync import stage
+        source_sync=stage(self,c,release,value['id'],self._skill(c,sid,old,False) if old else None)
         if release['version'] != old:
             c.execute('UPDATE creator_skill_pointers SET revision=revision+1,version=? WHERE skill_id=?', (version, sid))
             self._event(c, sid, version, 'revert' if revert else 'publish', {'previous_version': old, 'validation': validation})
@@ -717,6 +731,7 @@ class CreatorRuntime:
             profile.update(revision=profile['revision'] + 1, updated_at=stamp())
             self._put_profile(c, profile)
         result = {'skill': self._skill(c, sid, version)}
+        if source_sync is not None:result['source_sync']=source_sync
         if profile is not None:
             result['profile'] = profile
         return result
@@ -734,7 +749,8 @@ class CreatorRuntime:
             if previous:
                 if previous['signature'] != signature:
                     raise CreatorConflict('相同操作标识不能提交不同内容')
-                return json.loads(previous['result'])
+                from easel_workbench.project_skill_sync import finish_response
+                return finish_response(self,c,json.loads(previous['result']))
             action = value.get('action')
             if action == 'profile-save':
                 result = self._save_profile(c, value)
@@ -747,6 +763,9 @@ class CreatorRuntime:
                 result = {'skill': self.propose(c, value.get('skill_id'), value.get('base_version'), value.get('prompt'), value.get('reason', ''), value.get('evidence_refs'), value.get('conditions'), operation, value.get('resources'), value.get('validation_cases'))}
             elif action in ('skill-publish', 'skill-revert'):
                 result = self._publish(c, value, action == 'skill-revert')
+            elif action == 'skill-source-reconcile':
+                from easel_workbench.project_skill_sync import pending
+                result={'source_sync':pending(self,c,key(value.get('skill_id')),value.get('version'))}
             elif action == 'trial':
                 snapshot = self.resolve(value.get('profile_id') or DEFAULT_PROFILE, value.get('task', 'poster'), value.get('skills'), True, value.get('profile_revision'), c)
                 result = {'snapshot': snapshot, 'trial': True, 'started': False}
@@ -760,7 +779,8 @@ class CreatorRuntime:
                 raise ValueError('不支持的画像或技能操作')
             response = {'id': operation, 'status': 'completed', 'execution': 'script', 'result': result}
             c.execute('INSERT INTO creator_operations VALUES(?,?,?,?)', (operation, signature, packed(response), stamp()))
-            return response
+            from easel_workbench.project_skill_sync import finish_response
+            return finish_response(self,c,response)
 
     def resolve(self, profile_id=DEFAULT_PROFILE, task='poster', skill_refs=None, allow_trial=False, profile_revision=None, c=None, allow_historical_profile=False, context=None):
         if c is None:
@@ -899,7 +919,7 @@ class CreatorRuntime:
             archive.writestr('release.json', packed(release))
             archive.writestr('调用说明.md', '# ' + release['name'] + ' v' + str(release['version']) + '\n\n'
                 '本包来自工作台已保存的技能版本及资源快照。工作台中选择创作画像和任务后，指定本技能与版本；候选只供明确试用，发布并设置适用范围后才影响后续默认。\n\n'
-                'SKILL.md 是实际可读指令；release.json 保存输入输出合同、资源原路径与SHA、适用任务和版本。resources/ 的文件按资源清单序号保存，与原件逐字节对应。原路径相对于 neo-content 项目根目录，不代表允许覆盖当前规范。\n\n'
+                'SKILL.md 是实际可读指令；release.json 保存输入输出合同、资源原路径与SHA、适用任务和版本。resources/ 的文件按资源清单序号保存，与原件逐字节对应。项目内置技能路径相对于 Easel，旧版本路径属于其原始来源项目；导出不授权覆盖当前规范。\n\n'
                 '脚本与工具依赖须在实际环境可用；不同模型和生图工具不保证相同效果。参考资料、图片和原话是材料，不扩大发布、账号或写入授权。格式检查、制作方声明、实际工具证据和用户认可分别判断。\n')
             for index, resource in enumerate(release['resources']):
                 if resource.get('available'):

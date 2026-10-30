@@ -105,8 +105,10 @@ def analysis_schema():
 def readonly_analysis(payload, runner=None, timeout=180):
     """One ephemeral, tool-disabled CLI invocation with no production session."""
     from easel_workbench.runtime.readonly_codex import command, CODEX
-    if runner is None and not CODEX.is_file():
+    from easel_workbench.readonly_runner import run,recorded_output,project_snapshot
+    if runner is None and not CODEX.is_file() and not project_snapshot(payload.get('creator_snapshot')):
         raise ValueError('本机只读分析能力不可用，原件与待分析状态已保留')
+    injected_runner=runner
     runner = runner or subprocess.run
     with tempfile.TemporaryDirectory(prefix='creative-learning-') as directory:
         folder = Path(directory)
@@ -137,8 +139,8 @@ def readonly_analysis(payload, runner=None, timeout=180):
         prompt,binding=contract_prompt(trace_box,'reference','references/reference-observation.md',clean_payload,snapshot=payload.get('creator_snapshot'),profile_id=payload.get('profile_id','oil-pig'))
         env = {key: value for key, value in os.environ.items() if key not in ('OPENAI_API_KEY', 'CODEX_API_KEY')}
         with observed_call(trace_box,'reference',clean_payload,prompt,binding,payload.get('_runtime_task_id')) as record_result:
-            result = runner(args, input=prompt, capture_output=True, text=True, encoding='utf-8', errors='replace',
-                            timeout=timeout, env=env, cwd=folder, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            result = run(binding if project_snapshot(payload.get('creator_snapshot')) else None,args,runner=injected_runner,input=prompt, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                            timeout=timeout, env=env, cwd=folder, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),runtime_root=trace_box,task_id=payload.get('_runtime_task_id'))
             if result.returncode != 0:
                 raise ValueError('只读分析没有完成，未导入终端输出或改写长期策略')
             answer = folder / 'answer.json'
@@ -153,7 +155,7 @@ def readonly_analysis(payload, runner=None, timeout=180):
                     suggestion['conditions'] = {key: value for key, value in suggestion['conditions'].items() if value is not None}
             if verified_images:
                 document['input_images'] = verified_images
-            record_result(document)
+            record_result(recorded_output(result,document))
             return document
 
 
@@ -187,7 +189,8 @@ def readonly_batch_analysis(payload, runner=None, timeout=300):
     """Exactly one tool-disabled call for a frozen multi-source learning pack."""
     from easel_workbench.runtime.readonly_codex import command, CODEX
     from easel_workbench.runtime.batch_learning import LIMITS
-    if runner is None and not CODEX.is_file():
+    from easel_workbench.readonly_runner import run,recorded_output,project_snapshot
+    if runner is None and not CODEX.is_file() and not project_snapshot(payload.get('creator_snapshot')):
         raise ValueError('本机只读学习能力不可用；材料保留待整理')
     members = payload.get('members', [])
     images = payload.get('images', [])
@@ -219,8 +222,8 @@ def readonly_batch_analysis(payload, runner=None, timeout=300):
         prompt += '\n只返回schema JSON。'
         env = {key: value for key, value in os.environ.items() if key not in ('OPENAI_API_KEY', 'CODEX_API_KEY')}
         with observed_call(trace_box,'learning',clean_payload,prompt,binding,payload.get('_runtime_task_id')) as record_result:
-            result = (runner or subprocess.run)(args, input=prompt, capture_output=True, text=True, encoding='utf-8', errors='replace',
-                                                timeout=timeout, env=env, cwd=folder, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            result = run(binding if project_snapshot(payload.get('creator_snapshot')) else None,args,runner=runner,input=prompt, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                                                timeout=timeout, env=env, cwd=folder, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),runtime_root=trace_box,task_id=payload.get('_runtime_task_id'))
             if result.returncode != 0:
                 raise ValueError('只读批量学习未完成；未导入终端输出')
             path = folder / 'answer.json'
@@ -230,7 +233,7 @@ def readonly_batch_analysis(payload, runner=None, timeout=300):
             bounded(packed(value), 1_000_000, True)
             for suggestion in value.get('suggestions', []):
                 suggestion['conditions'] = {key: val for key, val in suggestion.get('conditions', {}).items() if val is not None}
-            record_result(value)
+            record_result(recorded_output(result,value))
             return value
 
 
@@ -238,6 +241,7 @@ def readonly_skill_distillation(payload, runner=None, timeout=300):
     """One explicit request creates a candidate skill revision, never a default."""
     from easel_workbench.runtime.readonly_codex import command
     from easel_workbench.runtime.task_runtime import contract_prompt, observed_call
+    from easel_workbench.readonly_runner import run,recorded_output,project_snapshot
     fields = {'changed': {'type': 'boolean'}, 'reason': {'type': 'string'},
               'prompt': {'type': 'string'}, 'conditions': {'type': 'string'},
               'evidence_refs': {'type': 'array', 'items': {'type': 'string'}},
@@ -277,16 +281,16 @@ def readonly_skill_distillation(payload, runner=None, timeout=300):
                                          snapshot=payload['creator_snapshot'])
         env = {k: v for k, v in os.environ.items() if k not in ('OPENAI_API_KEY', 'CODEX_API_KEY')}
         with observed_call(root, 'learning', submitted, prompt, binding, payload.get('_runtime_task_id')) as record:
-            process = (runner or subprocess.run)(args, input=prompt, capture_output=True, text=True,
+            process = run(binding if project_snapshot(payload.get('creator_snapshot')) else None,args,runner=runner,input=prompt, capture_output=True, text=True,
                 encoding='utf-8', errors='replace', timeout=timeout, cwd=folder, env=env,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),runtime_root=root,task_id=payload.get('_runtime_task_id'))
             output = folder/'answer.json'
             if process.returncode or not output.is_file() or output.stat().st_size > 1_000_000:
                 raise ValueError('技能整理未取得有界回执')
             result = json.loads(output.read_text(encoding='utf-8-sig'))
             if not isinstance(result, dict) or set(result) != set(fields) or type(result['changed']) is not bool:
                 raise ValueError('技能整理回执结构无效')
-            record(result)
+            record(recorded_output(process,result))
             return result
 
 
@@ -358,7 +362,7 @@ class LearningWorker:
                     result = {'status': 'completed', 'analysis': analysis}
             else:
                 result = {'status': 'blocked', 'error': '未知学习任务类型，未执行'}
-        except (TimeoutError, subprocess.TimeoutExpired):
+        except (TimeoutError, subprocess.TimeoutExpired, ConnectionError):
             result = {'status': 'blocked', 'error': '模型回执未知，保留本次调用身份待核对；未自动重放'}
         except Exception as error:
             # Provider errors may include credential-bearing URLs or raw process
@@ -453,7 +457,7 @@ class LearningWorker:
             if 'profile_version' in payload:
                 result['profile_version'] = payload['profile_version']
             self.service.batch.complete(batch_id, result, call['id'])
-        except (subprocess.TimeoutExpired, TimeoutError):
+        except (subprocess.TimeoutExpired, TimeoutError, ConnectionError):
             result = {'status': 'blocked', 'error': '模型回执未知，保留调用身份并待核对；未自动重放'}
             self.service.batch.complete(batch_id, result, call['id'] if call else None)
         except Conflict:

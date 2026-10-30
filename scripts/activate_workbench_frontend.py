@@ -41,7 +41,7 @@ def binding(value,prefix):
     return {key:value[key] for key in ('release','manifest_sha256')}
 
 
-def native_package(root,choice,source=False):
+def native_package(root,choice,source=False,source_root=None):
     choice=binding(choice,'native');directory=root/'native-releases'/choice['release']
     manifest=contained(root,str(directory/'native-manifest.json'))
     if sha(manifest)!=choice['manifest_sha256']:raise ValueError('Frontend manifest changed')
@@ -54,10 +54,11 @@ def native_package(root,choice,source=False):
         path=contained(root,name,directory)
         if not path.is_relative_to(directory.resolve()) or sha(path)!=expected:raise ValueError('Frontend member changed: '+name)
     if source:
+        origin=source_root or root
         inputs=read(directory/'build-inputs.json')
         if inputs.get('node')!='v24.19.0' or not isinstance(inputs.get('inputs'),dict) or not inputs['inputs']:raise ValueError('Frontend build inputs are missing')
         for name,expected in inputs['inputs'].items():
-            if Path(name).is_absolute() or sha(contained(root,name))!=expected:raise ValueError('Frontend build source changed: '+name)
+            if Path(name).is_absolute() or sha(contained(root,str(origin/name)))!=expected:raise ValueError('Frontend build source changed: '+name)
     return directory,document
 
 
@@ -120,7 +121,13 @@ def validate(root,acceptance_path,current):
     backend=binding(acceptance.get('backend'),'workbench');previous=binding(acceptance.get('previous_native'),'native');native=binding(acceptance.get('native'),'native')
     if backend!=current['runtime'] or previous!=current['native'] or native==previous:raise ValueError('Acceptance does not match the live baseline')
     directory=root/'workbench-releases'/backend['release'];verify(directory,backend['manifest_sha256'])
-    native_package(root,previous);native_package(root,native,source=True)
+    source_root=root
+    if 'source_root' in acceptance:
+        source=acceptance['source_root']
+        if not isinstance(source,str) or Path(source).is_absolute() or '..' in Path(source).parts:raise ValueError('Invalid isolated source root')
+        source_root=(root/source).resolve()
+        if not source_root.is_relative_to(root/'.local/workbench-validation'):raise ValueError('Isolated source must be inside project validation evidence')
+    native_package(root,previous);native_package(root,native,source=True,source_root=source_root)
     references=acceptance.get('evidence')
     if not isinstance(references,dict) or not {'browser','upgrade','frontend'}.issubset(references):raise ValueError('Browser, upgrade and frontend evidence are required')
     evidence={}

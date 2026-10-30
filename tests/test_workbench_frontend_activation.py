@@ -94,6 +94,31 @@ def test_preview_validates_only_and_does_not_authenticate_or_change_selectors(fi
     assert activation.controls(f.root)==before and f.database.read_bytes().startswith(b'TEMP DB sentinel')
 
 
+def test_isolated_build_validates_its_actual_source_without_touching_concurrent_edits(fixture):
+    f=fixture;relative='.local/workbench-validation/isolated-source'
+    source=f.root/relative/f.source.relative_to(f.root);source.parent.mkdir(parents=True);source.write_bytes(f.source.read_bytes())
+    f.source.write_text('Concurrent unreviewed source edit',encoding='utf-8')
+    f.acceptance['source_root']=relative;write(f.path,f.acceptance)
+    result=activation.execute(f.path,root=f.root,apply=True)
+    assert result['status']=='live' and not result['workers_restarted'] and not result['business_database_opened']
+    assert f.source.read_text(encoding='utf-8')=='Concurrent unreviewed source edit'
+
+
+@pytest.mark.parametrize('source',['../outside','D:/outside','.local/workbench-deployment'])
+def test_isolated_source_cannot_escape_validation_evidence(fixture,source):
+    f=fixture;f.acceptance['source_root']=source;write(f.path,f.acceptance)
+    with pytest.raises(ValueError):activation.execute(f.path,root=f.root,apply=True)
+    assert not f.auth_calls and activation.controls(f.root)['native']==f.previous
+
+
+def test_isolated_source_changes_are_rejected_before_authentication(fixture):
+    f=fixture;relative='.local/workbench-validation/isolated-source'
+    source=f.root/relative/f.source.relative_to(f.root);source.parent.mkdir(parents=True);source.write_text('Different source bytes',encoding='utf-8')
+    f.acceptance['source_root']=relative;write(f.path,f.acceptance)
+    with pytest.raises(ValueError):activation.execute(f.path,root=f.root,apply=True)
+    assert not f.auth_calls and activation.controls(f.root)['native']==f.previous
+
+
 def test_pointer_only_apply_preserves_runtime_manifest_controls_database_and_processes(fixture):
     f=fixture;before=activation.controls(f.root);manifest=(f.runtime/'workbench-release.json').read_bytes();database=f.database.read_bytes()
     result=activation.execute(f.path,root=f.root,apply=True,expected_native=f.previous['release'])

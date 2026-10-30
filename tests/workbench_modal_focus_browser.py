@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from urllib.parse import urlencode
@@ -102,8 +103,10 @@ def main():
                         verify('calendar', '.overlay > .modal', page.locator('.modal .icon-btn').first)
                         go('/works?' + urlencode({'path': '__workbench__/TEMP-focus-image/成品.png'}))
                         expect(page.locator('.drawer img')).to_be_visible()
+                        page.wait_for_function("()=>{const image=document.querySelector('.drawer img');return image?.complete&&image.naturalWidth>0}")
                         verify('output', '.drawer-overlay > .drawer', page.locator('.drawer-header .icon-btn').first)
                         go('/toolbox?section=skills'); page.locator('.skill-card').first.click()
+                        expect(page.locator('.drawer .skill-body-md')).to_contain_text(re.compile(r'\S'))
                         verify('skill', '.drawer-overlay > .drawer', page.locator('.drawer button[title="关闭"]').first)
                         check(profile, 'no-model-or-platform-operation', not f['adapter'].requests)
                     except BaseException as error:

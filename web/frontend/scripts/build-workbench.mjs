@@ -18,14 +18,14 @@ const sources=()=>{
   const files=fs.readdirSync(path.join(frontend,'src'),{recursive:true})
     .filter(n=>fs.statSync(path.join(frontend,'src',n)).isFile())
     .map(n=>'web/frontend/src/'+n.replaceAll('\\','/'));
-  files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','check.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
+  files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
     'easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','LICENSE');
   return Object.fromEntries(files.sort().map(n=>[n,sha(fs.readFileSync(path.join(root,n)))]));
 };
 const inputs=sources();
-await build({configFile:false,root:frontend,plugins:[react()],resolve:{alias:Object.fromEntries(Object.entries(aliases).map(([k,v])=>[k,path.join(frontend,'src/workbench',v)]))},base:'/native-assets/'+release+'/',build:{outDir:out,emptyOutDir:false,manifest:true,target:'es2022',rollupOptions:{input:{index:path.join(frontend,'workbench.html'),auth:path.join(frontend,'auth.html'),check:path.join(frontend,'check.html')}}},logLevel:'warn'});
+await build({configFile:false,root:frontend,plugins:[react()],resolve:{alias:Object.fromEntries(Object.entries(aliases).map(([k,v])=>[k,path.join(frontend,'src/workbench',v)]))},base:'/native-assets/'+release+'/',build:{outDir:out,emptyOutDir:false,manifest:true,target:'es2022',rollupOptions:{input:{index:path.join(frontend,'workbench.html'),auth:path.join(frontend,'auth.html')}}},logLevel:'warn'});
 fs.renameSync(path.join(out,'workbench.html'),path.join(out,'index.html'));
-for(const file of ['index.html','auth.html','check.html']){const p=path.join(out,file);fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('__NATIVE_RELEASE__',release));}
+for(const file of ['index.html','auth.html']){const p=path.join(out,file);fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('__NATIVE_RELEASE__',release));}
 fs.mkdirSync(path.join(out,'licenses'));fs.copyFileSync(path.join(root,'LICENSE'),path.join(out,'licenses/Easel-LICENSE.txt'));
 fs.copyFileSync(path.join(root,'docs/workbench/import-baseline.json'),path.join(out,'licenses/Workbench-SOURCE.json'));
 fs.writeFileSync(path.join(out,'licenses/Easel-NOTICE.txt'),'Easel, Apache-2.0. Source: https://github.com/ZJU-REAL/Easel\nLocal fork base: 514caf8089f89b4793063aeae867690cc69bf8b8\nPrivate workflow adaptation: easel_workbench and web/frontend/src/workbench.\n');

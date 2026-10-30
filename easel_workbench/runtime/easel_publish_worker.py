@@ -15,6 +15,28 @@ import sys
 import subprocess
 
 
+class SubmissionAlreadyAttempted(BaseException):
+    """Stop upstream recovery before a second potentially sent submission."""
+
+
+def single_channel_submission(module):
+    """Keep Easel's video upload flow, but fence its Enter-after-timeout loop."""
+    original=getattr(module,'_publish_weixin_channels',None)
+    if not original:return
+    def publish(page,context):
+        keyboard=page.keyboard;press=keyboard.press;sent=False
+        def once(key,*args,**kwargs):
+            nonlocal sent
+            if key=='Enter':
+                if sent:raise SubmissionAlreadyAttempted()
+                sent=True
+            return press(key,*args,**kwargs)
+        keyboard.press=once
+        try:return original(page,context)
+        finally:keyboard.press=press
+    module._publish_weixin_channels=publish
+
+
 def readonly(payload,session,revision,directory,source):
     """No publisher is imported or invoked on this path."""
     import datetime as dt
@@ -57,7 +79,7 @@ def main():
     os.environ.clear()
     os.environ.update(env)
     os.chdir(directory)
-    source = pathlib.Path(__file__).resolve().parent / 'vendor/easel/scripts'
+    source = pathlib.Path(__file__).resolve().parents[2] / 'skills/shared/scripts'
     sys.path.insert(0, str(source))
     platform = session['platform']
     if payload.get('mode')=='verify':
@@ -70,6 +92,7 @@ def main():
     who=json.loads(probe.stdout)
     if who.get('loggedIn') is not True or who.get('provider_user_id')!=revision['account']:raise ValueError('发送前账号身份不符')
     if platform=='bilibili':
+        sys.path.insert(0,str(source.parents[1]/'builtin/skill-bilibili-upload/scripts'))
         from types import SimpleNamespace
         import time
         uploader=importlib.import_module('bili_upload')
@@ -93,7 +116,7 @@ def main():
         credentials=payload['credentials']
         query=urllib.parse.urlencode({'grant_type':'client_credential','appid':credentials['app_id'],'secret':credentials['app_secret']})
         with urllib.request.urlopen('https://api.weixin.qq.com/cgi-bin/token?'+query,timeout=30) as response:token=json.load(response)['access_token']
-        sys.path.insert(0,str(source.parent/'wechat'))
+        sys.path.insert(0,str(source.parents[1]/'builtin/skill-wechat-publisher/scripts'))
         api=importlib.import_module('api');converter=importlib.import_module('html_converter')
         api.get_access_token=lambda:token
         api.get_config=lambda *a,**k:{'account_name':session['label'],'author':''}
@@ -112,6 +135,7 @@ def main():
         return
     module_name = 'weixin_mp_stats' if platform=='wechat-oa' else 'xhs_publish' if platform == 'xiaohongshu' else 'douyin_publish' if platform == 'douyin' else 'web_publisher'
     module = importlib.import_module(module_name)
+    if platform=='weixin-channels':single_channel_submission(module)
     readback = importlib.import_module('platform_readback')
     observed = {}
     for name in dir(readback):
@@ -134,9 +158,10 @@ def main():
         body.write_text('<article>'+''.join('<p>'+html.escape(line)+'</p>' for line in revision['body'].splitlines())+'</article>',encoding='utf-8')
         args=['publish','--profile-base',str(profile),'--html',str(body),'--cover',images[0],'--title',revision['title']]
     elif module_name == 'web_publisher':
-        if not files:
+        if not files and platform!='zhihu':
             raise ValueError('缺少实际媒体文件')
-        args += ['--platform', platform, '--media', str(files[0]), '--desc', revision['body']]
+        args += ['--platform', platform, '--desc', revision['body']]
+        if files:args+=['--media', str(files[0])]
     else:
         args += ['--content', revision['body']]
         if videos:
@@ -147,8 +172,16 @@ def main():
         else:
             raise ValueError('缺少实际媒体文件')
     sys.argv = [str(source / (module_name + '.py')), *args]
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    capture=io.StringIO()
+    with contextlib.redirect_stdout(capture), contextlib.redirect_stderr(io.StringIO()):
         module.main()
+    if platform=='wechat-oa':
+        for line in reversed(capture.getvalue().splitlines()):
+            try:value=json.loads(line)
+            except ValueError:continue
+            if isinstance(value,dict) and value.get('success') is True:
+                print(json.dumps({'account':revision['account'],'media_id':str(value.get('media_id') or ''),'readback':{'outcome':'unverified'}}));return
+            break
     # Strip arbitrary platform payloads; the caller keeps result unknown until
     # the complete identity/URL/time receipt contract has been established.
     matched = observed.get('matched') or {}

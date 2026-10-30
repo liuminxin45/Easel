@@ -14,7 +14,7 @@ import pathlib
 import threading
 
 from easel_workbench.runtime.desk import ROOT, Store, stamp
-from easel_workbench.runtime.distribution_runtime import DistributionRuntime, process_identity
+from easel_workbench.runtime.distribution_runtime import process_identity
 from easel_workbench.runtime.distribution_service import DistributionService, digest
 from easel_workbench.runtime.toolbox_store import Toolbox
 
@@ -51,7 +51,10 @@ def preflight_assets(box, revision):
 class DistributionWorker:
     def __init__(self, service, runtime=None, *, runner_id='distribution-local', lease_seconds=180, probe_before_claim=True):
         self.service = service
-        self.runtime = runtime or service.runtime or DistributionRuntime(service.box)
+        if runtime is None and service.runtime is None:
+            from easel_workbench.runtime.easel_distribution import EaselDistributionRuntime
+            runtime=EaselDistributionRuntime(service.box)
+        self.runtime = runtime or service.runtime
         self.runner_id = runner_id
         self.lease_seconds = lease_seconds
         self.probe_before_claim = probe_before_claim
@@ -153,7 +156,7 @@ def run(root=None, *, stop_event=None, once=False, poll_seconds=5, runtime=None)
     box = Toolbox(Store(root / 'data/desk.sqlite'), root)
     if runtime is None:
         from easel_workbench.runtime.easel_distribution import EaselDistributionRuntime
-        runtime = EaselDistributionRuntime(box,DistributionRuntime(box))
+        runtime = EaselDistributionRuntime(box)
     service = DistributionService(box, runtime)
     return DistributionWorker(service, runtime).run(stop_event=stop_event, once=once, poll_seconds=poll_seconds)
 

@@ -31,7 +31,9 @@ def main():
     os.environ.clear()
     os.environ.update(environment)
     os.chdir(directory)
-    source = pathlib.Path(__file__).resolve().parent / 'vendor/easel/scripts'
+    # Consume the same upstream scripts as Easel's web app, frozen in this release.
+    source = pathlib.Path(__file__).resolve().parents[2] / 'skills/shared/scripts'
+    if not (source/'web_publisher.py').is_file():raise ValueError('Easel platform scripts are unavailable')
     sys.path.insert(0, str(source))
     platform = session['platform']
     if platform == 'wechat-oa' and session.get('_auth_mode')=='credentials':
@@ -121,7 +123,7 @@ def main():
             except ValueError:
                 continue
         if platform=='bilibili' and observed_identity.get('id') and result.get('loggedIn') is True:result['provider_user_id']=observed_identity['id']
-    public = {k: result.get(k) for k in ('loggedIn', 'provider_user_id', 'name')}
+    public = {k: result.get(k) for k in ('loggedIn', 'provider_user_id', 'name','avatar')}
     print(json.dumps(public, ensure_ascii=False))
 
 

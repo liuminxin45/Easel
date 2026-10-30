@@ -31,6 +31,8 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.weekly_periodical import Periodical
     periodical=Periodical(store,root);app.state.periodical=periodical
     app.state.box=box;app.state.auth=auth
+    from easel_workbench.settings import service as settings_service,handle as settings_api
+    settings=settings_service(box);app.state.settings=settings
     from easel_workbench.runtime.collection_service import CollectionService
     collection=CollectionService(store,root);app.state.collection=collection
     from easel_workbench.runtime.studio_service import StudioService,StudioConflict as WorkspaceConflict,StudioUnavailable as WorkspaceUnavailable
@@ -224,7 +226,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if method not in ('GET','HEAD') and (not same or len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf)):return error(403,'csrf_rejected')
             return error(410,'通知页与通知设备已退役，任务进度请在工作台或作品中查看')
         if method in ('GET','HEAD'):
-            chat_response=await chat_api(chat,chat_business,path,request,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)))
+            settings_response=await settings_api(settings,path,request)
+            if settings_response is not None:return settings_response
+            chat_response=await chat_api(chat,chat_business,path,request,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response)
             if chat_response is not None:
                 if hasattr(chat_response,'body') and chat_response.status_code==200:
                     return reply(decorate_images(json.loads(chat_response.body),session,cookies(ctx.headers).get(SESSION)))
@@ -238,7 +242,11 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if headers.get('content-type','').split(';')[0]!='application/json':return error(415,'请求类型无效')
             value=json.loads(raw)
             if not isinstance(value,dict):raise ValueError('请求需要 JSON 对象')
-            chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)))
+            if path=='/api/collection/sources':
+                return reply(await asyncio.to_thread(collection.registry.update,value))
+            settings_response=await settings_api(settings,path,request,value)
+            if settings_response is not None:return settings_response
+            chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response)
             if chat_response is not None:return chat_response
             if path=='/api/creative/preview':
                 from easel_workbench.runtime.creative_recipes import service as recipes
@@ -382,12 +390,20 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 return reply(await asyncio.to_thread(collection.retry,collection_retry.group(1),value),202)
             return error(404,'工具操作不存在')
         q=request.query_params
+        source_receipt=re.fullmatch(r'/api/operations/([A-Za-z0-9_-]{1,128})',path)
+        if source_receipt and q.get('path')=='/api/collection/sources':
+            return reply(await asyncio.to_thread(collection.registry.receipt,source_receipt.group(1)))
+        operation_receipt=re.fullmatch(r'/api/operations/([A-Za-z0-9_-]{1,160})',path)
+        if operation_receipt:
+            from easel_workbench.runtime.operation_receipts import read as read_operation_receipt
+            return reply(await asyncio.to_thread(read_operation_receipt,store,operation_receipt[1],q.get('path',''),collection=collection))
         if path=='/api/creator/bootstrap':return reply(await asyncio.to_thread(creator.bootstrap))
         profile_proposal=re.fullmatch(r'/api/creator/profile-proposals/([A-Za-z0-9_-]+)',path)
         if profile_proposal:
             from easel_workbench.runtime.profile_learning import get as profile_proposal_get
             with store.connect() as connection:return reply(profile_proposal_get(connection,profile_proposal[1]))
         if path=='/api/easel/plans':return reply(await asyncio.to_thread(frontend.plans))
+        if path=='/api/easel/topics':return reply(await asyncio.to_thread(frontend.topics))
         if path in ('/api/platform-accounts','/api/media/accounts'):return reply(await asyncio.to_thread(accounts.bootstrap))
         account_qr=re.fullmatch(r'/api/(?:platform-accounts|media/accounts)/([A-Za-z0-9_-]+)/qr',path)
         if account_qr:
@@ -458,6 +474,11 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         completion_work=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/completion',path)
         if completion_work:return reply(await asyncio.to_thread(completion.get,completion_work.group(1)))
         if path=='/api/collection/status':return reply(await asyncio.to_thread(collection.status))
+        if path=='/api/collection/sources':
+            result=await asyncio.to_thread(collection.registry.public)
+            definitions=await asyncio.to_thread(collection.definitions)
+            result['sources']=[{**row,'enabled':definitions.get(row['id'],{}).get('enabled',False)} for row in result['sources']]
+            return reply(result)
         collection_run=re.fullmatch(r'/api/collection/runs/([A-Za-z0-9_-]{1,128})',path)
         if collection_run:return reply(await asyncio.to_thread(collection.get,collection_run.group(1)))
         if path=='/api/creative/bootstrap':
@@ -505,13 +526,16 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             url=image_delivery.image_url(value,session,cookies(ctx.headers).get(SESSION))
             return {**value,'image_url':url} if url else value
         if path=='/health':return reply({'ok':True,'architecture':'toolbox','thread':THREAD})
-        if path=='/api/config':return reply({'csrf':csrf,'sources':SOURCES,'tools':TOOLS,'thread_link':'codex://threads/'+THREAD,'architecture':'toolbox','usage':await asyncio.to_thread(usage.config,session['csrf'])})
+        if path=='/api/config':
+            definitions=await asyncio.to_thread(collection.definitions)
+            return reply({'csrf':csrf,'sources':{key:{k:row[k] for k in ('name','kind','feed','enabled','default','builtin') if k in row} for key,row in definitions.items()},'tools':TOOLS,'thread_link':'codex://threads/'+THREAD,'architecture':'toolbox','usage':await asyncio.to_thread(usage.config,session['csrf'])})
         if path=='/api/usage/summary':
             try:return reply(await asyncio.to_thread(usage.summary,session['csrf'],dict(q)))
             except UsageError as exc:return error(getattr(exc,'status',400),str(exc))
         if path=='/api/release':return reply({'release':web_assets.root(root).name,'architecture':'toolbox'})
         if path=='/api/news':
-            if SOURCES.get(q.get('source'),{}).get('kind')=='periodical':
+            registry=await asyncio.to_thread(store.sources,True)
+            if registry.get(q.get('source'),{}).get('kind')=='periodical':
                 result=await asyncio.to_thread(periodical.listing,q.get('issue',''),q.get('section',''),q.get('theme',''))
                 production=await asyncio.to_thread(box.news_production,[row['id'] for row in result['items']])
                 result['items']=[{**row,'poster':production.get(row['id'])} for row in result['items']]
@@ -519,7 +543,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             result=await asyncio.to_thread(store.article_day,q.get('q',''),q.get('source',''),'',q.get('day',''))
             production=await asyncio.to_thread(box.news_production,[row['id'] for row in result['items']])
             rows=await asyncio.to_thread(overviews.project,result['items'])
-            result['items']=[{**{k:row[k] for k in ('id','title','original_title','overview','overview_status','overview_error','unread','selected')},**{k:row[k] for k in ('overview_source','overview_input_hash') if k in row},'poster':production.get(row['id'])} for row in rows]
+            result['items']=[{**{k:row[k] for k in ('id','title','original_title','overview','overview_status','overview_error','unread','selected')},**{k:row[k] for k in ('overview_source','overview_input_hash','source_job','run_at','source_order','hot','fetched_at') if k in row},'poster':production.get(row['id'])} for row in rows]
             return reply(result)
         if path.startswith('/api/periodicals/'):
             return reply(await asyncio.to_thread(periodical.original,ident(path.rsplit('/',1)[-1])))

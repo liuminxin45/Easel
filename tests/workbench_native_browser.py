@@ -132,7 +132,7 @@ def direct_send_checks(browser,f,out,report,check,expect):
         textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_be_visible()
         previous=None
         def choose(label,text):
-            textarea.fill('/'+label+' '+text);expect(page.get_by_role('menuitem',name='/'+label,exact=False)).to_be_visible();textarea.press('Enter');expect(page.get_by_text(label+' · v',exact=False)).to_be_visible();expect(textarea).to_have_value(text)
+            textarea.fill('/'+label+' '+text);expect(page.get_by_role('menuitem',name='/'+label,exact=False)).to_be_visible(timeout=20000);textarea.press('Enter');expect(page.get_by_text(label+' · v',exact=False)).to_be_visible();expect(textarea).to_have_value(text)
         def parameters(container,turn):
             panel=container.locator('details.chat-production-details').filter(has=page.locator('summary',has_text='制作参数')).last
             expect(panel.locator('summary').first).to_have_text('制作参数');panel.locator('summary').first.click()
@@ -166,35 +166,45 @@ def direct_send_checks(browser,f,out,report,check,expect):
             expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
             history=wait_history(page,f['origin'],sid,previous,files=True);turn=history['session']['messages'][-1];previous=turn['turnId']
             page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid)
-            expect(page.locator('.chat-turn-outputs figure')).to_have_count(2 if format=='poster' else 4)
+            try:expect(page.locator('.artifact-gallery')).to_have_count(1 if format=='poster' else 2)
+            except AssertionError:
+                (out/'delivery-failure.json').write_text(json.dumps({'history':history,'body':page.locator('body').inner_text(),'errors':errors},ensure_ascii=False,indent=2),encoding='utf-8')
+                page.screenshot(path=str(out/'delivery-failure.png'),full_page=True)
+                raise
             sent=[request for request in requests[start:] if request['path']=='/api/chat/stream' and request['method']=='POST'];planned=[request for request in requests[start:] if request['path']=='/api/chat/plan' and request['method']=='POST']
             assert len(sent)==len(planned)==1 and len(f['adapter'].requests)==before+1
             assert sent[0]['body']['turnId']==planned[0]['body']['turnId']==turn['turnId']
             if plan:assert sent[0]['body']['context']['plan_token']==plan['plan_token']
             if format=='poster':assert not any(request['path'].startswith('/api/creative/prompts/') for request in requests),'parameters should load only on expansion'
-            saved=parameters(page.locator('.chat-turn-outputs').last,turn)
+            expect(page.locator('.artifact-gallery').last.locator('.artifact-count')).to_have_text('1 / 2')
+            page.get_by_role('button',name='打开成品页').last.click()
+            expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+            saved=parameters(page.locator('.ew-work-preview'),turn)
             assert saved['snapshot']['task']==format and turn['business_status']=='completed'
             report['simulated_executions'].append({'profile':profile,'format':format,'turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
             check(profile,format+' sends directly without a modal and exposes exact frozen parameters by the product')
+            page.goto(f['origin']+'/native/chat/'+sid)
+            expect(textarea).to_be_enabled()
         page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
         parameters(page.locator('.ew-work-preview'),turn);check(profile,'work product view shows the same exact version parameters')
         page.get_by_role('button',name='修改这版').click();page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
         textarea=page.get_by_role('textbox',name='对话输入');page.wait_for_function("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').command?.action_id==='change'",arg=sid)
         textarea.fill('修改准确版本，一次发送 '+profile);page.get_by_role('button',name='发送',exact=True).click();expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
         history=wait_history(page,f['origin'],sid,previous,files=True);turn=history['session']['messages'][-1];previous=turn['turnId']
-        page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(page.locator('.chat-turn-outputs figure')).to_have_count(6)
-        saved=parameters(page.locator('.chat-turn-outputs').last,turn);assert saved['snapshot']['task']=='change'
+        page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(page.locator('.artifact-gallery')).to_have_count(3)
+        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        saved=parameters(page.locator('.ew-work-preview'),turn);assert saved['snapshot']['task']=='change'
         report['simulated_executions'].append({'profile':profile,'format':'change','turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
         check(profile,'version modification sends once without a modal and keeps its exact parent')
         page.screenshot(path=str(out/(profile+'-direct-send.png')))
         page.goto(f['origin']+'/native/chat/'+sid);textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_be_enabled();choose('生成贴图','UNKNOWN_RECEIPT '+profile)
-        before=len(f['adapter'].requests);start=len(requests);page.get_by_role('button',name='发送',exact=True).click();retry=page.get_by_role('button',name='核对原请求');expect(retry).to_be_visible()
+        before=len(f['adapter'].requests);start=len(requests);page.get_by_role('button',name='发送',exact=True).click();status=page.get_by_role('status').filter(has_text='正在恢复原任务状态');expect(status.first).to_be_visible()
         pending=page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)
-        retry.click();expect(retry).to_be_visible();page.reload(wait_until='domcontentloaded');expect(retry).to_be_visible()
+        expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible()
         assert page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)==pending and len(f['adapter'].requests)==before+1
         assert len([request for request in requests[start:] if request['path']=='/api/chat/stream' and request['method']=='POST'])==1
         expect(page.get_by_role('button',name='发送',exact=True)).to_be_disabled();expect(page.locator('.chat-turn-outputs').last.get_by_text('制作参数',exact=True)).to_have_count(0)
-        check(profile,'unknown production receipt preserves the turn and never resends after retry or refresh')
+        check(profile,'unknown production receipt preserves the turn and never resends during automatic recovery or refresh')
         assert not errors,errors;context.close()
     assert len(report['checks'])==12
 
@@ -289,9 +299,9 @@ def main():
                         page.wait_for_function("()=>{const e=document.querySelector('textarea[aria-label=\"对话输入\"]');return e&&e.scrollHeight>e.clientHeight}");page.get_by_role('textbox',name='对话输入').evaluate('(e)=>{e.scrollTop=e.scrollHeight}');assert textarea.evaluate('e=>e.scrollHeight>e.clientHeight')
                         check(profile,'long raw draft survives reload and scrolls inside the native composer')
                         textarea.fill('UNKNOWN_RECEIPT '+profile);before=len(f['adapter'].requests);page.get_by_role('button',name='发送',exact=True).click()
-                        retry=page.get_by_role('button',name='核对原请求');expect(retry).to_be_visible(timeout=20000);retry.click();expect(retry).to_be_visible(timeout=20000);page.reload(wait_until='domcontentloaded');expect(page.get_by_role('button',name='核对原请求')).to_be_visible(timeout=20000)
+                        status=page.get_by_role('status').filter(has_text='正在恢复原任务状态');expect(status.first).to_be_visible(timeout=20000);expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible(timeout=20000)
                         assert len(f['adapter'].requests)==before+1
-                        check(profile,'unknown native receipt stays blocked across retry and refresh without replay')
+                        check(profile,'unknown native receipt stays blocked during automatic recovery and refresh without replay')
                         page.screenshot(path=str(out/(profile+'-unknown-receipt.png')),full_page=True)
                         # Existing domain pages remain real authenticated views.
                         before_pages=len(f['adapter'].requests)

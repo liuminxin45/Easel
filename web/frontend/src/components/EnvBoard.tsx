@@ -43,14 +43,15 @@ export default function EnvBoard({ tools, python, loading, error, jobs, anyRunni
   const pid = python ? python.split('\\').pop() : '';
 
   const groupTools = (gid: string) => tools.filter((t) => t.group === gid);
-  const installable = (t: EnvTool) => t.state !== 'no_dir';
+  const installable = (t: EnvTool) => t.state !== 'no_dir' && t.installable !== false;
+  const pendingIds = (list: EnvTool[]) => Array.from(new Map(list.filter(t => t.state !== 'ok' && installable(t)).map(t => [t.installKey || t.id, t.id])).values());
 
   const runAll = () => {
-    const ids = tools.filter((t) => t.state !== 'ok' && installable(t)).map((t) => t.id);
+    const ids = pendingIds(tools);
     if (ids.length) void onInstallMany(ids);
   };
   const runGroup = (gid: string) => {
-    const ids = groupTools(gid).filter((t) => t.state !== 'ok' && installable(t)).map((t) => t.id);
+    const ids = pendingIds(groupTools(gid));
     if (ids.length) void onInstallMany(ids);
   };
 
@@ -71,7 +72,7 @@ export default function EnvBoard({ tools, python, loading, error, jobs, anyRunni
       <div className="panel-top">
         <span className="pill sum" aria-live="polite">{allDone ? '全就绪' : `就绪 ${okCount} / ${total}`}</span>
         <span className="desc">
-          装完自动校验{pid ? ` · 目标解释器 ${pid}` : ''} · 给其他机器＝整个目录拷过去
+          装完自动校验{pid ? ` · 目标解释器 ${pid}` : ''} · {tools.some(t => t.scope === 'project_local') ? '项目隔离环境，固定运行时仅检测' : '给其他机器＝整个目录拷过去'}
         </span>
         <span className="spacer" />
         <button className="btn btn-sm" onClick={onRefresh} disabled={loading || anyRunning}>
@@ -148,9 +149,9 @@ export default function EnvBoard({ tools, python, loading, error, jobs, anyRunni
                             <button
                               className={`btn btn-sm ${v.state === 'ok' ? '' : 'btn-fill'}`}
                               onClick={() => void onInstall(t.id)}
-                              disabled={anyRunning}
+                              disabled={anyRunning || !installable(t)}
                             >
-                              {v.state === 'ok' ? '重装' : '安装'}
+                              {t.installable === false ? '固定运行时' : v.state === 'ok' ? '重装' : '安装'}
                             </button>
                           )}
                         </>
@@ -164,7 +165,7 @@ export default function EnvBoard({ tools, python, loading, error, jobs, anyRunni
         );
       })}
 
-      <div className="foot-note">装到哪：本机用户环境（Python 用户级 · PATH 自动接好）；给其他机器＝把独立版整个目录拷过去，双击即开。</div>
+      <div className="foot-note">{tools.some(t => t.scope === 'project_local') ? '依赖装到本项目隔离目录，安装完成后复测；不修改全局 PATH、上游 .venv 或工作台固定运行时。' : '装到哪：本机用户环境（Python 用户级 · PATH 自动接好）；给其他机器＝把独立版整个目录拷过去，双击即开。'}</div>
     </section>
   );
 }

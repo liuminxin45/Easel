@@ -854,6 +854,9 @@ export function fetchLastTurn(sessionId: string, turnId?: string): Promise<{ sta
 // ═══ 设置面板 · 环境安装（install_tool 引擎桥） ═══
 
 export interface EnvTool {
+  installKey?: string;
+  installable?: boolean;
+  scope?: string;
   id: string;
   state: 'ok' | 'missing' | 'no_dir' | 'fail';
   version: string | null;
@@ -866,6 +869,7 @@ export interface EnvTool {
 }
 
 export interface EnvToolsResponse {
+  activeJobs?: {id:string;jobId:string}[];
   python: string;
   tools: EnvTool[];
   cachedAt?: number;

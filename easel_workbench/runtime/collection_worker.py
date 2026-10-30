@@ -104,10 +104,15 @@ class CollectionWorker:
                 report('fetching')
                 self.prepare_resume(task,directory)
                 runner=self.runner
-                if runner is None:
-                    from easel_workbench.runtime.collection_sources import run_source
-                    runner=run_source
-                result=validated(runner(source,directory,report=report,force=bool(task['force']),root=self.root))
+                snapshot=json.loads(task['source_snapshot']) if task.get('source_snapshot') else None
+                if runner is None and snapshot and not snapshot.get('builtin',True):
+                    from easel_workbench.runtime.custom_source_collection import run
+                    result=validated(run(snapshot,directory,root=self.root,report=report))
+                else:
+                    if runner is None:
+                        from easel_workbench.runtime.collection_sources import run_source
+                        runner=run_source
+                    result=validated(runner(source,directory,report=report,force=bool(task['force']),root=self.root))
                 atomic(receipt,{'task_id':jid,'source_id':source,'result':result})
                 return result
         except LeaseLost:

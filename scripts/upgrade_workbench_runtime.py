@@ -18,10 +18,10 @@ from activate_workbench import STATE,OLD,PYTHON,read,atomic,sha,verify,idle,queu
 from workbench_release import validate_source_binding
 
 
-def validate_candidate(root, state, acceptance_path):
+def validate_candidate(root, state, acceptance_path, candidate_path=None):
     """Verify the reviewed pair before changing admission or any selector."""
     import re
-    choice=read(state/'candidate.json')
+    choice=read(candidate_path or state/'candidate.json')
     if not re.fullmatch(r'workbench-[A-Za-z0-9_-]+',str(choice.get('release',''))):
         raise ValueError('Invalid runtime candidate')
     package=verify(root/'workbench-releases'/choice['release'],choice['manifest_sha256'])
@@ -96,15 +96,25 @@ def needs_builtin_activation(root):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--acceptance',type=Path,default=STATE/'upgrade-acceptance.json')
+    parser.add_argument('--candidate',type=Path,help='Exact reviewed pair; leaves the shared candidate selector untouched')
     parser.add_argument('--builtin-plan',type=Path)
     parser.add_argument('--builtin-plan-sha256')
     options=parser.parse_args()
-    choice,package=validate_candidate(ROOT,STATE,options.acceptance)
+    from easel_workbench.runtime.feedback_ledger import locked
+    with locked(STATE/'runtime-release.lock',timeout=30),locked(STATE/'frontend-release.lock',timeout=30):
+        upgrade(options)
+
+
+def upgrade(options):
+    choice,package=validate_candidate(ROOT,STATE,options.acceptance,options.candidate)
     builtin=reviewed_builtin_plan(ROOT,package,options.acceptance,options.builtin_plan,options.builtin_plan_sha256)
     if builtin is None and needs_builtin_activation(ROOT):
         raise ValueError('Legacy skill defaults require an explicit reviewed builtin migration plan')
     previous=read(ROOT/'data/active-workbench.json');owner=read(ROOT/'data/migration-owner.json')
     previous_native=read(ROOT/'data/active-native.json')
+    acceptance=read(options.acceptance)
+    if (acceptance.get('base_runtime',previous)!=previous or acceptance.get('base_native',previous_native)!=previous_native):
+        raise ValueError('Reviewed deployment base changed; integrate the current live pair before retrying')
     if owner['target_root']!=str(ROOT) or any(owner[k]!=previous[k] for k in ('release','manifest_sha256')):
         raise ValueError('Business data ownership does not match the current runtime')
     state=idle(ROOT/'data/desk.sqlite')
@@ -121,6 +131,8 @@ def main():
                 atomic(STATE/'admission.json',{'workers':True})
                 atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':previous})
                 print(json.dumps({'status':'waiting','busy':state}));return
+            if read(ROOT/'data/active-workbench.json')!=previous or read(ROOT/'data/active-native.json')!=previous_native or read(ROOT/'data/migration-owner.json')!=owner:
+                raise ValueError('Active deployment changed during preflight; review the current pair before retrying')
             stop_new_profile();stopped=True
             fence.execute('ROLLBACK')
         builtin_activation=activate_builtin_after_stop(ROOT,builtin)
@@ -152,7 +164,8 @@ def main():
         # this same database even when the updated runtime needs a forward fix.
         if not stopped:
             atomic(STATE/'admission.json',{'workers':True})
-            atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':previous})
+            current={**read(ROOT/'data/active-workbench.json'),'native':read(ROOT/'data/active-native.json')}
+            atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':current})
         raise
     finally:client.close()
 

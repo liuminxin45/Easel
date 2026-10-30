@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction, ReactNode } from 'react';
+import { defaultSettingsApi, type SettingsApi } from './SettingsApi';
 import EnvBoard from './EnvBoard';
 import HarnessSettings from './HarnessSettings';
 import SettingsSelect, { OptionsDropdown } from './SettingsSelect';
 import type { JobView } from './EnvBoard';
-import {
-  fetchEnvTools, startEnvInstall, fetchEnvJob,
-  fetchModelChannels, runChannelSelftest, saveModelConfig,
-  fetchLocalAgents, enableLocalAgent, fetchAvailableModels,
-} from '../lib/api';
+import {InteractionNotice,useFeedbackChannel,useFeedbackMessage} from './InteractionNotice';
+import type {InteractionSource} from '../lib/interaction';
+
 import type { EnvTool, ModelRow, SelftestResult, LocalAgentInfo } from '../lib/api';
 import { IconSlidersHorizontal, IconPackage, IconEllipsis } from './settingsIcons';
 
 interface Props {
   onClose: () => void;
+  api?: SettingsApi;
+  moreContent?: ReactNode;
+  initialSection?: 'model' | 'env' | 'more';
+  onSectionChange?: (section: 'model' | 'env' | 'more') => void;
+  hostManaged?: boolean;
+  operationSource?: InteractionSource;
   /** 非空时在面板顶部显示一条提示条。首开未配置模型时由 App 传入。 */
   banner?: string;
 }
@@ -59,10 +64,14 @@ const hhmm = (ts: number) => {
 };
 
 /** 设置（统一入口）：竖＝功能分类（模型配置 / 环境安装 / 更多设置），横＝模型六通道。 */
-export default function SettingsPanel({ onClose, banner = '' }: Props) {
-  const [sec, setSec] = useState<Sec>('model');
+export default function SettingsPanel({ onClose, banner = '', api = defaultSettingsApi, moreContent, initialSection = 'model', onSectionChange, hostManaged = false, operationSource }: Props) {
+  const {fetchEnvTools, startEnvInstall, fetchEnvJob, fetchModelChannels, runChannelSelftest, saveModelConfig, fetchLocalAgents, enableLocalAgent, fetchAvailableModels} = api;
+  const [sec, setSection] = useState<Sec>(initialSection);
+  const setSec = (section: Sec) => { setSection(section); onSectionChange?.(section); };
+  useEffect(() => { setSection(initialSection); }, [initialSection]);
   const [chan, setChan] = useState<Chan>('chat');
   const [harness, setHarness] = useState('');
+  const feedback=useFeedbackChannel();
   const [selectedHarness, setSelectedHarness] = useState('');
 
   // ── 环境安装（引擎真实数据） ──────────────────────────────
@@ -72,16 +81,23 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
   const [envError, setEnvError] = useState('');
   const [jobs, setJobs] = useState<Record<string, JobView>>({});
   const runningRef = useRef(false);
+  const resumedJobs = useRef(new Set<string>());
 
   const refreshEnv = useCallback(async (force = false) => {
-    setEnvLoading(true);
+    feedback.clear();setEnvLoading(true);
     setEnvError('');
     try {
       const d = await fetchWithRetry(() => fetchEnvTools(force));
       setTools(d.tools || []);
       setPython(d.python || '');
+      for(const job of d.activeJobs || []) {
+        if(resumedJobs.current.has(job.jobId))continue;
+        resumedJobs.current.add(job.jobId);
+        setJobs(previous => ({...previous,[job.id]:{state:'running',line:'恢复原安装任务…'}}));
+        void pollJob(job.id,job.jobId).then(()=>refreshEnv(true));
+      }
     } catch (e) {
-      setEnvError(e instanceof Error ? `环境体检失败：${e.message}` : '环境体检失败');
+      setEnvError(feedback.report(e));
     } finally {
       setEnvLoading(false);
     }
@@ -127,7 +143,8 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
       const { jobId } = await startEnvInstall(id);
       await pollJob(id, jobId);
     } catch (e) {
-      setJobs((j) => ({ ...j, [id]: { state: 'fail', line: '', detail: e instanceof Error ? e.message : '启动失败' } }));
+      const error=feedback.report(e);
+      setJobs((j) => ({ ...j, [id]: error?{state:'fail',line:'',detail:error}:{state:'running',line:'正在恢复安装状态…'} }));
     }
     if (!batchMode.current) await settleJobs();   // 单卡装完立即收尾刷新
   }, [pollJob, settleJobs]);
@@ -178,6 +195,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
   // localStorage 里按 baseUrl 存的拉取结果（7 天过期），初始化时一次性读入。
   const [modelCache, setModelCache] = useState<Record<string, { models: string[]; fetchedAt: number }>>(() => {
     try {
+      if(hostManaged)return {};
       const raw = localStorage.getItem('easel_model_lists');
       return raw ? JSON.parse(raw) : {};
     } catch { return {}; }
@@ -193,26 +211,26 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
     let alive = true;
     fetchWithRetry(() => fetchLocalAgents(), 3, 10000)
       .then((d) => { if (alive) setLocalAgents(d.agents || []); })
-      .catch((e) => { if (alive) setLocalAgentsErr(e instanceof Error ? e.message : '探测失败'); });
+      .catch((e) => { if (alive) setLocalAgentsErr(feedback.report(e)); });
     return () => { alive = false; };
   }, [harness]);
 
   const doEnableAgent = useCallback(async (id: string, model = '') => {
-    setEnabling(id);
+    feedback.clear();setEnabling(id);
     setLocalAgentNote('');
     try {
       const d = await enableLocalAgent(id, model);
       setLocalAgentNote(d.note || '已接入');
       setLocalAgents((as) => as.map((a) => (a.id === id ? { ...a, configured: true } : a)));
     } catch (e) {
-      setLocalAgentNote(e instanceof Error ? e.message : '接入失败');
+      setLocalAgentNote(feedback.report(e));
     } finally {
       setEnabling('');
     }
   }, []);
 
   const pullModels = useCallback(async (key: string, r: ModelRow) => {
-    setModelLists((m) => ({ ...m, [key]: { loading: true, models: m[key]?.models || [], err: '' } }));
+    feedback.clear();setModelLists((m) => ({ ...m, [key]: { loading: true, models: m[key]?.models || [], err: '' } }));
     try {
       const proto = r.slot === 'custom' ? (r.protocol || 'openai') : (r.type === 'anthropic' ? 'anthropic' : 'openai');
       const d = await fetchAvailableModels(r.baseUrl || '', r.keyNew || '', proto, r.slot || '', r.name || '');
@@ -221,12 +239,13 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
       if (d.models.length) {
         setModelCache((c) => {
           const next = { ...c, [cacheKeyFor(r)]: { models: d.models, fetchedAt } };
-          try { localStorage.setItem('easel_model_lists', JSON.stringify(next)); } catch { /* 忽略 */ }
+          try { if(!hostManaged)localStorage.setItem('easel_model_lists', JSON.stringify(next)); } catch { /* 忽略 */ }
           return next;
         });
       }
     } catch (e) {
-      setModelLists((m) => ({ ...m, [key]: { loading: false, models: m[key]?.models || [], err: e instanceof Error ? e.message : '拉取失败' } }));
+      const error=feedback.report(e);
+      setModelLists((m) => ({ ...m, [key]: { loading: false, models: m[key]?.models || [], err: error } }));
     }
   }, []);
 
@@ -248,13 +267,13 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
         });
         setModelErr('');
       })
-      .catch((e) => { if (alive) setModelErr(e instanceof Error ? e.message : '模型配置读取失败'); })
+      .catch((e) => { if (alive) setModelErr(feedback.report(e)); })
       .finally(() => { if (alive) setModelLoading(false); });
     return () => { alive = false; };
   }, [harness, selectedHarness]);
 
   const doSelftest = useCallback(async (channel: string) => {
-    setTesting(true);
+    feedback.clear();setTesting(true);
     setSelftestNote('');
     try {
       const r = await runChannelSelftest(channel);
@@ -264,7 +283,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
       if (!r.results.length) setSelftestNote('没有可自测的通道（未配置 key）');
       void refreshEnv();
     } catch (e) {
-      setSelftestNote(e instanceof Error ? `自测失败：${e.message}` : '自测失败');
+      setSelftestNote(feedback.report(e));
     } finally {
       setTesting(false);
     }
@@ -272,7 +291,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
 
   // ── 模型配置可编辑（v2）：保存到 .env / openclaw ──────────
   const [saving, setSaving] = useState(false);
-  const [savedNote, setSavedNote] = useState('');
+  const [savedNote,setSavedNote,reportSavedNote]=useFeedbackMessage();
 
   const saveCurrent = useCallback(async () => {
     const rows = chan === 'chat' ? chatRows : chan === 'transcribe' ? transRows : (mediaRows[chan] || []);
@@ -301,7 +320,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
     setSaving(true);
     setSavedNote('');
     try {
-      const d = await fetchWithRetry(() => saveModelConfig(chan, payload), 3, 20000);
+      const d = await saveModelConfig(chan, payload);
       setChatRows(d.channels.chat.rows || []);
       setTransRows(d.channels.transcribe.rows || []);
       setMediaRows({
@@ -313,7 +332,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
       setSavedNote(d.note ? `✓ 已保存（${d.note}）` : '✓ 已保存');
       void refreshEnv();
     } catch (e) {
-      setSavedNote(e instanceof Error ? `保存失败：${e.message}` : '保存失败');
+      reportSavedNote(e);
     } finally {
       setSaving(false);
       setTimeout(() => setSavedNote(''), 6000);
@@ -323,7 +342,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
   // Esc 关闭
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
+      if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('dialog[open]')) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -462,6 +481,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                 <span className="pname">
                   <input
                     className="mock"
+                    aria-label={r.name+' 供应商名称'}
                     value={r.name}
                     placeholder="名称"
                     onChange={(e) => ops?.onRow?.(i, { name: e.target.value.toLowerCase() })}
@@ -515,8 +535,10 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
               )}
               {ed && ed.model && (!ops?.media || r.adv) ? (
                 <span className={`model-cell${isCustom ? ' custom-model-cell' : ''}`} ref={(el) => { modelCellRefs.current[k(i)] = el; }}>
+                  {hostManaged && <span className="settings-mobile-label">模型</span>}
                   <input
                     className="mock"
+                    aria-label={r.name+' 模型'}
                     value={r.model}
                     placeholder={isCustom ? '模型名' : ''}
                     onChange={(e) => ops?.onRow?.(i, { model: e.target.value })}
@@ -587,7 +609,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                 </span>
               )}
               {ed && ed.base && (!ops?.media || r.adv) ? (
-                <input className="mock" value={r.baseUrl} placeholder="https://…" onChange={(e) => ops?.onRow?.(i, { baseUrl: e.target.value })} />
+                <label className="settings-base-cell"><span className="settings-mobile-label" hidden={!hostManaged}>API 地址</span><input className="mock" aria-label={r.name+' API 地址'} value={r.baseUrl} placeholder="https://…" onChange={(e) => ops?.onRow?.(i, { baseUrl: e.target.value })} /></label>
               ) : (
                 <span className={`cell-text${ops?.media && !r.baseUrl ? ' dim' : ''}`} title={r.baseUrl || '内建默认'}>
                   {r.baseUrl
@@ -604,26 +626,29 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                     <input
                       className="mock key-input"
                       type="password"
-                      value={r.keyNew || ''}
+                      aria-label={r.name+' API Key'}
+                    value={r.keyNew || ''}
                       placeholder={r.keyMasked || 'Key'}
                       onChange={(e) => ops?.onRow?.(i, { keyNew: e.target.value })}
                     />
                     <input
                       className="mock key-input"
                       type="password"
-                      value={r.keyNew2 || ''}
+                      aria-label={r.name+' '+(r.key2Label||'第二凭据')}
+                    value={r.keyNew2 || ''}
                       placeholder={r.key2Masked || r.key2Label}
                       onChange={(e) => ops?.onRow?.(i, { keyNew2: e.target.value })}
                     />
                   </span>
                 ) : (
-                  <input
+                  <label className="settings-key-cell"><span className="settings-mobile-label" hidden={!hostManaged}>API Key</span><input
                     className="mock key-input"
                     type="password"
+                    aria-label={r.name+' API Key'}
                     value={r.keyNew || ''}
                     placeholder={r.keyMasked || '粘贴 Key'}
                     onChange={(e) => ops?.onRow?.(i, { keyNew: e.target.value })}
-                  />
+                  /></label>
                 )
               ) : (
                 <span className="cell-text key-mask" title="密钥不显示明文">{r.keyMasked || '—'}</span>
@@ -705,6 +730,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
           </div>
         )}
 
+        <InteractionNotice sources={[operationSource||{},{feedback:feedback.feedback?.kind==='status'&&(!operationSource||!feedback.feedback.operationScope)?feedback.feedback:undefined}]}/>
         <div className="settings-body">
           <nav className="settings-nav">
             <button className={`snav${sec === 'model' ? ' active' : ''}`} onClick={() => setSec('model')}>
@@ -728,9 +754,9 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                     </button>
                   ))}
                 </div>
-                {savedNote ? <div className={`save-note${savedNote.startsWith('保存失败') || savedNote.startsWith('没有') ? ' err' : ''}`}>{savedNote}</div> : null}
+                {(!operationSource||!savedNote?.operationScope)&&<InteractionNotice sources={[{feedback:savedNote}]}/>}
 
-                {chan === 'chat' && <HarnessSettings onChange={setHarness} onSelect={setSelectedHarness} />}
+                {chan === 'chat' && <HarnessSettings api={api} hostManaged={hostManaged} onChange={setHarness} onSelect={setSelectedHarness} />}
                 {chan === 'chat' && (selectedHarness === 'api' || selectedHarness === 'openclaw') && (
                   <section className="st-panel active">
                     <div className="panel-top">
@@ -803,7 +829,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                       <button className="btn btn-sm" onClick={() => void doSelftest('transcribe')} disabled={testing}>自测本通道</button>
                     </div>
                     {renderBoard([...transRows, localRow], { onRow: (i, p) => updateRow(setTransRows, i, p) }, 'transcribe')}
-                    <div className="foot-note">有字幕不下模型；API 通道缺 key 自动落到本地 whisper（本地组件在「环境安装」页装）。保存即写入 .env 生效。</div>
+                    <div className="foot-note">有字幕优先读字幕；API 转写与本地 whisper 在「环境安装」和本通道分别配置。{hostManaged ? '保存到服务器版本配置，后续新对话使用。' : '保存即写入 .env 生效。'}</div>
                   </section>
                 )}
 
@@ -877,6 +903,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
 
             {sec === 'more' && (
               <section className="st-sec active">
+                {moreContent}
                 <div className="panel-top">
                   <span className="pill off"><span className="dot" />可扩展位</span>
                   <span className="desc">同一个面板，以后放更多设置</span>
@@ -893,7 +920,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
 
         <div className="settings-foot">
           {harness === 'api' || harness === 'openclaw'
-            ? 'ⓘ 供应商配置保存到 .env；API 直连仅聊天、无工具。切换底座或对话模式后请新建对话。'
+            ? (hostManaged ? 'ⓘ 配置保存在服务器；API 直连仅聊天、无本机工具。保存后请新建对话，已有会话保留原配置。' : 'ⓘ 供应商配置保存到 .env；API 直连仅聊天、无工具。切换底座或对话模式后请新建对话。')
             : 'ⓘ 原生 Agent 认证由其 CLI 管理；「保存底座」只保存底座、模型覆盖和权限设置。媒体通道仍单独配置。'}
         </div>
       </div>

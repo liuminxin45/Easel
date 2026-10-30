@@ -350,6 +350,8 @@ def test_news_outer_cache_holds_unknown_or_completed_invalid_output_without_seco
     from easel_workbench.runtime.news_overviews import Overviews
     database = tmp_path / 'desk.sqlite'
     class Store:
+        def sources(self,include_deleted=False):
+            return {'github-trending':{'builtin':True,'kind':'news'}}
         @contextmanager
         def connect(self):
             connection = sqlite3.connect(database); connection.row_factory = sqlite3.Row

@@ -7,7 +7,7 @@ from .desk import stamp
 from . import server_logging as journal
 
 
-def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None):
+def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None, execution_identity=None):
     from .bridge import capture_artifacts
     from .task_runtime import production_finish, step
     with box.store.connect() as c:
@@ -20,8 +20,10 @@ def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receive
             c.execute("UPDATE toolbox_jobs SET status='uncertain',error=? WHERE id=?",
                       ('完成通知缺少有效回执，继续核对原任务；不会自动重复制作', jid))
         return {'job_id': jid, 'status': 'uncertain'}
+    if not native_turn_id and isinstance(execution_identity,dict) and execution_identity.get('kind') in ('jsonrpc_request','cli_result_sha256'):
+        native_turn_id=execution_identity.get('id')
     if not isinstance(native_turn_id, str) or not native_turn_id:
-        raise ValueError('交付必须绑定准确的原生回合')
+        raise ValueError('交付必须绑定准确的原生回合或协议完成回执')
     if job.get('turn_id') and job['turn_id'] != native_turn_id:
         raise ValueError('交付回合与已记录的任务身份不一致')
     if job['status'] == 'completed':

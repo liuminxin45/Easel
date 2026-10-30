@@ -157,12 +157,14 @@ class RPC:
             except (BrokenPipeError, ConnectionResetError) as error:
                 raise HarnessError("Agent 进程已退出，请检查 CLI 登录与模型配置") from error
 
-    async def call(self, method: str, params: dict, timeout=60):
+    async def call(self, method: str, params: dict, timeout=60, *, on_request=None):
         self.sequence += 1
         request_id = self.sequence
         future = asyncio.get_running_loop().create_future()
         self.pending[request_id] = future
         try:
+            if on_request:
+                on_request(request_id)
             await self.send({"id": request_id, "method": method, "params": params})
             result = await asyncio.wait_for(future, timeout)
             if self.client_error:

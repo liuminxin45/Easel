@@ -1,9 +1,15 @@
 # 2026-10-30：Easel 平台扫码、原生会话与项目技能已上线
 
+最新发布：全局交互与设置、技能库、菜单、热点更新已整合上线，后端 `workbench-20261030-091754`，前端 `native-easel-workbench-20261030091709`。准确 SHA、最终验收与数据保护结果见 [交互整合发布记录](INTERACTION-RELEASE-20261030.md)。下文旧版本编号保留对应阶段的历史记录，当前版本以活动指针及最新发布记录为准。
+
+本轮设置对齐已上线。原阻塞任务已通过准确原生 `thread/read` 核对为中断，保留原输入、
+回执和文件，没有重跑或标记制作完成。三类设置、六通道、真实 CLI 状态及原生模型目录
+已完成线上核验。详见 `SETTINGS-ALIGNMENT-20261030.md`。
+
 正式入口：https://leopc.tail2ce65.ts.net:8443/native/
 
-- 后端：`workbench-20261030-041324`，manifest `d7d4287ac8cbc3a2346002d77337d72404750b20b98df37eab1e0e1b16da0ac7`。
-- 前端：`native-easel-workbench-20261030040231`，manifest `47aaee26bd8687c3a44c83db4c547fbccb756811ac8b605e73c80fef2fc3f91c`。
+- 后端：`workbench-20261030-065654`，manifest `02bbc5f1c7f9d6d878b1e69bdf1e802246ce421adb89f52587ad05f662086818`。
+- 前端：`native-easel-workbench-20261030065600`，manifest `e5cda00307c95941cf36ad6abcf64aa785067d9f4b5acf35aaafddb5fcee19cc`。
 - 主工程与权威数据目录：`D:/Projects/Easel`；切换使用原数据库，没有复制或恢复旧库。
 - 2026-10-29 的部署与迁移记录保留在 `STATUS-20261029.md`，以下为本轮最终状态。
 

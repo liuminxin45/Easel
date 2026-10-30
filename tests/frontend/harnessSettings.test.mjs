@@ -1,3 +1,4 @@
+import {moduleLoader} from './helpers/modules.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -60,7 +61,7 @@ function setup({ runtime = 'openclaw', locked = false, installed = true, saveErr
       installed: ['api', 'openclaw'].includes(id) || installed, install_hint: `install ${id}`,
     })),
   };
-  const component = runInNewContext(outputText, {
+  const context = {
     React: {
       Fragment: 'fragment',
       createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat() }),
@@ -101,7 +102,13 @@ function setup({ runtime = 'openclaw', locked = false, installed = true, saveErr
       return { ...settings, runtime, models: { ...settings.models, [runtime]: model }, sandbox,
         codex_auto_approve: codexAutoApprove ?? false };
     },
-  });
+  };
+  const feedbackModule=moduleLoader({imports:{react:{useState:context.useState,useCallback:fn=>fn},'react/jsx-runtime':{jsx:(type,props)=>({type,props:props||{},children:[props?.children].flat()}),jsxs:(type,props)=>({type,props:props||{},children:[props?.children].flat()})}}})('components/InteractionNotice.tsx');
+  context.useFeedbackChannel=feedbackModule.useFeedbackChannel;context.useFeedbackMessage=feedbackModule.useFeedbackMessage;context.InteractionNotice=feedbackModule.InteractionNotice;
+  const originalCreate=context.React.createElement;
+  context.React.createElement=(type,props,...children)=>type===feedbackModule.InteractionNotice?type(props):originalCreate(type,props,...children);
+  context.defaultSettingsApi = context;
+  const component = runInNewContext(outputText, context);
   const onChange = value => changes.push(value);
   const onSelect = value => selections.push(value);
   return {
@@ -191,7 +198,7 @@ test('settings can retry a failed read without saving or silently changing the e
   view.render();
   await settle();
   let tree = view.render();
-  assert.match(text(tree), /读取失败：.*temporary connection failure/);
+  assert.match(text(tree), /temporary connection failure/);
   assert.equal(nodes(tree, 'button')[0].props.disabled, true);
   const reload = nodes(tree, 'button').find(node => text(node) === '重新读取');
   assert.ok(reload);
@@ -246,7 +253,7 @@ test('failed harness save shows error without switching the active runtime', asy
   nodes(view.render(), 'settings-select')[0].props.onChange('opencode');
   nodes(view.render(), 'button')[0].props.onClick();
   await settle();
-  assert.match(text(view.render()), /保存失败：.*active task/);
+  assert.match(text(view.render()), /active task/);
   assert.deepEqual(view.changes, ['openclaw']);
   assert.equal(nodes(view.render(), 'button')[0].props.disabled, false);
 });
@@ -336,7 +343,7 @@ test('native model listing failure preserves the saved model and allows manual i
   nodes(view.render(), 'button').find(node => text(node) === '拉取模型').props.onClick();
   await settle();
   const tree = view.render();
-  assert.match(text(tree), /读取失败：(Error: )?CLI unavailable/);
+  assert.match(text(tree), /CLI unavailable/);
   assert.equal(nodes(tree, 'input')[0].props.value, 'codex-model');
   assert.equal(view.saves.length, 0);
 });

@@ -3,6 +3,7 @@ import { artifactFromUrl, fitArtifact, mergeArtifacts } from '../lib/artifacts';
 import { fetchArtifactArchive, mediaUrl } from '../lib/api';
 import type { Artifact } from '../lib/artifacts';
 import { IconChevron, IconOutputs } from './icons';
+import TextArtifact from './TextArtifact';
 
 function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -74,7 +75,8 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
   const [error, setError] = useState(false);
   if (error) return <div className="artifact-hint">预览加载失败，可打开或下载原文件</div>;
   if (artifact.kind === 'html') return <HtmlArtifact artifact={artifact} />;
-  if (artifact.kind === 'image') return <img src={artifact.url} alt={artifact.name} onError={() => setError(true)} />;
+  if (artifact.kind === 'image') return <a className="artifact-image-link" href={artifact.url} target="_blank" rel="noreferrer" aria-label={'打开原图 '+artifact.name}><img src={artifact.url} alt={artifact.name} onError={() => setError(true)} /></a>;
+  if (artifact.kind === 'text') return <div className="artifact-text"><TextArtifact url={artifact.url} name={artifact.name}/></div>;
   if (artifact.kind === 'video') return <video src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
   if (artifact.kind === 'audio') return <audio src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
   if (artifact.kind === 'file') return <div className="artifact-hint">{artifact.name} · 可打开或下载原文件</div>;

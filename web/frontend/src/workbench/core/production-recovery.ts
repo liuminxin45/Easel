@@ -9,8 +9,9 @@ export function readProductionRecovery(value:unknown):ProductionRecovery|null{
  if(!text(row.job_id)||!['dispatch','production','uncertain'].includes(text(row.failure_kind))||!['not_sent','submitted','unknown'].includes(text(row.send_state))||row.action!==null&&!['resend','edit_materials','reconcile'].includes(text(row.action)))return null;
  const revision=typeof row.revision==='number'&&Number.isSafeInteger(row.revision)&&row.revision>=0?row.revision:-1;
  const safe=row.failure_kind==='dispatch'&&row.send_state==='not_sent'&&row.action==='resend';
+ const link=object(row.continuation),keys=['session_id','work_id','version_id','profile_id'],continuable=row.can_continue===true&&row.failure_kind==='production'&&row.send_state==='submitted'&&row.error_code==='native_interrupted'&&row.action==='edit_materials'&&link.version_id===row.job_id&&link.skill_id==='content-production'&&Number.isSafeInteger(link.skill_version)&&Number(link.skill_version)>0&&keys.every(key=>/^[A-Za-z0-9_-]{1,200}$/.test(text(link[key])));
  const phase=(text(row.phase)||text(row.status)||(row.action==='resend'?'failed':row.action==='reconcile'?'unknown':row.action==='edit_materials'?'production_failed':'idle')) as ProductionRecovery['phase'];
- return {job_id:text(row.job_id),phase,status:phase,failure_kind:row.failure_kind as ProductionRecovery['failure_kind'],send_state:row.send_state as ProductionRecovery['send_state'],action:row.action as ProductionRecovery['action'],
+ return {can_continue:continuable,...(continuable?{continuation:link as ProductionRecovery['continuation']}:{}),job_id:text(row.job_id),phase,status:phase,failure_kind:row.failure_kind as ProductionRecovery['failure_kind'],send_state:row.send_state as ProductionRecovery['send_state'],action:row.action as ProductionRecovery['action'],
   can_retry:safe&&revision>=0&&row.can_retry===true,attempt_count:count(row.attempt_count),auto_retry_count:count(row.auto_retry_count),max_auto_retries:3,
   next_retry_at:safe&&row.automatic_enabled===true&&typeof row.next_retry_at==='string'&&Number.isFinite(Date.parse(row.next_retry_at))?row.next_retry_at:null,
   retry_exhausted:row.retry_exhausted===true,revision,server_now:text(row.server_now),automatic_enabled:safe&&row.automatic_enabled===true,error_code:text(row.error_code),message:text(row.message)};
@@ -32,4 +33,11 @@ export function productionRecoveryView(value:unknown,serverNow=Date.now()):Produ
   message:recovery.message||(uncertain?'原任务的发送结果尚未确认，请核对同一次结果。':production?'查看制作说明，补充素材或调整要求后继续。':'原任务与输入已保留。'),action,
   can_resend:action==='resend'&&recovery.can_retry,attempts:action==='resend'?(recovery.attempt_count?'本轮发送尝试 '+recovery.attempt_count+' 次':'历史尝试次数未记录')+' · 自动重试 '+recovery.auto_retry_count+'/3':'',countdown,
   exhausted:action==='resend'&&recovery.retry_exhausted?'已自动重试 3 次，本轮最多 4 次发送尝试。':''};
+}
+
+/** Continuing opens a confirmed parent in its original chat; it never resends it. */
+export function nativeContinuationPath(value:unknown,workId?:string,versionId?:string):string|null{
+ const recovery=readProductionRecovery(value),link=recovery?.can_continue?recovery.continuation:undefined;
+ if(!link||workId&&link.work_id!==workId||versionId&&link.version_id!==versionId)return null;
+ return '/chat/'+encodeURIComponent(link.session_id)+'?'+new URLSearchParams({work:link.work_id,version:link.version_id,skill:link.skill_id,skill_version:String(link.skill_version),action:'change',continue:'1'});
 }

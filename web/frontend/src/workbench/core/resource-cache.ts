@@ -8,7 +8,7 @@ export const RESOURCE_CACHE_ENTRIES=128;
 const active=new Set(['queued','dispatching','running','working','processing','sending','leased','retry_wait','uncertain','needs_desktop','checking','login']);
 const url=(path:string)=>new URL(path,'https://workbench.invalid');
 
-export function resourceCacheable(path:string):boolean{return !/^\/api\/(?:config(?:\?|$)|mobile\/|auth(?:\/|$)|distribution\/credentials(?:\/|\?|$))/.test(path)}
+export function resourceCacheable(path:string):boolean{return !/^\/api\/(?:config(?:\?|$)|operations\/|mobile\/|auth(?:\/|$)|distribution\/credentials(?:\/|\?|$))/.test(path)}
 export function dynamicResource(path:string,data:unknown):boolean{
  const root=record(data),state=string(root.status)||string(root.state)||string(root.phase);
  if(record(root.session).pendingTurnId)return true;
@@ -24,7 +24,7 @@ export function dynamicResource(path:string,data:unknown):boolean{
  }
  return /^\/api\/tasks\//.test(path)&&data===null;
 }
-export const resourceFreshMs=(path:string,data:unknown):number=>resourceCacheable(path)?dynamicResource(path,data)?DYNAMIC_FRESH_MS:url(path).pathname==='/api/learning/bootstrap'?15_000:RESOURCE_FRESH_MS:0;
+export const resourceFreshMs=(path:string,data:unknown):number=>resourceCacheable(path)?dynamicResource(path,data)?url(path).pathname==='/api/platform-accounts'?1500:DYNAMIC_FRESH_MS:url(path).pathname==='/api/learning/bootstrap'?15_000:RESOURCE_FRESH_MS:0;
 export function resourceTags(path:string):string[]{
  const target=url(path),p=target.pathname,work=p.match(/^\/api\/works\/([^/]+)/)?.[1];
  if(p.startsWith('/api/chat/'))return ['chat'];
@@ -50,6 +50,7 @@ export function resourceTags(path:string):string[]{
 
 /** null means unknown mutation and requires conservative global invalidation. */
 export function mutationTags(path:string,input:JsonRecord,result:unknown):string[]|null{
+ if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/settings/')||new URL(path,'https://workbench.invalid').pathname.startsWith('/api/env/'))return ['settings'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/chat/'))return ['chat'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/platform-accounts'))return ['platform-accounts','distribution','creator'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/creator/'))return ['creator','creative','foundation','learning'];

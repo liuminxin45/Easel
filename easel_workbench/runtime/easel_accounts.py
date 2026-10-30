@@ -81,17 +81,9 @@ class EaselAccounts:
         value = copy.deepcopy(value)
         operation = ident(value.get('id'))
         signature, launch = digest(value), None
-        if self.autostart and self.runner is None and value.get('action') in ('login','probe'):
-            # Re-reading an accepted operation never depends on today's environment.
-            with self.store.connect() as c:
-                old=c.execute('SELECT signature,result FROM media_operations WHERE id=?',(operation,)).fetchone()
-                if old:
-                    if old['signature']!=signature:raise IntegrationConflict('同一账号操作不能更换内容')
-                    return json.loads(old['result'])
-                platform=self._get(c,value.get('session_id'))['platform']
-            from easel_workbench.runtime.connection_environment import service
-            needed='biliup' if platform=='bilibili' else 'browser'
-            if not any(row['id']==needed and row['state']=='ok' for row in service(self.box).check()['tools']):raise ValueError('请先在账号页安装平台连接依赖，再重新扫码。')
+        # Like Easel, acknowledge the job before starting the browser. Full
+        # dependency diagnostics belong to the explicit environment screen;
+        # they must not delay every login HTTP response with subprocess probes.
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
             old = c.execute('SELECT * FROM media_operations WHERE id=?', (operation,)).fetchone()

@@ -1,3 +1,4 @@
+import {ChatTurnProducts,productArtifacts} from './ChatTurnProducts';
 import React,{useEffect,useRef,useMemo} from 'react';
 import {useStore} from 'zustand';
 import {sessionRuntime,type FrozenTurn,type SessionDraft} from './chatRuntime';
@@ -6,13 +7,13 @@ import {type SkillItem} from '../../lib/api';
 import {generateSessionTitle,type ChatSession} from '../../lib/store';
 import type {Artifact as ChatArtifact} from '../../lib/artifacts';
 import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
-import {useWorkbench,useResource,useDraft,useAsyncAction,array,record,string,workPath,type DraftAttachment,type JsonRecord,fileDownload,type Artifact} from '@workbench/core';
+import {nativeContinuationPath,workProductionRecovery,type Work,useWorkbench,useResource,useDraft,useAsyncAction,array,record,string,workPath,type DraftAttachment,type JsonRecord,fileDownload,type Artifact} from '@workbench/core';
 import {Notice} from './common';
 import {IconSkills} from './components/icons';
 
 export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;display_name?:string;origin?:string;source_revision?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
 export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
-export interface NativeSession extends ChatSession {profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[]}
+export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[]}
 export interface NativeSessions {sessions:NativeSession[]}
 export function nativeSkillChoices(skills:NativeSkill[],versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
  const choices=skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
@@ -37,23 +38,17 @@ export function nativeSkillInputTarget(selection:NativeSelection):{key:string;fi
  const task=selection.task||selection.action_id;
  return task==='reference'?{key:'easel:reference',field:'text'}:task==='learning'?{key:'creator:experience',field:'goal'}:task==='analysis'?{key:'easel:metrics',field:'question'}:null;
 }
-export function nativeArtifacts(message:unknown):ChatArtifact[]{
- return array<Artifact>(record(message).output_files).filter(file=>!!file.id&&!!file.mime&&!!file.name).flatMap(file=>{
-  const kind:ChatArtifact['kind']|null=file.mime.startsWith('image/')?'image':file.mime.startsWith('video/')?'video':file.mime.startsWith('audio/')?'audio':file.mime==='application/pdf'?'pdf':file.mime==='text/html'?'html':'file';
-  return kind?[{url:'/api/files/'+encodeURIComponent(file.id),downloadUrl:fileDownload(file),name:file.name,kind}]:[];
- });
-}
-export function NativeTurnOutputs({message}:{message:unknown}){
- const vm=useWorkbench(),value=record(message),receipt=record(value.business_receipt),work=record(receipt.work||value.work),wid=string(work.work_id||receipt.work_id),vid=string(work.version_id||receipt.version_id||work.job_id),issue=string(value.business_error);
- if(!wid&&!issue)return null;
- return <div className="chat-turn-outputs">{issue&&<details className="chat-task-status"><summary>本轮回复已保留，作品交付仍需核对</summary><p className="ew-preserve">{issue}</p></details>}{wid&&<button className="btn btn-sm" onClick={()=>vm.navigate(workPath({id:wid,format:string(work.format)},vid||undefined))}>打开成品页</button>}</div>;
-}
+export function nativeArtifacts(message:unknown):ChatArtifact[]{return productArtifacts(record(message).output_files)}
+export function NativeTurnOutputs({message}:{message:unknown}){return <ChatTurnProducts message={message}/>}
 export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const vm=useWorkbench(),resource=useResource<{session:NativeSession;linked_works?:JsonRecord[]}>('/api/chat/sessions/'+encodeURIComponent(id),{interval:3000}),catalog=useResource<NativeSkill[]>('/api/skills');
  const key='chat:'+id,[draft,patch]=useDraft<SessionDraft>(key,{text:'',files:[]}),action=useAsyncAction();
- const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error}=useStore(runtime.state);
+ const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
- const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=nativeSkillChoices(catalog.data||[],versionContext);
+ const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
+ const continuationWork=useResource<Work>(search.get('continue')==='1'&&workId?'/api/works/'+encodeURIComponent(workId):null),continuationApplied=useRef('');
+ const continuationVersion=continuationWork.data?.versions.find(v=>v.id===parentVersion),continuationPath=continuationWork.data?nativeContinuationPath(workProductionRecovery(continuationWork.data,continuationVersion),workId,parentVersion):null;
+ useEffect(()=>{if(search.get('continue')!=='1'||!continuationPath||!session||session.pendingTurnId||draft.pending||continuationApplied.current===search.toString())return;continuationApplied.current=search.toString();runtime.state.setState({error:'',feedback:undefined});if(!draft.text.trim()&&!draft.files.length)patch({text:'请继续完成《'+continuationWork.data!.title+'》，沿用所选版本的原始素材、制作要求和保留文件，完成后另存新版本。'})},[continuationPath,session?.pendingTurnId,draft.pending,search.toString()]);
  useEffect(()=>{if(!catalog.data||applied.current===search.toString()||(!versionContext&&draft.command!==undefined))return;const skill=search.get('skill'),version=Number(search.get('skill_version')),actionId=search.get('action');
   const selected=choices.find(choice=>choice.selection.skill_id===skill&&(!actionId||choice.selection.action_id===actionId));
   if(selected){applied.current=search.toString();patch({command:{...selected.selection,...(Number.isSafeInteger(version)&&version>0?{version}:{}),...(search.get('trial')==='1'?{trial:true}:{})}});}
@@ -66,7 +61,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   repair.current=session.id;void vm.api.post('/api/chat/sessions',{action:'auto-title',session_id:id,operation_id:crypto.randomUUID(),expected_revision:session.revision,title:generateSessionTitle(first.content)},vm.config?.csrf||'').then(()=>vm.client.invalidate(['chat'])).catch(()=>{});
  },[session?.id,session?.revision]);
  const submit=()=>void action.run(async()=>{
-  if(!session)throw Error('会话尚未读回，输入已保留');if(runtime.state.getState().running||session.pendingTurnId)throw Error('原任务仍在进行，请先查看原回执');
+  if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
   const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.source_revision?{skill_revision:draft.command.source_revision}:{}),...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
@@ -90,14 +85,14 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const activeTurn=draft.pending?.turnId||session?.pendingTurnId,shown:ChatSession=session?{...session,messages:(session.messages||[]).filter(message=>!((running||!!session.pendingTurnId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)))}:{id,title:'对话',messages:[],created:0};
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label+' · v'+draft.command.version}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId;
- return <div className="ew-chat-layout"><ChatPage apiDirect={false} session={shown} stream={running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} linkifyArtifactPaths={false} messageArtifacts={nativeArtifacts} renderMessageExtra={message=><NativeTurnOutputs message={message}/>}
+ return <div className="ew-chat-layout"><ChatPage apiDirect={session?.runtime==='api'} session={shown} stream={running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} linkifyArtifactPaths={false} messageArtifacts={nativeArtifacts} renderMessageExtra={message=><NativeTurnOutputs message={message}/>}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
   composer={{text:draft.text,attachments:draft.files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:text=>patch({text}),onUpload:async files=>patch({files:await vm.service.attach(files,draft.files)}),onRemoveAttachment:fileId=>patch({files:draft.files.filter(file=>file.id!==fileId)}),commands:choices,selectedCommand:selected,
-   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:busy||unknown||!session,busy:action.busy,canSend:!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'原请求结果待核对':'',registerLayer:vm.navigation.registerLayer}}
+   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
   emptyState={{brand:'创作工作台',icon:<IconSkills size={32}/>,subtitle:'先聊创作目标，或用 / 或画笔选择技能。制作、采纳和发布各自核对授权。',suggestions:[]}}
-  notice={<>{draft.article_id&&<div className="chat-task-status"><span>本轮带入所选新闻的原始来源</span><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined})}>移除本轮来源绑定</button></div>}{versionContext&&<div className="chat-task-status"><p>{draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><button className="btn btn-sm" onClick={()=>vm.navigate(workPath({id:workId},parentVersion))}>打开所选版本</button></div>}<Notice message={resource.error||catalog.error||action.error||error}/>{unknown&&!running&&<button className="btn" onClick={()=>{if(draft.pending){runtime.blocked.delete(draft.pending.turnId);runtime.connect(draft.pending,profileId,true)}}}>核对原请求</button>}</>}
+  notice={<>{draft.article_id&&<div className="chat-task-status"><span>本轮带入所选新闻的原始来源</span><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined})}>移除本轮来源绑定</button></div>}{search.get('continue')==='1'&&<div className="chat-task-status">本轮接续所选中断版本；确认发送后才开始制作，原文件保留，新结果另存版本。</div>}{versionContext&&<div className="chat-task-status"><p>{draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><button className="btn btn-sm" onClick={()=>vm.navigate(workPath({id:workId},parentVersion))}>打开所选版本</button></div>}<Notice sources={[resource,catalog,action,{error,feedback}]}/></>}
   footer={array<JsonRecord>(resource.data?.linked_works||session?.linked_works).length?<div className="chat-linked-works">{array<JsonRecord>(resource.data?.linked_works||session?.linked_works).map(link=><button className="btn btn-sm" key={string(link.work_id)+string(link.version_id||link.job_id)} onClick={()=>vm.navigate(workPath({id:string(link.work_id),format:string(link.format)},string(link.version_id||link.job_id)))}>{string(link.title)||'打开关联作品'}{link.version_label?' · '+string(link.version_label):''}</button>)}</div>:undefined}/>
   </div>;
 }

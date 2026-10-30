@@ -63,6 +63,8 @@ class ChatService:
     def __init__(self, box, *, root=None, on_accept=None, on_started=None, on_finish=None, timeout=1800):
         self.box, self.store = box, box.store
         self.root = Path(root or box.root).resolve()
+        from .settings import service as settings_service
+        self.settings = settings_service(box)
         self.outputs = owned_output_path(self.root,'outputs')
         self.sessions_dir = owned_output_path(self.root,'outputs/_sessions')
         self.on_finish = on_finish
@@ -112,7 +114,7 @@ class ChatService:
             safe = safe[:95] + '-' + hashlib.sha256(turn['session_id'].encode()).hexdigest()[:24]
         harness_store.write_json(owned_output_path(self.root,Path('outputs/_sessions')/(safe+'.json')), {
             'status': 'done' if turn['status'] in TERMINAL else 'running',
-            'text': turn.get('output', ''), 'turn_id': turn['id'], 'runtime': 'codex',
+            'text': turn.get('output', ''), 'turn_id': turn['id'], 'runtime': turn['runtime'],
             'at': turn['updated_at'], 'clean_end': turn['status'] == 'completed',
             'stop_reason': turn['status'] if turn['status'] in TERMINAL else None,
         })
@@ -122,6 +124,7 @@ class ChatService:
             raise ValueError('对话操作格式无效')
         operation = identity(value.get('operation_id') or value.get('id'))
         signature = sha({'action': action, 'session_id': session_id, 'value': value})
+        execution_settings = self.settings.capture() if action == 'create' else None
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
             previous = c.execute('SELECT signature,result FROM easel_chat_operations WHERE id=?', (operation,)).fetchone()
@@ -142,7 +145,8 @@ class ChatService:
                     text(persona, 200, True)
                 session = {'id': session_id, 'title': text(value.get('title', '新对话'), 200, True),
                            'title_source': 'manual' if value.get('title') not in (None, '新对话', 'New Chat') else 'default',
-                           'profile_id': profile_id, 'persona': persona, 'runtime': 'codex',
+                           'profile_id': profile_id, 'persona': persona, 'runtime': execution_settings['runtime'],
+                           'execution_settings': execution_settings,
                            'created': int(time.time() * 1000), 'updated': now(), 'sessionKey': session_id,
                            'revision': 1, 'archived': False, 'pendingTurnId': None}
             else:
@@ -217,7 +221,7 @@ class ChatService:
                              'attachments': copy.deepcopy(turn.get('attachments', []))})
             messages.append({'id': turn['id'], 'role': 'assistant', 'content': turn.get('output', ''),
                              'timestamp': turn['updated_at'], 'status': self.get_turn(turn['id'])['status'],
-                             'runtime': 'codex', 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
+                             'runtime': turn['runtime'], 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
             if turn.get('work') and turn['work'] not in linked:
                 linked.append(copy.deepcopy(turn['work']))
         session['messages'] = messages
@@ -268,9 +272,16 @@ class ChatService:
         actual_prompt = text(actual_prompt, 1024 * 1024, True)
         from .runtime.task_runtime import validated_snapshot
         frozen = validated_snapshot(snapshot, snapshot.get('task'))
-        environment = self._environment()
-        config = harness_store.settings(self.outputs, environment)
-        model = config['models'].get('codex', '')
+        with self.store.connect() as c:
+            accepted_session = self._session(c, session_id)
+        config = self.execution_settings(accepted_session)
+        runtime = config['runtime']
+        if runtime == 'api' and (work or (value.get('context') or {}).get('skill_id')):
+            raise ChatConflict('API 仅聊天模式没有本机技能和制作工具，请新建 Agent 对话')
+        if work and runtime == 'codex' and config['sandbox'] == 'read-only':
+            raise ChatConflict('此会话使用只读沙箱，不能制作文件；请新建工作区写入对话')
+        environment = self.settings.execution_environment(config)
+        model = config['models'].get(runtime, '')
         if frozen_instructions is None:
             frozen_instructions = harness_instructions(RunRequest(actual_prompt, self.root, environment, model=model))
         frozen_instructions = text(frozen_instructions, 1024 * 1024, True)
@@ -306,12 +317,13 @@ class ChatService:
                     for row in c.execute('SELECT result FROM easel_chat_operations'))
                 if first and not legacy_manual and session.get('title_source', 'default') == 'default' and session['title'] in ('新对话', 'New Chat'):
                     session.update(title=initial_title, title_source='automatic')
-            turn = {'id': turn_id, 'operation_id': operation, 'session_id': session_id, 'runtime': 'codex',
+            turn = {'id': turn_id, 'operation_id': operation, 'session_id': session_id, 'runtime': runtime,
+                    'execution_settings': config,
                     'message': message, 'context': copy.deepcopy(context), 'snapshot': frozen,
                     'actual_prompt': actual_prompt, 'actual_prompt_sha256': hashlib.sha256(actual_prompt.encode()).hexdigest(),
                     'frozen_instructions': frozen_instructions, 'instructions_sha256': hashlib.sha256(frozen_instructions.encode()).hexdigest(),
                     'model': model, 'request_signature': sha(value),
-                    'cwd': str(self.root), 'session_key': session_id, 'runner': 'easel.harnesses.codex.CodexAdapter',
+                    'cwd': str(self.root), 'session_key': session_id, 'runner': self.runner_name(runtime),
                     'status': 'accepted', 'delivery_state': 'not_started', 'created_at': now(), 'updated_at': now(),
                     'output': '', 'thinking': '', 'activity': '', 'attachments': copy.deepcopy(value.get('attachments') or []),
                     'native_id': '', 'work': copy.deepcopy(work), 'hook_status': 'not_started'}
@@ -339,6 +351,20 @@ class ChatService:
         environment = proxy_environment(web_environment(environment), 'localhost,127.0.0.1,::1')
         environment.update(EASEL_AGENT_RUNTIME='codex', EASEL_ROOT=str(self.root))
         return environment
+
+    @staticmethod
+    def runner_name(runtime):
+        return {'codex':'easel.harnesses.codex.CodexAdapter','opencode':'easel.harnesses.acp.OpenCodeAdapter',
+                'acp':'easel.harnesses.acp.ACPAdapter','api':'easel.direct_api.stream_chat',
+                'openclaw':'easel.harnesses.openclaw.OpenClawAdapter'}[runtime]
+
+    def execution_settings(self, session):
+        if session.get('execution_settings'):
+            return copy.deepcopy(session['execution_settings'])
+        # Pre-settings conversations belong to the original fixed Codex setup.
+        self.settings.capture()
+        initial = self.settings.current(1)
+        return {key: copy.deepcopy(initial[key]) for key in ('revision','runtime','models','sandbox','codex_auto_approve')}
 
     def _event_path(self, turn_id):
         return owned_output_path(self.root,Path('outputs/_sessions/jobs')/(identity(turn_id)+'.jsonl'))
@@ -425,8 +451,11 @@ class ChatService:
                 raise ValueError('回答格式无效')
             for item in items:
                 text(item, 10000, True)
-            if key == 'permission' and items not in (['允许本次'], ['拒绝']):
-                raise ValueError('请选择本次允许或拒绝')
+            if key == 'permission':
+                original=next((question for question in record['questions'] if question['questionId']==key),{})
+                allowed={option['label'] for option in original.get('options',[]) if isinstance(option,dict) and 'label' in option}
+                if len(items)!=1 or items[0] not in allowed:
+                    raise ValueError('请选择本轮列出的准确授权选项')
         record['future'].set_result(copy.deepcopy(answers))
         record['close']('answered')
         return {'ok': True, 'answered': True, 'id': question_id, 'status': 'answered'}
@@ -506,7 +535,7 @@ class ChatService:
 
         def bind(native_id):
             owned_output_path(self.root,'outputs/_sessions')
-            harness_store.bind(self.sessions_dir, turn['session_id'], 'codex', native_id)
+            harness_store.bind(self.sessions_dir, turn['session_id'], turn['runtime'], native_id)
             turn['native_id'] = native_id
             persist()
 
@@ -521,7 +550,15 @@ class ChatService:
             nonlocal started_hook_task
             if turn['native_id'] != thread_id:
                 raise HarnessError('实际回合与已绑定的原生会话不一致')
-            turn.update(native_turn_id=native_turn_id, status='running', delivery_state='accepted', native_started_at=now())
+            if turn['runtime'] in ('acp','opencode'):
+                turn.update(native_request_id=native_turn_id,execution_identity={'kind':'jsonrpc_request','id':native_turn_id})
+            else:
+                turn.update(native_turn_id=native_turn_id,execution_identity={'kind':'native_turn','id':native_turn_id})
+            start_execution()
+
+        def start_execution():
+            nonlocal started_hook_task
+            turn.update(status='running', delivery_state='accepted', native_started_at=now())
             persist()
             if self.on_started:
                 try:
@@ -534,8 +571,14 @@ class ChatService:
                 except Exception as error:
                     turn.update(start_hook_status='failed', start_hook_error_type=type(error).__name__)
 
+        def execution_receipt(receipt):
+            if receipt.get('kind')!='openclaw_cli_result' or receipt.get('native_session_id')!=turn['native_id'] or not re.fullmatch(r'[0-9a-f]{64}',receipt.get('sha256','')):
+                raise HarnessError('原生 CLI 回执与准确会话不一致')
+            turn.update(execution_receipt=copy.deepcopy(receipt),execution_identity={'kind':'cli_result_sha256','id':receipt['sha256']})
+            start_execution()
+
         def native_interrupt(thread_id, native_turn_id):
-            if turn['native_id'] != thread_id or turn.get('native_turn_id') != native_turn_id:
+            if turn['native_id'] != thread_id or (turn.get('execution_identity') or {}).get('id',turn.get('native_turn_id')) != native_turn_id:
                 raise HarnessError('停止回执与本轮原生会话不一致')
             turn.update(interrupt_confirmed=True, interrupt_confirmed_at=now())
             persist()
@@ -568,19 +611,25 @@ class ChatService:
         try:
             owned_output_path(self.root,'outputs/_sessions')
             record = harness_store.binding(self.sessions_dir, turn['session_id'])
-            if record and record['runtime'] != 'codex':
+            if record and record['runtime'] != turn['runtime']:
                 raise HarnessError('此会话属于其他底座，不能替换其历史')
             native_id = record.get('native_id', '')
-            harness_store.bind(self.sessions_dir, turn['session_id'], 'codex', native_id)
+            harness_store.bind(self.sessions_dir, turn['session_id'], turn['runtime'], native_id)
             turn.update(status='submitting', delivery_state='submission_pending')
             persist()
-            emit('activity', '已收到，正在连接 Codex…')
+            emit('activity', '已收到，正在连接 '+turn['runtime']+'…')
+            configuration = turn.get('execution_settings') or {'sandbox':'workspace-write','codex_auto_approve':False}
             request = RunRequest(turn['actual_prompt'], self.root, environment, native_id,
-                                 turn['model'], 'workspace-write', self.timeout,
-                                 session_key=turn['session_id'], codex_auto_approve=False,
+                                 turn['model'], configuration['sandbox'], self.timeout,
+                                 session_key=turn['session_id'], codex_auto_approve=configuration['codex_auto_approve'],
                                  on_native_turn=native_turn, on_native_interrupt=native_interrupt,
+                                 on_execution_receipt=execution_receipt,
                                  frozen_instructions=turn['frozen_instructions'])
-            await asyncio.wait_for(harnesses.adapter('codex').run(request, emit, ask, bind), self.timeout)
+            if turn['runtime'] in ('api','openclaw'):
+                from .settings_execution import run as configured_run
+                await asyncio.wait_for(configured_run(self, turn, request, emit, ask, bind), self.timeout)
+            else:
+                await asyncio.wait_for(harnesses.adapter(turn['runtime']).run(request, emit, ask, bind), self.timeout)
             turn.update(status='completed', delivery_state='accepted')
         except asyncio.CancelledError:
             confirmed = turn_id in self._stop_requested and turn.get('interrupt_confirmed') is True

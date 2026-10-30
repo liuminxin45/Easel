@@ -3,8 +3,19 @@ import type { FormEvent } from 'react';
 import { fetchTrendManagement, updateTrendSource } from '../lib/api';
 import type { TrendManagedSource } from '../lib/api';
 import SettingsSelect from './SettingsSelect';
+import {InteractionNotice,useFeedbackChannel} from './InteractionNotice';
+import {refreshViews,type InteractionSource} from '../lib/interaction';
 
-export default function TrendSourcesDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (addedId?: string) => void }) {
+export interface SourceUpdateResult {id:string;revision?:number;source?:TrendManagedSource|null;deleted?:boolean}
+
+export interface TrendSourceManagement {
+  load: typeof fetchTrendManagement;
+  update: (value: Record<string, unknown>) => Promise<SourceUpdateResult>;
+  footer?: React.ReactNode;
+  revision?: number;
+  operationSource?:InteractionSource;
+}
+export default function TrendSourcesDialog({ onClose, onChanged, management }: { onClose: () => void; onChanged: (addedId?: string) => void; management?:TrendSourceManagement }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const errorBox = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
@@ -18,6 +29,7 @@ export default function TrendSourcesDialog({ onClose, onChanged }: { onClose: ()
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const feedback=useFeedbackChannel();
   const [notice, setNotice] = useState('');
   const [removing, setRemoving] = useState('');
   const [kind, setKind] = useState('rss');
@@ -27,38 +39,47 @@ export default function TrendSourcesDialog({ onClose, onChanged }: { onClose: ()
   const [headers, setHeaders] = useState('{}');
   const [body, setBody] = useState('{}');
   const [refresh, setRefresh] = useState(300);
+  const revision=useRef(management?.revision);
 
   const reload = useCallback(async () => {
-    const result = await fetchTrendManagement();
+    const result = await (management?.load||fetchTrendManagement)();
     if (!alive.current) return;
-    setSources(result.sources); setWarnings(result.warnings);
+    feedback.clear();setSources(result.sources); setWarnings(result.warnings);
     setTemplate(result.python_template); setMaxScriptBytes(result.script_max_bytes);
     setScriptCode(prev => prev || result.python_template);
-  }, []);
+  }, [management?.load]);
   useEffect(() => {
     alive.current = true;
     const element = dialog.current;
     element?.showModal();
     void reload().catch((e: unknown) => {
-      if (alive.current) setError(e instanceof Error ? e.message : '无法读取数据源。');
+      if (alive.current) setError(feedback.report(e));
     }).finally(() => { if (alive.current) setLoading(false); });
     return () => { alive.current = false; element?.close(); };
   }, [reload]);
+  useEffect(()=>{
+    if(revision.current===management?.revision)return;
+    revision.current=management?.revision;
+    void reload().catch(error=>{if(alive.current)setError(feedback.report(error))});
+  },[management?.revision,reload]);
   useEffect(() => { if (error) errorBox.current?.focus(); }, [error]);
 
   const mutate = async (value: Record<string, unknown>, added = false) => {
     if (busy) return;
-    setBusy(true); setError(''); setNotice('');
+    feedback.clear();setBusy(true); setError(''); setNotice('');
     try {
-      const result = await updateTrendSource(value);
+      const update:(value:Record<string,unknown>)=>Promise<SourceUpdateResult>=management?.update||updateTrendSource;
+      const result = await update(value);
       onChanged(added ? result.id : undefined);
       if (alive.current) {
-        if (added) { setLabel(''); setUrl(''); }
+        if (added) { setLabel(current=>current.trim()===value.label?'':current);setUrl(current=>current.trim()===value.url?'':current); }
+        if(result.deleted)setSources(previous=>previous.filter(source=>source.id!==result.id));
+        else if(result.source)setSources(previous=>previous.some(source=>source.id===result.id)?previous.map(source=>source.id===result.id?result.source!:source):[...previous,result.source!]);
         setRemoving(''); setNotice(added ? '已添加，热点雷达会自动选中这个来源。' : '已保存。');
-        await reload();
+        refreshViews(reload);
       }
     } catch (e: unknown) {
-      if (alive.current) setError(e instanceof Error ? e.message : '保存失败，请稍后重试。');
+      if (alive.current) setError(feedback.report(e));
     } finally { if (alive.current) setBusy(false); }
   };
 
@@ -88,8 +109,9 @@ export default function TrendSourcesDialog({ onClose, onChanged }: { onClose: ()
   return <dialog ref={dialog} className="trend-manager" aria-labelledby="trend-manager-title" onCancel={event => { event.preventDefault(); onClose(); }}>
     <div className="trend-manager-head"><div><h2 id="trend-manager-title">数据源</h2><p>订阅你关心的内容，或接入自己的采集服务。</p></div><button className="btn btn-sm" onClick={onClose}>关闭</button></div>
     {error && <div ref={errorBox} tabIndex={-1} className="trend-manager-error" role="alert">{error}</div>}
+    <InteractionNotice sources={[management?.operationSource||{busy},{feedback:feedback.feedback?.kind==='status'&&(!management?.operationSource||!feedback.feedback.operationScope)?feedback.feedback:undefined}]}/>
     {notice && <div className="trend-manager-notice" role="status">{notice}</div>}
-    {warnings.map((warning, i) => <p className="trend-manager-error" key={i}>{warning}</p>)}
+    {warnings.map((warning,i)=><InteractionNotice key={i} sources={[{feedback:{kind:'status',message:warning}}]}/>)}
     {loading ? <p role="status">正在加载数据源…</p> : <>
       <section className="trend-manager-list" aria-label="已配置来源">
         {sources.map(source => <div key={source.id} className="trend-manager-row">
@@ -128,6 +150,6 @@ export default function TrendSourcesDialog({ onClose, onChanged }: { onClose: ()
         </details>
         <div className="trend-manager-footer"><span>保存后立即生效。</span><button className="btn btn-primary" type="submit" disabled={busy || (kind === 'python' && !scriptCode.trim())}>{busy ? '保存中…' : kind === 'python' ? '保存并启用' : '添加来源'}</button></div>
       </form>
-    </>}
+    </>}{management?.footer}
   </dialog>;
 }

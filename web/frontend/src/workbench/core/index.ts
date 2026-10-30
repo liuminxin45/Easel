@@ -3,6 +3,7 @@ export * from './transport';
 export * from './persistence';
 export * from './client';
 export * from './react';
+export * from '../../lib/interaction';
 export * from './metrics';
 export * from './auth';
 export * from './distribution';

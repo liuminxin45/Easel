@@ -43,6 +43,7 @@ class RunRequest:
     ephemeral: bool | None = None
     on_native_interrupt: Callable[[str, str], None] | None = None
     on_agent_message: Callable[[str, str, dict], None] | None = None
+    on_execution_receipt: Callable[[dict], None] | None = None
 
 
 class Adapter(Protocol):

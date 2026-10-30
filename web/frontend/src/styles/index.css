@@ -896,6 +896,12 @@ textarea.field { resize: vertical; min-height: 90px; }
 .notice-error { max-width: 1100px; margin: 14px auto 0; color: var(--red); background: var(--red-soft); border: 1px solid transparent; border-radius: var(--radius); padding: 10px 14px; font-size: 13px; }
 
 /* ============ 热点雷达 ============ */
+.trends-page { font-size: 16px; line-height: 1.6; }
+.trends-page .chip { font: 13px/normal Arial, sans-serif; }
+.trends-page .btn { line-height: normal; }
+.trends-page .trend-save,.trends-page .trend-use { font-family: Arial, sans-serif; line-height: normal; }
+.trend-manager { font-size: 16px; line-height: 1.6; }
+.trend-manager .btn { line-height: normal; }
 .trend-platforms { display: flex; gap: 8px; flex-wrap: wrap; max-width: 1100px; margin: 14px auto 0; }
 .trend-grid { max-width: 1100px; margin: 16px auto 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .trend-col { padding: 14px 6px 10px; }
@@ -1100,6 +1106,21 @@ textarea.field { resize: vertical; min-height: 90px; }
   padding: 5px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-tertiary); cursor: pointer; }
 .trend-item:hover .trend-save { opacity: 1; }
 .trend-save:hover { color: var(--accent-end); background: var(--accent-soft); border-color: transparent; }
+.trend-item:focus-within .trend-save,.trend-item:focus-within .trend-use { opacity: 1; }
+.trends-page .trend-col { min-width: 0; }
+.dash-trend-title:is(button) { width: 100%; text-align: left; border: 0; background: none; padding: 0; font-family: inherit; }
+@media (hover: none) { .trend-save,.trend-use { opacity: 1; } }
+@media (max-width:800px) {
+  .trends-page .trend-save,.trends-page .trend-use { opacity: 1; min-height: 36px; }
+  .trends-page .chip,.trends-page .trend-actions .btn { min-height: 44px; }
+  .trends-page .trend-item { gap: 6px; padding: 7px 8px; }
+}
+@media (max-width: 640px) {
+  .trends-page .page-head { flex-wrap: wrap; }
+  .trend-grid { grid-template-columns: minmax(0,1fr); }
+  .trend-manager { max-width: calc(100vw - 24px); padding: 16px; }
+  .trend-manager-fields { grid-template-columns: minmax(0,1fr); }
+}
 
 /* ============ 发布中心 ============ */
 .publishing-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -1516,3 +1537,24 @@ textarea.field { resize: vertical; min-height: 90px; }
 
 .persona-control .settings-select { min-height: 36px; border-radius: var(--radius); }
 .settings-overlay .thinking-controls .settings-select-wrap { width: auto; min-width: 0; }
+.interaction-status{color:var(--text-secondary);font-size:13px;line-height:1.5;margin:8px 0}
+
+/* Bounded radar and dashboard lists; keep every record available by scrolling. */
+.trend-grid { align-items: start; }
+.trend-list { --trend-row-height: 3.5rem; max-height: calc(15 * var(--trend-row-height)); overflow-y: auto; scrollbar-gutter: stable; scroll-padding-block: 4px; }
+.trend-list > .trend-item { height: var(--trend-row-height); min-height: var(--trend-row-height); box-sizing: border-box; }
+.trend-hot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-card-list { max-height: 360px; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; scroll-padding-block: 8px; }
+.dash-card:has(> .dash-card-list) { align-self: start; min-width: 0; }
+.dash-card-list .ew-list-button { width: 100%; min-width: 0; }
+.dash-card-list .dash-output > span { min-width: 0; }
+:is(.trend-list,.dash-card-list):focus-visible { outline: 2px solid var(--accent-end); outline-offset: 2px; }
+.copyable-text { border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:12px 0; background:var(--surface); min-width:0; }
+.copyable-text header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+.copyable-text header button { min-height:44px; padding:6px 12px; background:transparent; color:inherit; border:0; border-radius:6px; cursor:pointer; }
+.copyable-text pre { margin:0; padding:14px; white-space:pre-wrap; overflow-wrap:anywhere; max-height:55vh; overflow:auto; font:inherit; line-height:1.7; user-select:text; }
+.copyable-text code { font:inherit; background:none; padding:0; }
+.copyable-text-status { display:block; min-height:1.5em; padding:0 12px; font-size:12px; color:var(--text-secondary); }
+.artifact-image-link { display:flex; align-items:center; justify-content:center; min-width:0; width:100%; height:100%; max-width:100%; max-height:100%; }
+.artifact-text { width:100%; max-height:100%; overflow:auto; align-self:stretch; padding:8px; }
+.artifact-text .copyable-text { margin:0; }

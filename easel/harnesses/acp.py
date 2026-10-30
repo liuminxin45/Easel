@@ -18,11 +18,20 @@ class ACPAdapter:
     async def run(self, request: RunRequest, emit, ask, bind):
         session_id = request.native_id
         active = False
+        prompt_request_id = ''
+        observed = False
+
+        def observe():
+            nonlocal observed
+            if not observed and prompt_request_id and request.on_native_turn:
+                observed = True
+                request.on_native_turn(session_id, prompt_request_id)
 
         def notify(method, params):
             if not active or method != "session/update" or params.get("sessionId") != session_id:
                 return
             update = params.get("update") or {}
+            observe()
             kind = update.get("sessionUpdate")
             if kind in ("agent_message_chunk", "agent_thought_chunk"):
                 content = update.get("content") or {}
@@ -42,6 +51,7 @@ class ACPAdapter:
             labels = {f"{index + 1}. {option['name']}": option["optionId"]
                       for index, option in enumerate(allowed)}
             tool = params.get("toolCall") or {}
+            observe()
             answers = await ask([{"questionId": "permission", "header": "执行授权",
                                   "question": f"Agent 请求工具权限（仅本次）：{tool.get('title', '')}",
                                   "options": [{"label": label} for label in labels]}])
@@ -90,19 +100,26 @@ class ACPAdapter:
                     raise HarnessError("此 ACP Agent 未提供模型切换能力，请清空覆盖值使用原生配置")
             active = True
             prompt = harness_instructions(request) + "\n\n" + request.prompt
+            def sent(identifier):
+                nonlocal prompt_request_id
+                prompt_request_id = str(identifier)
             pending = asyncio.create_task(rpc.call("session/prompt", {
                 "sessionId": session_id, "prompt": [{"type": "text", "text": prompt}]},
-                timeout=request.timeout))
+                timeout=request.timeout, **({'on_request': sent} if request.on_native_turn else {})))
             try:
                 # Keep the original response alive: ACP v1 acknowledges cancel
                 # by resolving session/prompt, not by replying to session/cancel.
                 result = await asyncio.shield(pending)
                 if result.get("stopReason") != "end_turn":
                     raise HarnessError(f"Agent 本轮未正常完成：{result.get('stopReason', 'unknown')}")
+                observe()
             except asyncio.CancelledError:
                 async def cancel_and_wait():
                     await rpc.send({"method": "session/cancel", "params": {"sessionId": session_id}})
-                    await asyncio.shield(pending)
+                    result = await asyncio.shield(pending)
+                    if result.get('stopReason') in ('cancelled', 'canceled') and request.on_native_interrupt:
+                        observe()
+                        request.on_native_interrupt(session_id, prompt_request_id)
                 try:
                     await asyncio.wait_for(cancel_and_wait(), TIMEOUT_HARNESS_CANCEL)
                 except (HarnessError, asyncio.TimeoutError):

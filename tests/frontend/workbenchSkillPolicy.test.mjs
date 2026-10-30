@@ -20,6 +20,7 @@ function load(file, imports = {}, suffix = '') {
   if (file.startsWith('core/')) cache.set(file, exports);
   runInNewContext(outputText, {exports, URL, URLSearchParams, requestAnimationFrame: fn => fn(),
     require: id => {
+      if(id==='./common')return {ActionButton:'button',...(imports[id]||{})};
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
       if (id === './ProductionParameters') return {ProductionParameters: () => {}};

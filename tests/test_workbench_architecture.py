@@ -21,7 +21,25 @@ PRIVATE_PREFIX='easel_workbench'
 FRONTEND=ROOT/'web/frontend/src'
 PRIVATE_UI=FRONTEND/'workbench'
 UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
-    'web/frontend/package-lock.json','web/frontend/tsconfig.app.json'}
+    'web/frontend/package-lock.json','web/frontend/tsconfig.app.json',
+    # Optional generic turn receipt/frozen instruction ports; defaults remain upstream-owned.
+    'easel/harnesses/base.py','easel/harnesses/codex.py','easel/harnesses/workspace.py',
+    # Generic optional view ports; these files may not import private services.
+    'web/frontend/src/components/ChatPage.tsx','web/frontend/src/components/MessageBubble.tsx',
+    'web/frontend/src/components/Sidebar.tsx','web/frontend/src/components/SkillPage.tsx',
+    'web/frontend/src/components/QuestionCards.tsx','web/frontend/src/components/SkillDrawer.tsx',
+    'web/frontend/src/lib/api.ts'}
+WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
+    'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
+
+
+def allowed_upstream_patch(relative):
+    if relative in UPSTREAM_PATCH_ALLOWLIST or relative.startswith('web/frontend/src/workbench/'):
+        return True
+    if relative=='skills/workbench-import.json' or relative.startswith('skills/shared/workbench/'):
+        return True
+    parts=Path(relative).parts
+    return len(parts)>3 and parts[:2]==('skills','builtin') and parts[2] in WORKBENCH_BUILTIN_IDS
 
 
 def python_edges(source):
@@ -146,8 +164,20 @@ def test_upstream_patch_surface_is_explicit_and_small():
     changed=subprocess.check_output([git,'diff','--name-only','-z',baseline,'--',*protected],cwd=ROOT)
     untracked=subprocess.check_output([git,'ls-files','--others','--exclude-standard','-z','--',*protected],cwd=ROOT)
     paths={p.decode('utf-8') for p in changed.split(b'\0')+untracked.split(b'\0') if p}
-    unexpected=sorted(p for p in paths if p not in UPSTREAM_PATCH_ALLOWLIST and not p.startswith('web/frontend/src/workbench/'))
+    unexpected=sorted(p for p in paths if not allowed_upstream_patch(p))
     assert not unexpected,('Unexpected upstream edits; review them explicitly rather than spreading private logic into upstream files',unexpected)
+
+
+def test_project_skill_patch_allowlist_rejects_neighboring_upstream_and_global_sources():
+    assert allowed_upstream_patch('skills/builtin/content-production/SKILL.md')
+    assert allowed_upstream_patch('skills/builtin/delivery-review/scripts/check_deliverables.py')
+    assert allowed_upstream_patch('skills/shared/workbench/规范/写作要求.md')
+    assert allowed_upstream_patch('skills/workbench-import.json')
+    assert not allowed_upstream_patch('skills/builtin/ai-image-gen/SKILL.md')
+    assert not allowed_upstream_patch('skills/shared/scripts/new_executor.py')
+    assert not allowed_upstream_patch('skills/workbench-import-other.json')
+    assert not allowed_upstream_patch('web/frontend/src/App.tsx')
+    assert not allowed_upstream_patch('easel/harnesses/new_private_runtime.py')
 
 
 @pytest.mark.parametrize('source',[

@@ -1,0 +1,285 @@
+{
+  "authority": "这是可读创作资源的目录；状态沿用已有规范或保留候选，不新增认可。",
+  "components": [
+    {
+      "assets": [],
+      "id": "editorial-writing",
+      "name": "清楚、克制、有依据的解释",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/editorial-writing-v1.md",
+      "prompt_sha256": "b76c5190728a9992ea9f9144c0e6fa0b2394ac1c956046c18f189cdef14ba376",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "article-writing",
+      "name": "长文：围绕一个问题组织完整意思",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/article-writing-v1.md",
+      "prompt_sha256": "df9e5fffd97de8203ebc57712210039fed70dc73cf91d6b7f536e8ca6909c897",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已采纳 Kimi v0.4 版面示例（不复用旧事实）",
+          "path": "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/01-Kimi新品能力与排名.png",
+          "required": false,
+          "role": "example",
+          "sha256": "3e1115901208da6a05dddc57e39d5ae3527ed64b341f0d515d2eabe0990355ce"
+        },
+        {
+          "label": "已采纳 Kimi v0.4 版面示例（不复用旧事实）",
+          "path": "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/02-Kimi编程分项一张图.png",
+          "required": false,
+          "role": "example",
+          "sha256": "4812850677c3f1ac3c5efc3640b983b3a25fe980ac5919b2c00539f10167b7f7"
+        }
+      ],
+      "id": "editorial-poster",
+      "name": "Kimi v0.4：清楚层次与关系解释",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/editorial-poster-v1.md",
+      "prompt_sha256": "a76a550a91d8d2f7f58db9a2f6814221d6f68d5ae9dea60f84a9a042f76a3b8b",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "scene-visual",
+      "name": "油猪大侠：具象场景解释",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/scene-visual-v1.md",
+      "prompt_sha256": "1600354521091e605302527ca6294460ac880f053cc46fab7763dc48e6c01447",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可正面身份",
+          "path": "skills/shared/workbench/规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef"
+        },
+        {
+          "label": "已认可三视图",
+          "path": "skills/shared/workbench/规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506"
+        }
+      ],
+      "id": "simple-pig",
+      "name": "简笔小猪侠",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/simple-pig-v1.md",
+      "prompt_sha256": "5f696b3c032073fa47d1c6b641883f59a01531d83171d3ef07c49f7374b17a94",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可精致武侠三视图",
+          "path": "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b"
+        }
+      ],
+      "id": "wuxia-pig",
+      "name": "精致武侠小猪",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/wuxia-pig-v1.md",
+      "prompt_sha256": "d6d1afaf162a08d83e213c240650b8199b97c610cfc98027b658d7aed0ec5c14",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "by-purpose",
+      "name": "按主题选择角色与素材",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/by-purpose-v1.md",
+      "prompt_sha256": "6238f4260a39533fdcf3053ae2297b7304e947e998ba89d3cd22c93a62bd80d8",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "page-roles",
+      "name": "按内容分工组织整组",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/page-roles-v1.md",
+      "prompt_sha256": "29b767680cefd78bf7c6f41796b060c1bcd3a011a9fc9ecc5745c751894f4570",
+      "revision": 1,
+      "slot": "layout",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "外部候选封面",
+          "path": "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+          "required": false,
+          "role": "external_reference",
+          "sha256": "da4fa9bdfddd52211ae2357c8a8d2b589dec980f670377b0fe52e7f82afa81f2"
+        },
+        {
+          "label": "外部候选内页",
+          "path": "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+          "required": false,
+          "role": "external_reference",
+          "sha256": "a9281cf045a893187566a1243ff677043f242dda7bf9979f355c303f391caa74"
+        }
+      ],
+      "id": "typographic",
+      "name": "工具合集：排字封面试用",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/typographic-v1.md",
+      "prompt_sha256": "a63998efc9cf910d4ffd7120ec830ee7f00ad787b0a5e4b00ed55cf77dd44187",
+      "revision": 1,
+      "slot": "visual",
+      "status": "candidate"
+    },
+    {
+      "assets": [],
+      "id": "tool-writing",
+      "name": "工具合集：按任务与选择理由",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tool-writing-v1.md",
+      "prompt_sha256": "a7795b03df717f92ccff093323a78dc5892999aa01811a640d8e3a0817ad7a93",
+      "revision": 1,
+      "slot": "writing",
+      "status": "candidate"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可固定图生母版",
+          "path": "skills/shared/workbench/规范/模板/TechPulse-图生-v1/认可母版.png",
+          "required": true,
+          "role": "master",
+          "sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4"
+        }
+      ],
+      "id": "tech-pulse",
+      "name": "Tech Pulse v01 固定母版",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tech-pulse-v1.md",
+      "prompt_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "tech-writing",
+      "name": "Tech Pulse：沿用本期栏目文案规范",
+      "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tech-writing-v1.md",
+      "prompt_sha256": "bcbc12b5590fe08cad651b2967875ea8500d8fa885bcaf314b527afd91e8fbf6",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    }
+  ],
+  "packs": [
+    {
+      "components": {
+        "character": "by-purpose",
+        "layout": "page-roles",
+        "visual": "editorial-poster",
+        "writing": "editorial-writing"
+      },
+      "description": "默认视觉参考；按内容组织，不套固定构图。",
+      "formats": [
+        "poster"
+      ],
+      "id": "editorial-poster",
+      "name": "清楚的解释型海报",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "simple-pig",
+        "layout": "page-roles",
+        "visual": "scene-visual",
+        "writing": "editorial-writing"
+      },
+      "description": "有意义的角色动作与清楚的信息分工。",
+      "formats": [
+        "poster"
+      ],
+      "id": "oil-pig-simple",
+      "name": "油猪大侠 · 简笔场景",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "wuxia-pig",
+        "layout": "page-roles",
+        "visual": "scene-visual",
+        "writing": "editorial-writing"
+      },
+      "description": "使用已认可精致角色身份，不替换简笔资产。",
+      "formats": [
+        "poster"
+      ],
+      "id": "oil-pig-wuxia",
+      "name": "油猪大侠 · 精致武侠",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "visual": "tech-pulse",
+        "writing": "tech-writing"
+      },
+      "description": "固定母版，不允许普通局部选择改写母版。",
+      "fixed_master": true,
+      "formats": [
+        "poster"
+      ],
+      "id": "tech-pulse",
+      "name": "Tech Pulse · 固定栏目",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "by-purpose",
+        "layout": "page-roles",
+        "visual": "typographic",
+        "writing": "tool-writing"
+      },
+      "description": "本轮明确试用，不自动变成长期默认。",
+      "formats": [
+        "poster"
+      ],
+      "id": "P007-typographic",
+      "name": "工具合集 · 排字封面试用",
+      "policy_profile": "P007-typographic",
+      "revision": 1,
+      "status": "candidate"
+    },
+    {
+      "components": {
+        "character": "by-purpose",
+        "visual": "editorial-poster",
+        "writing": "article-writing"
+      },
+      "description": "完整论述、真实依据，配图按正文需要选择。",
+      "formats": [
+        "article"
+      ],
+      "id": "editorial-article",
+      "name": "清楚、克制的长文章",
+      "revision": 1,
+      "status": "confirmed"
+    }
+  ],
+  "revision": 1,
+  "schema_version": 1
+}

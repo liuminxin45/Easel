@@ -19,7 +19,7 @@ from easel_workbench.runtime import server_logging as journal
 from easel_workbench.runtime import image_delivery as image_delivery
 from easel_workbench.runtime import distribution_entry as distribution_entry
 
-TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/posters/new', 'description': '调用内容生产技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
+TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
     root=pathlib.Path(root);store=store or Store();auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
     forms=Forms(auth);csrf=csrf_token(store);origin=auth.data['origin'];host=auth.data['host']
@@ -41,6 +41,17 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     learning=attach_learning(box,studio);app.state.learning=learning
     from easel_workbench.runtime.creator_runtime import CreatorRuntime,CreatorConflict
     creator=CreatorRuntime(box,project=studio.project);box.creator=creator;app.state.creator=creator
+    from easel_workbench.chat import ChatService
+    from easel_workbench.chat_business import ChatBusiness
+    from easel_workbench.chat_api import handle as chat_api
+    chat_business=ChatBusiness(box,root=root)
+    chat=ChatService(box,root=root,on_started=chat_business.started,on_finish=chat_business.finished,on_accept=chat_business.accept)
+    chat_business.chat=chat;app.state.chat=chat;app.state.chat_business=chat_business
+    from easel_workbench.native_corrections import NativeCorrections
+    corrections=NativeCorrections(chat,chat_business);app.state.native_corrections=corrections
+    app.add_event_handler('startup',corrections.start)
+    app.add_event_handler('shutdown',corrections.close)
+    app.add_event_handler('shutdown',chat.close)
     from easel_workbench.runtime import distribution_api as distribution_api
     distribution=distribution or distribution_api.mount_service(box)
     app.state.distribution=distribution
@@ -212,6 +223,12 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path in ('/api/mobile/devices','/api/notifications','/api/notifications/read'):
             if method not in ('GET','HEAD') and (not same or len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf)):return error(403,'csrf_rejected')
             return error(410,'通知页与通知设备已退役，任务进度请在工作台或作品中查看')
+        if method in ('GET','HEAD'):
+            chat_response=await chat_api(chat,chat_business,path,request,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)))
+            if chat_response is not None:
+                if hasattr(chat_response,'body') and chat_response.status_code==200:
+                    return reply(decorate_images(json.loads(chat_response.body),session,cookies(ctx.headers).get(SESSION)))
+                return chat_response
         if method=='POST':
             if not same:return error(403,'origin_rejected')
             if len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
@@ -221,6 +238,8 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if headers.get('content-type','').split(';')[0]!='application/json':return error(415,'请求类型无效')
             value=json.loads(raw)
             if not isinstance(value,dict):raise ValueError('请求需要 JSON 对象')
+            chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)))
+            if chat_response is not None:return chat_response
             if path=='/api/creative/preview':
                 from easel_workbench.runtime.creative_recipes import service as recipes
                 try:return reply(await asyncio.to_thread(recipes(box).preview,value))
@@ -543,6 +562,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             return StreamingResponse(zip_chunks(),media_type='application/zip',headers={'Cache-Control':'no-store','Content-Disposition':'attachment; filename="poster-images.zip"'})
         if path.startswith('/api/works/'):
             result=await asyncio.to_thread(box.work,path.rsplit('/',1)[-1])
+            with store.connect() as c:
+                linked=c.execute("SELECT session_id,document FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id')=? ORDER BY rowid DESC LIMIT 1",(result['id'],)).fetchone()
+            if linked:result['native_chat']={'session_id':linked['session_id'],**json.loads(linked['document'])['work']}
             for version in result['versions']:version['artifacts']=[picture_links(value) for value in version['artifacts']]
             return reply(result)
         if path.startswith('/api/tasks/'):return reply(await asyncio.to_thread(box.job,path.rsplit('/',1)[-1]))
@@ -565,7 +587,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             except ValueError:location='/posters'
             return Response(status_code=303,headers={'Location':location})
         if path=='/messages' and method in ('GET','HEAD'):return Response(status_code=303,headers={'Location':'/native/?path=%2Ftoolbox','Cache-Control':'no-store'})
-        if path in ('/','/toolbox','/news','/posters','/posters/new','/articles','/articles/new','/works','/works/new','/settings','/messages') or re.fullmatch(r'/(?:articles|posters|works|news/a)/[A-Za-z0-9_-]+',path):
+        if path in ('/','/toolbox','/chat','/news','/posters','/posters/new','/articles','/articles/new','/works','/works/new','/settings','/messages') or re.fullmatch(r'/(?:chat|articles|posters|works|news/a)/[A-Za-z0-9_-]+',path):
             return Response(status_code=303,headers={'Location':'/native/?'+urllib.parse.urlencode({'path':target}),'Cache-Control':'no-store'})
         return error(404,'页面不存在')
     @app.api_route('/{path:path}',methods=['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'])

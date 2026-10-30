@@ -17,6 +17,23 @@ class RPCError(RuntimeError):
         self.error = error
         super().__init__(str(error.get('message', 'Codex request failed')))
 
+    @property
+    def code(self):
+        value = self.error.get('code')
+        return value if type(value) is int else None
+
+    @property
+    def safe_code(self):
+        """Fixed diagnostics only; native messages may contain private input."""
+        message = str(self.error.get('message', '')).lower()
+        if self.code == -32600 and message.startswith('no rollout found for thread id '):
+            return 'thread_rollout_missing'
+        if self.code == -32600 and message.startswith('thread not loaded:'):
+            return 'thread_not_loaded'
+        if any(word in message for word in ('writer', 'owned', 'already running', 'another process')):
+            return 'thread_owned_elsewhere'
+        return 'native_request_rejected'
+
 
 class RPCNotSentError(ConnectionError):
     """Positive evidence that this call never entered stdin.write.

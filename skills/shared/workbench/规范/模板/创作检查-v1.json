@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "neo-content-creative-review-v1",
+  "authority": ["规范/写作要求.md#标题与配图的反馈检查", "规范/图片制作要求.md#标题与配图的反馈检查"],
+  "basis": "assistant_assessment",
+  "checks": [
+    {"id": "title_reasoning", "stage": "plan", "question": "读者要完成什么任务或理解什么具体变化？主体与读者价值有何事实依据；若展开技术机制或用法，是否有解释价值且有材料支持？候选标题的切入点和最终取舍是什么？", "allows_not_applicable": false},
+    {"id": "visual_reasoning", "stage": "plan", "question": "先检查了哪些现成素材，哪些事实需要真实画面？适用自制角色图时，如何优先用具象小猪场景与动作解释用户任务、变化或机制？每张图增加什么信息，哪些素材或图解有必要保留？", "allows_not_applicable": true},
+    {"id": "title_consistency", "stage": "delivery", "question": "最终标题、首图/文章标题与交付清单是否一致？正文或配文是否讲清本篇的用户任务或具体变化？技术机制和用法是否只在有解释价值且有材料支持时展开，未披露的机制是否避免补造？是否删去无读者价值的免责、核查或自我辩护，同时保留影响理解与选择的真实条件？", "allows_not_applicable": false},
+    {"id": "visual_inspection", "stage": "delivery", "question": "实际查看完整图和手机预览后，有小猪时其身份、具象场景与动作是否清楚解释主题，跨图是否有信息增量？真实/示意边界、证据完整性、图文对应与阅读层次是否合格？", "allows_not_applicable": true}
+  ]
+}

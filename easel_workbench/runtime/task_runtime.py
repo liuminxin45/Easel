@@ -363,8 +363,10 @@ def attach_review_basis(box,c,document,job_id,editable_text=None,assets=None):
     return bound
 
 
-def production_call(box, job_id, inputs):
+def production_call(box, job_id, inputs, status='submitting'):
     """One logical queued production call; reconnecting is not a new call."""
+    if status not in ('submitting', 'queued', 'running'):
+        raise ValueError('制作发送阶段无效')
     with box.store.connect() as c:
         run = read_run(c, job_id)
         if not run:
@@ -374,14 +376,68 @@ def production_call(box, job_id, inputs):
             row = c.execute('SELECT document FROM creator_model_calls WHERE id=?', (call_id,)).fetchone()
             if row and json.loads(row[0]).get('input_sha256') != digest({'payload': inputs, 'prompt': inputs[0]['text']}):
                 raise ValueError('重接任务输入与原技能调用不同，未发送')
+            if row:
+                record=json.loads(row[0]);record.update(status=status,delivery_state=status,submission_started_at=record.get('submission_started_at') or stamp())
+                if status=='running':record.setdefault('started_at',stamp())
+                record.pop('finished_at',None)
+                c.execute('UPDATE creator_model_calls SET document=?,updated_at=? WHERE id=?',(packed(record),stamp(),call_id))
+                step(c,job_id,'production','running' if status=='running' else 'queued',call_id=call_id,transport_status=status)
             return call_id
         snapshot = run['snapshot']
-    call_id = begin_call(box, snapshot.get('task','poster'), inputs, inputs[0]['text'], snapshot=snapshot, task_id=job_id)
+    call_id = begin_call(box, snapshot.get('task','poster'), inputs, inputs[0]['text'], snapshot=snapshot, task_id=job_id, status=status)
     with box.store.connect() as c:
         run = read_run(c, job_id)
         run['model_call_id'] = call_id
         _put_run(c, run)
     return call_id
+
+
+def preparation_state(c, job_id, status, *, diagnostic=None, proven_not_sent=False):
+    """Connection preparation is not evidence of a model submission."""
+    run=read_run(c,job_id)
+    if not run:return
+    run['preparation']={'status':status,'updated_at':stamp(),**({'diagnostic':diagnostic} if diagnostic else {})}
+    _put_run(c,run)
+    if proven_not_sent:
+        call_id=run.get('model_call_id')
+        row=c.execute('SELECT document FROM creator_model_calls WHERE id=?',(call_id,)).fetchone() if call_id else None
+        if row:
+            call=json.loads(row[0])
+            if call.get('status') in ('completed','unknown','reused') or call.get('turn_id') or call.get('output'):
+                return  # never erase an earlier actual or unknown model receipt
+            if call.get('started_at'):call.setdefault('preparation_started_at',call.pop('started_at'))
+            call.update(status='not_started',finished_at=stamp(),delivery_state='not_sent')
+            if diagnostic:call['connection_diagnostic']=copy.deepcopy(diagnostic)
+            c.execute('UPDATE creator_model_calls SET document=?,updated_at=? WHERE id=?',(packed(call),stamp(),call_id))
+
+
+def production_started(box, job_id, turn_id):
+    with box.store.connect() as c:
+        run=read_run(c,job_id)
+        if not run:return
+        call_id=run.get('model_call_id')
+        row=c.execute('SELECT document FROM creator_model_calls WHERE id=?',(call_id,)).fetchone() if call_id else None
+        if row:
+            call=json.loads(row[0]);call.update(status='running',turn_id=turn_id,delivery_state='accepted')
+            call.setdefault('started_at',stamp())
+            c.execute('UPDATE creator_model_calls SET document=?,updated_at=? WHERE id=?',(packed(call),stamp(),call_id))
+        step(c,job_id,'production','running',call_id=call_id,turn_id=turn_id,transport_status='accepted')
+
+
+def production_transport_failure(c,job_id,diagnostic,*,unknown=False,proven_not_sent=False,terminal=False):
+    preparation_state(c,job_id,'failed',diagnostic=diagnostic,proven_not_sent=proven_not_sent)
+    run=read_run(c,job_id)
+    if not run:return
+    if unknown:
+        call_id=run.get('model_call_id')
+        row=c.execute('SELECT document FROM creator_model_calls WHERE id=?',(call_id,)).fetchone() if call_id else None
+        if row:
+            call=json.loads(row[0])
+            if call.get('status')!='completed':
+                call.update(status='unknown',connection_diagnostic=diagnostic)
+                c.execute('UPDATE creator_model_calls SET document=?,updated_at=? WHERE id=?',(packed(call),stamp(),call_id))
+    step(c,job_id,'production','unknown' if unknown else 'failed' if terminal else 'queued',
+         transport_status='unknown' if unknown else 'not_sent',connection_diagnostic=diagnostic)
 
 
 def production_finish(box, job_id, status, output=None, error=None):
@@ -404,69 +460,208 @@ def thread_id_for(c, job_id):
     run = read_run(c, job_id)
     if not run:
         return THREAD
+    if run.get('engine')=='easel.harnesses.codex':return run.get('native_id')
     row = c.execute('SELECT document FROM creator_thread_contexts WHERE id=?', (context_id(run),)).fetchone()
     return json.loads(row[0]).get('thread_id') if row else None
 
 
-def target_for_thread(thread_id):
+def target_for_thread(thread_id,expected_project=None):
     import sqlite3
     from easel_workbench.runtime.bridge import STATE
     from easel_workbench.runtime.desk import PROJECT
     with sqlite3.connect('file:' + str(STATE) + '?mode=ro', uri=True) as c:
         row = c.execute('SELECT cwd,rollout_path FROM threads WHERE id=?', (thread_id,)).fetchone()
-    if not row or pathlib.Path(row[0].removeprefix('\\\\?\\')).resolve() != PROJECT.resolve():
+    expected=pathlib.Path(expected_project).resolve() if expected_project is not None else PROJECT.resolve()
+    if not row or pathlib.Path(row[0].removeprefix('\\\\?\\')).resolve() != expected:
         raise ValueError('创作会话的项目目录无法核对；没有发送任务')
     return pathlib.Path(row[1].removeprefix('\\\\?\\')) if row[1] else None
 
 
-def ensure_target(box, job_id, factory, legacy_rollout):
-    """Create a fresh context before sending; legacy in-flight jobs stay fixed."""
-    from easel_workbench.runtime.desk import PROJECT
-    from easel_workbench.runtime.poster_rpc import RPCNotSentError
-    with box.store.connect() as c:
-        run = read_run(c, job_id)
-        if not run:
-            return legacy_rollout()
-        key = context_id(run)
-        c.execute('BEGIN IMMEDIATE')
-        old = c.execute('SELECT document FROM creator_thread_contexts WHERE id=?', (key,)).fetchone()
-        context = json.loads(old[0]) if old else None
-        if context and context.get('thread_id'):
-            if context.get('rollout_path'):
-                return pathlib.Path(context['rollout_path'])
-            return target_for_thread(context['thread_id'])
-        if context and context.get('status') in ('allocating', 'unknown'):
-            raise ValueError('创作会话建立回执待核对，未重复发送制作')
-        context = {'id': key, 'profile_id': run['snapshot']['profile']['id'], 'work_id': run['work_id'],
-                   'status': 'allocating', 'created_at': stamp()}
-        c.execute('INSERT OR REPLACE INTO creator_thread_contexts VALUES(?,?,?)', (key, packed(context), stamp()))
-    connection = None
+class PreparedTarget:
+    """Own a newly loaded native context until its first submission finishes."""
+    def __init__(self,path,thread_id=None,connection=None,owned=False):
+        self.path,self.thread_id,self.connection,self.owned=path,thread_id,connection,owned
+    def __enter__(self):return self
+    def __exit__(self,*args):self.close()
+    def close(self):
+        connection,self.connection=self.connection,None
+        if connection:connection.close()
+
+
+def _unused_context(c,run,context,job_id):
+    """Reject every prior write boundary, including a different work revision."""
+    if context.get('work_id')!=run['work_id'] or context.get('profile_id')!=run['snapshot']['profile']['id']:
+        raise ValueError('制作上下文与作品归属不一致')
+    rows=c.execute('SELECT id,status,dispatch_started,queue_id,turn_id FROM toolbox_jobs WHERE work_id=?',(run['work_id'],)).fetchall()
+    if not any(row['id']==job_id for row in rows):raise ValueError('制作任务不存在')
+    for row in rows:
+        if row['dispatch_started'] or row['queue_id'] or row['turn_id'] or row['status'] in ('running','uncertain','needs_desktop'):
+            raise ValueError('作品存在已发送或回执未知的制作，不得重建会话')
+        retry_row=c.execute('SELECT document FROM toolbox_dispatch_retries WHERE job_id=?',(row['id'],)).fetchone()
+        if retry_row:
+            state=json.loads(retry_row[0])
+            if state.get('phase') in ('submitted','unknown') or any(event.get('event') in ('submitted','submission_unknown') for event in state.get('history',[])):
+                raise ValueError('制作历史包含发送边界，不得重建会话')
+    for row in c.execute('SELECT m.document FROM creator_model_calls m JOIN toolbox_jobs j ON j.id=m.task_id WHERE j.work_id=?',(run['work_id'],)):
+        call=json.loads(row[0])
+        if call.get('status') in ('unknown','completed','reused') or call.get('turn_id') or call.get('output'):
+            raise ValueError('已有实际模型回执，不得重建制作会话')
+
+
+def _native_context_absent(context):
+    """Both native authorities must positively show an unpersisted empty thread."""
+    import sqlite3
+    from easel_workbench.runtime.bridge import STATE
+    path=context.get('rollout_path')
+    if not isinstance(path,str) or not path or pathlib.Path(path).exists():return False
     try:
-        connection = factory(on_event=lambda event: None)
-        response = connection.call('thread/start', {'cwd': str(PROJECT), 'ephemeral':False}, timeout=30)
-        thread = response.get('thread') or {}
-        if not isinstance(thread.get('id'), str) or not thread['id']:
-            raise ValueError('会话建立缺少准确身份，未发送制作')
-        actual = thread.get('cwd')
-        if actual and pathlib.Path(actual.removeprefix('\\\\?\\')).resolve() != PROJECT.resolve():
-            raise ValueError('会话项目与作品源不一致，未发送制作')
-        context.update(status='ready', thread_id=thread['id'])
-        if thread.get('path'):
-            context['rollout_path'] = str(pathlib.Path(thread['path'].removeprefix('\\\\?\\')))
-        with box.store.connect() as c:
-            c.execute('UPDATE creator_thread_contexts SET document=?,updated_at=? WHERE id=?', (packed(context), stamp(), key))
-        return pathlib.Path(context['rollout_path']) if context.get('rollout_path') else target_for_thread(context['thread_id'])
+        with contextlib.closing(sqlite3.connect(pathlib.Path(STATE).resolve().as_uri()+'?mode=ro',uri=True)) as native:
+            return native.execute('SELECT 1 FROM threads WHERE id=?',(context.get('thread_id'),)).fetchone() is None
+    except (OSError,sqlite3.Error):return False
+
+
+def _start_target(box,connection,key,context):
+    from easel_workbench.runtime.desk import PROJECT
+    response=connection.call('thread/start',{'cwd':str(PROJECT),'ephemeral':False},timeout=30)
+    thread=response.get('thread') or {}
+    if not isinstance(thread.get('id'),str) or not thread['id']:
+        raise ValueError('会话建立缺少准确身份，未发送制作')
+    actual=thread.get('cwd')
+    if actual and pathlib.Path(actual.removeprefix('\\\\?\\')).resolve()!=PROJECT.resolve():
+        raise ValueError('会话项目与作品源不一致，未发送制作')
+    context.update(status='ready',thread_id=thread['id'])
+    context.pop('rollout_path',None)
+    if thread.get('path'):context['rollout_path']=str(pathlib.Path(thread['path'].removeprefix('\\\\?\\')))
+    with box.store.connect() as c:
+        current=c.execute('SELECT document FROM creator_thread_contexts WHERE id=?',(key,)).fetchone()
+        if not current or json.loads(current[0]).get('allocation_id')!=context.get('allocation_id'):
+            raise ValueError('会话准备预约已变化，未发送制作')
+        c.execute('UPDATE creator_thread_contexts SET document=?,updated_at=? WHERE id=?',(packed(context),stamp(),key))
+    return PreparedTarget(pathlib.Path(context['rollout_path']) if context.get('rollout_path') else None,thread['id'],connection,True)
+
+
+def prepare_target(box,job_id,factory,legacy_rollout):
+    """Keep thread/start and the first turn on the same owning connection.
+
+    Legacy and submitted tasks retain their exact context. A missing empty
+    context can be replaced only after native rejection and independent proof
+    that no revision of this work ever crossed a production write boundary.
+    """
+    from easel_workbench.runtime.desk import PROJECT,THREAD
+    from easel_workbench.runtime.poster_rpc import RPCError,RPCNotSentError
+    with box.store.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
+        run=read_run(c,job_id)
+        if not run:return PreparedTarget(legacy_rollout(),THREAD)
+        key=context_id(run)
+        row=c.execute('SELECT document FROM creator_thread_contexts WHERE id=?',(key,)).fetchone()
+        context=json.loads(row[0]) if row else None
+        job=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(job_id,)).fetchone()
+        if not job:raise ValueError('制作任务不存在')
+        sent=bool(job['dispatch_started'] or job['queue_id'] or job['turn_id'])
+        if context and context.get('thread_id'):
+            path=pathlib.Path(context['rollout_path']) if context.get('rollout_path') else None
+            if sent:return PreparedTarget(path or target_for_thread(context['thread_id']),context['thread_id'])
+        elif sent:
+            raise ValueError('已发送制作的准确会话缺失，等待核对；不会重建')
+        elif context and context.get('status') in ('allocating','unknown'):
+            raise ValueError('创作会话建立回执待核对，未重复发送制作')
+        else:
+            context={'id':key,'profile_id':run['snapshot']['profile']['id'],'work_id':run['work_id'],
+                     'status':'allocating','created_at':stamp(),'allocation_id':uuid.uuid4().hex}
+            _unused_context(c,run,context,job_id)
+            c.execute('INSERT OR REPLACE INTO creator_thread_contexts VALUES(?,?,?)',(key,packed(context),stamp()))
+        preparation_state(c,job_id,'preparing')
+    connection=None
+    try:
+        connection=factory(on_event=lambda event:None)
+        if context.get('thread_id'):
+            try:
+                response=connection.call('thread/resume',{'threadId':context['thread_id'],'excludeTurns':True},timeout=15)
+                thread=response.get('thread') or {}
+                actual=thread.get('cwd')
+                if thread.get('id') not in (None,context['thread_id']) or actual and pathlib.Path(actual.removeprefix('\\\\?\\')).resolve()!=PROJECT.resolve():
+                    raise ValueError('制作会话与原作品上下文不一致，未发送')
+                prepared=PreparedTarget(path,context['thread_id'],connection,True)
+                connection=None
+                return prepared
+            except RPCError as error:
+                if error.safe_code=='thread_owned_elsewhere':
+                    prepared=PreparedTarget(path,context['thread_id'],connection,False)
+                    connection=None
+                    return prepared
+                expected='no rollout found for thread id '+context['thread_id']
+                if error.code!=-32600 or str(error.error.get('message','')).strip()!=expected or not _native_context_absent(context):raise
+                with box.store.connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    current=c.execute('SELECT document FROM creator_thread_contexts WHERE id=?',(key,)).fetchone()
+                    if not current or json.loads(current[0])!=context:raise ValueError('制作会话已变化，未重建')
+                    _unused_context(c,run,context,job_id)
+                    previous=copy.deepcopy(context)
+                    context={'id':key,'profile_id':run['snapshot']['profile']['id'],'work_id':run['work_id'],
+                             'status':'allocating','created_at':stamp(),'allocation_id':uuid.uuid4().hex,
+                             'replaced_empty_context':previous,'replacement_evidence':{'rpc_code':error.code,
+                             'reason':'native_empty_thread','rollout_absent':True,'native_record_absent':True,'checked_at':stamp()}}
+                    c.execute('UPDATE creator_thread_contexts SET document=?,updated_at=? WHERE id=?',(packed(context),stamp(),key))
+        prepared=_start_target(box,connection,key,context)
+        connection=None  # ownership has moved to the returned context manager
+        return prepared
     except Exception as error:
-        # No production input has been submitted, but an unknown thread creation
-        # is kept for reconciliation rather than allocating more contexts.
-        if not context.get('thread_id'):
-            context.update(status='not_started' if isinstance(error, RPCNotSentError) else 'unknown', error_type=type(error).__name__)
+        if context.get('status')=='allocating':
+            context.update(status='not_started' if isinstance(error,RPCNotSentError) else 'unknown',error_type=type(error).__name__)
             with box.store.connect() as c:
-                c.execute('UPDATE creator_thread_contexts SET document=?,updated_at=? WHERE id=?', (packed(context), stamp(), key))
+                c.execute("UPDATE creator_thread_contexts SET document=?,updated_at=? WHERE id=? AND json_extract(document,'$.allocation_id')=?",
+                          (packed(context),stamp(),key,context.get('allocation_id')))
         raise
     finally:
-        if connection:
-            connection.close()
+        if connection:connection.close()
+
+
+def reconcile_preparation_failure(box,job_id,proof):
+    """Explicit operator repair of false running projections; never retry a job.
+
+    The local evidence descriptor is verified again against both native stores
+    and all durable dispatch boundaries. No job, frozen input or retry row is
+    modified. Callers retain their own pre-repair backup of operational rows.
+    """
+    if not isinstance(proof,dict) or set(proof)!={'path','sha256'}:raise ValueError('核对证据描述无效')
+    path=pathlib.Path(proof['path']).resolve()
+    if not path.is_relative_to((pathlib.Path(box.root)/'.local').resolve()) or not path.is_file() or path.stat().st_size>65536:
+        raise ValueError('核对证据不属于本地运行记录')
+    raw=path.read_bytes()
+    if hashlib.sha256(raw).hexdigest()!=proof['sha256']:raise ValueError('核对证据字节已变化')
+    evidence=json.loads(raw)
+    if evidence.get('job_id')!=job_id or evidence.get('rpc_code')!=-32600 or evidence.get('rpc_reason')!='thread_rollout_missing' or evidence.get('rollout_absent') is not True or evidence.get('native_record_absent') is not True:
+        raise ValueError('缺少准确的未持久化会话证据')
+    with box.store.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
+        run=read_run(c,job_id)
+        if not run:raise ValueError('找不到准确任务')
+        row=c.execute('SELECT document FROM creator_thread_contexts WHERE id=?',(context_id(run),)).fetchone()
+        context=json.loads(row[0]) if row else {}
+        if context.get('thread_id')!=evidence.get('thread_id') or not _native_context_absent(context):
+            raise ValueError('原生会话证据已变化，未修正状态')
+        _unused_context(c,run,context,job_id)
+        job=c.execute('SELECT status FROM toolbox_jobs WHERE id=?',(job_id,)).fetchone()
+        retry_row=c.execute('SELECT document FROM toolbox_dispatch_retries WHERE job_id=?',(job_id,)).fetchone()
+        state=json.loads(retry_row[0]) if retry_row else {}
+        if job['status']!='error' or state.get('phase')!='exhausted' or not state.get('retry_exhausted'):
+            raise ValueError('仅核对已耗尽且确定未发送的失败任务')
+        old=run.get('preparation_reconciliation')
+        if old and old.get('evidence_sha256')==proof['sha256']:return {'job_id':job_id,'changed':False,'requeued':False}
+        call_id=run.get('model_call_id')
+        call_row=c.execute('SELECT task_id,document FROM creator_model_calls WHERE id=?',(call_id,)).fetchone() if call_id else None
+        if call_row and (call_row['task_id']!=job_id or json.loads(call_row['document']).get('status') not in ('running','not_started')):
+            raise ValueError('模型回执不能按准备失败修正')
+        before=digest(run)
+        preparation_state(c,job_id,'failed',diagnostic={'reason':'thread_rollout_missing','rpc_code':-32600},proven_not_sent=True)
+        step(c,job_id,'production','failed',error='本地制作会话未持久化，制作没有发送。',transport_status='not_sent')
+        updated=read_run(c,job_id)
+        updated['preparation_reconciliation']={'evidence_sha256':proof['sha256'],'previous_run_sha256':before,
+             'previous_call_sha256':hashlib.sha256(call_row['document'].encode()).hexdigest() if call_row else None,
+             'reconciled_at':stamp(),'requeued':False}
+        _put_run(c,updated)
+        return {'job_id':job_id,'call_id':call_id,'changed':True,'requeued':False,'evidence_sha256':proof['sha256']}
 
 
 def named_prompt(box, task, payload, profile_id='oil-pig', skill_refs=None):
@@ -524,9 +719,11 @@ def contract_prompt(box, task, resource_suffix, payload, snapshot=None, profile_
     return prompt, selected
 
 
-def begin_call(box, task, payload, prompt, operation_id=None, profile_id='oil-pig', skill_refs=None, snapshot=None, task_id=None):
+def begin_call(box, task, payload, prompt, operation_id=None, profile_id='oil-pig', skill_refs=None, snapshot=None, task_id=None, status='running'):
     """Persist a call before the transport boundary; does not call any model."""
     box = runtime_box(box)
+    if status not in ('running','submitting','queued'):
+        raise ValueError('模型发送阶段无效')
     resolved = snapshot or registry(box).resolve(profile_id=profile_id, task=task, skill_refs=skill_refs)
     call_id = operation_id or uuid.uuid4().hex
     record = {'schema_version': 1, 'id': call_id, 'task_id': task_id, 'task': task,
@@ -534,8 +731,10 @@ def begin_call(box, task, payload, prompt, operation_id=None, profile_id='oil-pi
               'active_skills':[{k:r[k] for k in ('id','name','version','sha256') if k in r} for r in resolved['skills'] if r.get('executor')!='workflow' and r.get('execution_role')!='reserved_independent'],
               'reserved_skills':[{k:r[k] for k in ('id','name','version','sha256') if k in r} for r in resolved['skills'] if r.get('execution_role')=='reserved_independent'],
               'input_sha256': digest({'payload': payload, 'prompt': prompt}),
-              'status': 'running', 'started_at': stamp(), 'token_usage': None,
+              'status': status, 'created_at': stamp(), 'token_usage': None,
               'notice': '应用实际提交文本；不包含模型供应商不可见的系统指令。'}
+    if status=='running':record['started_at']=stamp()
+    else:record.update(submission_started_at=stamp(),delivery_state=status)
     with box.store.connect() as c:
         initialize(c)
         old = c.execute('SELECT document FROM creator_model_calls WHERE id=?', (call_id,)).fetchone()
@@ -549,7 +748,7 @@ def begin_call(box, task, payload, prompt, operation_id=None, profile_id='oil-pi
         c.execute('INSERT INTO creator_model_calls VALUES(?,?,?,?)', (call_id, task_id, packed(record), stamp()))
         if task_id:
             step(c, task_id, 'production' if task in ('poster', 'article', 'change', 'discuss', 'analysis') else task,
-                 'running', call_id=call_id)
+                 'running' if status=='running' else 'queued', call_id=call_id,transport_status=status)
     return call_id
 
 

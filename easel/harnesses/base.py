@@ -35,6 +35,14 @@ class RunRequest:
     command: tuple[str, ...] = ()
     session_key: str = ""
     codex_auto_approve: bool = False
+    on_native_turn: Callable[[str, str], None] | None = None
+    frozen_instructions: str | None = None
+    input_images: tuple[str, ...] | None = None
+    reasoning_effort: str | None = None
+    output_schema: dict | None = None
+    ephemeral: bool | None = None
+    on_native_interrupt: Callable[[str, str], None] | None = None
+    on_agent_message: Callable[[str, str, dict], None] | None = None
 
 
 class Adapter(Protocol):

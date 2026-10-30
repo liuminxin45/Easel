@@ -27,6 +27,11 @@ def run(args):
                     def go(path):
                         if page.url.startswith(origin):page.wait_for_function("()=>!document.querySelector('dialog[open]')&&!history.state?.nativeLayer")
                         h.ready(page,origin,path)
+                    def creation_details():
+                        if not page.get_by_label('主题',exact=True).is_visible():page.get_by_text('画像、制作要求与草稿',exact=True).click()
+                    def choose_command(name):
+                        page.get_by_role('button',name='添加素材或选择技能',exact=True).click()
+                        page.get_by_role('menuitem',name='/'+name,exact=False).click()
                     def check(name):checks.append({'profile':profile,'check':name,'passed':True})
                     def post_response(path,action):
                         with page.expect_response(lambda r:path in r.url and r.request.method=='POST') as response:action()
@@ -44,7 +49,7 @@ def run(args):
                         page.get_by_role('button',name=poster_launch,exact=True).click()
                         material='合成输入：从读者的问题开始，保留准确来源，不提交真实模型。'
                         page.get_by_label('素材与目标',exact=True).fill(material)
-                        page.get_by_label('主题',exact=True).fill('Easel 合成内容生产 '+profile)
+                        creation_details();page.get_by_label('主题',exact=True).fill('Easel 合成内容生产 '+profile)
                         with f['store'].connect() as c:before=c.execute('SELECT count(*) FROM toolbox_jobs').fetchone()[0]
                         preview=post_response('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
                         expect(page.get_by_role('dialog',name='确认本次制作方案')).to_be_visible()
@@ -59,20 +64,20 @@ def run(args):
                             run=json.loads(c.execute('SELECT document FROM creator_task_runs WHERE id=?',(wid,)).fetchone()[0]);assert run['workflow']['entry_skills'][0]['id']=='content-production'
                             assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==0
                         check('content-production-skill-real-preview-freeze-and-existing-task-receipt')
-                        go('/posters/new?draft=easel-title-only-'+profile);page.get_by_label('主题',exact=True).fill('只有标题也能开始 '+profile)
+                        go('/posters/new?draft=easel-title-only-'+profile);choose_command('生成贴图');creation_details();page.get_by_label('主题',exact=True).fill('只有标题也能开始 '+profile)
                         title_only=post_response('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
                         assert title_only['input']['title']=='只有标题也能开始 '+profile and not title_only['input']['material'];page.get_by_role('button',name='返回修改',exact=True).click();check('title-only-input-retains-original-production-contract')
-                        go('/posters/new?draft=easel-file-only-'+profile)
+                        go('/posters/new?draft=easel-file-only-'+profile);choose_command('生成贴图')
                         page.locator('input[type=file]').set_input_files({'name':'synthetic-reference.png','mimeType':'image/png','buffer':raw})
                         file_only=post_response('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
                         assert file_only['input']['files'] and not file_only['input']['material'];page.get_by_role('button',name='返回修改',exact=True).click();check('attachment-only-input-retains-original-production-contract')
-                        go('/articles/new?draft=easel-article-'+profile)
+                        go('/articles/new?draft=easel-article-'+profile);choose_command('撰写文章')
                         page.get_by_label('素材与目标',exact=True).fill('合成文章素材，确认写作和配图技能版本。')
                         article_preview=post_response('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
                         assert article_preview['input']['format']=='article';page.get_by_role('button',name='返回修改',exact=True).click();check('article-uses-same-production-skill')
                         go('/posters/'+ids['work']+'?version='+ids['response'])
                         if mobile:page.locator('#easel-main').get_by_role('button',name='对话',exact=True).click()
-                        page.get_by_label('发送方式',exact=True).select_option('feedback')
+                        page.get_by_text('本轮操作与技能',exact=True).click();page.get_by_label('发送方式',exact=True).select_option('feedback')
                         page.get_by_label('对话输入',exact=True).fill('合成反馈原话：请保留来源。')
                         feedback=post_response('/actions',lambda:page.get_by_role('button',name='发送',exact=True).click())
                         with f['store'].connect() as c:

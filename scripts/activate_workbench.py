@@ -23,7 +23,7 @@ OLD=Path('D:/Projects/ai-news-desk')
 STATE=ROOT/'.local/workbench-deployment'
 PYTHON=ROOT/'.runtime/workbench-python/Scripts/pythonw.exe'
 sys.path.insert(0,str(ROOT))
-from workbench_release import atomic,sha,verify
+from workbench_release import atomic,sha,verify,validate_source_binding
 from easel_workbench.runtime.scripts.windows_process_identity import ProcessIdentity
 from easel_workbench.processes import checked_identity
 
@@ -48,14 +48,20 @@ def idle(database=None):
     with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row
         status=automation.busy_state(c,audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
-        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs'):
+        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','easel_chat_turns'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}
             if 'document' in cols:
                 for ident,raw in c.execute('select id,document from '+table):
                     value=json.loads(raw)
-                    if value.get('status') in ('running','dispatching','requested','sending'):
+                    active=value.get('status') in ('running','dispatching','requested','sending','submitting','accepted')
+                    if table=='easel_chat_turns':
+                        active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
+                    if active:
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
+        if base.exists_table(c,'easel_native_corrections'):
+            for (ident,) in c.execute("SELECT job_id FROM easel_native_corrections WHERE status='queued'"):
+                status['busy']=True;status.setdefault('additional',[]).append({'table':'easel_native_corrections','id':ident})
     # The historical audit is anchored to the retained original evidence. New
     # model receipts belong to the authoritative database's data directory.
     # Do not inspect only the retired project's cache during later upgrades.
@@ -243,7 +249,7 @@ def execute(apply=False):
     for member,expected in read(manifest)['files'].items():
         file=(native/member).resolve()
         if not file.is_relative_to(native.resolve()) or sha(file)!=expected:raise ValueError('Frontend asset changed')
-    if package['capabilities_sha256']!=sha('D:/Projects/neo-content/.agents/skills/capabilities.json'):raise ValueError('Skill source changed')
+    validate_source_binding(package,ROOT)
     status=idle()
     if status['busy']:return {'status':'waiting','busy':status,'production_changed':False}
     held,parents=identities()

@@ -1,0 +1,790 @@
+{
+  "files": {
+    "skills/builtin/content-production/SKILL.md": "5e7841ef402c4b18e2320f5863cb95ceddb269da221c50b0c286eb45a6a38850",
+    "skills/builtin/content-writing/SKILL.md": "c281c6f9274cbeb3ccbc53ba4145e0bbffe41dae67a903b6561bd363c9b2afc8",
+    "skills/builtin/delivery-review/SKILL.md": "1f41f8a38bcfe370b387534a93967d4c4dca960736c771005f0857bd01f55ad3",
+    "skills/builtin/delivery-review/scripts/check_deliverables.py": "95ea9205e101a5757401bc4ac6fc09487d07a0fca79abac9e0f21daf83be54af",
+    "skills/builtin/experience-distillation/SKILL.md": "484278a990fc879c09da3753e3c4fd2b8e43aa1c1c11585becd7227a399ddfbe",
+    "skills/builtin/image-production/SKILL.md": "c4551b35e631c802bce9280f8d5db9e37ba2cdec6e66b69c4fc30c1b3395f16f",
+    "skills/builtin/publication-analysis/SKILL.md": "c42ea3dda8a8373052cc168478bcecb930731bac64de96852bd85f3b1190dce0",
+    "skills/builtin/reference-analysis/SKILL.md": "d572fad1c9c48a27dddb6cf7d4e00f0248b8746d5a79f5d1b6792d3d380c35b4",
+    "skills/builtin/topic-research/SKILL.md": "a1fa4cc2fe70eff627195e64173c7d1e18180ba0bc79e1483f13140181b81868",
+    "skills/shared/workbench/.agents/skills/neo-delivery-review/references/independent-check.md": "aa52dbca8a248d3903b18c37881e69b095266a77c7af0e66f5729271e40a8dd8",
+    "skills/shared/workbench/.agents/skills/neo-experience-distillation/references/incremental-learning.md": "226d905afbce37bc17bdeeffd9ebfc7ff455b00bc42587c0d2da7ee8b97ca0a6",
+    "skills/shared/workbench/.agents/skills/neo-experience-distillation/references/skill-distillation.md": "6489ceff793b5abbe32e305717caa323bebe050e55290528f5115d6102b25c48",
+    "skills/shared/workbench/.agents/skills/neo-reference-analysis/references/reference-observation.md": "01684b58942e1af8598d1ef360522b2e919d2039e0a16db75572b8ae0ecf06fb",
+    "skills/shared/workbench/.agents/skills/neo-topic-research/references/news-summary.md": "7cdfaad2de1a4817dd21afe1fc6b9f93e3087d614b871fe2985b089762eb188b",
+    "skills/shared/workbench/.agents/skills/neo-topic-research/references/watcha-editorial.md": "3031b7cddeaae084d210b36d62c7bcd3f2c82db796fa4151596f55a0ce96f692",
+    "skills/shared/workbench/.agents/skills/neo-topic-research/references/weekly-normalize.md": "9e4453c359d28cdd0197e9e98d1be1267e8324f86ec33c4e1757b0c8674195c1",
+    "skills/shared/workbench/production-contract.md": "6c53c40eab2d7524302d8f912007a9cd3cea4a7c7763eb2ad322c220fa2c96f8",
+    "skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章学习.md": "169f9073984d45d0b27a42daf8b6beff696af2110c6e9a7d9fe4b607d0151d5b",
+    "skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章生产.md": "35a13bde71fc239b4526bf70d424fbcb8f92a9e0d4875fa2b1ad47ddafa2e1af",
+    "skills/shared/workbench/provenance/.agents/skills/neo-content/references/贴图生产.md": "c96aa382a4de64ca48dda9e5472e1ca1198c465a692ca2382cf440ef6f76bf3d",
+    "skills/shared/workbench/provenance/legacy-prompt-for.py.txt": "c4a83c887d1614f9559b0984483561b039addae395d0ca7400f285ff1b3d59f8",
+    "skills/shared/workbench/provenance/工具/内容工作流/creative_review.py.txt": "67b5c904b0337a681e913c0039d8e8b1cbff98d3229fbd49bc5220cc90a361f8",
+    "skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt": "6d6014de85ea37bd2972eec7c2e10c3502c521b14a3f351049eed057b3487aed",
+    "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/01-Kimi新品能力与排名.png": "3e1115901208da6a05dddc57e39d5ae3527ed64b341f0d515d2eabe0990355ce",
+    "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/02-Kimi编程分项一张图.png": "4812850677c3f1ac3c5efc3640b983b3a25fe980ac5919b2c00539f10167b7f7",
+    "skills/shared/workbench/规范/公众号排版要求.md": "63cd266f0f2196475f21c89fa8018b66810f4a78bb626ff348c320b297d7f94a",
+    "skills/shared/workbench/规范/公众号贴图写作要求.md": "221011e8de45616ddaa26ed6d53d1454f7b5ac0940fdf95c96566656c4c3f8bd",
+    "skills/shared/workbench/规范/内容总规格.md": "f5b339dafd17470984b03731f6034dc468164fc3657e5c9b81d3b142c6cb4441",
+    "skills/shared/workbench/规范/写作要求.md": "bd85bfd9be8cdc55e722e94170cb005d905df5fc424f84b3ea022bcd3bbbbb2d",
+    "skills/shared/workbench/规范/创作方案/目录.json": "fa76245f3063f7cbd6856ec3c68c0390b0f8d52e9aee25cfc4e7877eab4e68d5",
+    "skills/shared/workbench/规范/创作方案/策略文本/3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883.md": "3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883",
+    "skills/shared/workbench/规范/创作方案/策略文本/9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe.md": "9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe",
+    "skills/shared/workbench/规范/创作方案/策略文本/a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a.md": "a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a",
+    "skills/shared/workbench/规范/创作方案/策略文本/a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8.md": "a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8",
+    "skills/shared/workbench/规范/创作方案/策略文本/caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7.md": "caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7",
+    "skills/shared/workbench/规范/创作方案/策略文本/d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8.md": "d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8",
+    "skills/shared/workbench/规范/创作方案/策略文本/d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334.md": "d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334",
+    "skills/shared/workbench/规范/创作方案/策略文本/d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce.md": "d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce",
+    "skills/shared/workbench/规范/创作方案/策略文本/da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349.md": "da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349",
+    "skills/shared/workbench/规范/创作方案/策略文本/da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd.md": "da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd",
+    "skills/shared/workbench/规范/创作方案/策略文本/e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598.md": "e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598",
+    "skills/shared/workbench/规范/创作方案/组件/article-writing-v1.md": "df9e5fffd97de8203ebc57712210039fed70dc73cf91d6b7f536e8ca6909c897",
+    "skills/shared/workbench/规范/创作方案/组件/by-purpose-v1.md": "6238f4260a39533fdcf3053ae2297b7304e947e998ba89d3cd22c93a62bd80d8",
+    "skills/shared/workbench/规范/创作方案/组件/editorial-poster-v1.md": "a76a550a91d8d2f7f58db9a2f6814221d6f68d5ae9dea60f84a9a042f76a3b8b",
+    "skills/shared/workbench/规范/创作方案/组件/editorial-writing-v1.md": "b76c5190728a9992ea9f9144c0e6fa0b2394ac1c956046c18f189cdef14ba376",
+    "skills/shared/workbench/规范/创作方案/组件/page-roles-v1.md": "29b767680cefd78bf7c6f41796b060c1bcd3a011a9fc9ecc5745c751894f4570",
+    "skills/shared/workbench/规范/创作方案/组件/scene-visual-v1.md": "1600354521091e605302527ca6294460ac880f053cc46fab7763dc48e6c01447",
+    "skills/shared/workbench/规范/创作方案/组件/simple-pig-v1.md": "5f696b3c032073fa47d1c6b641883f59a01531d83171d3ef07c49f7374b17a94",
+    "skills/shared/workbench/规范/创作方案/组件/tech-pulse-v1.md": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+    "skills/shared/workbench/规范/创作方案/组件/tech-writing-v1.md": "bcbc12b5590fe08cad651b2967875ea8500d8fa885bcaf314b527afd91e8fbf6",
+    "skills/shared/workbench/规范/创作方案/组件/tool-writing-v1.md": "a7795b03df717f92ccff093323a78dc5892999aa01811a640d8e3a0817ad7a93",
+    "skills/shared/workbench/规范/创作方案/组件/typographic-v1.md": "a63998efc9cf910d4ffd7120ec830ee7f00ad787b0a5e4b00ed55cf77dd44187",
+    "skills/shared/workbench/规范/创作方案/组件/wuxia-pig-v1.md": "d6d1afaf162a08d83e213c240650b8199b97c610cfc98027b658d7aed0ec5c14",
+    "skills/shared/workbench/规范/创作策略.json": "db3de55f688eab8dadd58ac5902f12ddc7d7b32504a3466c11578e455d26b3ce",
+    "skills/shared/workbench/规范/发布与归档要求.md": "fdea446e300b9efe7423cda87514020ff4bdd51a9f82fb874f705ba3b98a287a",
+    "skills/shared/workbench/规范/图片制作要求.md": "f39f18f435fedd86e7e79ab26a9ce96cd66a1e55d3158bc0c8c3d25412d5a4f0",
+    "skills/shared/workbench/规范/存档规范.md": "4cf05f7db41ff8612deadc512abf670120bf3caeb763824820a1354aa75beb8b",
+    "skills/shared/workbench/规范/定位与编辑原则.md": "2c04439254ed78654d7c9981383055278e93c78e6bb877bfb824ce7c62095133",
+    "skills/shared/workbench/规范/效率工具分享要求.md": "c5b756cc8b6e634d4dd01c3a9e9af751c81adc1244d8f01d2c3b7de9eca9d05d",
+    "skills/shared/workbench/规范/文章批注与改稿要求.md": "6289ce2b623e36c481085d5866cfbc9508e451eb10ed1ae562931999dfb11930",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json": "41b6a0ba9e18ffc28aade87c7d9b1c3cac07aed28490c3920a9469d6196db301",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/生成指引.txt": "eaea0bce9933fe8bdf5b73a1bb51b2cb8d013212549a13d4f5e4a6655cf85e2d",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/认可母版.png": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4",
+    "skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+    "skills/shared/workbench/规范/模板/创作检查-v1.json": "61fb3412a1ac4d696fa68316fdad164cbe89545c95f577d35d719aebede30519",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-v1/已认可正面参考.png": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-v1/角色复用规范.md": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/三视图认可说明.md": "cce056f6ddde23f2cb48ce48c6949000c40949f741e165e14edb6bd94de52d83",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b",
+    "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/角色复用规范.md": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
+    "skills/shared/workbench/规范/模板/油猪大侠角色库.md": "089046404d077580cd74f8e08af1379b5c72e2c05aa1d091da13d7d229ca721a",
+    "skills/shared/workbench/规范/模板/设计说明-v2.md": "dfe7b7d8889ed67b6a7d72986951cab172e4d1781b693b34909c32359a255ea0",
+    "skills/shared/workbench/规范/认可例段.md": "bfaeb45293cc19602d513c4375cd6459874be30b5c2d2e98d302aab91cdc6636",
+    "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg": "da4fa9bdfddd52211ae2357c8a8d2b589dec980f670377b0fe52e7f82afa81f2",
+    "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg": "a9281cf045a893187566a1243ff677043f242dda7bf9979f355c303f391caa74",
+    "skills/shared/workbench/资料/风格研究/样本索引.md": "3a5c162c8811991f7a6f28c1b81308a03ea6c191497c912bd8c69ba314f86aa0",
+    "skills/shared/workbench/资料/风格研究/用户指导记录索引.md": "698738f910df8da2c9ff38ad2e0b0024b066579abe3e68106f7b321f0b0ca452"
+  },
+  "legacy_prompt_source": {
+    "active": false,
+    "function": "prompt_for",
+    "function_sha256": "c4a83c887d1614f9559b0984483561b039addae395d0ca7400f285ff1b3d59f8",
+    "path": "easel_workbench/runtime/poster_executor.py",
+    "sha256": "d596f7f46968e2f77168d573763b5a70e27559aab02f343e645a51eec3bf3fb3",
+    "snapshot_path": "skills/shared/workbench/provenance/legacy-prompt-for.py.txt",
+    "source_kind": "historical_compatibility_method",
+    "source_path": "D:\\Projects\\Easel\\workbench-releases\\workbench-20261029-181552\\easel_workbench\\runtime\\poster_executor.py"
+  },
+  "mapping": [
+    {
+      "executable": false,
+      "kind": "legacy_operation",
+      "new_path": "skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章学习.md",
+      "new_sha256": "169f9073984d45d0b27a42daf8b6beff696af2110c6e9a7d9fe4b607d0151d5b",
+      "old_path": ".agents/skills/neo-content/references/文章学习.md",
+      "old_sha256": "169f9073984d45d0b27a42daf8b6beff696af2110c6e9a7d9fe4b607d0151d5b",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "legacy_operation",
+      "new_path": "skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章生产.md",
+      "new_sha256": "35a13bde71fc239b4526bf70d424fbcb8f92a9e0d4875fa2b1ad47ddafa2e1af",
+      "old_path": ".agents/skills/neo-content/references/文章生产.md",
+      "old_sha256": "35a13bde71fc239b4526bf70d424fbcb8f92a9e0d4875fa2b1ad47ddafa2e1af",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "legacy_operation",
+      "new_path": "skills/shared/workbench/provenance/.agents/skills/neo-content/references/贴图生产.md",
+      "new_sha256": "c96aa382a4de64ca48dda9e5472e1ca1198c465a692ca2382cf440ef6f76bf3d",
+      "old_path": ".agents/skills/neo-content/references/贴图生产.md",
+      "old_sha256": "c96aa382a4de64ca48dda9e5472e1ca1198c465a692ca2382cf440ef6f76bf3d",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-delivery-review/references/independent-check.md",
+      "new_sha256": "aa52dbca8a248d3903b18c37881e69b095266a77c7af0e66f5729271e40a8dd8",
+      "old_path": ".agents/skills/neo-delivery-review/references/independent-check.md",
+      "old_sha256": "aa52dbca8a248d3903b18c37881e69b095266a77c7af0e66f5729271e40a8dd8",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-experience-distillation/references/incremental-learning.md",
+      "new_sha256": "226d905afbce37bc17bdeeffd9ebfc7ff455b00bc42587c0d2da7ee8b97ca0a6",
+      "old_path": ".agents/skills/neo-experience-distillation/references/incremental-learning.md",
+      "old_sha256": "226d905afbce37bc17bdeeffd9ebfc7ff455b00bc42587c0d2da7ee8b97ca0a6",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-experience-distillation/references/skill-distillation.md",
+      "new_sha256": "6489ceff793b5abbe32e305717caa323bebe050e55290528f5115d6102b25c48",
+      "old_path": ".agents/skills/neo-experience-distillation/references/skill-distillation.md",
+      "old_sha256": "6489ceff793b5abbe32e305717caa323bebe050e55290528f5115d6102b25c48",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-reference-analysis/references/reference-observation.md",
+      "new_sha256": "01684b58942e1af8598d1ef360522b2e919d2039e0a16db75572b8ae0ecf06fb",
+      "old_path": ".agents/skills/neo-reference-analysis/references/reference-observation.md",
+      "old_sha256": "01684b58942e1af8598d1ef360522b2e919d2039e0a16db75572b8ae0ecf06fb",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-topic-research/references/news-summary.md",
+      "new_sha256": "7cdfaad2de1a4817dd21afe1fc6b9f93e3087d614b871fe2985b089762eb188b",
+      "old_path": ".agents/skills/neo-topic-research/references/news-summary.md",
+      "old_sha256": "7cdfaad2de1a4817dd21afe1fc6b9f93e3087d614b871fe2985b089762eb188b",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-topic-research/references/watcha-editorial.md",
+      "new_sha256": "3031b7cddeaae084d210b36d62c7bcd3f2c82db796fa4151596f55a0ce96f692",
+      "old_path": ".agents/skills/neo-topic-research/references/watcha-editorial.md",
+      "old_sha256": "3031b7cddeaae084d210b36d62c7bcd3f2c82db796fa4151596f55a0ce96f692",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/.agents/skills/neo-topic-research/references/weekly-normalize.md",
+      "new_sha256": "9e4453c359d28cdd0197e9e98d1be1267e8324f86ec33c4e1757b0c8674195c1",
+      "old_path": ".agents/skills/neo-topic-research/references/weekly-normalize.md",
+      "old_sha256": "9e4453c359d28cdd0197e9e98d1be1267e8324f86ec33c4e1757b0c8674195c1",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/01-Kimi新品能力与排名.png",
+      "new_sha256": "3e1115901208da6a05dddc57e39d5ae3527ed64b341f0d515d2eabe0990355ce",
+      "old_path": "内容/KimiK3.1Pro新品速览/产物/v0.4/01-Kimi新品能力与排名.png",
+      "old_sha256": "3e1115901208da6a05dddc57e39d5ae3527ed64b341f0d515d2eabe0990355ce",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/内容/KimiK3.1Pro新品速览/产物/v0.4/02-Kimi编程分项一张图.png",
+      "new_sha256": "4812850677c3f1ac3c5efc3640b983b3a25fe980ac5919b2c00539f10167b7f7",
+      "old_path": "内容/KimiK3.1Pro新品速览/产物/v0.4/02-Kimi编程分项一张图.png",
+      "old_sha256": "4812850677c3f1ac3c5efc3640b983b3a25fe980ac5919b2c00539f10167b7f7",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "legacy_script",
+      "new_path": "skills/shared/workbench/provenance/工具/内容工作流/creative_review.py.txt",
+      "new_sha256": "67b5c904b0337a681e913c0039d8e8b1cbff98d3229fbd49bc5220cc90a361f8",
+      "old_path": "工具/内容工作流/creative_review.py",
+      "old_sha256": "67b5c904b0337a681e913c0039d8e8b1cbff98d3229fbd49bc5220cc90a361f8",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "legacy_script",
+      "new_path": "skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt",
+      "new_sha256": "6d6014de85ea37bd2972eec7c2e10c3502c521b14a3f351049eed057b3487aed",
+      "old_path": "工具/内容工作流/poster_imagegen.py",
+      "old_sha256": "6d6014de85ea37bd2972eec7c2e10c3502c521b14a3f351049eed057b3487aed",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/公众号排版要求.md",
+      "new_sha256": "63cd266f0f2196475f21c89fa8018b66810f4a78bb626ff348c320b297d7f94a",
+      "old_path": "规范/公众号排版要求.md",
+      "old_sha256": "63cd266f0f2196475f21c89fa8018b66810f4a78bb626ff348c320b297d7f94a",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/公众号贴图写作要求.md",
+      "new_sha256": "221011e8de45616ddaa26ed6d53d1454f7b5ac0940fdf95c96566656c4c3f8bd",
+      "old_path": "规范/公众号贴图写作要求.md",
+      "old_sha256": "221011e8de45616ddaa26ed6d53d1454f7b5ac0940fdf95c96566656c4c3f8bd",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/内容总规格.md",
+      "new_sha256": "f5b339dafd17470984b03731f6034dc468164fc3657e5c9b81d3b142c6cb4441",
+      "old_path": "规范/内容总规格.md",
+      "old_sha256": "f5b339dafd17470984b03731f6034dc468164fc3657e5c9b81d3b142c6cb4441",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/写作要求.md",
+      "new_sha256": "bd85bfd9be8cdc55e722e94170cb005d905df5fc424f84b3ea022bcd3bbbbb2d",
+      "old_path": "规范/写作要求.md",
+      "old_sha256": "bd85bfd9be8cdc55e722e94170cb005d905df5fc424f84b3ea022bcd3bbbbb2d",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/目录.json",
+      "new_sha256": "fa76245f3063f7cbd6856ec3c68c0390b0f8d52e9aee25cfc4e7877eab4e68d5",
+      "old_path": "规范/创作方案/目录.json",
+      "old_sha256": "ce1b8d85f099e6dd919a5192fc7d0fa3d4b759629e927a9dd3aef8feea225674",
+      "transformation": "json_project_path_rebase"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883.md",
+      "new_sha256": "3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883",
+      "old_path": "规范/创作方案/策略文本/3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883.md",
+      "old_sha256": "3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe.md",
+      "new_sha256": "9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe",
+      "old_path": "规范/创作方案/策略文本/9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe.md",
+      "old_sha256": "9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a.md",
+      "new_sha256": "a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a",
+      "old_path": "规范/创作方案/策略文本/a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a.md",
+      "old_sha256": "a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8.md",
+      "new_sha256": "a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8",
+      "old_path": "规范/创作方案/策略文本/a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8.md",
+      "old_sha256": "a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7.md",
+      "new_sha256": "caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7",
+      "old_path": "规范/创作方案/策略文本/caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7.md",
+      "old_sha256": "caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8.md",
+      "new_sha256": "d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8",
+      "old_path": "规范/创作方案/策略文本/d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8.md",
+      "old_sha256": "d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334.md",
+      "new_sha256": "d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334",
+      "old_path": "规范/创作方案/策略文本/d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334.md",
+      "old_sha256": "d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce.md",
+      "new_sha256": "d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce",
+      "old_path": "规范/创作方案/策略文本/d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce.md",
+      "old_sha256": "d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349.md",
+      "new_sha256": "da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349",
+      "old_path": "规范/创作方案/策略文本/da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349.md",
+      "old_sha256": "da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd.md",
+      "new_sha256": "da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd",
+      "old_path": "规范/创作方案/策略文本/da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd.md",
+      "old_sha256": "da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/策略文本/e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598.md",
+      "new_sha256": "e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598",
+      "old_path": "规范/创作方案/策略文本/e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598.md",
+      "old_sha256": "e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/article-writing-v1.md",
+      "new_sha256": "df9e5fffd97de8203ebc57712210039fed70dc73cf91d6b7f536e8ca6909c897",
+      "old_path": "规范/创作方案/组件/article-writing-v1.md",
+      "old_sha256": "df9e5fffd97de8203ebc57712210039fed70dc73cf91d6b7f536e8ca6909c897",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/by-purpose-v1.md",
+      "new_sha256": "6238f4260a39533fdcf3053ae2297b7304e947e998ba89d3cd22c93a62bd80d8",
+      "old_path": "规范/创作方案/组件/by-purpose-v1.md",
+      "old_sha256": "6238f4260a39533fdcf3053ae2297b7304e947e998ba89d3cd22c93a62bd80d8",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/editorial-poster-v1.md",
+      "new_sha256": "a76a550a91d8d2f7f58db9a2f6814221d6f68d5ae9dea60f84a9a042f76a3b8b",
+      "old_path": "规范/创作方案/组件/editorial-poster-v1.md",
+      "old_sha256": "a76a550a91d8d2f7f58db9a2f6814221d6f68d5ae9dea60f84a9a042f76a3b8b",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/editorial-writing-v1.md",
+      "new_sha256": "b76c5190728a9992ea9f9144c0e6fa0b2394ac1c956046c18f189cdef14ba376",
+      "old_path": "规范/创作方案/组件/editorial-writing-v1.md",
+      "old_sha256": "b76c5190728a9992ea9f9144c0e6fa0b2394ac1c956046c18f189cdef14ba376",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/page-roles-v1.md",
+      "new_sha256": "29b767680cefd78bf7c6f41796b060c1bcd3a011a9fc9ecc5745c751894f4570",
+      "old_path": "规范/创作方案/组件/page-roles-v1.md",
+      "old_sha256": "29b767680cefd78bf7c6f41796b060c1bcd3a011a9fc9ecc5745c751894f4570",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/scene-visual-v1.md",
+      "new_sha256": "1600354521091e605302527ca6294460ac880f053cc46fab7763dc48e6c01447",
+      "old_path": "规范/创作方案/组件/scene-visual-v1.md",
+      "old_sha256": "1600354521091e605302527ca6294460ac880f053cc46fab7763dc48e6c01447",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/simple-pig-v1.md",
+      "new_sha256": "5f696b3c032073fa47d1c6b641883f59a01531d83171d3ef07c49f7374b17a94",
+      "old_path": "规范/创作方案/组件/simple-pig-v1.md",
+      "old_sha256": "5f696b3c032073fa47d1c6b641883f59a01531d83171d3ef07c49f7374b17a94",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/tech-pulse-v1.md",
+      "new_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "old_path": "规范/创作方案/组件/tech-pulse-v1.md",
+      "old_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/tech-writing-v1.md",
+      "new_sha256": "bcbc12b5590fe08cad651b2967875ea8500d8fa885bcaf314b527afd91e8fbf6",
+      "old_path": "规范/创作方案/组件/tech-writing-v1.md",
+      "old_sha256": "bcbc12b5590fe08cad651b2967875ea8500d8fa885bcaf314b527afd91e8fbf6",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/tool-writing-v1.md",
+      "new_sha256": "a7795b03df717f92ccff093323a78dc5892999aa01811a640d8e3a0817ad7a93",
+      "old_path": "规范/创作方案/组件/tool-writing-v1.md",
+      "old_sha256": "a7795b03df717f92ccff093323a78dc5892999aa01811a640d8e3a0817ad7a93",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/typographic-v1.md",
+      "new_sha256": "a63998efc9cf910d4ffd7120ec830ee7f00ad787b0a5e4b00ed55cf77dd44187",
+      "old_path": "规范/创作方案/组件/typographic-v1.md",
+      "old_sha256": "a63998efc9cf910d4ffd7120ec830ee7f00ad787b0a5e4b00ed55cf77dd44187",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作方案/组件/wuxia-pig-v1.md",
+      "new_sha256": "d6d1afaf162a08d83e213c240650b8199b97c610cfc98027b658d7aed0ec5c14",
+      "old_path": "规范/创作方案/组件/wuxia-pig-v1.md",
+      "old_sha256": "d6d1afaf162a08d83e213c240650b8199b97c610cfc98027b658d7aed0ec5c14",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/创作策略.json",
+      "new_sha256": "db3de55f688eab8dadd58ac5902f12ddc7d7b32504a3466c11578e455d26b3ce",
+      "old_path": "规范/创作策略.json",
+      "old_sha256": "4f230cb9df15d224ffd95cba596f22980507a47f02e69fdfc3828bfaf2696bfa",
+      "transformation": "json_project_path_rebase"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/发布与归档要求.md",
+      "new_sha256": "fdea446e300b9efe7423cda87514020ff4bdd51a9f82fb874f705ba3b98a287a",
+      "old_path": "规范/发布与归档要求.md",
+      "old_sha256": "fdea446e300b9efe7423cda87514020ff4bdd51a9f82fb874f705ba3b98a287a",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/图片制作要求.md",
+      "new_sha256": "f39f18f435fedd86e7e79ab26a9ce96cd66a1e55d3158bc0c8c3d25412d5a4f0",
+      "old_path": "规范/图片制作要求.md",
+      "old_sha256": "f39f18f435fedd86e7e79ab26a9ce96cd66a1e55d3158bc0c8c3d25412d5a4f0",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/存档规范.md",
+      "new_sha256": "4cf05f7db41ff8612deadc512abf670120bf3caeb763824820a1354aa75beb8b",
+      "old_path": "规范/存档规范.md",
+      "old_sha256": "4cf05f7db41ff8612deadc512abf670120bf3caeb763824820a1354aa75beb8b",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/定位与编辑原则.md",
+      "new_sha256": "2c04439254ed78654d7c9981383055278e93c78e6bb877bfb824ce7c62095133",
+      "old_path": "规范/定位与编辑原则.md",
+      "old_sha256": "2c04439254ed78654d7c9981383055278e93c78e6bb877bfb824ce7c62095133",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/效率工具分享要求.md",
+      "new_sha256": "c5b756cc8b6e634d4dd01c3a9e9af751c81adc1244d8f01d2c3b7de9eca9d05d",
+      "old_path": "规范/效率工具分享要求.md",
+      "old_sha256": "c5b756cc8b6e634d4dd01c3a9e9af751c81adc1244d8f01d2c3b7de9eca9d05d",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/文章批注与改稿要求.md",
+      "new_sha256": "6289ce2b623e36c481085d5866cfbc9508e451eb10ed1ae562931999dfb11930",
+      "old_path": "规范/文章批注与改稿要求.md",
+      "old_sha256": "6289ce2b623e36c481085d5866cfbc9508e451eb10ed1ae562931999dfb11930",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json",
+      "new_sha256": "41b6a0ba9e18ffc28aade87c7d9b1c3cac07aed28490c3920a9469d6196db301",
+      "old_path": "规范/模板/TechPulse-图生-v1/模板.json",
+      "old_sha256": "17d3eb70002a366c46409aaf45938f64a4934990739131f317bb70905d8f4db8",
+      "transformation": "json_project_path_rebase"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/TechPulse-图生-v1/生成指引.txt",
+      "new_sha256": "eaea0bce9933fe8bdf5b73a1bb51b2cb8d013212549a13d4f5e4a6655cf85e2d",
+      "old_path": "规范/模板/TechPulse-图生-v1/生成指引.txt",
+      "old_sha256": "eaea0bce9933fe8bdf5b73a1bb51b2cb8d013212549a13d4f5e4a6655cf85e2d",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/TechPulse-图生-v1/认可母版.png",
+      "new_sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4",
+      "old_path": "规范/模板/TechPulse-图生-v1/认可母版.png",
+      "old_sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md",
+      "new_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "old_path": "规范/模板/TechPulse-图生-v1/风格说明.md",
+      "old_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/创作检查-v1.json",
+      "new_sha256": "61fb3412a1ac4d696fa68316fdad164cbe89545c95f577d35d719aebede30519",
+      "old_path": "规范/模板/创作检查-v1.json",
+      "old_sha256": "61fb3412a1ac4d696fa68316fdad164cbe89545c95f577d35d719aebede30519",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+      "new_sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+      "old_path": "规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+      "old_sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+      "new_sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+      "old_path": "规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+      "old_sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-v1/角色复用规范.md",
+      "new_sha256": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
+      "old_path": "规范/模板/油猪大侠角色-v1/角色复用规范.md",
+      "old_sha256": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/三视图认可说明.md",
+      "new_sha256": "cce056f6ddde23f2cb48ce48c6949000c40949f741e165e14edb6bd94de52d83",
+      "old_path": "规范/模板/油猪大侠角色-精致武侠-v1/三视图认可说明.md",
+      "old_sha256": "cce056f6ddde23f2cb48ce48c6949000c40949f741e165e14edb6bd94de52d83",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+      "new_sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b",
+      "old_path": "规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+      "old_sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色-精致武侠-v1/角色复用规范.md",
+      "new_sha256": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
+      "old_path": "规范/模板/油猪大侠角色-精致武侠-v1/角色复用规范.md",
+      "old_sha256": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/油猪大侠角色库.md",
+      "new_sha256": "089046404d077580cd74f8e08af1379b5c72e2c05aa1d091da13d7d229ca721a",
+      "old_path": "规范/模板/油猪大侠角色库.md",
+      "old_sha256": "089046404d077580cd74f8e08af1379b5c72e2c05aa1d091da13d7d229ca721a",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/模板/设计说明-v2.md",
+      "new_sha256": "dfe7b7d8889ed67b6a7d72986951cab172e4d1781b693b34909c32359a255ea0",
+      "old_path": "规范/模板/设计说明-v2.md",
+      "old_sha256": "dfe7b7d8889ed67b6a7d72986951cab172e4d1781b693b34909c32359a255ea0",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/规范/认可例段.md",
+      "new_sha256": "bfaeb45293cc19602d513c4375cd6459874be30b5c2d2e98d302aab91cdc6636",
+      "old_path": "规范/认可例段.md",
+      "old_sha256": "bfaeb45293cc19602d513c4375cd6459874be30b5c2d2e98d302aab91cdc6636",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+      "new_sha256": "da4fa9bdfddd52211ae2357c8a8d2b589dec980f670377b0fe52e7f82afa81f2",
+      "old_path": "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+      "old_sha256": "da4fa9bdfddd52211ae2357c8a8d2b589dec980f670377b0fe52e7f82afa81f2",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "resource",
+      "new_path": "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+      "new_sha256": "a9281cf045a893187566a1243ff677043f242dda7bf9979f355c303f391caa74",
+      "old_path": "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+      "old_sha256": "a9281cf045a893187566a1243ff677043f242dda7bf9979f355c303f391caa74",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "historical_index",
+      "new_path": "skills/shared/workbench/资料/风格研究/样本索引.md",
+      "new_sha256": "3a5c162c8811991f7a6f28c1b81308a03ea6c191497c912bd8c69ba314f86aa0",
+      "old_path": "资料/风格研究/样本索引.md",
+      "old_sha256": "3a5c162c8811991f7a6f28c1b81308a03ea6c191497c912bd8c69ba314f86aa0",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "historical_index",
+      "new_path": "skills/shared/workbench/资料/风格研究/用户指导记录索引.md",
+      "new_sha256": "698738f910df8da2c9ff38ad2e0b0024b066579abe3e68106f7b321f0b0ca452",
+      "old_path": "资料/风格研究/用户指导记录索引.md",
+      "old_sha256": "698738f910df8da2c9ff38ad2e0b0024b066579abe3e68106f7b321f0b0ca452",
+      "transformation": "byte_copy"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/content-production/SKILL.md",
+      "new_sha256": "5e7841ef402c4b18e2320f5863cb95ceddb269da221c50b0c286eb45a6a38850",
+      "old_path": ".agents/skills/content-production/SKILL.md",
+      "old_sha256": "9706888490c1ee01fff2b8831384d0434754a948f766eac8c5d95b92541a3568",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/topic-research/SKILL.md",
+      "new_sha256": "a1fa4cc2fe70eff627195e64173c7d1e18180ba0bc79e1483f13140181b81868",
+      "old_path": ".agents/skills/neo-topic-research/SKILL.md",
+      "old_sha256": "4669160aa1fda988498c878f8b1758d3e1b04ce38c821b393637b1544c90ffc6",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/content-writing/SKILL.md",
+      "new_sha256": "c281c6f9274cbeb3ccbc53ba4145e0bbffe41dae67a903b6561bd363c9b2afc8",
+      "old_path": ".agents/skills/neo-content-writing/SKILL.md",
+      "old_sha256": "10592a68f9fb70353b62a41b7576ad9d09c50fc792081e9f8327fe0f939a34e7",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/image-production/SKILL.md",
+      "new_sha256": "c4551b35e631c802bce9280f8d5db9e37ba2cdec6e66b69c4fc30c1b3395f16f",
+      "old_path": ".agents/skills/neo-image-production/SKILL.md",
+      "old_sha256": "b65468ee7062278b157bf5f6e3075c5b18feabb92fd5b89c0a0a8916b7db1520",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/reference-analysis/SKILL.md",
+      "new_sha256": "d572fad1c9c48a27dddb6cf7d4e00f0248b8746d5a79f5d1b6792d3d380c35b4",
+      "old_path": ".agents/skills/neo-reference-analysis/SKILL.md",
+      "old_sha256": "366d5becdb31bdb4d7d409aeb3e25aac96dfbe425868022eecba213e3934b344",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/delivery-review/SKILL.md",
+      "new_sha256": "1f41f8a38bcfe370b387534a93967d4c4dca960736c771005f0857bd01f55ad3",
+      "old_path": ".agents/skills/neo-delivery-review/SKILL.md",
+      "old_sha256": "8832123f5576cdeac7d2310199e839e94ef8e8a0acfc2416f7c867fea118ef2b",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/publication-analysis/SKILL.md",
+      "new_sha256": "c42ea3dda8a8373052cc168478bcecb930731bac64de96852bd85f3b1190dce0",
+      "old_path": ".agents/skills/neo-publication-analysis/SKILL.md",
+      "old_sha256": "e260e736afb9e9267d8689408fa7f9b284473f5f5337837df6d993a1cba37c92",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    },
+    {
+      "executable": false,
+      "kind": "skill_entry",
+      "new_path": "skills/builtin/experience-distillation/SKILL.md",
+      "new_sha256": "484278a990fc879c09da3753e3c4fd2b8e43aa1c1c11585becd7227a399ddfbe",
+      "old_path": ".agents/skills/neo-experience-distillation/SKILL.md",
+      "old_sha256": "8188ce8aa26b2f6ebbc399a3866569fce0cf6418e6965d55d113840fdda044ae",
+      "transformation": "easel_frontmatter_and_project_relative_paths"
+    }
+  ],
+  "notes": [
+    "Original files are retained unchanged.",
+    "Historical indexes are not recursively copied or followed.",
+    "Style/reference/asset bytes are copied unchanged; only builtin entries and the Easel execution contract adapt routing.",
+    "No database publication, profile update, model call, global install, or production execution occurs."
+  ],
+  "purpose": "read_only_migration_provenance_not_registry",
+  "registry_path": ".agents/skills/capabilities.json",
+  "registry_sha256": "014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8",
+  "schema_version": 1,
+  "skill_ids": [
+    "content-production",
+    "topic-research",
+    "content-writing",
+    "image-production",
+    "reference-analysis",
+    "delivery-review",
+    "publication-analysis",
+    "experience-distillation"
+  ],
+  "source_root": "D:\\Projects\\neo-content"
+}

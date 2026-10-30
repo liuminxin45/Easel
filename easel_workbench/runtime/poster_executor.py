@@ -71,44 +71,8 @@ class Executor:
         with self.store.connect() as c:c.execute('UPDATE toolbox_jobs SET '+','.join(k+'=?' for k in values)+' WHERE id=?',(*values.values(),jid))
         if 'status' in values:journal.emit('production_state',operation_ref=journal.reference(jid),phase=values['status'])
     def complete(self,job,result):
-        if not isinstance(result.get('reply'),str) or not result['reply'].strip():
-            self.update(job['id'],status='uncertain',error='完成通知缺少有效回执，继续核对原任务；不会自动重复制作')
-            return
-        status='completed';outcome=None
-        try:
-            if job['kind']!='discuss':capture_artifacts(self.store,job['id'],result['reply'])
-            if job['kind'] in ('create','change'):
-                from easel_workbench.runtime.production_outcome import assess,record
-                with self.store.connect() as c:
-                    outcome=assess(self.box,c,job,result['reply']);record(c,job['id'],outcome)
-                status=outcome['status']
-        except Exception as exc:
-            journal.exception('production_delivery_failed',exc,operation_ref=journal.reference(job['id']))
-            from easel_workbench.runtime.production_outcome import record
-            outcome={'status':'error','stage':'delivery','code':'delivery_capture_failed','message':'成品接收失败，原制作答复已保留。','next_action':'查看制作说明与原任务，补齐交付文件后继续。'}
-            with self.store.connect() as c:record(c,job['id'],outcome)
-            status='error'
-        from easel_workbench.runtime.browser_cleanup import record as record_browser_cleanup
-        warning=record_browser_cleanup(self.store,job['id'],result['reply']) if job['kind'] in ('accept','reject') else None
-        self.update(job['id'],status=status,turn_id=result['turn_id'],reply=result['reply'],finished_at=stamp(),error=outcome['message'] if outcome and status!='completed' else warning)
-        from easel_workbench.runtime.task_runtime import production_finish,step
-        production_finish(self.box,job['id'],'completed',{'turn_id':result['turn_id'],'reply':result['reply']})
-        with self.store.connect() as c:
-            step(c,job['id'],'capture','completed' if status=='completed' else 'failed',delivery_status=status,
-                 artifacts=[dict(row) for row in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=?',(job['id'],))])
-        if job['kind'] in ('accept','archive'):
-            from easel_workbench.runtime.completion_service import service as completion_service
-            service=completion_service(self.box)
-            service.verify_project_archive(service.archive_decision_id(job),result['reply'])
-        with self.store.connect() as c:
-            c.execute('UPDATE toolbox_works SET updated_at=? WHERE id=?',(stamp(),job['work_id']))
-            if status=='completed':
-                from easel_workbench.runtime.local_operations import enqueue_delivery
-                enqueue_delivery(c,job)
-            learning=getattr(self.box,'learning',None)
-            if learning and job['kind'] in ('create','change') and status=='completed':learning.enqueue_review(c,job['id'])
-            if learning and job['kind'] in ('feedback','accept','reject'):learning.index_database(c)
-            c.execute("INSERT OR IGNORE INTO notification_events(event_key,kind,status,article_id,task_id) VALUES(?,?,?,?,?)",('toolbox:'+job['id'],'toolbox_discuss' if job['kind']=='discuss' else 'toolbox',status,None,job['id']))
+        from easel_workbench.runtime.production_delivery import record_delivery
+        return record_delivery(self.box,job['id'],result.get('reply'),result.get('turn_id'),receiver=capture_artifacts)
     def reconcile(self,job,path):
         if job['rollout_offset'] is None or path is None or not path.is_file():return False
         result=correlate(events(path,job['rollout_offset']),'AI_NEWS_DESK_REQUEST:'+job['id'])
@@ -122,7 +86,7 @@ class Executor:
             token=retry.begin_attempt(c,job,self.clock)
             if token:self.attempt_tokens[job['id']]=token
             return bool(token)
-    def mark_dispatch(self,job,started=False,attempt_token=None):
+    def mark_dispatch(self,job,started=False,attempt_token=None,thread_id=None):
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(job['id'],)).fetchone()
@@ -132,6 +96,10 @@ class Executor:
             token=attempt_token if attempt_token is not None else self.attempt_tokens.get(job['id'])
             if not row or row['dispatch_started'] or row['status']!='dispatching' or not state or state.get('attempt_token')!=token:
                 raise ReservationLost('发送预约已转移，未重复提交')
+            if thread_id is not None:
+                from easel_workbench.runtime.task_runtime import thread_id_for
+                if thread_id_for(c,job['id'])!=thread_id:
+                    raise ReservationLost('制作上下文预约已变化，未发送到旧会话')
             c.execute("UPDATE toolbox_jobs SET dispatch_started=1,status='dispatching',started_at=? WHERE id=?",(stamp() if started else row['started_at'],job['id']))
     def guard(self,c,job,token,require_boundary=True):
         from easel_workbench.runtime.local_operations import is_agent
@@ -159,7 +127,10 @@ class Executor:
     def accepted(self,job,token,**values):
         return self.fenced_update(job,token,accepted=True,**values)
     def failed(self,job,exc,phase,prior_sent=False,attempt_token=None):
-        journal.exception('production_dispatch_failed',exc,operation_ref=journal.reference(job['id']))
+        diagnostic={'phase':phase,'error_type':type(exc).__name__}
+        if isinstance(exc,RPCError):diagnostic.update(reason=exc.safe_code,rpc_code=exc.code)
+        journal.exception('production_dispatch_failed',exc,operation_ref=journal.reference(job['id']),
+                          phase=exc.safe_code if isinstance(exc,RPCError) else phase)
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(job['id'],)).fetchone()
@@ -176,6 +147,8 @@ class Executor:
             if row['dispatch_started'] or row['queue_id'] or row['turn_id']:
                 retry.submitted(c,job['id'],unknown=True,at=self.clock)
                 c.execute("UPDATE toolbox_jobs SET status='uncertain',error=? WHERE id=?",(retry.MESSAGES['submission_unknown'],job['id']))
+                from easel_workbench.runtime.task_runtime import production_transport_failure
+                production_transport_failure(c,job['id'],diagnostic,unknown=True)
             else:
                 automatic=True
                 if phase=='input':code='input_unavailable';automatic=False
@@ -187,6 +160,9 @@ class Executor:
                 elif isinstance(exc,RPCError):code='codex_request_rejected'
                 else:code='codex_configuration_invalid';automatic=False
                 retry.unsent_failure(c,dict(row),code,automatic=automatic,at=self.clock)
+                from easel_workbench.runtime.task_runtime import production_transport_failure
+                current=c.execute('SELECT status FROM toolbox_jobs WHERE id=?',(job['id'],)).fetchone()
+                production_transport_failure(c,job['id'],diagnostic,proven_not_sent=isinstance(exc,RPCNotSentError),terminal=current['status']=='error')
     def tick(self):
         from easel_workbench.runtime.completion_service import service as completion_service
         completion_service(self.box).resume_pending()
@@ -198,22 +174,25 @@ class Executor:
                 if not self.begin_attempt(job):continue
             attempt_token=self.attempt_tokens.get(job['id']) if not job['dispatch_started'] else None
             try:
-                from easel_workbench.runtime.task_runtime import ensure_target
-                path=ensure_target(self.box,job['id'],self.factory,self.rollout)
+                from easel_workbench.runtime.task_runtime import prepare_target
+                prepared=prepare_target(self.box,job['id'],self.factory,self.rollout)
             except Exception as exc:
                 self.failed(job,exc,'target',prior_sent=bool(job['dispatch_started']),attempt_token=attempt_token);return
-            if job['dispatch_started']:
-                if self.reconcile(job,path):continue
-                if job['queue_id']:self.dispatch(job,path)
-                elif job['status']=='dispatching':self.failed(job,ConnectionError(),'connect',prior_sent=True)
-                # Unknown writes and native requests for human action are never replayed.
-                return
-            self.dispatch(job,path,attempt_reserved=True,reserved_token=attempt_token);return
-    def dispatch(self,job,path,attempt_reserved=False,reserved_token=None):
+            with prepared:
+                path=prepared.path
+                if job['dispatch_started']:
+                    if self.reconcile(job,path):continue
+                    if job['queue_id']:self.dispatch(job,path,prepared=prepared)
+                    elif job['status']=='dispatching':self.failed(job,ConnectionError(),'connect',prior_sent=True)
+                    # Unknown writes and native requests for human action are never replayed.
+                    return
+                self.dispatch(job,path,attempt_reserved=True,reserved_token=attempt_token,prepared=prepared);return
+    def dispatch(self,job,path,attempt_reserved=False,reserved_token=None,prepared=None):
         from easel_workbench.runtime.task_runtime import thread_id_for
         with self.store.connect() as c:thread_id=thread_id_for(c,job['id'])
         if not thread_id:raise ValueError('创作会话尚未建立，未发送')
-        done=threading.Event();connection=None;reply=[];turn=[job['turn_id']];owned=[False];phase='input';prior_sent=bool(job['dispatch_started']);attempt_token=reserved_token
+        if prepared and prepared.thread_id and prepared.thread_id!=thread_id:raise ValueError('准备会话已变化，未发送')
+        done=threading.Event();connection=None;reply=[];turn=[job['turn_id']];owned=[False];phase='input';prior_sent=bool(job['dispatch_started']);attempt_token=reserved_token;last_stream=[0.0]
         bound=[bool(turn[0])];awaiting_ack=[False];pending_events=[];buffer_truncated=[False]
         def on_event(event):
             params=event.get('params',{});method=event.get('method','')
@@ -234,7 +213,13 @@ class Executor:
                 if not self.fenced_update(job,attempt_token,status='needs_desktop',error='此任务需要在 Codex 制作会话中确认；未自动同意或重发'):return
                 done.set();return
             if method=='turn/started':self.fenced_update(job,attempt_token,turn_id=turn[0],status='running',error=None)
-            if method=='item/agentMessage/delta':reply.append(params.get('delta',''))
+            if method=='item/agentMessage/delta':
+                delta=params.get('delta','')
+                if not isinstance(delta,str):return
+                reply.append(delta)
+                now=time.monotonic()
+                if now-last_stream[0]>=1:
+                    if self.fenced_update(job,attempt_token,reply=''.join(reply)):last_stream[0]=now
             if method=='turn/completed':
                 result=params['turn'];turn[0]=result['id']
                 if result.get('status')=='completed':
@@ -247,7 +232,10 @@ class Executor:
                         recovered=correlate(events(actual_path,job['rollout_offset'] or 0),'AI_NEWS_DESK_REQUEST:'+job['id']) if actual_path and actual_path.is_file() else None
                         final=recovered['reply'] if recovered else ''
                     self.complete(job,{'reply':final,'turn_id':turn[0]})
-                else:self.fenced_update(job,attempt_token,status='error',turn_id=turn[0],error='制作回合未完成，请在 Codex 查看原因；没有自动重发',finished_at=stamp())
+                else:
+                    if self.fenced_update(job,attempt_token,status='error',turn_id=turn[0],error='制作回合未完成，请在 Codex 查看原因；没有自动重发',finished_at=stamp()):
+                        from easel_workbench.runtime.task_runtime import production_finish
+                        production_finish(self.box,job['id'],'failed',error='native_turn_incomplete')
                 done.set()
         try:
             with self.store.connect() as c:
@@ -303,43 +291,52 @@ class Executor:
                     c.execute('BEGIN IMMEDIATE')
                     if not prior_sent and self.guard(c,job,attempt_token,False) is None:raise ReservationLost('发送预约已转移')
                     inputs=retry.frozen_inputs(c,job,inputs,self.clock)
-            from easel_workbench.runtime.task_runtime import production_call
-            production_call(self.box,job['id'],inputs)
             phase='connect'
-            connection=self.factory(on_event=on_event)
-            try:
-                result=connection.call('thread/resume',{'threadId':thread_id,'excludeTurns':True},timeout=15);owned[0]=True
-                actual=(result.get('thread') or {}).get('cwd')
-                if actual and pathlib.Path(actual.removeprefix('\\\\?\\')).resolve()!=PROJECT.resolve():raise ValueError('制作会话的项目目录不一致，任务未发送')
-            except RPCError as exc:
-                if not any(word in str(exc).lower() for word in ('writer','owned','already running','another process')):raise
+            if prepared and prepared.connection:
+                connection=prepared.connection;connection.on_event=on_event;owned[0]=prepared.owned
+            else:
+                connection=self.factory(on_event=on_event)
+                try:
+                    result=connection.call('thread/resume',{'threadId':thread_id,'excludeTurns':True},timeout=15);owned[0]=True
+                    actual=(result.get('thread') or {}).get('cwd')
+                    if actual and pathlib.Path(actual.removeprefix('\\\\?\\')).resolve()!=PROJECT.resolve():raise ValueError('制作会话的项目目录不一致，任务未发送')
+                except RPCError as exc:
+                    if exc.safe_code!='thread_owned_elsewhere':raise
+            from easel_workbench.runtime.task_runtime import production_call,production_started
             if job['rollout_offset'] is None:
                 offset=path.stat().st_size if path and path.is_file() else 0
                 if not self.fenced_update(job,attempt_token,require_boundary=prior_sent,rollout_offset=offset):raise ReservationLost('发送预约已转移')
                 job['rollout_offset']=offset
             if not owned[0]:
                 if not job['queue_id']:
-                    self.mark_dispatch(job,attempt_token=attempt_token)
+                    self.mark_dispatch(job,attempt_token=attempt_token,thread_id=thread_id)
+                    production_call(self.box,job['id'],inputs)
                     value=connection.call('thread/queue/add',{'threadId':thread_id,'clientUserMessageId':job['id'],'input':inputs},timeout=20)
                     if not self.accepted(job,attempt_token,queue_id=value['queuedSubmission']['id'],status='queued',error='已交给指定制作会话，等待前面的任务结束'):raise ReservationLost('发送预约已转移')
+                    production_call(self.box,job['id'],inputs,status='queued')
                 return
             queue=connection.call('thread/queue/list',{'threadId':thread_id,'limit':100},timeout=8)['data']
             if job['queue_id']:
                 if not queue or queue[0]['id']!=job['queue_id']:return
                 if not self.fenced_update(job,attempt_token,status='dispatching'):raise ReservationLost('发送预约已转移')
                 awaiting_ack[0]=True
+                production_call(self.box,job['id'],inputs)
                 result=connection.call('thread/queue/start',{'threadId':thread_id,'queuedSubmissionId':job['queue_id']},timeout=30)
             elif queue:
-                self.mark_dispatch(job,attempt_token=attempt_token)
+                self.mark_dispatch(job,attempt_token=attempt_token,thread_id=thread_id)
+                production_call(self.box,job['id'],inputs)
                 value=connection.call('thread/queue/add',{'threadId':thread_id,'clientUserMessageId':job['id'],'input':inputs},timeout=20)
                 if not self.accepted(job,attempt_token,queue_id=value['queuedSubmission']['id'],status='queued',error=None):raise ReservationLost('发送预约已转移')
+                production_call(self.box,job['id'],inputs,status='queued')
                 return
             else:
-                self.mark_dispatch(job,started=True,attempt_token=attempt_token)
+                self.mark_dispatch(job,started=True,attempt_token=attempt_token,thread_id=thread_id)
                 awaiting_ack[0]=True
+                production_call(self.box,job['id'],inputs)
                 result=connection.call('turn/start',{'threadId':thread_id,'clientUserMessageId':job['id'],'input':inputs},timeout=30)
             turn[0]=result['turn']['id'];bound[0]=True;awaiting_ack[0]=False
             if not self.accepted(job,attempt_token,turn_id=turn[0],error=None):raise ReservationLost('发送预约已转移')
+            production_started(self.box,job['id'],turn[0])
             buffered=list(pending_events);pending_events.clear()
             for event in buffered:on_event(event)
             if result['turn'].get('status')=='completed':on_event({'method':'turn/completed','params':{'threadId':thread_id,'turn':result['turn']}})
@@ -352,8 +349,11 @@ class Executor:
             self.failed(job,exc,phase,prior_sent=prior_sent,attempt_token=attempt_token)
         finally:
             if connection:
-                if not done.is_set() and bound[0] and turn[0]:self.fenced_update(job,attempt_token,status='uncertain',error='后台停止，已提交任务等待核对；未自动重发')
-                connection.close()
+                if not done.is_set() and bound[0] and turn[0] and self.fenced_update(job,attempt_token,status='uncertain',error='后台停止，已提交任务等待核对；未自动重发'):
+                    from easel_workbench.runtime.task_runtime import production_transport_failure
+                    with self.store.connect() as c:
+                        production_transport_failure(c,job['id'],{'phase':'completion','reason':'worker_stopped'},unknown=True)
+                if not prepared or connection is not prepared.connection:connection.close()
 
 def run():
     import msvcrt,os

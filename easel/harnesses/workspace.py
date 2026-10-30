@@ -20,6 +20,10 @@ def workspace_documents(root: Path) -> list[Path]:
 
 
 def harness_instructions(request: RunRequest) -> str:
+    if request.frozen_instructions is not None:
+        if not isinstance(request.frozen_instructions, str):
+            raise HarnessError('冻结的工作区指令必须为文字')
+        return request.frozen_instructions
     root = request.cwd.resolve()
     python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     runtime = request.env.get("EASEL_AGENT_RUNTIME", "当前所选引擎")

@@ -1,0 +1,332 @@
+{
+  "authority": "长期且带条件的创作策略与风格唯一来源；用户原话仍以原作品、样本、批注或发布记录为权威原件。",
+  "methods": [
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {},
+      "dimension": "title",
+      "evidence_refs": [
+        "skills/shared/workbench/规范/写作要求.md",
+        "资料/风格研究/反馈检查案例.json"
+      ],
+      "id": "clear-title",
+      "name": "对象、变化与阅读理由",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8.md",
+      "prompt_segments": [
+        41,
+        42,
+        45
+      ],
+      "prompt_sha256": "a79b65eeb52b8362e0c4fe7f918f9c76adb01f3b9ac4a47ef6e74cba392605a8",
+      "reason": "迁移当前明确标题规范与有原话的反馈检查基线；不把单篇认可推广为固定标题句式。",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": [
+          "poster",
+          "article"
+        ]
+      },
+      "dimension": "visual",
+      "evidence_refs": [
+        "skills/shared/workbench/规范/图片制作要求.md",
+        "资料/风格研究/反馈检查案例.json"
+      ],
+      "id": "visual-information-role",
+      "name": "配图增加信息并服务主线",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598.md",
+      "prompt_segments": [
+        37,
+        41,
+        41
+      ],
+      "prompt_sha256": "e5b53bf67b1a15b388051c17b6d33ef07542a8bd5128d94a8207986f5edcf598",
+      "reason": "当前图片规范与已有检查案例已明确要求图像承担解释；具体构图仍按本篇判断。",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {},
+      "dimension": "expression",
+      "evidence_refs": [
+        "skills/shared/workbench/规范/写作要求.md",
+        "skills/shared/workbench/规范/定位与编辑原则.md"
+      ],
+      "id": "necessary-conditions",
+      "name": "必要条件靠近对应主张",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7.md",
+      "prompt_segments": [
+        43,
+        33,
+        34
+      ],
+      "prompt_sha256": "caf7962b77e8061c8f279355725bc68f89b69c30cc1717081b6069eae6a210d7",
+      "reason": "迁移现行成品删冗余、必要条件与真实表达要求。",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": [
+          "poster",
+          "article"
+        ]
+      },
+      "dimension": "review",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-22-标题与配图反馈检查/用户原话.md",
+        "资料/风格研究/反馈检查案例.json",
+        "skills/shared/workbench/规范/写作要求.md"
+      ],
+      "id": "version-bound-feedback-check",
+      "name": "本版计划、历史案例与实际交付核对",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a.md",
+      "prompt_segments": [
+        36,
+        43,
+        42
+      ],
+      "prompt_sha256": "a2cfcc61025801e6f07dc416d86d1c74a96fccff8a60b93b423631f50a63d57a",
+      "reason": "已有明确实施授权与检查案例，只迁移执行基线，不补造历史检查。",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": "poster",
+        "topic": [
+          "工具合集",
+          "tool_collection"
+        ]
+      },
+      "dimension": "title",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/用户指导原文.md",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/参考拆解-v0.1.md"
+      ],
+      "id": "P007-reader-contrast",
+      "name": "P007：主题清楚、真实反差引出问题",
+      "priority": 0,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883.md",
+      "prompt_segments": [
+        49,
+        36
+      ],
+      "prompt_sha256": "3d58c94192e0763059a7de00e93ff5658eadd008f0a1a953972ca0d764d82883",
+      "reason": "用户肯定本例标题吸引力，机制与具体句式仍是候选；本轮明确纳入才试用。",
+      "revision": 1,
+      "selection": "explicit",
+      "status": "candidate"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": "poster",
+        "topic": [
+          "工具合集",
+          "tool_collection"
+        ]
+      },
+      "dimension": "visual",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/用户指导原文.md",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/参考拆解-v0.1.md",
+        "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+        "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg"
+      ],
+      "id": "P007-type-cover",
+      "name": "P007：单一排字焦点与统一材质",
+      "priority": 0,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe.md",
+      "prompt_segments": [
+        45,
+        47
+      ],
+      "prompt_sha256": "9bd1a0e77c557af892dfdf8e6749beae7f4a8c00fe850721bfa62e7ba4aeb6fe",
+      "reason": "本例首页质感获正向评价，具体材质、色彩与构图未获长期认可。",
+      "revision": 2,
+      "selection": "explicit",
+      "status": "candidate"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": "poster",
+        "topic": [
+          "工具合集",
+          "tool_collection"
+        ]
+      },
+      "dimension": "structure",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/参考拆解-v0.1.md",
+        "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/3-1000119528.jpg",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/4-1000119532.jpg",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/5-1000119530.jpg"
+      ],
+      "id": "P007-reader-grouping",
+      "name": "P007：按任务和实际门槛分组",
+      "priority": 0,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd.md",
+      "prompt_segments": [
+        53
+      ],
+      "prompt_sha256": "da6ddd85607a98095a7979b6dd29813e293b354e4ad5119c5019588914b3d5cd",
+      "reason": "外部样本的阅读组织观察，尚无本项目实际稿件验证。",
+      "revision": 2,
+      "selection": "explicit",
+      "status": "candidate"
+    },
+    {
+      "compatibility_group": "editorial-clarity",
+      "conditions": {
+        "format": "poster",
+        "topic": [
+          "工具合集",
+          "tool_collection"
+        ]
+      },
+      "dimension": "copy",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/参考拆解-v0.1.md"
+      ],
+      "id": "P007-selection-reasons",
+      "name": "P007：名单与选择理由分工",
+      "priority": 0,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8.md",
+      "prompt_segments": [
+        57
+      ],
+      "prompt_sha256": "d0e9a8a9c56e1a42d68bc821dd390bca3df2db3147733d91943ac2ec63a502c8",
+      "reason": "候选方法只在本轮明确选择后试用，不由样本日期或传播观察升为默认。",
+      "revision": 1,
+      "selection": "explicit",
+      "status": "candidate"
+    }
+  ],
+  "precedence": [
+    "当前用户明确指令",
+    "本轮与本作品设置及批注",
+    "条件匹配且已确认的策略",
+    "本轮明确选择的候选试用"
+  ],
+  "profiles": [
+    {
+      "conditions": {},
+      "dimension": "main_style",
+      "evidence_refs": [
+        "skills/shared/workbench/规范/定位与编辑原则.md",
+        "skills/shared/workbench/规范/写作要求.md"
+      ],
+      "id": "neo-editorial-baseline",
+      "intent": {},
+      "name": "清楚、克制、有依据的解释",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334.md",
+      "prompt_segments": [
+        33,
+        50,
+        42
+      ],
+      "prompt_sha256": "d17b886521ff4ba1868b8255151dbe6497b87479af4e3ad86c01dee4805c9334",
+      "reason": "当前明确的通用表达基线；允许由本篇、本轮明确指令及已确认条件风格细化。",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "conditions": {
+        "format": "poster",
+        "visual_role": "illustrative_scene"
+      },
+      "dimension": "main_style",
+      "evidence_refs": [
+        "skills/shared/workbench/规范/图片制作要求.md",
+        "资料/风格研究/2026-10-20-小猪彩色表现/用户指导原文.md"
+      ],
+      "id": "oil-pig-explanatory-scene",
+      "intent": {
+        "image": "scene",
+        "style": "focused"
+      },
+      "name": "油猪大侠具象解释场景",
+      "priority": 50,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349.md",
+      "prompt_segments": [
+        41,
+        37,
+        43
+      ],
+      "prompt_sha256": "da5441d126a943af78db258ae77767bf3b740895679ef0df02ab03e3e1104349",
+      "reason": "保留已确认角色表达及彩色纠正的真实适用范围，不追改历史素材。",
+      "refines": [
+        "neo-editorial-baseline"
+      ],
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "conditions": {
+        "format": "poster",
+        "topic": [
+          "工具合集",
+          "tool_collection"
+        ]
+      },
+      "dimension": "main_style",
+      "evidence_refs": [
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/用户指导原文.md",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/参考拆解-v0.1.md",
+        "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+        "skills/shared/workbench/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+        "资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/5-1000119530.jpg"
+      ],
+      "id": "P007-typographic",
+      "intent": {
+        "image": "typographic",
+        "style": "focused",
+        "title": "question"
+      },
+      "name": "P007：工具合集排字封面试用",
+      "priority": 0,
+      "prompt_file": "skills/shared/workbench/规范/创作方案/策略文本/d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce.md",
+      "prompt_segments": [
+        41,
+        40,
+        46
+      ],
+      "prompt_sha256": "d88a5871713018a6574e2d51862dd4d0efa76b02a375ec2974916bfcb7a1c6ce",
+      "reason": "将样本候选整理为一次可审阅的语义试用；长期生效仍须差异确认。",
+      "revision": 2,
+      "selection": "explicit",
+      "status": "candidate"
+    }
+  ],
+  "revision": 2,
+  "routing": {
+    "automatic_promotion": false,
+    "opposite_styles": "不同条件可以共存，同条件互斥必须明确选择",
+    "original_quotes": "仅从带SHA-256与明确位置的权威原件读取；缺失原件如实标明",
+    "recency_or_metrics_overwrite": false,
+    "relationships": [
+      "different_conditions",
+      "composable",
+      "mutually_exclusive",
+      "insufficient_evidence"
+    ],
+    "trial_limit": 2,
+    "unresolved_conflicts": "保留并显示，明确采用项或补充适用条件后执行；不自动忽略"
+  },
+  "schema_version": 2,
+  "updated_at": "2026-10-28"
+}

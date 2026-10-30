@@ -209,10 +209,10 @@ def simulate_execution(f,jid,image,records):
             raise AssertionError(method)
         def close(self):pass
     executor=poster_executor.Executor(box,factory=FakeRPC,rollout=lambda:rollout)
-    path=task_runtime.ensure_target(box,jid,FakeRPC,lambda:rollout)
     # capture_artifacts is real. Its filesystem root is confined to the TEMP
     # fixture, so apply_locked_text cannot write to the production authority.
-    with patch.object(bridge,'ROOT',f['root']):executor.dispatch(job,path)
+    with task_runtime.prepare_target(box,jid,FakeRPC,lambda:rollout) as prepared:
+        with patch.object(bridge,'ROOT',f['root']):executor.dispatch(job,prepared.path,prepared=prepared)
     with box.store.connect() as c:
         saved=dict(c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone())
         assert saved['status']=='completed',saved.get('error')
@@ -307,6 +307,10 @@ def browser_tests(native,out,only_entries=False):
                             if page.url.startswith(f['origin']):
                                 page.wait_for_function("()=>!document.querySelector('dialog[open]')&&!history.state?.nativeLayer")
                             h.ready(page,f['origin'],path)
+                        def creation_details():
+                            if not page.get_by_label('主题',exact=True).is_visible():page.get_by_text('画像、制作要求与草稿',exact=True).click()
+                        def work_controls():
+                            if not page.get_by_label('发送方式',exact=True).is_visible():page.get_by_text('本轮操作与技能',exact=True).click()
                         def post(path,action):
                             with page.expect_response(lambda r:path in r.url and r.request.method=='POST') as r:action()
                             assert r.value.status==200,r.value.text()
@@ -321,8 +325,15 @@ def browser_tests(native,out,only_entries=False):
                                     go('/toolbox?section=skills&item='+entry_id+'&version='+str(trial['version']))
                                     page.get_by_role('button',name='本次试用 · '+workflow_launch['label'],exact=True).click()
                                     expect(page.get_by_label('素材与目标',exact=True)).to_have_value('技能入口前的本机原始草稿。')
-                                else:go(endpoint+'/new?draft=full-flow-'+format+'-'+profile)
-                                page.get_by_label('主题',exact=True).fill(title)
+                                else:
+                                    go('/posters/new?draft=full-flow-'+format+'-'+profile)
+                                    before_command_url=page.url
+                                    page.get_by_label('素材与目标',exact=True).fill('/撰写文章 原始文章素材 '+profile)
+                                    page.get_by_label('素材与目标',exact=True).press('Enter')
+                                    expect(page.get_by_label('素材与目标',exact=True)).to_have_value('原始文章素材 '+profile)
+                                    assert page.url==before_command_url
+                                    check(profile,'slash-article-command-preserves-same-draft-without-submit')
+                                creation_details();page.get_by_label('主题',exact=True).fill(title)
                                 material='隔离原始材料：解释一个实际问题；保留来源、限制条件和本次明确要求。'
                                 page.get_by_label('素材与目标',exact=True).fill(material)
                                 preview=post('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
@@ -345,7 +356,7 @@ def browser_tests(native,out,only_entries=False):
                                     assert doc['execution_prompt']['body']==preview['execution_prompt']['body']
                                 check(profile,format+'-preview-confirm-frozen-native-simulation-real-files')
                                 if mobile:page.locator('#easel-main').get_by_role('button',name='对话',exact=True).click()
-                                page.get_by_label('发送方式',exact=True).select_option('change')
+                                work_controls();page.get_by_label('发送方式',exact=True).select_option('change')
                                 page.get_by_label('对话输入',exact=True).fill('仅修改当前版本，补充来源限制的说明。')
                                 post('/api/creative/preview',lambda:page.get_by_role('button',name='查看修改方案',exact=True).click())
                                 changed=post('/actions',lambda:page.get_by_role('button',name='确认并开始制作',exact=True).click())
@@ -353,7 +364,7 @@ def browser_tests(native,out,only_entries=False):
                                 simulate_execution(f,child,image,report['simulated_executions'])
                                 go(endpoint+'/'+wid+'?version='+child)
                                 if mobile:page.locator('#easel-main').get_by_role('button',name='对话',exact=True).click()
-                                page.get_by_label('发送方式',exact=True).select_option('feedback')
+                                work_controls();page.get_by_label('发送方式',exact=True).select_option('feedback')
                                 page.get_by_label('对话输入',exact=True).fill('反馈只记录，绑定本次合成修改版本。')
                                 post('/actions',lambda:page.get_by_role('button',name='发送',exact=True).click())
                                 with f['store'].connect() as c:
@@ -386,7 +397,7 @@ def browser_tests(native,out,only_entries=False):
                                 go('/toolbox?section=skills&item='+entry['id']+'&version='+str(entry['version']))
                                 page.get_by_role('button',name='本次试用 · '+launch['label'],exact=True).click()
                                 if task=='discuss':
-                                    page.get_by_label('主题',exact=True).fill('合成候选讨论 '+profile)
+                                    creation_details();page.get_by_label('主题',exact=True).fill('合成候选讨论 '+profile)
                                     page.get_by_label('素材与目标',exact=True).fill('只讨论这份材料的制作方向，绑定当前明确试用版本。')
                                     response=post('/discussions',lambda:page.get_by_role('button',name='发送讨论',exact=True).click())
                                 elif task=='reference':
@@ -425,9 +436,11 @@ def browser_tests(native,out,only_entries=False):
                                     with f['store'].connect() as c:
                                         c.execute("UPDATE toolbox_jobs SET status='completed',reply=?,finished_at=? WHERE id=?",
                                             ('合成讨论答复：选择清楚的具体问题，并保留原始来源。',time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),response['id']))
-                                    go('/posters/'+response['work_id'])
-                                    if mobile:page.locator('#easel-main').get_by_role('button',name='成品',exact=True).click()
-                                    preview=post('/api/creative/preview',lambda:page.get_by_role('button',name='按当前草稿制作',exact=True).click())
+                                    go('/posters/'+response['work_id']+'?discuss=1')
+                                    page.get_by_role('button',name='添加素材或选择技能',exact=True).click()
+                                    page.get_by_role('menuitem',name='/生成贴图',exact=False).click()
+                                    page.get_by_label('对话输入',exact=True).fill('按刚才讨论的方向生成贴图，完整保留来源与限制。')
+                                    preview=post('/api/creative/preview',lambda:page.get_by_role('button',name='查看制作方案',exact=True).click())
                                     first=post('/finalize',lambda:page.get_by_role('button',name='确认并开始制作',exact=True).click())
                                     simulate_execution(f,first['id'],image,report['simulated_executions'])
                                     with f['store'].connect() as c:

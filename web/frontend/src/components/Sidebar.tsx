@@ -2,7 +2,7 @@ import SettingsSelect from './SettingsSelect';
 import { useState } from 'react';
 import type { ChatSession } from '../lib/store';
 import type { PersonaItem } from '../lib/api';
-import type { ComponentType } from 'react';
+import type { ComponentType,ReactNode,Ref } from 'react';
 import {
   IconChat, IconSkills, IconOutputs, IconAccounts, IconProfile,
   IconNewChat, IconEdit, IconArchive, IconUnarchive, IconTrash, IconChevron,
@@ -31,6 +31,12 @@ interface SidebarProps {
   apiDirect: boolean;
   agentRuntime: string;
   onOpenSettings: () => void;
+  navigation?: {id:string;label:string;icon:ReactNode;active:boolean;onSelect:()=>void}[];
+  hasMessages?: (session:ChatSession)=>boolean;
+  canDeleteSession?:boolean;
+  brand?:string;logo?:ReactNode;themeControl?:ReactNode;rootRef?:Ref<HTMLDivElement>;
+  navigationLabel?:string;rootLabel?:string;personaOptions?:{value:string;label:string}[];
+  statusText?:string;settingsTitle?:string;
 }
 
 // 主导航（精简）；热点雷达/选题库/内容日历/发布中心 收进「工作台」，不占侧栏
@@ -61,6 +67,7 @@ export default function Sidebar({
   apiDirect,
   agentRuntime,
   onOpenSettings,
+  navigation,hasMessages,canDeleteSession=true,brand,logo,themeControl,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,
 }: SidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -72,7 +79,7 @@ export default function Sidebar({
     setRenamingId(null);
   };
 
-  const active = sessions.filter((s) => !s.archived && (s.messages.length > 0 || s.id === activeSessionId));
+  const active = sessions.filter((s) => !s.archived && ((hasMessages?hasMessages(s):s.messages.length > 0) || s.id === activeSessionId));
   const archived = sessions.filter((s) => s.archived);
 
   const renderItem = (s: ChatSession, isArchived: boolean) => {
@@ -108,25 +115,25 @@ export default function Sidebar({
             onClick={(e) => { e.stopPropagation(); onSessionArchive(s.id, !isArchived); }}>
             {isArchived ? <IconUnarchive size={14} /> : <IconArchive size={14} />}
           </button>
-          <button className="session-act danger" title="删除"
-            onClick={(e) => { e.stopPropagation(); onSessionDelete(s.id); }}><IconTrash size={14} /></button>
+          {canDeleteSession&&<button className="session-act danger" title="删除"
+            onClick={(e) => { e.stopPropagation(); onSessionDelete(s.id); }}><IconTrash size={14} /></button>}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="sidebar">
+    <div className="sidebar" ref={rootRef} role={rootLabel?'complementary':undefined} aria-label={rootLabel}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img className="sidebar-logo-icon" src="./static/easel-icon-transparent.png" alt="" />
-          <h1>Easel</h1>
-          <ThemeToggle />
+          {logo||<img className="sidebar-logo-icon" src="./static/easel-icon-transparent.png" alt="" />}
+          <h1>{brand||'Easel'}</h1>
+          {themeControl||<ThemeToggle />}
         </div>
         <SettingsSelect className="persona-control" label="选择用户画像"
           title="选择用户画像（一个对话对应一个画像：切换会新建一个对话）"
           value={selectedPersona}
-          options={[{ value: '', label: '通用模式' },
+          options={personaOptions||[{ value: '', label: '通用模式' },
             ...personas.map(p => ({ value: p.name, label: p.name })),
             { value: '__new__', label: '+ 新建画像…' }]}
           onChange={(value) => {
@@ -135,14 +142,14 @@ export default function Sidebar({
           }} />
       </div>
 
-      <nav className="sidebar-nav">
-        {NAV.map(({ page, Icon, label }) => (
+      <nav className="sidebar-nav" aria-label={navigationLabel}>
+        {(navigation||NAV.map(({page,Icon,label})=>({id:page,label,icon:<Icon size={18}/>,active:currentPage===page,onSelect:()=>onPageChange(page)}))).map(({id,icon,label,active,onSelect}) => (
           <button
-            key={page}
-            className={`nav-item ${currentPage === page ? 'active' : ''}`}
-            onClick={() => onPageChange(page)}
+            key={id}
+            className={`nav-item ${active ? 'active' : ''}`} aria-current={active?'page':undefined}
+            onClick={onSelect}
           >
-            <span className="nav-icon"><Icon size={18} /></span>
+            <span className="nav-icon">{icon}</span>
             {label}
           </button>
         ))}
@@ -170,12 +177,12 @@ export default function Sidebar({
 
       <div className="sidebar-status">
         <span className={`status-dot ${gatewayStatus === 'connected' ? '' : 'offline'}`} />
-        <span className="sidebar-status-text">{gatewayStatus === 'connected'
+        <span className="sidebar-status-text">{statusText||(gatewayStatus === 'connected'
           ? (apiDirect ? '仅聊天模式已配置' : agentRuntime !== 'openclaw' ? `${agentRuntime} CLI 已安装` : '网关已连接')
           : gatewayStatus === 'disconnected'
             ? (apiDirect ? 'API 配置不完整' : agentRuntime !== 'openclaw' ? `${agentRuntime} CLI 未配置` : '网关离线')
-            : '连接中…'}</span>
-        <button className="settings-gear" onClick={onOpenSettings} title="设置（模型 · 环境 · 更多）">
+            : '连接中…')}</span>
+        <button className="settings-gear" onClick={onOpenSettings} title={settingsTitle||'设置（模型 · 环境 · 更多）'}>
           <IconGear size={13} /> 设置
         </button>
       </div>

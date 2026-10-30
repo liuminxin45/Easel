@@ -29,7 +29,7 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
   mediaUrl:path=>'/api/media/'+path.split('/').map(encodeURIComponent).join('/'),
  };
  const values=new Map<string,string>();
- const releaseCache=bindWhoamiStorage({getItem:key=>values.get(key)??null,setItem:(key,value)=>{values.set(key,value)},removeItem:key=>{values.delete(key)}});
+ const releaseCache=bindWhoamiStorage({getItem:key=>values.get(key)??null,setItem:(key,value)=>{values.set(key,value)},removeItem:key=>{values.delete(key)}},{automaticVerification:false});
  const releaseApi=bindEaselApiTransport(transport);
  return ()=>{releaseApi();releaseCache();values.clear()};
 }

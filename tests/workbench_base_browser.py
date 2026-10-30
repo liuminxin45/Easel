@@ -184,7 +184,7 @@ def main():
                         page.set_default_timeout(20000)
                         errors, requests = [], []
                         page.on('pageerror', lambda error: errors.append(str(error)))
-                        page.on('request', lambda request: requests.append({'path': urlsplit(request.url).path, 'method': request.method, 'operation_id':request.headers.get('x-operation-id')}))
+                        page.on('request', lambda request: requests.append({'path': urlsplit(request.url).path, 'query':urlsplit(request.url).query, 'method': request.method, 'operation_id':request.headers.get('x-operation-id')}))
                         def visit(path):
                             page.goto(f['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
                         def capture(name):
@@ -261,6 +261,8 @@ def main():
                         assert page.get_by_role('button', name='配置 AppID 凭据', exact=True).count() == 0
                         capture('accounts-initial')
                         assert not legacy_account_caches(page),legacy_account_caches(page)
+                        assert not any(item['path'].startswith('/api/accounts/') and item['path'].endswith('/whoami') for item in requests),requests
+                        check(label+': entering the native account page never starts automatic whoami verification')
                         account_styles = styles(page, ['.accounts-grid', '.account-card', '.account-card-name', '.account-card .btn'])
                         if canonical:
                             reference_context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':height},is_mobile=mobile,has_touch=mobile,color_scheme=theme)
@@ -308,9 +310,11 @@ def main():
                         expect(modal.get_by_text('登录出错', exact=False)).to_be_visible()
                         modal.get_by_role('button', name='关闭', exact=True).click()
                         start_login()
-                        synthetic.finish('success', 'TEMP 合成成功回执')
-                        expect(modal.get_by_text('登录成功 ✅', exact=False)).to_be_visible()
-                        modal.get_by_role('button', name='完成', exact=True).click()
+                        with page.expect_request(lambda request:urlsplit(request.url).path=='/api/accounts/wechat-oa/whoami' and parse_qs(urlsplit(request.url).query).get('force')==['true']) as explicit_verification:
+                            synthetic.finish('success', 'TEMP 合成成功回执')
+                            expect(modal.get_by_text('登录成功 ✅', exact=False)).to_be_visible()
+                            modal.get_by_role('button', name='完成', exact=True).click()
+                        assert explicit_verification.value.method=='GET'
                         expect(card.get_by_role('button', name='退出登录', exact=True)).to_be_visible()
                         capture('account-success')
                         page.once('dialog', lambda dialog: dialog.accept())

@@ -11,6 +11,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 });
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const storageFor=map=>({getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)});
 
 function setup() {
   const entries = new Map();
@@ -28,6 +29,53 @@ function setup() {
   });
   return { exports, pending, entries };
 }
+
+test('a host can disable automatic account verification without requests, callbacks or cached observations',async()=>{
+ const view=setup(),entries=new Map(),updates=[];
+ const release=view.exports.bindWhoamiStorage(storageFor(entries),{automaticVerification:false});
+ try{
+  view.exports.verifyStale(['xiaohongshu','wechat-oa'],{onUpdate:(...args)=>updates.push(args)});
+  await settle();
+  assert.equal(view.pending.length,0);
+  assert.equal(updates.length,0);
+  assert.equal(entries.size,0);
+  assert.equal(view.entries.size,0);
+ }finally{release()}
+});
+
+test('a host retains the official automatic verification default when no policy is provided',async()=>{
+ const view=setup(),entries=new Map();
+ const release=view.exports.bindWhoamiStorage(storageFor(entries));
+ try{
+  view.exports.verifyStale(['xiaohongshu']);
+  assert.equal(view.pending.length,1);
+  view.pending[0].resolve({loggedIn:true,name:'Official default',avatar:''});
+  await settle();
+  assert.equal(JSON.parse(entries.get('easel_whoami_v4')).xiaohongshu.name,'Official default');
+ }finally{release()}
+});
+
+test('explicit force verification remains available when the host disables automatic checks',async()=>{
+ const view=setup(),entries=new Map(),updates=[];
+ const release=view.exports.bindWhoamiStorage(storageFor(entries),{automaticVerification:false});
+ try{
+  view.exports.verifyStale(['wechat-oa'],{force:true,onUpdate:(...args)=>updates.push(args)});
+  assert.equal(view.pending.length,1);
+  view.pending[0].resolve({loggedIn:true,name:'Explicit check',avatar:''});
+  await settle();
+  assert.equal(JSON.parse(entries.get('easel_whoami_v4'))['wechat-oa'].name,'Explicit check');
+  assert.equal(updates.length,1);
+  assert.equal(view.entries.size,0,'explicit host observations must remain in its ephemeral cache');
+ }finally{release()}
+});
+
+test('releasing an old binding cannot re-enable automatic verification on a newer binding',()=>{
+ const view=setup(),storage=storageFor(new Map());
+ const releaseOld=view.exports.bindWhoamiStorage(storage);
+ const releaseCurrent=view.exports.bindWhoamiStorage(storage,{automaticVerification:false});
+ releaseOld();view.exports.verifyStale(['wechat-oa']);assert.equal(view.pending.length,0);
+ releaseCurrent();view.exports.verifyStale(['wechat-oa']);assert.equal(view.pending.length,1);
+});
 
 test('verification from an old host cannot populate the next authentication cache',async()=>{
  const view=setup(),first=new Map(),second=new Map();

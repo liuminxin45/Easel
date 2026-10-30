@@ -12,8 +12,25 @@ function fixture(){
  }});
  client.session.setState({config:{csrf:'owner-csrf'},loading:false});
  const release=load('workbench/ui/nativeApi.ts').bindWorkbenchNativeApi(client);
- return {client,calls,storage,api:load('lib/api.ts'),close(){release();client.pauseVisible()},set dropped(value){dropped=value},set receipt(value){receipt=value}};
+ return {client,calls,storage,api:load('lib/api.ts'),whoami:load('lib/whoami.ts'),close(){release();client.pauseVisible()},set dropped(value){dropped=value},set receipt(value){receipt=value}};
 }
+
+test('the private native binding retires automatic whoami but retains the original explicit account service',async()=>{
+ const f=fixture();try{
+  f.whoami.verifyStale(['wechat-oa','xiaohongshu']);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.calls.length,0);
+  assert.deepEqual(Object.keys(f.whoami.getWhoamiCache()),[]);
+  assert.equal(f.storage.size,0);
+  f.whoami.verifyStale(['wechat-oa'],{force:true});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.calls.filter(call=>call.path.includes('/whoami')).length,1);
+  assert.ok(f.whoami.getWhoamiCache()['wechat-oa']);
+  await f.api.accountWhoami('wechat-oa',true);
+  assert.ok(f.calls.some(call=>call.path==='/api/accounts/wechat-oa/whoami?force=true'));
+  assert.ok(![...f.storage.keys()].some(key=>key.startsWith('easel_')));
+ }finally{f.close()}
+});
 
 test('a native read completed after authentication changes is discarded',async()=>{
  const load=moduleLoader(),{ApiTransport}=load('workbench/core/transport.ts');let epoch=1,complete;

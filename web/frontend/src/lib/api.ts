@@ -680,6 +680,7 @@ export function stopChat(sessionId: string): Promise<{ stopped: boolean }> {
 }
 
 export interface StreamChatOptions {
+  initialTitle?:string;
   context?: Record<string, unknown>;
   headers?: Record<string, string>;
   basePath?:string;
@@ -805,7 +806,7 @@ export function streamChat(
         const res = first
           ? await fetch(`${base}/api/chat/stream`, {
               method: 'POST', headers: { 'Content-Type': 'application/json', ...options?.headers },
-              body: JSON.stringify({ message, persona: persona || undefined, sessionId, turnId, attachments, ...(options?.context?{context:options.context}:{}) }),
+              body: JSON.stringify({ message, persona: persona || undefined, sessionId, turnId, attachments, ...(options?.context?{context:options.context}:{}), ...(options?.initialTitle?{initial_title:options.initialTitle}:{}) }),
               signal: controller.signal,
             })
           : await fetch(`${base}/api/chat/jobs/${encodeURIComponent(turnId || '')}/stream?after=${lastEventId}`, {

@@ -28,7 +28,9 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/src/components/ChatPage.tsx','web/frontend/src/components/MessageBubble.tsx',
     'web/frontend/src/components/Sidebar.tsx','web/frontend/src/components/SkillPage.tsx',
     'web/frontend/src/components/QuestionCards.tsx','web/frontend/src/components/SkillDrawer.tsx',
-    'web/frontend/src/lib/api.ts'}
+    'web/frontend/src/lib/api.ts','web/frontend/src/lib/artifacts.ts',
+    # Generic capability catalog and authorized artifact presentation ports.
+    'web/frontend/src/components/BrushEntry.tsx','web/frontend/src/components/ArtifactGallery.tsx'}
 WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
     'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
 

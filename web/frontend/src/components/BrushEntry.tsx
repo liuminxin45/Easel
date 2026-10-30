@@ -5,12 +5,18 @@ import type { CapabilityItem } from '../lib/capabilityMenu';
 const DOT: Record<string, string> = { done: 's-done', ready: 's-ready', need: 's-need', incoming: 's-incoming' };
 
 /** 笔入口：点开「能做的都在这」→ 选一项自动填进输入框。纯前端，选中即预填，不自动发送。 */
-export default function BrushEntry({ onPick }: { onPick: (text: string) => void }) {
+export interface BrushChoice {id:string;label:string;description?:string;disabled?:boolean;group?:string}
+export default function BrushEntry({ onPick, items, onSelect, registerLayer, disabled=false }: { onPick: (text: string) => void;
+  items?:BrushChoice[];onSelect?:(id:string)=>void;registerLayer?:(close:()=>void)=>(()=>void)|undefined;disabled?:boolean }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState(0);
   const [q, setQ] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const menu = useMemo(()=>items ? {tabs:[{id:'available',label:'技能与能力',groups:Array.from(new Set(items.map(item=>item.group||'已接入能力'))).map(label=>({label,items:items.filter(item=>(item.group||'已接入能力')===label).map(item=>({id:item.id,label:item.label,desc:item.description,skill:item.id,status:item.disabled?'need':'ready'}))}))}]} : CAPABILITY_MENU,[items]);
+
+  useEffect(()=>{if(!open)return;const close=()=>{setOpen(false);wrapRef.current?.querySelector<HTMLButtonElement>('.brush-btn')?.focus()};const release=registerLayer?.(close);const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();close()}};document.addEventListener('keydown',key);return()=>{release?.();document.removeEventListener('keydown',key)}},[open,registerLayer]);
+  useEffect(()=>{if(disabled)setOpen(false)},[disabled]);
 
   useEffect(() => { if (open) searchRef.current?.focus(); }, [open]);
   useEffect(() => {
@@ -23,8 +29,8 @@ export default function BrushEntry({ onPick }: { onPick: (text: string) => void 
   }, [open]);
 
   const all = useMemo(
-    () => CAPABILITY_MENU.tabs.flatMap((t) => t.groups.flatMap((g) => g.items)),
-    [],
+    () => menu.tabs.flatMap((t) => t.groups.flatMap((g) => g.items)),
+    [menu],
   );
   const pipeline = useMemo(() => all.find((x) => x.status === 'incoming'), [all]);
 
@@ -32,6 +38,7 @@ export default function BrushEntry({ onPick }: { onPick: (text: string) => void 
   const hit = (it: CapabilityItem) => !ql || `${it.label}${it.desc || ''}${it.skill || ''}`.toLowerCase().includes(ql);
 
   const pick = (it: CapabilityItem, pipe?: boolean) => {
+    if(items){if(disabled||items.find(item=>item.id===it.id)?.disabled)return;onSelect?.(it.id!);setOpen(false);return;}
     onPick(pipe ? '用「视频产线」做一支整片：' : `帮我做「${it.label}」`);
     setOpen(false);
   };
@@ -39,7 +46,7 @@ export default function BrushEntry({ onPick }: { onPick: (text: string) => void 
   return (
     <div className={`brush-entry${open ? ' open' : ''}`} ref={wrapRef}>
       <button type="button" className="brush-btn" onClick={() => setOpen((v) => !v)}
-        aria-label="看看能做什么" title="看看能做什么">
+        disabled={disabled} aria-expanded={open} aria-label="看看能做什么" title="看看能做什么">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <defs>
             <linearGradient id="brushHandleGrad" x1="12" y1="1.6" x2="12" y2="11.6" gradientUnits="userSpaceOnUse">
@@ -65,14 +72,14 @@ export default function BrushEntry({ onPick }: { onPick: (text: string) => void 
           <div className="brush-panel-head">
             <div className="brush-panel-headline">
               <div className="brush-panel-title">能做的都在这</div>
-              <div className="brush-panel-sub">选一个 → 自动填进输入框；「管线」件走整片产线</div>
+              <div className="brush-panel-sub">{items?'选一个 → 带入输入框，发送后执行':'选一个 → 自动填进输入框；「管线」件走整片产线'}</div>
             </div>
             <input ref={searchRef} className="brush-search" placeholder="搜索…" value={q}
               onChange={(e) => setQ(e.target.value)} />
             <button type="button" className="brush-close" onClick={() => setOpen(false)} aria-label="关闭">×</button>
           </div>
           <div className="brush-tabs">
-            {CAPABILITY_MENU.tabs.map((t, i) => (
+            {menu.tabs.map((t, i) => (
               <button type="button" key={t.id} className={`brush-tab${i === tab ? ' on' : ''}`}
                 onClick={() => setTab(i)}>{t.label}</button>
             ))}
@@ -90,14 +97,14 @@ export default function BrushEntry({ onPick }: { onPick: (text: string) => void 
                 </button>
               </div>
             )}
-            {CAPABILITY_MENU.tabs[tab] && CAPABILITY_MENU.tabs[tab].groups.map((g) => {
-              const items = g.items.filter((it) => it.status !== 'incoming' && hit(it));
-              if (!items.length) return null;
+            {(menu.tabs[tab]||menu.tabs[0])?.groups.map((g) => {
+              const groupItems = g.items.filter((it) => it.status !== 'incoming' && hit(it));
+              if (!groupItems.length) return null;
               return (
                 <div key={g.label} className="brush-grp">
-                  <div className="brush-grp-name">{g.label} · {items.length}</div>
-                  {items.map((it) => (
-                    <button type="button" key={it.skill || it.label} className="brush-item" onClick={() => pick(it)}>
+                  <div className="brush-grp-name">{g.label} · {groupItems.length}</div>
+                  {groupItems.map((it) => (
+                    <button type="button" key={it.skill || it.label} className="brush-item" disabled={disabled||!!items?.find(item=>item.id===it.id)?.disabled} onClick={() => pick(it)}>
                       <span className={`brush-dot ${DOT[it.status || 'ready'] || 's-ready'}`} />
                       <span className="brush-il">{it.label}</span>
                       <span className="brush-idesc">{it.desc}</span>

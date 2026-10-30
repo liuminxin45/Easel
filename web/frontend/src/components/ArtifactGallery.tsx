@@ -77,6 +77,7 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'image') return <img src={artifact.url} alt={artifact.name} onError={() => setError(true)} />;
   if (artifact.kind === 'video') return <video src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
   if (artifact.kind === 'audio') return <audio src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
+  if (artifact.kind === 'file') return <div className="artifact-hint">{artifact.name} · 可打开或下载原文件</div>;
   return <iframe src={artifact.url} title={artifact.name} sandbox="" />;
 }
 
@@ -126,7 +127,7 @@ export default function ArtifactGallery({ artifacts, archives }: { artifacts: Ar
       <div className="artifact-footer">
         <span className="artifact-name" title={artifact.name}>{artifact.name}</span>
         <a href={artifact.url} target="_blank" rel="noreferrer">打开 ↗</a>
-        <a href={artifact.url} download={artifact.name}>下载</a>
+        <a href={artifact.downloadUrl || artifact.url} download={artifact.name}>下载</a>
       </div>
     </section>
   );

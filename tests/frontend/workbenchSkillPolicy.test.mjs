@@ -22,6 +22,7 @@ function load(file, imports = {}, suffix = '') {
     require: id => {
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
+      if (id === './ProductionParameters') return {ProductionParameters: () => {}};
       if (id === './ChatAdapter') return load('ui/ChatAdapter.tsx', {
         react: imports.react || {}, '@workbench/core': imports['@workbench/core'],
         'react/jsx-runtime': jsx, '../../components/ChatPage': () => {}, './components/icons': {},
@@ -33,6 +34,7 @@ function load(file, imports = {}, suffix = '') {
 }
 const models = load('core/models.ts');
 const creator = load('core/creator.ts', {'./models': models});
+const mainline = load('core/mainline.ts', {'./models': models});
 const ref = (id, version = 1) => ({id, version});
 const skill = (id, tasks, version = 4) => ({id, name: id, tasks, published_version: version,
   versions: [{version: 2, status: 'published'}, {version, status: 'published'}], launch_actions: []});
@@ -192,10 +194,10 @@ test('same-work first production selects production pins while preserving its di
       title: '原字标题', material: '原字材料', files: [], creative: {recipe: {pack_id: 'editorial-poster'},
         creator: {profile_id: 'p', profile_revision: 7, trial: true, skills: [ref('research-new', 2)]}}}};
   const before = JSON.stringify(work);
-  const previews = [];
-  const core = {...models, ...creator, changeCreative: () => ({}),
-    useWorkbench: () => ({navigation: {}, client: {read: async () => work},
-      service: {prepareProduction: async (...args) => {previews.push(args); return {};}}}),
+  const previews = [], submissions = [];
+  const core = {...models, ...creator, ...mainline, changeCreative: () => ({}),
+    useWorkbench: () => ({navigation: {}, client: {read: async () => work, drafts: {get: () => ({text:'',files:[],creative:{}})}},
+      service: {prepareProduction: async (...args) => {previews.push(args); return {revision_token: 'exact-frozen-revision'};}, finalize: async (...args) => {submissions.push(args); return {id:'accepted-first-version'};}}}),
     useResource: path => ({data: path === '/api/creator/bootstrap' ? data() : null}),
     useDraft: (key, initial) => [initial, () => {}, () => {}],
     useOperation: () => ({}),
@@ -213,7 +215,25 @@ test('same-work first production selects production pins while preserving its di
   assert.deepEqual(plain(previews[0][1].creative.creator.skills), [ref('writer-new', 2), ref('checker-new', 4)]);
   assert.equal(previews[0][1].revision, 3);
   assert.equal(previews[0][1].discussion_token, 'frozen-discussion');
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0][0], work.id);
+  assert.deepEqual(plain(submissions[0][1].creative.creator.skills), [ref('writer-new', 2), ref('checker-new', 4)]);
+  assert.equal(submissions[0][1].creative.context_revision, 'exact-frozen-revision');
   assert.equal(JSON.stringify(work), before);
+});
+
+test('a slow compatibility production keeps input typed after the submitted draft was frozen',async()=>{
+  const creative={creator:{profile_id:'p',skills:[ref('writer-new',2),ref('checker-new',4)]}},submitted={text:'本轮原字',files:[],creative};
+  const work={id:'existing-work',title:'已有版本',format:'poster',creator:{id:'p'},latest_version:'parent',versions:[{id:'parent',status:'completed',label:'v1',artifacts:[],creative}],history:[],pending:[],draft:{revision:3,creative}};
+  let current=submitted,resets=0,release;const hold=new Promise(resolve=>{release=resolve}),sent=[];
+  const core={...models,...creator,...mainline,changeCreative:()=>creative,revisionCreative:value=>value,
+    useWorkbench:()=>({navigation:{},client:{drafts:{get:()=>current}},service:{prepareProduction:async()=>hold,workAction:async(...args)=>{sent.push(args)}}}),
+    useResource:path=>({data:path==='/api/creator/bootstrap'?data():null}),useDraft:(key,initial)=>key.startsWith('feedback:')?[submitted,()=>{},()=>{resets++}]:[initial,()=>{},()=>{}],useOperation:()=>({}),useAsyncAction:()=>({busy:false,run:fn=>fn()})};
+  const react={useState:value=>[value==='discuss'?'change':value,()=>{}],useEffect:()=>{},useRef:value=>({current:value})};
+  const {WorkCanvas}=load('ui/production.tsx',{react,'react/jsx-runtime':jsx,'@workbench/core':core,'./components/icons':{},'./common':{}},'\nexport {WorkCanvas};');
+  const tree=WorkCanvas({work,search:new URLSearchParams('version=parent'),reload:async()=>work}),composer=nodes(tree).find(node=>node.type?.name==='ChatAdapter');
+  composer.props.onSend();await new Promise(resolve=>setImmediate(resolve));current={...submitted,text:'等待时新输入，必须保留'};release({revision_token:'frozen-before-new-input'});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(sent.length,1);assert.equal(sent[0][1].text,'本轮原字');assert.equal(sent[0][1].creative.context_revision,'frozen-before-new-input');assert.equal(resets,0);assert.equal(current.text,'等待时新输入，必须保留');
 });
 
 test('private barrel retains manual bridge discovery and has no retired production hooks', () => {

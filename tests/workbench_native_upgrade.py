@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -40,16 +41,18 @@ def main():
                     context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':900},is_mobile=mobile,has_touch=mobile)
                     context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);page=context.new_page();page.set_default_timeout(20000)
                     path='/posters/new?draft=upgrade-native-'+profile;page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
-                    textarea=page.get_by_role('textbox',name='素材与目标',exact=True);expect(textarea).to_be_visible(timeout=30000)
+                    textarea=page.get_by_role('textbox',name=re.compile('^(素材与目标|对话输入)$'));expect(textarea).to_be_visible(timeout=30000)
                     raw='  在线升级仍保留全部原字。\n第二行 '+profile+'  ';textarea.fill(raw);page.locator('.chat-hero-title,h1').last.click()
+                    page.wait_for_function('raw=>Object.entries(localStorage).some(([k,v])=>k.startsWith("toolbox:draft:")&&[JSON.parse(v).text,JSON.parse(v).material].includes(raw))',arg=raw)
+                    original_keys=page.evaluate('raw=>Object.entries(localStorage).filter(([k,v])=>k.startsWith("toolbox:draft:")&&[JSON.parse(v).text,JSON.parse(v).material].includes(raw)).map(([k])=>k)',raw)
                     page.wait_for_function('()=>!!navigator.serviceWorker.controller');page.wait_for_load_state('networkidle')
                     textarea.dispatch_event('compositionstart');pointer.write_text(json.dumps(report['native']),encoding='utf-8');page.evaluate("()=>window.dispatchEvent(new Event('focus'))");page.wait_for_timeout(500)
                     assert page.locator('meta[name=native-release]').get_attribute('content')==old['release'];check(profile,'IME composition defers the online upgrade')
                     textarea.dispatch_event('compositionend');page.evaluate("()=>window.dispatchEvent(new Event('focus'))")
                     page.wait_for_function("release=>document.querySelector('meta[name=native-release]')?.content===release",arg=current['release'],timeout=45000)
                     current_input=page.get_by_role('textbox',name='对话输入',exact=True);expect(current_input).to_have_value(raw,timeout=30000)
-                    assert page.evaluate('key=>JSON.parse(localStorage.getItem("toolbox:draft:"+key)).material','upgrade-native-'+profile)==raw
-                    assert not f['adapter'].requests;check(profile,'upgrade copies the old raw draft into a native session and retains the original key')
+                    assert page.evaluate('({keys,raw})=>keys.every(key=>{const v=JSON.parse(localStorage.getItem(key));return !!v&&[v.text,v.material].includes(raw)})',{'keys':original_keys,'raw':raw})
+                    assert not f['adapter'].requests;check(profile,'upgrade retains the exact raw draft and its original input keys')
                     page.wait_for_function("async release=>{const reg=await navigator.serviceWorker.getRegistration('/native/');if(!reg?.active||reg.installing||reg.waiting)return false;const cache=await caches.open('native-shell-'+release);const response=await cache.match('/native/');return !!response&&(await response.text()).includes(release)}",arg=current['release'],timeout=30000);page.wait_for_function("release=>new Promise(resolve=>{const channel=new MessageChannel(),timer=setTimeout(()=>resolve(false),400);channel.port1.onmessage=event=>{clearTimeout(timer);resolve(event.data?.release===release&&event.data?.shell_ready===true)};if(!navigator.serviceWorker.controller){clearTimeout(timer);resolve(false);return}navigator.serviceWorker.controller.postMessage({type:'NATIVE_VERSION'},[channel.port2])})",arg=current['release'],timeout=30000);stage(page,profile,'before-offline');context.set_offline(True);page.reload(wait_until='domcontentloaded')
                     expect(page.get_by_role('heading',name='保留的本机输入')).to_be_visible(timeout=35000);stage(page,profile,'offline')
                     assert page.evaluate('raw=>Object.entries(localStorage).filter(([k])=>k.startsWith("toolbox:draft:")).some(([k,v])=>JSON.stringify(JSON.parse(v).text)===JSON.stringify(raw))',raw)

@@ -22,7 +22,7 @@ from easel_workbench.runtime import distribution_entry as distribution_entry
 TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
     root=pathlib.Path(root);store=store or Store();auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
-    forms=Forms(auth);csrf=csrf_token(store);origin=auth.data['origin'];host=auth.data['host']
+    forms=Forms(auth,inert=True);csrf=csrf_token(store);origin=auth.data['origin'];host=auth.data['host']
     def error(code,message):return JSONResponse({'error':message},status_code=code,headers={'Cache-Control':'no-store'})
     def reply(data,code=200):return JSONResponse(data,status_code=code,headers={'Cache-Control':'no-store'})
     app=FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
@@ -142,9 +142,13 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path.startswith('/api/workbench/') or path.startswith('/api/v2/') or path in ('/api/cache-session','/api/offline-manifest','/api/action'):
             return error(410,'旧工作台与同步接口已停用，请重新打开工具箱；草稿会保留')
         if path=='/api/mobile/poll':return error(410,'通知设备与通知推送已退役')
-        if method in ('GET','HEAD') and pwa_assets.asset(path,web_assets.root(root)) is not None:
-            pwa_assets.serve(ctx,path,web_assets.root(root));return ctx.response()
+        if method in ('GET','HEAD') and pwa_assets.asset(path,project=root) is not None:
+            pwa_assets.serve(ctx,path,project=root);return ctx.response()
         if path=='/login':
+            # Native auth still reads the original inert CSRF challenge via
+            # fetch; only opening the old document moves to the native UI.
+            if method in ('GET','HEAD') and (headers.get('sec-fetch-mode')=='navigate' or 'text/html' in headers.get('accept','')):
+                return Response(status_code=303,headers={'Location':'/native/login'+('?' + request.url.query if request.url.query else ''),'Cache-Control':'no-store'})
             if method=='POST' and not same:return error(403,'origin_rejected')
             await asyncio.to_thread(forms.login,ctx,as_form(headers,raw) if method=='POST' else None);return ctx.response()
         match=re.fullmatch(r'/media/images/([A-Za-z0-9_-]{1,128})/([^/]+)',path)
@@ -161,8 +165,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             native_response=await native_preview.handle_native(request,root,bool(session))
             if native_response is not None:return native_response
         if not session:
-            if method in ('GET','HEAD') and (path in ('/','/toolbox','/news','/posters','/posters/new','/articles','/articles/new','/works','/works/new','/settings','/messages','/account','/workbench','/apps','/wiki') or path.startswith(('/articles/','/posters/','/works/','/news/a/','/news/production/','/workbench/','/wiki/'))):
-                forms.send(ctx,303,location='/login?next='+urllib.parse.quote(target,safe=''));return ctx.response()
+            if method in ('GET','HEAD') and (path in ('/','/toolbox','/chat','/news','/posters','/posters/new','/articles','/articles/new','/works','/works/new','/settings','/messages','/account','/account/password','/workbench','/apps','/wiki') or path.startswith(('/chat/','/articles/','/posters/','/works/','/news/a/','/news/production/','/workbench/','/wiki/'))):
+                native_target='/native/?'+urllib.parse.urlencode({'path':target})
+                forms.send(ctx,303,location='/native/login?next='+urllib.parse.quote(native_target,safe=''));return ctx.response()
             return error(401,'authentication_required')
         if native_api.supports(path,method):
             native_value=None
@@ -236,9 +241,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             forms.send(ctx,303,location='/login',set_cookie=cookie(SESSION,'',0));return ctx.response()
         if path in ('/account','/account/password'):
             if method=='POST':return error(405,'method rejected')
-            if path.endswith('/password'):forms.send(ctx,303,location='/account')
-            else:forms.send(ctx,200,forms.account_page(session))
-            return ctx.response()
+            return Response(status_code=303,headers={'Location':'/native/?path=%2Fsettings','Cache-Control':'no-store'})
         if path in ('/api/mobile/devices','/api/notifications','/api/notifications/read'):
             if method not in ('GET','HEAD') and (not same or len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf)):return error(403,'csrf_rejected')
             return error(410,'通知页与通知设备已退役，任务进度请在工作台或作品中查看')

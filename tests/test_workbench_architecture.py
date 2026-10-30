@@ -74,6 +74,8 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'skills/shared/scripts/web_publisher.py',
     'skills/shared/scripts/weixin_mp_stats.py',
     'skills/shared/scripts/xhs_publish.py',
+    # Generic explicit runtime root and analytics directory, with native defaults.
+    'skills/shared/scripts/account_stats.py',
 })
 WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
     'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
@@ -228,6 +230,8 @@ def test_project_skill_patch_allowlist_rejects_neighboring_upstream_and_global_s
     assert allowed_upstream_patch('skills/workbench-import.json')
     assert not allowed_upstream_patch('skills/builtin/ai-image-gen/SKILL.md')
     assert not allowed_upstream_patch('skills/shared/scripts/new_executor.py')
+    assert allowed_upstream_patch('skills/shared/scripts/account_stats.py')
+    assert not allowed_upstream_patch('skills/shared/scripts/account_stats_private.py')
     assert not allowed_upstream_patch('skills/workbench-import-other.json')
     assert allowed_upstream_patch('web/frontend/src/App.tsx')
     assert not allowed_upstream_patch('web/frontend/src/PrivateApp.tsx')

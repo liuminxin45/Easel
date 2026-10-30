@@ -102,6 +102,11 @@ def styles(page, selectors):
     }))""", selectors)
 
 
+def legacy_account_caches(page):
+    return page.evaluate("""()=>Object.keys(localStorage).filter(key=>
+      /^(?:easel|postcraft)_(?:whoami|analytics)(?:_|$)/.test(key))""")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--native', required=True)
@@ -179,14 +184,27 @@ def main():
                         page.set_default_timeout(20000)
                         errors, requests = [], []
                         page.on('pageerror', lambda error: errors.append(str(error)))
-                        page.on('request', lambda request: requests.append({'path': urlsplit(request.url).path, 'method': request.method}))
+                        page.on('request', lambda request: requests.append({'path': urlsplit(request.url).path, 'method': request.method, 'operation_id':request.headers.get('x-operation-id')}))
                         def visit(path):
                             page.goto(f['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
                         def capture(name):
                             page.screenshot(path=str(out / (label + '-' + name + '.png')), full_page=True)
                             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'), name
+                        held_boot=[]
+                        boot_handler=lambda route:held_boot.append(route)
+                        page.route('**/api/config',boot_handler)
                         visit('/toolbox')
+                        expect(page.locator('.ew-loading')).to_be_visible()
+                        assert len(held_boot)==1,held_boot
+                        assert page.locator('.dash-page').count()==0,'A native page mounted before its authenticated transport was ready'
+                        assert not legacy_account_caches(page),legacy_account_caches(page)
+                        assert not any(item['path'].startswith('/native/api/') for item in requests),requests
+                        held_boot[0].continue_()
+                        page.unroute('**/api/config',boot_handler)
                         expect(page.locator('.dash-page')).to_be_visible()
+                        assert not legacy_account_caches(page),legacy_account_caches(page)
+                        assert not any(item['path'].startswith('/native/api/') for item in requests),requests
+                        check(label+': startup gate prevents premature page effects, legacy account caches and native-relative API requests')
                         expect(page.locator('.sidebar .nav-item')).to_have_count(6)
                         assert page.locator('.sidebar select.persona-select').count() == 1
                         assert page.locator('.sidebar-logo-icon').count() == 1
@@ -242,9 +260,13 @@ def main():
                         assert page.get_by_text('历史账号记录', exact=True).count() == 0
                         assert page.get_by_role('button', name='配置 AppID 凭据', exact=True).count() == 0
                         capture('accounts-initial')
+                        assert not legacy_account_caches(page),legacy_account_caches(page)
                         account_styles = styles(page, ['.accounts-grid', '.account-card', '.account-card-name', '.account-card .btn'])
                         if canonical:
-                            reference = context.new_page()
+                            reference_context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':height},is_mobile=mobile,has_touch=mobile,color_scheme=theme)
+                            reference_context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}])
+                            reference_context.add_init_script('localStorage.setItem("easel_theme",'+json.dumps(theme)+');localStorage.setItem("easel_onboarding_seen","1");')
+                            reference = reference_context.new_page()
                             with reference.expect_response(lambda response: urlsplit(response.url).path=='/canonical/api/settings/bootstrap') as boot_response:
                                 reference.goto(f['origin'] + '/canonical/', wait_until='domcontentloaded')
                             expect(reference.locator('.dash-page')).to_be_visible()
@@ -257,7 +279,7 @@ def main():
                             expect(reference.locator('.account-card').first).to_be_visible()
                             assert styles(reference, list(account_styles)) == account_styles, {'native': account_styles, 'reference': styles(reference, list(account_styles))}
                             reference.screenshot(path=str(out / (label + '-canonical-accounts.png')), full_page=True)
-                            reference.close()
+                            reference_context.close()
                             check(label + ': default-app and hosted shared controls have equal computed styles')
                         modal = page.locator('.modal').filter(has=page.get_by_role('heading', name='登录 微信公众号 · 后台取数', exact=True))
                         def start_login():
@@ -351,7 +373,83 @@ def main():
                             assert any(item['method'] == 'PUT' and item['path'].endswith('/api/persona/oil-pig/file') for item in requests)
                             assert page.get_by_role('button', name='📊 抓取公众号数据', exact=True).count() == 0
                             check('native file editor writes exact profile revision without account import or deletion')
+                            # A real owner401 must keep local input and the original
+                            # durable request identity even when auth memory is reset.
+                            retained_text=first.locator('textarea').input_value()+'\nTEMP 401原字输入'
+                            first.locator('textarea').fill(retained_text)
+                            held_profile_write=[]
+                            profile_write_handler=lambda route:held_profile_write.append(route)
+                            page.route('**/api/persona/oil-pig/file',profile_write_handler)
+                            first.get_by_role('button',name='保存',exact=True).click()
+                            assert len(held_profile_write)==1
+                            f['auth'].expired=True
+                            with page.expect_response(lambda response:response.request.method=='PUT' and urlsplit(response.url).path=='/api/persona/oil-pig/file') as rejected:
+                                held_profile_write[0].continue_()
+                            assert rejected.value.status==401,rejected.value.status
+                            page.unroute('**/api/persona/oil-pig/file',profile_write_handler)
+                            expect(page.locator('.native-host-notice').filter(has_text='登录已过期')).to_be_visible()
+                            profile_key='toolbox:draft:easel:profile-files:oil-pig'
+                            pending_key='toolbox:draft:native:pending:easel-native:PUT:/api/persona/oil-pig/file'
+                            retained_profile=page.evaluate('key=>JSON.parse(localStorage.getItem(key))',profile_key)
+                            original_pending=page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation',pending_key)
+                            assert retained_profile['fields']=={'identity.md':retained_text}
+                            assert original_pending['id'] and original_pending['metadataOnly'] and original_pending['body']=={},original_pending
+                            f['auth'].expired=False
+                            recover_start=len(requests)
+                            page.reload(wait_until='domcontentloaded')
+                            first=page.locator('.profile-dim').filter(has_text='身份定位').first
+                            expect(first.locator('textarea')).to_have_value(retained_text)
+                            assert page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation.id',pending_key)==original_pending['id']
+                            assert not any(item['path']=='/api/persona/oil-pig/file' and item['method']=='PUT' for item in requests[recover_start:])
+                            check('real owner401 and authenticated reload preserve exact profile input and request identity without replay')
+                            # Lose only the acknowledgement of a genuine TEMP idea
+                            # write; suppress receipt visibility, never replay POST.
+                            visit('/toolbox?section=research&pane=topics')
+                            page.get_by_role('button',name='+ 新建选题',exact=True).click()
+                            page.locator('.modal .field').nth(0).fill('TEMP 未知回执原字选题')
+                            def hide_receipt(route):
+                                operation=urlsplit(route.request.url).path.rsplit('/',1)[-1]
+                                route.fulfill(status=200,content_type='application/json',body=json.dumps({'id':operation,'state':'unavailable','result':None}))
+                            page.route('**/api/native/operations/*',hide_receipt)
+                            accepted_idea=[]
+                            def lose_idea_ack(route):
+                                if route.request.method!='POST':route.continue_();return
+                                response=route.fetch()
+                                assert response.ok,response.text()
+                                accepted_idea.append({'id':route.request.headers['x-operation-id'],'result':response.json()})
+                                route.abort('connectionreset')
+                            page.route('**/api/ideas',lose_idea_ack)
+                            unknown_start=len(requests)
+                            page.locator('.modal').get_by_role('button',name='保存',exact=True).click()
+                            idea_pending_key='toolbox:draft:native:pending:easel-native:POST:/api/ideas'
+                            page.wait_for_function('key=>JSON.parse(localStorage.getItem(key)||"{}").operation?.uncertain===true',arg=idea_pending_key)
+                            assert len(accepted_idea)==1,accepted_idea
+                            operation_id=accepted_idea[0]['id']
+                            assert page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation.id',idea_pending_key)==operation_id
+                            page.unroute('**/api/ideas',lose_idea_ack)
+                            page.locator('.modal').get_by_role('button',name='×',exact=True).click()
+                            f['auth'].expired=True
+                            with page.expect_response(lambda response:response.status==401 and urlsplit(response.url).path.startswith('/api/')) as expired_unknown:
+                                page.locator('.sidebar .nav-item').filter(has_text='账号').click()
+                            assert expired_unknown.value.request.method=='GET'
+                            expect(page.locator('.native-host-notice').filter(has_text='登录已过期')).to_be_visible()
+                            assert page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation.id',idea_pending_key)==operation_id
+                            visit('/toolbox?section=distribution&pane=connections')
+                            expect(page.get_by_role('heading',name='登录创作工作台',exact=True)).to_be_visible()
+                            assert page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation.id',idea_pending_key)==operation_id
+                            f['auth'].expired=False
+                            visit('/toolbox?section=research&pane=topics')
+                            expect(page.locator('.modal .field').nth(0)).to_have_value('TEMP 未知回执原字选题')
+                            page.wait_for_timeout(200)
+                            assert page.evaluate('key=>JSON.parse(localStorage.getItem(key)).operation.id',idea_pending_key)==operation_id
+                            assert len([item for item in requests[unknown_start:] if item['path']=='/api/ideas' and item['method']=='POST'])==1
+                            remote_ideas=page.request.get(f['origin']+'/api/ideas').json()
+                            assert len([item for item in remote_ideas if item['title']=='TEMP 未知回执原字选题'])==1,remote_ideas
+                            page.unroute('**/api/native/operations/*',hide_receipt)
+                            check('accepted write with lost acknowledgement retains exact idea input and unknown operation identity through401 and reload; POST is never replayed')
                         assert not errors, errors
+                        assert not legacy_account_caches(page),legacy_account_caches(page)
+                        assert not any(item['path'].startswith('/native/api/') for item in requests),requests
                         all_errors.extend(errors)
                         context.close()
                 assert not f['adapter'].requests, 'Page acceptance must not run an inference adapter'

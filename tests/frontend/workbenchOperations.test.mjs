@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
 import {webcrypto} from 'node:crypto';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript'),cache=new Map();
-const root=path.resolve('web/frontend/src/workbench/core');
+const root=fileURLToPath(new URL('../../web/frontend/src/workbench/core',import.meta.url));
 function load(file){
  file=path.resolve(file);if(cache.has(file))return cache.get(file);
  const exports={};cache.set(file,exports);

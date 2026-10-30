@@ -4,12 +4,21 @@
 
 通用修复与可选宿主接口放在原 Easel 目录，保留无宿主时的默认行为，能够单独审查、测试及整理给上游。准确版本、冻结输入、画像绑定、授权、历史回执及项目采集属于本项目业务，只能由私有适配层提供。本轮提交推送到 origin；官方 upstream 只作为读取和合并来源，不向官方提交私有业务 PR。
 
+## 采用的模式
+
+- **端口与适配器（Ports and Adapters）。** 原页面通过原 API 函数工作，共享后端通过工厂取得目录、存储和执行器。服务器鉴权、作品台账、画像修订及安装队列由私有适配器接入；公共模块不认识工作台业务。
+- **集中组装（Composition Root）。** 原 `App.tsx` 保有唯一应用布局；私有入口集中绑定传输、缓存和路由。认证代数变更时先重建绑定再挂载页面，避免旧缓存或迟到响应混入新身份。
+- **扩展槽与策略注入。** 页面通过可选 props 接收草稿仓库、保存策略和详情区域。默认参数保留官方行为；私有业务只填入扩展槽，不复制页面或覆盖其 CSS。
+- **边界装饰（Decorator）。** 原请求进入共享处理函数前，由私有边界包住准入、准确操作身份、授权事务和回执。处理结果仍沿用原协议；未知回执只查询，不通过重新执行补救。
+
+这些模式落实为少量函数、类型和可选参数，不建立第二套页面框架或通用依赖注入容器。`binding.py` 是迁出原函数时的兼容桥，约束见下文；新增服务优先显式工厂参数，不能继续扩散运行时替换。
+
 ## 当前接缝及职责
 
 | 位置 | 通用实现和默认行为 | 私有接入点 |
 |---|---|---|
 | `web/frontend/src/App.tsx` | `ApplicationFrame` 唯一绘制侧栏、子导航和页面容器；不传 `host` 时运行原 `NativeApp` | `workbench/ui/index.tsx` 组装服务器会话、路由转换和页面内容，不另画应用壳 |
-| `web/frontend/src/lib/api.ts`、`lib/whoami.ts` | 原页面仍调用原 API 函数；无绑定时沿用原 fetch 和账号显示缓存 | `workbench/ui/nativeApi.ts` 连接鉴权客户端、操作身份和内存缓存；入口按客户端与认证修订完成绑定后才挂载原页面；缓存代数拒绝旧宿主的迟到响应 |
+| `web/frontend/src/lib/api.ts`、`lib/whoami.ts` | 原页面仍调用原 API 函数；无绑定时沿用原 fetch、账号显示缓存和自动核验默认策略 | `workbench/ui/nativeApi.ts` 连接鉴权客户端、操作身份和内存缓存；入口按客户端与认证修订完成绑定后才挂载原页面；缓存代数拒绝旧宿主的迟到响应；私有绑定关闭自动核验，手动及扫码后的明确核验仍走原服务 |
 | 原页面的可选 props | `IdeasPage`、`ProfilePage` 的草稿存储，`DashboardPage` 的缓存/读取策略，预览与发布页的回调均保留默认行为 | `nativePages.tsx`、`nativeProfiles.tsx`、`nativePublishing.ts` 只转换数据、批准输入和业务回调；仍渲染完整原组件 |
 | `easel/web_services/{accounts,settings,planning,outputs,environment,analytics}.py` | 从 `web/app.py` 移出的单一函数实现；原路由继续绑定同一代码 | 工厂接收目录、环境、执行器、存储和检查回调；不得导入 `easel_workbench` |
 | `easel/web_services/binding.py` | 用同一函数代码建立独立上下文；原 `web/app.py` 绑定自身命名空间，保留原测试入口 | 仅工厂组装上下文，不复制源码、不修改进程环境，不把此桥接扩展成通用依赖注入框架 |

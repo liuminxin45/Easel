@@ -190,10 +190,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         # Owner authentication above remains mandatory for retired routes too.
         # Original image display is a pre-existing workbench feature.
         legacy_account = path == '/api/media/accounts' or path.startswith('/api/media/accounts/')
-        history_read = method in ('GET','HEAD') and bool(re.fullmatch(r'/api/media/jobs/[A-Za-z0-9_-]+(?:/transcript)?',path))
+        history_read = method in ('GET','HEAD') and bool(native_api.HOST_MEDIA_JOB.fullmatch(path))
         if path.startswith('/api/media/') and not (legacy_account or path.startswith('/api/media/images/') or history_read):
             return error(410,'Easel 仅保留平台连接；媒体制作、配置与迁入入口已撤下，历史数据保留')
-        media_match=re.fullmatch(r'/api/media/images/([A-Za-z0-9_-]{1,128})/([a-f0-9]{64})/(original|thumb-256)',path)
+        media_match=native_api.HOST_DISPLAY_IMAGE.fullmatch(path)
         if path.startswith('/api/media/images/'):
             if method not in ('GET','HEAD'):return error(405,'method rejected')
             if not media_match or request.url.query:return error(400,'图片展示地址无效')
@@ -422,7 +422,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path=='/api/easel/plans':return reply(await asyncio.to_thread(frontend.plans))
         if path=='/api/easel/topics':return reply(await asyncio.to_thread(frontend.topics))
         if path in ('/api/platform-accounts','/api/media/accounts'):return reply(await asyncio.to_thread(accounts.bootstrap))
-        account_qr=re.fullmatch(r'/api/(?:platform-accounts|media/accounts)/([A-Za-z0-9_-]+)/qr',path)
+        account_qr=native_api.HOST_ACCOUNT_QR.fullmatch(path)
         if account_qr:
             with store.connect() as connection:account=accounts._get(connection,account_qr[1])
             image=pathlib.Path(root)/'data/easel-accounts'/account['id']/'qr.png'
@@ -431,7 +431,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path=='/api/platform-accounts/environment':
             from easel_workbench.runtime.connection_environment import service as environment_service
             return reply(await asyncio.to_thread(environment_service(box).check))
-        media_job=re.fullmatch(r'/api/media/jobs/([A-Za-z0-9_-]+)(/transcript)?',path)
+        media_job=native_api.HOST_MEDIA_JOB.fullmatch(path)
         if media_job:
             from easel_workbench.runtime.easel_integration import service as history_service
             history=history_service(box)

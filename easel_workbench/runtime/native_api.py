@@ -36,6 +36,17 @@ PROFILE_FILES = {'identity.md': 'identity', 'style.md': 'voice',
 EXTRA_PROFILE_FILES = {'platforms.md', 'memory.md'}
 WRITE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
 
+# These exact protocols already belong to the authenticated host. Ordinary
+# output directories named images/accounts/jobs still use native media serving.
+HOST_DISPLAY_IMAGE = re.compile(r'/api/media/images/([A-Za-z0-9_-]{1,128})/([a-f0-9]{64})/(original|thumb-256)')
+HOST_MEDIA_JOB = re.compile(r'/api/media/jobs/([A-Za-z0-9_-]+)(/transcript)?')
+HOST_ACCOUNT_QR = re.compile(r'/api/(?:platform-accounts|media/accounts)/([A-Za-z0-9_-]+)/qr')
+
+
+def is_host_media_protocol(path):
+    return path == '/api/media/accounts' or any(pattern.fullmatch(path) for pattern in (
+        HOST_DISPLAY_IMAGE, HOST_MEDIA_JOB, HOST_ACCOUNT_QR))
+
 # A server-owned capability, never a request/response header supplied by a client.
 # HTML keeps the same opaque-origin script sandbox as the original OutputsPage.
 _HTML_PREVIEW = object()
@@ -93,6 +104,8 @@ def _protect_html_preview(response, *, preview):
 
 def supports(path, method=None):
     """Pure route ownership check used before the outer legacy-route guard."""
+    if is_host_media_protocol(path):
+        return False
     routes = (
         r'/api/native/operations/[A-Za-z0-9_-]+', r'/api/upload',
         r'/api/outputs', r'/api/output-context', r'/api/(?:output|media)/.+',

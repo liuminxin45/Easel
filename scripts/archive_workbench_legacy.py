@@ -616,8 +616,8 @@ def retire(directory, review_path, *, keep=(), processes=None):
     obsolete_controls = []
     for control in review.get('retire_candidate_controls', []):
         path = absolute(control['path']); fenced(path, root)
-        if (path.parent != root / '.local/workbench-deployment' or 'candidate' not in path.name
-                or path.name == 'candidate.json' or path.suffix != '.json'
+        if (path.parent not in (root / '.local/workbench-deployment', root / 'data') or 'candidate' not in path.name
+                or path.name == 'candidate.json' or path.name.startswith('active') or path.suffix != '.json'
                 or digest(path) != control.get('sha256')):
             raise ValueError('Obsolete candidate control must be an exact reviewed non-primary selector')
         if any(Path(p).name in path.read_text(encoding='utf-8') for p in kept):

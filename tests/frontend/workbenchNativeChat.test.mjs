@@ -16,7 +16,7 @@ const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:i
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
 function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride}={}){
  let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
- const react={useMemo:fn=>{const index=cursor++;if(!(index in hooks))hooks[index]=fn();return hooks[index]},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
+ const react={useMemo:(fn,deps)=>{const index=cursor++,old=hooks[index];if(!old||!deps||!old.deps||deps.length!==old.deps.length||deps.some((value,i)=>!Object.is(value,old.deps[i])))hooks[index]={deps,value:fn()};return hooks[index].value},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
  const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
  vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/core/react.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
@@ -32,6 +32,21 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  return {calls,resources,lib,runtime,vm,components,render,effects,runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('editing a draft and identical history polls preserve the native scroll dependency',()=>{
+ const f=fixture();f.resources.session.messages=[{role:'user',content:'原问题'},{role:'assistant',content:'保留阅读位置'}];
+ const original=f.render().chat.session.messages;
+ f.draft={...f.draft,text:'继续输入，未发送'};
+ assert.equal(f.render().chat.session.messages,original);
+ f.resources.session={...f.resources.session,messages:plain(f.resources.session.messages)};
+ assert.equal(f.render().chat.session.messages,original);
+ f.resources.session={...f.resources.session,messages:[...f.resources.session.messages,{role:'assistant',content:'新的真实消息'}]};
+ const updated=f.render().chat.session.messages;
+ assert.notEqual(updated,original);assert.equal(updated.at(-1).content,'新的真实消息');
+ f.resources.session={...f.resources.session,id:'another-session'};
+ assert.notEqual(f.render().chat.session.messages,updated);
+ assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);
+});
 test('native commands come from exact server releases and contextual actions route to their business page',()=>{
  const f=fixture(),choices=f.lib.nativeSkillChoices(catalog,false),production=choices.find(c=>c.selection.action_id==='poster');
  assert.equal(production.label,'生成贴图');assert.equal(production.selection.version,3);

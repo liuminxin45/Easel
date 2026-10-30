@@ -82,7 +82,14 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   if(!['discuss','','native'].includes(string(turn.context.action_id)))throw Error('请在成品页恢复原任务或显式选择制作技能');
   turn.inputs={text:'',files:[]};runtime.connect(turn,profileId);
  });
- const activeTurn=draft.pending?.turnId||session?.pendingTurnId,shown:ChatSession=session?{...session,messages:(session.messages||[]).filter(message=>!((running||!!session.pendingTurnId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)))}:{id,title:'对话',messages:[],created:0};
+ const activeTurn=draft.pending?.turnId||session?.pendingTurnId;
+ // Draft edits and identical polling replies must not retrigger the native
+ // ChatPage's new-message scroll effect. API history is plain JSON.
+ const historyJson=useMemo(()=>JSON.stringify(session?.messages||[]),[session?.messages]);
+ const visibleMessages=useMemo(()=>
+  (JSON.parse(historyJson) as ChatSession['messages']).filter(message=>!((running||!!session?.pendingTurnId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn))),
+  [historyJson,session?.id,running,session?.pendingTurnId,activeTurn]);
+ const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label+' · v'+draft.command.version}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId;
  return <div className="ew-chat-layout"><ChatPage apiDirect={session?.runtime==='api'} session={shown} stream={running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} linkifyArtifactPaths={false} messageArtifacts={nativeArtifacts} renderMessageExtra={message=><NativeTurnOutputs message={message}/>}

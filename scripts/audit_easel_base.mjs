@@ -102,6 +102,38 @@ export function inspectHostCss(source,file='host.css'){
  });return violations;
 }
 
+// The native host may adapt geometry to a small viewport without restyling
+// shared Easel components. Keep that exception explicit and mechanically bounded.
+export function inspectMobileCss(source,file='mobile.css'){
+ const violations=[],sheet=postcss.parse(source,{from:file});
+ const geometry=new Set(['display','flex','flex-direction','flex-wrap','flex-shrink','flex-basis','align-items','align-content','justify-content','gap',
+  'position','grid-template-columns','grid-column','inline-size','block-size','min-inline-size','min-block-size','max-inline-size','max-block-size',
+  'padding','padding-inline','padding-block-end','padding-inline-end','margin-inline-start','margin-block-end','border-inline-end-width',
+  'overflow','overflow-x','overflow-y','overscroll-behavior-y','overflow-wrap','white-space','opacity']);
+ const viewport=/^\(max-width: (?:480|760|900|1100)px\)(?:, \(max-width: 1100px\) and \(max-height: 500px\))?$|^\(max-width: 1100px\) and \(max-height: 500px\)$/;
+ const report=(node,rule,extra={})=>violations.push({file,line:node.source.start.line,rule,...extra});
+ sheet.walkAtRules(node=>{if(node.name!=='media')report(node,'mobile-adapter-must-use-viewport-media');});
+ sheet.walkRules(node=>{
+  if(!splitSelectors(node.selector).every(selector=>selector.startsWith('html[data-native-platform] ')))report(node,'mobile-adapter-must-be-host-scoped');
+  if(node.parent.type!=='atrule'||node.parent.name!=='media'||!viewport.test(node.parent.params))report(node,'mobile-adapter-viewport-unreviewed');
+  node.walkDecls(decl=>{
+   if(!geometry.has(decl.prop)||decl.important)report(decl,'mobile-adapter-must-preserve-appearance',{property:decl.prop});
+   if((decl.prop==='overflow'||decl.prop==='overflow-x')&&/hidden|clip/.test(decl.value))report(decl,'mobile-adapter-must-not-conceal-overflow');
+   if(decl.prop==='display'&&decl.value==='none'){
+    const selectors=splitSelectors(node.selector);
+    const pairedTabs=selectors.every(selector=>{
+     if(!/^html\[data-native-platform\] \.ew-work-(?:preview|chat|records):not\(\.ew-selected\)$/.test(selector))return false;
+     let shown=false;const active=selector.replace(':not(.ew-selected)','.ew-selected');
+     sheet.walkRules(peer=>{if(peer.parent.type==='atrule'&&peer.parent.params===node.parent.params&&splitSelectors(peer.selector).includes(active))peer.walkDecls('display',value=>{if(value.value==='block')shown=true;});});
+     return shown;
+    });
+    if(!pairedTabs)report(decl,'mobile-adapter-must-not-hide-controls');
+   }
+   if(decl.prop==='opacity'&&decl.value!=='1')report(decl,'mobile-adapter-must-not-hide-controls');
+  });
+ });return violations;
+}
+
 export function auditEaselBase(base=root){
  const read=file=>fs.readFileSync(path.join(base,file),'utf8');const violations=[];
  const nativeUse=[['web/frontend/src/workbench/ui/index.tsx','App','../../App'],
@@ -118,6 +150,8 @@ export function auditEaselBase(base=root){
  violations.push(...inspectFrame(read('web/frontend/src/App.tsx')));
  violations.push(...inspectExtensionCss(read('web/frontend/src/workbench/ui/styles/workbench.css')));
  violations.push(...inspectHostCss(read('web/frontend/src/workbench/host.css')));
+ const mobile='web/frontend/src/workbench/ui/styles/mobile.css';
+ if(fs.existsSync(path.join(base,mobile)))violations.push(...inspectMobileCss(read(mobile),mobile));
  for(const name of ['index','theme']){
   const file=`web/frontend/src/workbench/ui/styles/${name}.css`;
   if(fs.existsSync(path.join(base,file))){

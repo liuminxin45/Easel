@@ -1,4 +1,4 @@
-import {useCallback,useMemo} from 'react';
+import {useCallback,useMemo,useSyncExternalStore} from 'react';
 import DashboardPage from '../../components/DashboardPage';
 import OutputsPage from '../../components/OutputsPage';
 import IdeasPage,{type IdeasPageDraft} from '../../components/IdeasPage';
@@ -15,11 +15,19 @@ import {SkillTask} from './management';
 /** Only route/data adaptation lives here. Native pages own their complete UI. */
 export {nativePageRoutes} from '../platform/native-routes';
 
+const compactDashboardQuery='(max-width: 900px), (max-width: 1100px) and (max-height: 500px)';
+const compactDashboard=()=>matchMedia(compactDashboardQuery).matches;
+function subscribeDashboardLayout(change:()=>void){
+ const media=matchMedia(compactDashboardQuery);media.addEventListener('change',change);
+ return()=>media.removeEventListener('change',change);
+}
+
 export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTopic:(title:string)=>void}){
  const vm=useWorkbench(),status=useResource<JsonRecord>('/api/status');
+ const compact=useSyncExternalStore(subscribeDashboardLayout,compactDashboard,()=>false);
  return <DashboardPage persona={profileId} gatewayStatus={status.data?.gateway===true?'connected':'disconnected'}
   apiDirect={status.data?.runtime==='api'} agentRuntime={string(status.data?.runtime)||'codex'}
-  persistAnalytics={false} verifyAccountsOnMount={false} listMaxHeight={360}
+  persistAnalytics={false} verifyAccountsOnMount={false} listMaxHeight={compact?undefined:360}
   onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic}/>;
 }
 

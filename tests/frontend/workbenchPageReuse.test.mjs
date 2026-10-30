@@ -14,7 +14,7 @@ const routeSource=readFileSync(new URL('../../web/frontend/src/workbench/platfor
 const routeModule={};
 runInNewContext(ts.transpileModule(routeSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports:routeModule});
 
-function load(name,{data={},vm={},choices=[]}={}){
+function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
  const source=readFileSync(new URL('../../web/frontend/src/workbench/ui/'+name,import.meta.url),'utf8');
  const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const exports={};
@@ -24,8 +24,8 @@ function load(name,{data={},vm={},choices=[]}={}){
   useWorkbench:()=>host,useResource:path=>({data:data[path]??null,reload:async()=>data[path]??null}),
   useDraft:(_,initial)=>[initial,()=>{}],useAsyncAction:()=>({busy:false,run:async fn=>fn()}),
   creatorAssetInputs:value=>value||[],workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
- runInNewContext(compiled,{exports,require:specifier=>{
-  if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}]};
+ runInNewContext(compiled,{exports,matchMedia:()=>({matches:viewport.compact,addEventListener(){},removeEventListener(){}}),require:specifier=>{
+  if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}],useSyncExternalStore:(_,snapshot)=>snapshot()};
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='@workbench/core')return core;
   if(specifier==='../platform/native-routes')return routeModule;
@@ -78,6 +78,16 @@ test('dashboard uses server data and leaves retired account auto-detection disab
  assert.equal(dashboard.props.persistAnalytics,false);
  assert.equal(dashboard.props.verifyAccountsOnMount,false);
  assert.equal(dashboard.props.listMaxHeight,360);
+});
+
+test('compact dashboard delegates flat scrolling to the native page and restores bounded desktop lists',()=>{
+ const viewport={compact:true},pages=load('nativePages.tsx',{viewport});
+ const mobile=pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}});
+ assert.equal(mobile.type,native.DashboardPage);
+ assert.equal(mobile.props.listMaxHeight,undefined);
+ assert.equal(mobile.props.verifyAccountsOnMount,false);
+ viewport.compact=false;
+ assert.equal(pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}}).props.listMaxHeight,360);
 });
 
 test('native profile editor keeps stable identity and makes account imports and deletion unavailable',()=>{

@@ -9,7 +9,7 @@ import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
 import { IconArrowUp, IconStop, IconPlus, IconFile } from './icons';
 
-export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; group?:string; }
+export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; group?:string;tab?:string;tabLabel?:string;status?:string;prompt?:string; }
 export interface ChatComposerBindings {
   text: string;
   attachments: UploadedFile[];
@@ -224,7 +224,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       )}
       <div className="composer-top">
         {apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
-          : <BrushEntry items={composer?.commands} onSelect={id=>{const choice=composer?.commands?.find(item=>item.id===id);pickCommand(id);if(!input.trim()&&choice)setInput(`帮我${choice.label}`);requestAnimationFrame(()=>textareaRef.current?.focus())}} registerLayer={composer?.registerLayer} disabled={busy||composer?.disabled} onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
+          : <BrushEntry items={composer?.commands} onSelect={id=>{const choice=composer?.commands?.find(item=>item.id===id);pickCommand(id);if(!input.trim()&&choice)setInput(choice.prompt||`帮我${choice.label}`);requestAnimationFrame(()=>textareaRef.current?.focus())}} registerLayer={composer?.registerLayer} disabled={busy||composer?.disabled} onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
         <textarea
           ref={textareaRef}
           className="chat-input"

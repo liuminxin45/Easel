@@ -63,9 +63,10 @@ async def handle(service,business,path,request,value=None,*,authenticated=None):
     if not (path.startswith('/api/chat/') or path=='/api/skills' or path.startswith('/api/skill/')):
         return None
     try:
-        if path=='/api/skills' and get:return response(business.skills())
+        if path=='/api/skills' and get:return response(await asyncio.to_thread(business.skills))
+        if path=='/api/chat/artifacts' and get:return response(business.upstream.library())
         match=re.fullmatch(r'/api/skill/([a-z0-9-]+)',path)
-        if match and get:return response(business.skill(match[1]))
+        if match and get:return response(await asyncio.to_thread(business.skill,match[1]))
         if path=='/api/chat/sessions':
             if get:
                 result=service.list_sessions()
@@ -87,7 +88,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None):
         if match and get:return response(business.history(match[1]))
         if path=='/api/chat/plan' and method=='POST':return response(business.plan(value))
         if path=='/api/chat/stream' and method=='POST':
-            prepared=business.prepare(value)
+            prepared=await asyncio.to_thread(business.prepare,value)
             if authenticated is not None and not authenticated():return response({'error':'authentication_required'},401)
             turn=prepared.get('receipt') or await service.submit(value,**prepared)
             return stream(service,turn['id'],accepted=True,authenticated=authenticated)

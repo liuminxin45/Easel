@@ -21,7 +21,7 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:resources,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
  const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{}};
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get draft(){return draft},set draft(next){draft=next}};
 }
@@ -171,4 +171,13 @@ test('explicit ordinary retry pins the original skill version and preserves a la
  f.render().chat.onResend(0);await tick();assert.equal(f.calls.stream.length,1);
  const args=f.calls.stream[0];assert.equal(args[0],'原问题');assert.equal(args[16].context.version,2);assert.equal(args[16].context.skill_id,'topic-research');
  args[16].onAccepted();assert.equal(f.draft.text,'  原字材料\n保留  ');
+});
+
+
+test('the upstream brush retains both official groups and places private skills in extensions',()=>{
+ const f=fixture(),menu=module('lib/capabilityMenu.ts',{}).CAPABILITY_MENU;
+ const originals=menu.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill).map(item=>({id:item.skill,name:item.skill,layer:tab.id==='make'?'produce':'general',origin:'easel',version:1,source_revision:'a'.repeat(64),launch_actions:[{id:'native',label:'使用技能',task:'native',requires_plan:false}]}))));
+ const choices=f.lib.nativeSkillChoices([...originals,...catalog]);
+ assert.equal(choices.filter(item=>item.tab==='make').length,61);assert.equal(choices.filter(item=>item.tab==='operate').length,52);assert.ok(choices.some(item=>item.tab==='extensions'&&item.label==='生成贴图'));
+ const card=choices.find(item=>item.selection.skill_id==='card-quote');assert.equal(card.label,'金句卡 / 数据卡');assert.equal(card.prompt,'帮我做「金句卡 / 数据卡」');assert.equal(card.selection.source_revision,'a'.repeat(64));assert.equal(f.lib.nativeSkillDestination(card.selection,'oil-pig'),null);
 });

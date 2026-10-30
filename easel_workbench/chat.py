@@ -275,7 +275,7 @@ class ChatService:
             frozen_instructions = harness_instructions(RunRequest(actual_prompt, self.root, environment, model=model))
         frozen_instructions = text(frozen_instructions, 1024 * 1024, True)
         context = value.get('context', {})
-        if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode'}:
+        if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode', 'skill_revision'}:
             raise ValueError('对话启动上下文无效')
         if 'trial' in context and type(context['trial']) is not bool:
             raise ValueError('技能试用标记必须为布尔值')

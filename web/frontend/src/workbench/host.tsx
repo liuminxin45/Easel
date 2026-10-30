@@ -1,6 +1,7 @@
 import React,{Suspense,lazy,useEffect,useLayoutEffect,useMemo,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {CoreProvider,useWorkbench,useUsage} from '@workbench/core';
 import {ActivityCoordinator,NavigationService,bindViewport,bindNavigationLinks,browserProfile,prepareNativeWorker,type PlatformProfile} from '@workbench/platform';
+import {bindNativeModalFocus} from './platform/modal-focus';
 import './host.css';
 const EaselRoot=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselWorkbench}))),EaselAuth=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselAuth})));
 const nonce=()=>document.querySelector<HTMLMetaElement>('meta[name="style-nonce"]')?.content||'';
@@ -28,6 +29,7 @@ export default function NativeHost({auth=false}:{auth?:boolean}){
  useLayoutEffect(()=>auth?undefined:navigation.start(),[navigation,auth]);useLayoutEffect(()=>auth?undefined:navigation.committed(),[navigation,route,auth]);
  useEffect(()=>auth?undefined:bindNavigationLinks(navigation),[navigation,auth]);
  useEffect(()=>bindViewport(activities),[activities]);
+ useEffect(()=>auth?undefined:bindNativeModalFocus(),[auth]);
  useEffect(()=>{const change=()=>{const next=browserProfile(layout);setProfile(current=>current.family===next.family&&current.os===next.os&&current.layout===next.layout&&current.input===next.input&&current.display===next.display&&current.supportedNative===next.supportedNative?current:next)},media=matchMedia('(prefers-color-scheme:dark)'),dark=()=>setSystemDark(media.matches);change();window.addEventListener('resize',change);media.addEventListener('change',dark);return()=>{window.removeEventListener('resize',change);media.removeEventListener('change',dark)}},[layout]);
  useEffect(()=>{document.documentElement.dataset.nativePlatform=profile.family;document.documentElement.dataset.nativeLayout=profile.layout;document.documentElement.dataset.nativeInput=profile.input;document.documentElement.dataset.nativeTheme=theme;document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark')},[profile.family,profile.layout,profile.input,theme]);
  const onThemeChange=(value:Theme)=>{setPreference(value);try{localStorage.setItem('native:theme',value)}catch{/* Keep the selected theme for this session. */}};

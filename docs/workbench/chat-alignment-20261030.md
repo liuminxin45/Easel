@@ -47,14 +47,14 @@ original App entry and private entry both build independently with Node 24.19.0.
 
 Immutable pair:
 
-- Backend `workbench-20261030-055311`, manifest
-  `da0d05c9d238b5376031160982abf8186671cdb53a3e5cb7e193267e1b1d0032`.
-- Frontend `native-easel-workbench-20261030055158`, manifest
-  `a3f42c79279824f4ec65d79a7f3493df7b6d6fb00693508e3008e19718c7ba54`.
+- Backend `workbench-20261030-061429`, manifest
+  `c718714d667b5f2ee05d4cfa7b835b265de341bda4b276f7bffc3b7313f43125`.
+- Frontend `native-easel-workbench-20261030061308`, manifest
+  `b535be4d12ccb04a63c41bf73c949b8daf1522fe8497998b9f863fb4ebf6c8f3`.
 
 Evidence is under `.local/workbench-validation/chat-alignment/`:
 
-- 182 frontend tests; 111 chat/architecture/skill checks; 68 permission and native
+- 183 frontend tests; 111 chat/architecture/skill checks; 68 permission and native
   ownership checks; 19 upstream event/question replay checks in the upstream
   Python environment. A separate 94-test business/completion/correction/deployment
   regression run passed during implementation (overlaps the above suites).
@@ -72,3 +72,10 @@ Evidence is under `.local/workbench-validation/chat-alignment/`:
 Activation uses the existing admission fence, idle/queue checks and immutable
 pair switch. The same authoritative database remains in place. Previous release
 assets, historical turns, frozen inputs and unknown operations are preserved.
+
+The final follow-up clears transient connection notices when streaming resumes
+or a terminal receipt is verified. It was built from commit `9e57c7d` plus that
+single private UI change in an isolated source tree. Its backend members are
+byte-identical to the previously validated runtime. Concurrent collection,
+account and cache edits in the working checkout were excluded from this release;
+those files were preserved. Reports for this pair use the `isolated-*` prefix.

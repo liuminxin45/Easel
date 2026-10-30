@@ -158,6 +158,12 @@ test('terminal question replay is checked before it becomes an actionable card',
  const owner=f.runtime.sessionRuntime(f.vm.client,'session-one');assert.equal(owner.state.getState().stream.questions.length,0);assert.ok(owner.closed.has('old'));
 });
 
+test('verified stream recovery clears transient connection notices',async()=>{
+ const f=fixture();f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0],owner=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ callbacks[8]();assert.match(owner.state.getState().error,/连接中断/);callbacks[3]('继续回复');assert.equal(owner.state.getState().error,'');
+ callbacks[8]();callbacks[4]();await tick();await tick();assert.equal(owner.state.getState().error,'');
+});
+
 
 test('explicit ordinary retry pins the original skill version and preserves a later draft',async()=>{
  const f=fixture({receipt:{turn_id:'old-turn',execution_status:'completed',delivery_state:'accepted',context:{profile_id:'oil-pig'},skill_refs:[{id:'topic-research',version:2}]}});

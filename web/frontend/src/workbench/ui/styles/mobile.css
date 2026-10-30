@@ -16,6 +16,7 @@
   html[data-native-platform] .cal-legend-filter { flex-wrap: wrap; min-inline-size: 0; }
   html[data-native-platform] .page-head > *,
   html[data-native-platform] .profile-head > * { min-inline-size: 0; max-inline-size: 100%; }
+  html[data-native-platform] .accounts-page > div:first-child > .btn { flex-shrink: 0; white-space: nowrap; }
   html[data-native-platform] .page-title,
   html[data-native-platform] .page-subtitle,
   html[data-native-platform] .account-card-name,

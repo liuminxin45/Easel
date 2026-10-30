@@ -21,6 +21,7 @@ import {Publishing} from './publishing';
 import {Settings,LocalInputs} from './system';
 import '../../index.css';
 import './styles/workbench.css';
+import './styles/mobile.css';
 
 export interface EaselProps{theme:'light'|'dark';onThemeChange:(theme:'light'|'dark')=>void}
 const icons:Record<string,React.ReactNode>={workbench:<IconDashboard size={18}/>,chat:<IconChat size={18}/>,skills:<IconSkills size={18}/>,content:<IconOutputs size={18}/>,accounts:<IconAccounts size={18}/>,profiles:<IconProfile size={18}/>};

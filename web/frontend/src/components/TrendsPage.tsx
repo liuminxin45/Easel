@@ -9,6 +9,7 @@ interface TrendsPageProps {
   onUseTopic: (title: string) => void;   // 一键做成内容 → 跳 chat
   refreshAll?: () => Promise<unknown>;
   listLimit?: number;
+  quietBackgroundRefresh?: boolean;
 }
 
 class TrendBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -23,7 +24,7 @@ export default function TrendsPage(props: TrendsPageProps) {
   return <TrendBoundary><TrendsPanel {...props} /></TrendBoundary>;
 }
 
-function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15 }: TrendsPageProps) {
+function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15, quietBackgroundRefresh = false }: TrendsPageProps) {
   const [sources, setSources] = useState<TrendSource[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
@@ -48,19 +49,18 @@ function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15 }: TrendsPageProps
     } catch { setSaveError('收藏失败，请稍后重试。'); }
   };
 
-  const load = useCallback((pfs: string[]) => {
+  const load = useCallback((pfs: string[], background = false) => {
     const id = ++requestId.current;
     if (pfs.length === 0) { setGroups([]); setLoading(false); setError(''); return; }
     setGroups((prev) => prev.filter((g) => pfs.includes(g.platform)));
-    setLoading(true);
-    setError('');
+    if (!quietBackgroundRefresh || !background) { setLoading(true); setError(''); }
     fetchTrends(pfs.join(','), listLimit)
-      .then((d) => { if (requestId.current === id) { setGroups(d.trends); setUpdated(d.updated); setWarnings(d.warnings); } })
+      .then((d) => { if (requestId.current === id) { setGroups(d.trends); setUpdated(d.updated); setWarnings(d.warnings); if (quietBackgroundRefresh && background) setError(''); } })
       .catch((e: unknown) => {
         if (requestId.current === id) setError(e instanceof Error ? e.message : '热点拉取失败，请稍后重试。');
       })
       .finally(() => { if (requestId.current === id) setLoading(false); });
-  }, [listLimit]);
+  }, [listLimit, quietBackgroundRefresh]);
 
   const discover = useCallback(() => {
     const id = ++discoveryId.current;
@@ -92,7 +92,7 @@ function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15 }: TrendsPageProps
   useEffect(() => { if (ready) load(selected); }, [load, selected, ready]);
   useEffect(() => {
     if (!groups.some(group => group.error?.code === 'busy')) return;
-    const timer = window.setTimeout(() => load(selected), 1500);
+    const timer = window.setTimeout(() => load(selected, true), 1500);
     return () => window.clearTimeout(timer);
   }, [groups, selected, load]);
 

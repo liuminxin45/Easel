@@ -53,6 +53,12 @@ def test_actual_native_turn_registers_version_blob_files_and_gallery_once(librar
             async def run(self,request,emit,ask,bind):
                 requests.append(request);bind('native-real-shape');request.on_native_turn('native-real-shape','native-turn-real-shape')
                 payload=json.JSONDecoder().raw_decode(request.prompt.split('## 本轮冻结输入\n')[-1])[0]
+                assert len(payload['frozen_skill_files'])==1
+                manifest=Path(payload['frozen_skill_library']['manifest'])
+                assert manifest.is_file()
+                from easel_workbench.runtime.creator_runtime import digest
+                assert digest(manifest.read_bytes())==payload['frozen_skill_library']['sha256']
+                assert any(file['original_path'].endswith('model_registry.py') for file in json.loads(manifest.read_text(encoding='utf-8')))
                 folder=Path(payload['output_directory'])/'products';folder.mkdir(parents=True)
                 (folder/'成品.html').write_text('<h1>Actual TEMP file</h1>',encoding='utf-8')
                 emit('token','已生成本轮文件。')

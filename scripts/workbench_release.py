@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
+import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -93,11 +94,13 @@ main()
     import importlib.metadata
     dependencies=sorted(d.metadata['Name']+'=='+d.version for d in importlib.metadata.distributions())
     value={'schema':1,'release':name,'architecture':'easel-workbench-extension',
-        'easel_base':'514caf8089f89b4793063aeae867690cc69bf8b8','files':files,
+        'easel_base':'5a597e5f3ef5b01098b53f36caf719dd9a32b7bf','files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,
         'capabilities_type':'easel_project_builtin','capabilities_sha256':capabilities,
         'workspace_sha256':workspace,
+        'upstream_commit':'5a597e5f3ef5b01098b53f36caf719dd9a32b7bf',
+        'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     atomic(target/'workbench-release.json',value)
     selection={'release':name,'manifest_sha256':sha(target/'workbench-release.json'),'native':value['native']}

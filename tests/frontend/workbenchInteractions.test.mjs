@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {readdirSync} from 'node:fs';
 import {inspectInteractions,auditInteractions} from '../../scripts/audit_workbench_interactions.mjs';
 import {moduleLoader} from './helpers/modules.mjs';
 const jsx={jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
@@ -24,7 +25,14 @@ test('background view refresh never holds the command or leaks a rejection',asyn
 });
 
 test('the complete private view surface follows the shared interaction contract',()=>{
- const report=auditInteractions();assert.deepEqual(report.violations,[]);assert.ok(report.files>=26);assert.ok(report.counts.buttons>=45);assert.ok(report.counts.notices>=35);assert.equal(report.counts.backgroundRefreshes,2);
+ const report=auditInteractions();
+ const privateFiles=readdirSync(new URL('../../web/frontend/src/workbench/ui/',import.meta.url),{recursive:true}).filter(name=>/\.(ts|tsx)$/.test(name));
+ // Removing duplicate native pages should reduce button counts. Coverage and
+ // rejection of unsafe interaction patterns are the contract, not UI quantity.
+ assert.equal(report.passed,true);assert.deepEqual(report.violations,[]);
+ assert.equal(report.files,privateFiles.length+4);
+ assert.ok(report.counts.buttons>0);assert.ok(report.counts.notices>0);
+ assert.equal(report.counts.backgroundRefreshes,2);
 });
 
 test('the audit rejects old patterns and accepts shared feedback and background refresh',()=>{

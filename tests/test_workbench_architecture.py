@@ -46,6 +46,35 @@ UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
     'web/frontend/src/components/IdeasView.tsx'})
+# Reviewed single-source services and generic optional host ports. Each file is
+# named: neighboring components and new execution modules remain protected.
+UPSTREAM_PATCH_ALLOWLIST.update({
+    'web/app.py', 'web/frontend/src/App.tsx',
+    'easel/web_services/__init__.py', 'easel/web_services/binding.py',
+    'easel/web_services/accounts.py', 'easel/web_services/settings.py',
+    'easel/web_services/planning.py', 'easel/web_services/outputs.py',
+    'easel/web_services/environment.py',
+    'easel/web_services/analytics.py',
+    'web/frontend/src/components/ThemeToggle.tsx',
+    'web/frontend/src/components/OutputsPage.tsx',
+    'web/frontend/src/components/ProfilePage.tsx',
+    'web/frontend/src/components/BreakdownPage.tsx',
+    'web/frontend/src/components/PublishingPage.tsx',
+    'web/frontend/src/components/ManualPublishPage.tsx',
+    'web/frontend/src/components/CopyableText.tsx',
+    'web/frontend/src/components/TextArtifact.tsx',
+    # Optional in-memory host cache; native account logic remains shared.
+    'web/frontend/src/lib/whoami.ts',
+    'web/frontend/src/styles/theme.css',
+    # Restore the exact official stylesheet entry, dropping the fork-only import.
+    'web/frontend/src/index.css',
+    # Stable account IDs are returned once by the actual native drivers.
+    'skills/shared/scripts/bili_login.py',
+    'skills/shared/scripts/douyin_publish.py',
+    'skills/shared/scripts/web_publisher.py',
+    'skills/shared/scripts/weixin_mp_stats.py',
+    'skills/shared/scripts/xhs_publish.py',
+})
 WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
     'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
 
@@ -63,6 +92,12 @@ def python_edges(source):
     """Return real import/known module-launch edges and their function scope."""
     tree=ast.parse(source)
     result=[]
+    def literal(node):
+        if isinstance(node,ast.Constant) and isinstance(node.value,str):return node.value
+        if isinstance(node,ast.BinOp) and isinstance(node.op,ast.Add):
+            left,right=literal(node.left),literal(node.right)
+            if left is not None and right is not None:return left+right
+        return None
     def visit(node,scope=''):
         if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)):scope=node.name
         if isinstance(node,ast.Import):
@@ -73,8 +108,9 @@ def python_edges(source):
             result.extend((prefix+a.name,'import',scope,node.lineno) for a in node.names if a.name!='*')
         elif isinstance(node,ast.Call):
             name=getattr(node.func,'id',None) or getattr(node.func,'attr',None)
-            if name in ('__import__','import_module') and node.args and isinstance(node.args[0],ast.Constant) and isinstance(node.args[0].value,str):
-                result.append((node.args[0].value,'dynamic',scope,node.lineno))
+            if name in ('__import__','import_module') and node.args:
+                target=literal(node.args[0])
+                if target is not None:result.append((target,'dynamic',scope,node.lineno))
         elif isinstance(node,(ast.List,ast.Tuple)):
             values=[n.value if isinstance(n,ast.Constant) and isinstance(n.value,str) else None for n in node.elts]
             for n,value in enumerate(values[:-1]):
@@ -193,7 +229,10 @@ def test_project_skill_patch_allowlist_rejects_neighboring_upstream_and_global_s
     assert not allowed_upstream_patch('skills/builtin/ai-image-gen/SKILL.md')
     assert not allowed_upstream_patch('skills/shared/scripts/new_executor.py')
     assert not allowed_upstream_patch('skills/workbench-import-other.json')
-    assert not allowed_upstream_patch('web/frontend/src/App.tsx')
+    assert allowed_upstream_patch('web/frontend/src/App.tsx')
+    assert not allowed_upstream_patch('web/frontend/src/PrivateApp.tsx')
+    assert not allowed_upstream_patch('web/frontend/src/components/PrivateAccountsPage.tsx')
+    assert not allowed_upstream_patch('easel/web_services/private_transport.py')
     assert not allowed_upstream_patch('easel/harnesses/new_private_runtime.py')
 
 
@@ -201,6 +240,7 @@ def test_project_skill_patch_allowlist_rejects_neighboring_upstream_and_global_s
     'import easel_workbench.runtime',
     'from easel_workbench import collectors',
     'import importlib\nimportlib.import_module("easel_workbench.collectors")',
+    'importlib.import_module("easel_" + "workbench.collectors")',
     '__import__("easel_workbench.entry")',
     'subprocess.run(["python", "-m", "easel_workbench.entry"])',
 ])

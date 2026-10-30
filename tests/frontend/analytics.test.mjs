@@ -23,7 +23,7 @@ function setup() {
   let data = {}, errors = {};
   const pending = [], storage = new Map(), exports = {};
   runInNewContext(outputText, {
-    exports, Error,
+    exports, Error, persistAnalytics: true,
     anaPending: { current: new Set() },
     setAnaSel: () => {},
     setAnaErrors: update => { errors = update(errors); },

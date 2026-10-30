@@ -9,6 +9,7 @@ const frontend=path.resolve(import.meta.dirname,'..'),root=path.resolve(frontend
 if(process.version!=='v24.19.0')throw Error('Node 24.19.0 required');
 execFileSync(process.execPath,['node_modules/typescript/bin/tsc','-p','tsconfig.workbench.json'],{cwd:frontend,stdio:'inherit'});
 execFileSync(process.execPath,[path.join(root,'scripts/audit_workbench_interactions.mjs')],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[path.join(root,'scripts/audit_easel_base.mjs')],{cwd:root,stdio:'inherit'});
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const release=process.env.NATIVE_RELEASE_ID||'native-easel-workbench-'+new Date().toISOString().replace(/\D/g,'').slice(0,14);
 if(!/^native-[\w-]{1,80}$/.test(release))throw Error('Invalid release');
@@ -20,11 +21,12 @@ const sources=()=>{
     .filter(n=>fs.statSync(path.join(frontend,'src',n)).isFile())
     .map(n=>'web/frontend/src/'+n.replaceAll('\\','/'));
   files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
-    'scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','LICENSE');
+    'web/static/easel-icon-transparent.png','scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','docs/workbench/upstream-base.json','scripts/audit_easel_base.mjs','LICENSE');
   return Object.fromEntries(files.sort().map(n=>[n,sha(fs.readFileSync(path.join(root,n)))]));
 };
 const inputs=sources();
 await build({configFile:false,root:frontend,plugins:[react()],resolve:{alias:Object.fromEntries(Object.entries(aliases).map(([k,v])=>[k,path.join(frontend,'src/workbench',v)]))},base:'/native-assets/'+release+'/',build:{outDir:out,emptyOutDir:false,manifest:true,target:'es2022',rollupOptions:{input:{index:path.join(frontend,'workbench.html'),auth:path.join(frontend,'auth.html')}}},logLevel:'warn'});
+fs.mkdirSync(path.join(out,'static'));fs.copyFileSync(path.join(root,'web/static/easel-icon-transparent.png'),path.join(out,'static/easel-icon-transparent.png'));
 fs.renameSync(path.join(out,'workbench.html'),path.join(out,'index.html'));
 for(const file of ['index.html','auth.html']){const p=path.join(out,file);fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('__NATIVE_RELEASE__',release));}
 fs.mkdirSync(path.join(out,'licenses'));fs.copyFileSync(path.join(root,'LICENSE'),path.join(out,'licenses/Easel-LICENSE.txt'));

@@ -1,0 +1,55 @@
+name: Easel base alignment
+
+on:
+  push:
+    branches: ['codex/easel-base-alignment']
+  pull_request:
+    paths:
+      - 'easel/**'
+      - 'easel_workbench/**'
+      - 'web/**'
+      - 'tests/test_easel*'
+      - 'tests/test_workbench_architecture.py'
+      - 'scripts/audit_easel_base.mjs'
+      - 'docs/workbench/upstream-base.json'
+      - '.github/workflows/easel-base.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shared-base:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install validation dependencies without media runtimes
+        run: python -m pip install --prefer-binary pytest fastapi httpx requests websocket-client cryptography pyyaml python-multipart sse-starlette
+      - name: Install frontend dependencies
+        working-directory: web/frontend
+        run: npm ci
+      - name: Verify official ancestry and shared source contracts
+        run: node scripts/audit_easel_base.mjs
+      - name: Verify shared services and private business boundaries
+        env:
+          PYTHONUTF8: '1'
+        run: python -m pytest -q tests/test_easel_shared_services.py tests/test_easel_base_alignment.py tests/test_workbench_architecture.py tests/test_workbench_settings.py tests/test_workbench_skill_policy.py tests/test_workbench_skill_commands.py
+      - name: Build original Easel independently
+        working-directory: web/frontend
+        run: npm run build
+      - name: Check and build private host using the same components
+        working-directory: web/frontend
+        run: |
+          npm run check:workbench
+          npm run build:workbench

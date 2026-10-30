@@ -24,7 +24,11 @@ function load(file, imports = {}, suffix = '') {
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
       if (id === './ProductionParameters') return {ProductionParameters: () => {}};
-      if (id === './PlatformAccounts') return {Accounts: () => {}, ConnectionEnvironment: () => {}};
+      if (id === './PlatformAccounts') return {Accounts: () => {}};
+      if (id === './nativeProfiles') return {NativeProfiles: () => {}};
+      if (id === './nativePages') return {NativeDashboard: () => {}, NativeLibrary: () => {}, NativeTopics: () => {}, NativeTrends: () => {}, NativeCalendar: () => {}, NativeBreakdown: () => {}};
+      if (id === './WorkCompletion') return {Completion: () => {}};
+      if (id === './ChatTurnProducts') return {ChatTurnProducts: () => {}};
       if (id === './ChatAdapter') return load('ui/ChatAdapter.tsx', {
         react: imports.react || {}, '@workbench/core': imports['@workbench/core'],
         'react/jsx-runtime': jsx, '../../components/ChatPage': () => {}, './components/icons': {},
@@ -37,6 +41,7 @@ function load(file, imports = {}, suffix = '') {
 const models = load('core/models.ts');
 const creator = load('core/creator.ts', {'./models': models});
 const mainline = load('core/mainline.ts', {'./models': models});
+const recovery = load('core/production-recovery.ts');
 const ref = (id, version = 1) => ({id, version});
 const skill = (id, tasks, version = 4) => ({id, name: id, tasks, published_version: version,
   versions: [{version: 2, status: 'published'}, {version, status: 'published'}], launch_actions: []});
@@ -197,7 +202,7 @@ test('same-work first production selects production pins while preserving its di
         creator: {profile_id: 'p', profile_revision: 7, trial: true, skills: [ref('research-new', 2)]}}}};
   const before = JSON.stringify(work);
   const previews = [], submissions = [];
-  const core = {...models, ...creator, ...mainline, changeCreative: () => ({}),
+  const core = {...models, ...creator, ...mainline, ...recovery, changeCreative: () => ({}),
     useWorkbench: () => ({navigation: {}, client: {read: async () => work, drafts: {get: () => ({text:'',files:[],creative:{}})}},
       service: {prepareProduction: async (...args) => {previews.push(args); return {revision_token: 'exact-frozen-revision'};}, finalize: async (...args) => {submissions.push(args); return {id:'accepted-first-version'};}}}),
     useResource: path => ({data: path === '/api/creator/bootstrap' ? data() : null}),
@@ -228,7 +233,7 @@ test('a slow compatibility production keeps input typed after the submitted draf
   const creative={creator:{profile_id:'p',skills:[ref('writer-new',2),ref('checker-new',4)]}},submitted={text:'本轮原字',files:[],creative};
   const work={id:'existing-work',title:'已有版本',format:'poster',creator:{id:'p'},latest_version:'parent',versions:[{id:'parent',status:'completed',label:'v1',artifacts:[],creative}],history:[],pending:[],draft:{revision:3,creative}};
   let current=submitted,resets=0,release;const hold=new Promise(resolve=>{release=resolve}),sent=[];
-  const core={...models,...creator,...mainline,changeCreative:()=>creative,revisionCreative:value=>value,
+  const core={...models,...creator,...mainline,...recovery,changeCreative:()=>creative,revisionCreative:value=>value,
     useWorkbench:()=>({navigation:{},client:{drafts:{get:()=>current}},service:{prepareProduction:async()=>hold,workAction:async(...args)=>{sent.push(args)}}}),
     useResource:path=>({data:path==='/api/creator/bootstrap'?data():null}),useDraft:(key,initial)=>key.startsWith('feedback:')?[submitted,()=>{},()=>{resets++}]:[initial,()=>{},()=>{}],useOperation:()=>({}),useAsyncAction:()=>({busy:false,run:fn=>fn()})};
   const react={useState:value=>[value==='discuss'?'change':value,()=>{}],useEffect:()=>{},useRef:value=>({current:value})};

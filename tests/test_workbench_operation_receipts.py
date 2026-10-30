@@ -60,16 +60,47 @@ def test_collection_receipt_projects_the_original_run_without_enqueue(accounts):
 
 
 def test_login_ack_does_not_wait_for_full_dependency_diagnostics(accounts,monkeypatch):
+    import json
+    from starlette.requests import Request
+    from easel.web_services.accounts import create_accounts_context
+    from easel_workbench.runtime.easel_connection_support import ConnectionConflict
+    from easel_workbench.runtime.native_api import handle
     from easel_workbench.runtime import connection_environment
     session=fixtures.create(accounts);accounts.runner=None;accounts.autostart=True
     monkeypatch.setattr(connection_environment,'service',lambda *_:pytest.fail('synchronous dependency diagnostics delayed login'))
     starts=[]
     monkeypatch.setattr('easel_workbench.runtime.easel_accounts.threading.Thread',lambda **kwargs:SimpleNamespace(start=lambda:starts.append(kwargs)))
-    response=accounts.command({'id':'fast-login','action':'login','session_id':session['id'],'base_revision':1})
-    assert response['status']=='accepted' and response['result']['session']['state']=='login'
-    assert len(starts)==1
-    assert accounts.command({'id':'fast-login','action':'login','session_id':session['id'],'base_revision':1})==response
-    assert len(starts)==1
+    with accounts.store.connect() as c:
+        before=[tuple(row) for row in c.execute('SELECT * FROM media_account_sessions')]
+    # The retired executor cannot regain a write path merely to satisfy an old
+    # acknowledgement test. It must reject before launching or diagnosing.
+    with pytest.raises(ConnectionConflict,match='旧账号执行入口已退役'):
+        accounts.command({'id':'fast-login','action':'login','session_id':session['id'],'base_revision':1})
+    assert starts==[]
+    with accounts.store.connect() as c:
+        assert [tuple(row) for row in c.execute('SELECT * FROM media_account_sessions')]==before
+        assert c.execute('SELECT result FROM media_operations WHERE id=?',('fast-login',)).fetchone() is None
+
+    processes=[]
+    def launch(command,**options):
+        processes.append(command)
+        return SimpleNamespace(poll=lambda:None)
+    native=create_accounts_context(accounts.root,environment={},process_factory=launch)
+    accounts._native_context=native
+    assert native.api_mp_login_start.__code__.co_filename.replace('\\','/').endswith('web_services/accounts.py')
+    path='/api/accounts/wechat-oa/mp-login'
+    def request():
+        return Request({'type':'http','method':'POST','path':path,'headers':[(b'x-operation-id',b'native-fast-login')],
+                        'query_string':b'','scheme':'https','server':('native.test',443)})
+    first=asyncio.run(handle(accounts.box,path,request(),{}))
+    repeated=asyncio.run(handle(accounts.box,path,request(),{}))
+    assert first.status_code==repeated.status_code==200
+    assert json.loads(first.body)==json.loads(repeated.body)
+    assert json.loads(first.body)['state']=='starting'
+    assert len(processes)==1 and Path(processes[0][1]).name=='weixin_mp_stats.py'
+    assert starts==[]
+    observed=asyncio.run(native.api_accounts())
+    assert not next(value for value in observed if value['platform']=='wechat-oa')['loggedIn']
 
 
 def test_receipt_http_endpoint_requires_owner_auth_and_is_read_only(accounts):

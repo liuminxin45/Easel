@@ -1,0 +1,9 @@
+{
+  "upstream_url": "https://github.com/ZJU-REAL/Easel.git",
+  "upstream_commit": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+  "local_baseline_commit": "6920288",
+  "branch": "codex/easel-base-alignment",
+  "public_implementation": ["web/frontend/src/App.tsx", "web/frontend/src/components", "easel/web_services", "easel/harnesses"],
+  "private_adapters": ["easel_workbench", "web/frontend/src/workbench"],
+  "exceptions": ["project Python source protocol", "server-owned sessions and frozen revisions", "15 visible trend rows and 360px dashboard lists"]
+}

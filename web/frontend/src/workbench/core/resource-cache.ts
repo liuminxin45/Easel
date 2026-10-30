@@ -18,7 +18,7 @@ export function dynamicResource(path:string,data:unknown):boolean{
  if(active.has(string(record(record(root.batch_learning).latest_cycle).status)))return true;
  for(const key of ['works','items','deliveries','jobs','analyses','tasks','cycles','sessions'])for(const item of array<JsonRecord>(root[key])){
   if(item.current===false)continue;
-  if(item.pendingTurnId||active.has(string(item.status))||array(item.pending).length||active.has(string(record(item.recovery).phase)))return true;
+  if(item.pendingTurnId||active.has(string(item.status))||active.has(string(item.state))||array(item.pending).length||active.has(string(record(item.recovery).phase)))return true;
   const archive=record(item.project_archive);
   if(active.has(string(archive.phase)))return true;
  }

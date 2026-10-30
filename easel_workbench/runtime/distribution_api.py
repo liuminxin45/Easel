@@ -6,10 +6,9 @@ from easel_workbench.runtime.auth_totp import equal
 from easel_workbench.runtime.toolbox_store import ident
 
 def mount_service(box):
-    from easel_workbench.runtime.distribution_runtime import DistributionRuntime
     from easel_workbench.runtime.distribution_service import DistributionService
     from easel_workbench.runtime.easel_distribution import EaselDistributionRuntime
-    return DistributionService(box, EaselDistributionRuntime(box,DistributionRuntime(box)))
+    return DistributionService(box, EaselDistributionRuntime(box))
 
 def bridge_status(service):
     method=getattr(service.runtime,'bridge_status',None)
@@ -76,6 +75,9 @@ async def handle(service, path, request, session, same, raw, api_csrf, credentia
     def reply(value, status=200):
         return JSONResponse(value,status_code=status,headers={'Cache-Control':'no-store'})
     method = request.method
+    if getattr(service.runtime,'extension_retired',False):
+        retired=path in ('/api/distribution/bridge/form','/api/distribution/bridge/configure','/api/distribution/credentials/form','/api/distribution/credentials','/api/distribution/discover','/api/distribution/observations','/api/distribution/import-account','/api/distribution/browser','/api/distribution/discovery') or path.startswith('/api/distribution/checks/')
+        if retired:return reply({'error':'feature_retired','feature':'browser_extension_connection','retired':True,'message':'浏览器扩展连接已退役，请在账号页直接扫码连接。'},410)
     if path == '/api/distribution/auto-check' and method in ('GET','HEAD'):
         from easel_workbench.runtime import distribution_auto_api as distribution_auto_api
         return await distribution_auto_api.handle(service,path,request)
@@ -86,7 +88,7 @@ async def handle(service, path, request, session, same, raw, api_csrf, credentia
     if path == '/api/distribution/bootstrap' and method in ('GET','HEAD'):
         data=await asyncio.to_thread(service.bootstrap,request.query_params.get('work_id') or None)
         from easel_workbench.runtime import distribution_discovery as distribution_discovery
-        data['discovery']={'bridge':bridge_status(service),'observation':await asyncio.to_thread(distribution_discovery.latest,service)}
+        if not getattr(service.runtime,'extension_retired',False):data['discovery']={'bridge':bridge_status(service),'observation':await asyncio.to_thread(distribution_discovery.latest,service)}
         return reply(data)
     if path == '/api/distribution/discovery' and method in ('GET','HEAD'):
         from easel_workbench.runtime import distribution_discovery as distribution_discovery

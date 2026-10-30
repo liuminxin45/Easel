@@ -48,13 +48,14 @@ def idle(database=None):
     with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row
         status=automation.busy_state(c,audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
-        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','easel_chat_turns'):
+        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}
             if 'document' in cols:
                 for ident,raw in c.execute('select id,document from '+table):
                     value=json.loads(raw)
                     active=value.get('status') in ('running','dispatching','requested','sending','submitting','accepted')
+                    if table=='media_account_sessions':active=value.get('state') in ('login','checking')
                     if table=='easel_chat_turns':
                         active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
                     if active:

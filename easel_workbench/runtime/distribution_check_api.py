@@ -1,7 +1,7 @@
 """A phone-authorized, one-attempt account observation, never a login session."""
 from __future__ import annotations
 import asyncio,json,re,urllib.parse
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse,Response
 from easel_workbench.runtime import server_logging as journal
 
 def service(distribution):
@@ -13,6 +13,11 @@ def reply(value,code=200):
     return JSONResponse(value,status_code=code,headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer'})
 
 async def public(distribution,path,request,same,raw):
+    if getattr(distribution.runtime,'extension_retired',False):
+        if path=='/distribution/check':
+            from easel_workbench.runtime.distribution_auto_api import ACCOUNTS_URL
+            return Response(status_code=303,headers={'Location':ACCOUNTS_URL+'#','Cache-Control':'no-store','Referrer-Policy':'no-referrer'})
+        if path=='/api/distribution/check-report':return reply({'error':'feature_retired','feature':'browser_extension_connection','retired':True},410)
     if path=='/distribution/check':
         if request.method not in ('GET','HEAD'):return reply({'error':'method rejected'},405)
         if request.url.query:return reply({'error':'检测页面不接受查询凭证'},400)

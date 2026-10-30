@@ -69,7 +69,14 @@ def main():
             assert all(sha(selected/member)==digest for member,digest in json.loads((selected/'workbench-release.json').read_text(encoding='utf-8'))['files'].items())
             report.update(module_count=len(modules),module_roots_valid=True)
         report['passed']=True
-    except BaseException as error:report['error']=repr(error);raise
+    except BaseException as error:
+        report['error']=repr(error)
+        if 'page' in locals():
+            try:
+                report['diagnostics']=page.evaluate('''async()=>{const registration=await navigator.serviceWorker.getRegistration('/native/');const controller=navigator.serviceWorker.controller;let worker=null;if(controller)worker=await new Promise(resolve=>{const channel=new MessageChannel(),timer=setTimeout(()=>resolve(null),1500);channel.port1.onmessage=event=>{clearTimeout(timer);resolve(event.data)};controller.postMessage({type:'NATIVE_VERSION'},[channel.port2])});return {release:document.querySelector('meta[name=native-release]')?.content,hidden:document.hidden,version:await fetch('/native/version',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),worker,active:registration?.active?.state,waiting:registration?.waiting?.state,installing:registration?.installing?.state,caches:await caches.keys()}}''')
+                page.screenshot(path=str(out/'failure.png'),full_page=True)
+            except Exception:pass
+        raise
     finally:
         (out/'harness.py').write_bytes(Path(__file__).read_bytes());report['evidence']={path.name:sha(path) for path in out.glob('*.png')};(out/'upgrade.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(report,ensure_ascii=False),flush=True)
 

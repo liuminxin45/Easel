@@ -20,7 +20,7 @@ from easel_workbench.runtime.toolbox_store import ident, pack
 from easel_workbench.runtime.easel_connection_support import ConnectionConflict as IntegrationConflict, digest
 
 RECIPES = {
-    'browser': {'name': '平台连接专用浏览器', 'packages': ['playwright==1.64.1'], 'module': 'playwright', 'group': '平台连接'},
+    'browser': {'name': '平台连接专用浏览器与二维码识别', 'packages': ['playwright==1.64.1','opencv-python==4.14.0.94','numpy==2.4.6'], 'module': 'playwright', 'group': '平台连接'},
     'biliup': {'name': 'B站扫码登录依赖', 'packages': ['biliup==1.3.4','segno==1.6.6'], 'module': 'biliup', 'group': '平台连接'},
 }
 BASE_PACKAGES=['httpx==0.28.1','Pillow==12.3.0','requests==2.34.2']
@@ -73,6 +73,8 @@ class ConnectionEnvironment:
                     if result.returncode == 0:
                         state, version = 'ok', result.stdout.strip()
                     if key=='browser' and state=='ok':
+                        qr=self._run([self.python,'-c',"import cv2,numpy;assert callable(cv2.QRCodeDetector);assert numpy.zeros((4,4),dtype=numpy.uint8).shape==(4,4)"])
+                        if qr.returncode:state='missing'
                         binary=self._run([self.python,'-c',"from playwright.sync_api import sync_playwright;import os; p=sync_playwright().start();print(p.chromium.executable_path);exit(0 if os.path.isfile(p.chromium.executable_path) else 1)"])
                         if binary.returncode:state='missing'
                 except (OSError, subprocess.TimeoutExpired):

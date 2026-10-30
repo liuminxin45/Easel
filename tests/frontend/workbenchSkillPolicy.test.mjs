@@ -23,6 +23,7 @@ function load(file, imports = {}, suffix = '') {
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
       if (id === './ProductionParameters') return {ProductionParameters: () => {}};
+      if (id === './PlatformAccounts') return {Accounts: () => {}, ConnectionEnvironment: () => {}};
       if (id === './ChatAdapter') return load('ui/ChatAdapter.tsx', {
         react: imports.react || {}, '@workbench/core': imports['@workbench/core'],
         'react/jsx-runtime': jsx, '../../components/ChatPage': () => {}, './components/icons': {},

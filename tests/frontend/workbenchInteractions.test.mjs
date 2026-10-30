@@ -6,6 +6,22 @@ import {moduleLoader} from './helpers/modules.mjs';
 const jsx={jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
 const load=moduleLoader({imports:{'react/jsx-runtime':jsx}}),{interactionFeedback,refreshViews}=load('lib/interaction.ts'),{InteractionNotice}=load('components/InteractionNotice.tsx');
 
+const privateLoad=moduleLoader({imports:{'react/jsx-runtime':jsx,'@workbench/core':{},'./lib/sanitize':{renderMarkdown:value=>value}}});
+const {Notice}=privateLoad('workbench/ui/common.tsx');
+const privateFeedback=props=>InteractionNotice(Notice(props).props);
+
+test('private polling and routine busy states never insert a status banner',()=>{
+ for(const sources of [[{refreshing:true}],[{busy:true}],[{refreshing:true},{busy:true}],[]])assert.equal(privateFeedback({sources}),null);
+ // Shared Easel retains its independent presentation; only the host opts out.
+ assert.equal(InteractionNotice({sources:[{refreshing:true}]}).props.role,'status');
+});
+
+test('private quiet reads still expose errors and uncertain receipt recovery',()=>{
+ const error=privateFeedback({sources:[{refreshing:true,error:'读取失败'}]});assert.equal(error.props.role,'alert');assert.equal(error.props.children,'读取失败');
+ const recovery=privateFeedback({sources:[{refreshing:true,feedback:interactionFeedback({uncertain:true})}]});assert.equal(recovery.props.role,'status');assert.match(recovery.props.children,/恢复操作状态/);
+ assert.equal(privateFeedback({message:'请重新登录',sources:[{busy:true}]}).props.children,'请重新登录');
+});
+
 test('normal submission and receipt recovery are neutral, while definite errors remain alerts',()=>{
  for(const source of [{busy:true},{refreshing:true},{feedback:interactionFeedback({uncertain:true,message:'internal receipt detail'})},{feedback:interactionFeedback({unreachable:true})}]){
   const tree=InteractionNotice({sources:[source]});assert.equal(tree.props.role,'status');assert.notEqual(tree.props.className,'notice-error');

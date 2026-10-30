@@ -12,8 +12,8 @@ import {AUTH_CHECK_MS,RESOURCE_CACHE_BYTES,RESOURCE_CACHE_ENTRIES,mutationTags,r
 import {commandScope,interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
 
 export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
-export interface PendingOperation {scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean}
-export interface MutationOptions {metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string}
+export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean}
+export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string}
 export interface OperationState {busy:boolean;pending:PendingOperation|null;error:string;notice:string;result?:unknown;feedback?:InteractionFeedback}
 export interface SessionState {config:Config|null;loading:boolean;error:string;feedback?:InteractionFeedback;expired:boolean;reachable:boolean|null}
 export interface ClientOptions extends TransportOptions {storage?:Storage;navigation?:NavigationDelegate;activities?:ActivityDelegate;clock?:()=>number;cacheBytes?:number;cacheEntries?:number}
@@ -164,12 +164,12 @@ export class WorkbenchClient {
     const state=this.operation(scope),current=state.getState();if(current.busy)throw new RequestError('这项操作正在处理。');
     if(options.metadataOnly&&(!options.requestSignature||!options.receiptPath))throw new RequestError('此操作缺少安全的恢复配置。');
     let pending=current.pending;
-    if(pending){state.setState({busy:true});let result:T|null;try{result=await this.reconcile<T>(scope)}finally{state.setState({busy:false});this.scheduleReceiptRecovery(scope)}if(result!==null){if(pending.path===path&&(pending.requestSignature??signature(pending.body))===(options.requestSignature??signature(fields)))return result;if(options.metadataOnly&&typeof record(result).revision==='number')fields={...fields,expected_revision:record(result).revision};pending=null}else throw new RequestError('连接恢复中，原输入已保留，请稍后再试。',{status:409,uncertain:true,operationScope:scope,operationId:pending.id})}
+    if(pending){state.setState({busy:true});let result:T|null;try{result=await this.reconcile<T>(scope)}finally{state.setState({busy:false});this.scheduleReceiptRecovery(scope)}if(result!==null){if(pending.path===path&&(pending.method??'POST')===(options.method??'POST')&&(pending.requestSignature??signature(pending.body))===(options.requestSignature??signature(fields)))return result;if(options.metadataOnly&&typeof record(result).revision==='number')fields={...fields,expected_revision:record(result).revision};pending=null}else throw new RequestError('连接恢复中，原输入已保留，请稍后再试。',{status:409,uncertain:true,operationScope:scope,operationId:pending.id})}
     if(!this.session.getState().config?.csrf||this.session.getState().expired)throw new RequestError('请等待登录校验完成。');
-    const id=string(fields.operation_id)||string(fields.id)||crypto.randomUUID(),body={...fields,id,...(['/api/studio/commands','/api/learning/commands','/api/collection/sources'].includes(path)?{operation_id:id}:{})};
-    pending={scope,path,body:options.metadataOnly?{}:body,id,uncertain:false,...(options.metadataOnly?{metadataOnly:true,requestSignature:options.requestSignature,receiptPath:options.receiptPath!(id)}:{})};
+    const id=(options.preserveBody?'':string(fields.operation_id)||string(fields.id))||crypto.randomUUID(),body=options.preserveBody?fields:{...fields,id,...(['/api/studio/commands','/api/learning/commands','/api/collection/sources'].includes(path)?{operation_id:id}:{})};
+    pending={scope,path,...(options.method?{method:options.method}:{}),body:options.metadataOnly?{}:body,id,uncertain:false,...(options.metadataOnly?{metadataOnly:true,requestSignature:options.requestSignature,receiptPath:options.receiptPath!(id)}:{})};
     if(!this.drafts.set('native:pending:'+scope,{operation:pending}))throw new RequestError('原操作标识未能保存，请先核对本机存储；这次尚未提交。');state.setState({pending});
-    return this.execute<T>(pending,body);
+    return this.execute<T>(pending,body,options.raw);
   }
   /** Lost acknowledgements are recovered by GET. This never runs a command. */
   reconcile<T=JsonRecord>(scope:string):Promise<T|null>{
@@ -180,7 +180,7 @@ export class WorkbenchClient {
       const receipt=await this.api.get<{id?:string;state:string;result?:T}>(pending.receiptPath??'/api/operations/'+encodeURIComponent(pending.id)+'?'+new URLSearchParams({path:pending.path}),AbortSignal.timeout(3000));
       if(epoch!==this.authEpoch||(receipt.id!==undefined&&receipt.id!==pending.id)||(!pending.receiptPath&&receipt.id!==pending.id)||this.operation(scope).getState().pending?.id!==pending.id)return null;
       if(receipt.state==='unavailable')this.operation(scope).setState({feedback:{kind:'status',message:'暂未取得操作结果，输入已保留。'}});
-      if(receipt.state==='rejected'){const error=new RequestError(string(record(receipt.result).error,'操作未被受理，请修正后重试。'),{status:400});this.clearPending(pending);this.operation(scope).setState({pending:null,error:error.message,feedback:interactionFeedback(error)});throw error}
+      if(receipt.state==='rejected'){const error=new RequestError(string(record(receipt.result).error)||string(record(receipt.result).detail,'操作未被受理，请修正后重试。'),{status:400});this.clearPending(pending);this.operation(scope).setState({pending:null,error:error.message,feedback:interactionFeedback(error)});throw error}
       if(!['received','completed'].includes(receipt.state)||receipt.result===undefined)return null;
       this.clearPending(pending);this.operation(scope).setState({pending:null,error:'',feedback:undefined,notice:'已恢复连接',result:receipt.result});this.refreshAfterCommand(pending,receipt.result);return receipt.result;
     }catch(error){if(error instanceof RequestError&&error.status===400&&!error.uncertain)throw error;return null}finally{if(this.receiptReads.get(key)===job)this.receiptReads.delete(key)}})();this.receiptReads.set(key,job);return job;
@@ -193,11 +193,11 @@ export class WorkbenchClient {
     void this.invalidate(mutationTags(pending.path,pending.body,result)).catch(()=>{/* A refresh failure cannot turn an acknowledged command into an unknown write. */});
   }
   async retry<T=JsonRecord>(scope:string):Promise<T>{const result=await this.reconcile<T>(scope);if(result===null)throw new RequestError('操作结果暂不可用，输入已保留。',{uncertain:true});return result}
-  private async execute<T>(pending:PendingOperation,body=pending.body):Promise<T>{
+  private async execute<T>(pending:PendingOperation,body=pending.body,raw?:FormData):Promise<T>{
     const state=this.operation(pending.scope);if(state.getState().busy)throw new RequestError('这项操作正在处理。');state.setState({busy:true,error:'',feedback:undefined,notice:''});
     const csrf=this.session.getState().config?.csrf;if(!csrf){state.setState({busy:false});throw new RequestError('请等待登录校验完成。')}
     const authEpoch=this.authEpoch;
-    try{this.usage.command(pending.path,pending.body,'attempt',pending.id);const result=await this.api.post<T>(pending.path,body,csrf,pending.id);if(authEpoch!==this.authEpoch)throw new RequestError('登录状态已变化，原输入已保留。',{uncertain:true});this.clearPending(pending);this.usage.command(pending.path,pending.body,'accepted',pending.id);state.setState({pending:null,notice:'已保存',result});this.refreshAfterCommand(pending,result);return result}
+    try{this.usage.command(pending.path,pending.body,'attempt',pending.id);const result=await this.api.request<T>(pending.path,{body,csrf,id:pending.id,method:pending.method,raw});if(authEpoch!==this.authEpoch)throw new RequestError('登录状态已变化，原输入已保留。',{uncertain:true});this.clearPending(pending);this.usage.command(pending.path,pending.body,'accepted',pending.id);state.setState({pending:null,notice:'已保存',result});this.refreshAfterCommand(pending,result);return result}
     catch(error){if(authEpoch!==this.authEpoch){state.setState({error:'登录状态已变化，请重新登录。原输入已保留。'});throw error}this.usage.command(pending.path,pending.body,error instanceof RequestError&&!!error.status&&error.status>=400&&error.status<500&&!error.uncertain?'failed':'uncertain',pending.id);const definite=error instanceof RequestError&&!!error.status&&error.status>=400&&error.status<500&&!error.uncertain;if(definite){this.clearPending(pending);state.setState({pending:null,error:message(error)});throw error}const next={...pending,uncertain:true};this.drafts.set('native:pending:'+pending.scope,{operation:next});state.setState({pending:next});const recovered=await this.reconcile<T>(pending.scope);if(recovered!==null)return recovered;state.setState({error:'',feedback:interactionFeedback(new RequestError('正在恢复状态',{uncertain:true}))});throw new RequestError('连接暂时中断，正在恢复状态。原输入已保留。',{uncertain:true,operationScope:pending.scope,operationId:pending.id})}
     finally{state.setState({busy:false});if(state.getState().pending)this.scheduleReceiptRecovery(pending.scope)}
   }

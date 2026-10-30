@@ -62,6 +62,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.easel_connection_support import ConnectionConflict as IntegrationConflict
     from easel_workbench.runtime.easel_accounts import service as easel_account_service
     accounts=easel_account_service(box,distribution);app.state.easel_accounts=accounts
+    app.add_event_handler('shutdown',accounts.close_native)
     from easel_workbench.runtime.completion_service import CompletionService,CompletionConflict
     from easel_workbench.runtime.completion_preferences import PreferencesConflict
     completion=CompletionService(box,distribution=distribution,studio=studio)
@@ -121,10 +122,12 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         target=path+('?' + request.url.query if request.url.query else '')
         if len(headers.getlist('host'))!=1 or headers.get('host')!=host:return error(403,'Host rejected')
         if headers.get('sec-fetch-site')=='cross-site':return error(403,'cross-site rejected')
-        if method not in ('GET','HEAD','POST'):return error(405,'method rejected')
+        from easel_workbench.runtime import native_api
+        if method not in ('GET','HEAD','POST') and not (method in ('PUT','PATCH','DELETE') and native_api.supports(path,method)):return error(405,'method rejected')
         if target.startswith('//') or '\\' in target or '#' in target or headers.get('upgrade') or len(headers.getlist('authorization'))>1:return error(400,'请求格式无效')
         if method in ('GET','HEAD') and (headers.get('transfer-encoding') or int(headers.get('content-length','0'))):return error(400,'GET 不接受请求内容')
-        raw=await body(request,20*1024*1024 if path=='/api/uploads' else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 512000) if method=='POST' else b''
+        raw=await body(request,20*1024*1024 if path in ('/api/uploads','/api/upload') else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 512000) if method in ('POST','PUT','PATCH','DELETE') else b''
+        request._body=raw
         pairs=[(key.decode('latin1'),value.decode('latin1')) for key,value in headers.raw];ctx=Context(method,target,pairs,raw)
         ctx.auth_id=trace
         ctx.auth_event=lambda reason,status:journal.emit('authentication',trace_id=ctx.auth_id,route=path,status=status,phase=reason)
@@ -161,6 +164,20 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if method in ('GET','HEAD') and (path in ('/','/toolbox','/news','/posters','/posters/new','/articles','/articles/new','/works','/works/new','/settings','/messages','/account','/workbench','/apps','/wiki') or path.startswith(('/articles/','/posters/','/works/','/news/a/','/news/production/','/workbench/','/wiki/'))):
                 forms.send(ctx,303,location='/login?next='+urllib.parse.quote(target,safe=''));return ctx.response()
             return error(401,'authentication_required')
+        if native_api.supports(path,method):
+            native_value=None
+            if method in ('POST','PUT','PATCH','DELETE'):
+                if not same:return error(403,'origin_rejected')
+                if len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
+                if len(headers.getlist('x-operation-id'))!=1:return error(400,'原生操作缺少唯一身份')
+                content_type=headers.get('content-type','').split(';')[0]
+                if path=='/api/upload' and content_type=='multipart/form-data':pass
+                elif content_type=='application/json':
+                    native_value=json.loads(raw)
+                    if not isinstance(native_value,dict):return error(400,'请求需要 JSON 对象')
+                else:return error(415,'请求类型无效')
+            native_response=await native_api.handle(box,path,request,native_value)
+            if native_response is not None:return native_response
         if path=='/api/wiki' or path.startswith('/api/wiki/'):
             return error(410,'资料库已移除，笔记原件保留')
         if path=='/wiki' or path.startswith('/wiki/'):
@@ -265,10 +282,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 try:return reply(await asyncio.to_thread(environment_service(box).install,value))
                 except IntegrationConflict as exc:return error(409,str(exc))
                 except ValueError as exc:return error(400,str(exc))
-            if path in ('/api/platform-accounts','/api/media/accounts'):
-                try:return reply(await asyncio.to_thread(accounts.command,value))
-                except IntegrationConflict as exc:return error(409,str(exc))
-                except ValueError as exc:return error(400,str(exc))
+            if path in ('/api/platform-accounts','/api/media/accounts'):return error(410,'账号操作已迁入 Easel 原生登录接口；历史记录与回执保留')
             if path=='/api/easel/commands':
                 try:return reply(await asyncio.to_thread(frontend.command,value))
                 except FrontendConflict as exc:return error(409,str(exc))

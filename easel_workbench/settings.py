@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -118,21 +117,12 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
         return {'state': row['state'], 'result': json.loads(row['result']) if row['result'] else None} if row else {'state': 'not_found'}
 
     def _module(self, directory, environment, state):
-        spec = importlib.util.spec_from_file_location('easel_workbench_settings_projection', Path(__file__).parent / 'runtime/settings_upstream.py')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        from easel.web_services.settings import create_settings_context
         config = Path(directory) / 'openclaw.json'
         config.write_text(pack({'agents': {'defaults': {'workspace': str(self.root)}}, 'models': {'providers': {}}}), encoding='utf-8')
         if state.get('openclaw_ref'):
             config.write_text(pack(self.vault.get(state['openclaw_ref'], 'workbench-openclaw')), encoding='utf-8')
-        module.PROJECT_ROOT, module.OUTPUTS_DIR, module.ENV_FILE = self.root, self.root / 'outputs', self.root / '.env'
-        module._read_env = lambda: dict(environment)
-        module.read_settings = lambda *args, **kwargs: dict(environment)
-        module._harness_settings = lambda: dict(state)
-        module._oc_config_path = lambda: config
-        module._write_env_direct = lambda updates: environment.update({key: value for key, value in updates.items() if value.strip()})
-        module._warn_http_transport_unavailable = lambda *args: None
-        return module, config
+        return create_settings_context(self.root, environment, state, config), config
 
     async def channels(self, runtime=None):
         if runtime not in (None, 'api', 'openclaw'):
@@ -207,6 +197,22 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
             self._guard = asyncio.Lock()
         return self._guard
 
+    def installation_api(self, operation_id=None):
+        """Native endpoint implementation over the one private install queue."""
+        from easel.web_services.environment import create_environment_context
+        from .runtime.connection_environment import RECIPES, tools, install_port, job_port
+        if operation_id is None and getattr(self, '_installation_read_api', None):
+            return self._installation_read_api
+        context = create_environment_context(self.root,
+            scripts=Path(__file__).resolve().parents[1] / 'skills/shared/scripts',
+            ports={'check': lambda refresh=False: tools(self.box),
+                   'ids': lambda: frozenset(RECIPES) | {'pw', 'cft'},
+                   'install': lambda tool: install_port(self.box, {'id': operation_id, 'tool_id': tool}),
+                   'job': lambda job: job_port(self.box, job)})
+        if operation_id is None:
+            self._installation_read_api = context
+        return context
+
     def scrub(self, text):
         result = str(text)
         for key, value in self.environment().items():
@@ -217,8 +223,8 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
     async def _execute(self, path, request, *, operation_id=None):
         state = self.current()
         if path == '/api/env/install':
-            from .runtime.connection_environment import install_port
-            return await asyncio.to_thread(install_port, self.box, {**request,'id':operation_id})
+            native = self.installation_api(operation_id)
+            return await native.api_env_install(native.EnvInstallRequest(id=request.get('tool_id', '')))
         writing = path in ('/api/settings/harness', '/api/settings/models/save', '/api/settings/local-agents/enable')
         if writing and (type(request.get('expected_revision')) is not int or request['expected_revision'] != state['revision']):
             raise SettingsConflict('配置已有新版本，请重新读取后保存')
@@ -288,11 +294,9 @@ async def handle(settings, path, request, value=None):
     try:
         if request.method in ('GET', 'HEAD'):
             if path == '/api/env/tools':
-                from .runtime.connection_environment import tools
-                return response(await asyncio.to_thread(tools, settings.box))
+                return response(await settings.installation_api().api_env_tools(request.query_params.get('refresh') in ('1', 'true')))
             if path.startswith('/api/env/job/'):
-                from .runtime.connection_environment import job_port
-                return response(await asyncio.to_thread(job_port, settings.box, path.rsplit('/', 1)[-1]))
+                return response(await settings.installation_api().api_env_job(path.rsplit('/', 1)[-1]))
             if path in ('/api/status', '/api/settings/bootstrap'):
                 return response(await settings.status())
             if path == '/api/settings/harness':

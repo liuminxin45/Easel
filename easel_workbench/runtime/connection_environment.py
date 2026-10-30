@@ -28,6 +28,7 @@ RECIPES = {
     'rmdeps': {'name': 'Remotion 工程依赖', 'packages': [], 'module': '', 'group': 'rm', 'needs_dir': True},
     'shell': {'name': 'Chrome Headless Shell', 'packages': [], 'module': '', 'group': 'rm', 'needs_dir': True},
     'pylibs': {'name': '常用 Python 库', 'packages': ['Pillow==12.3.0','edge-tts','pdfplumber','requests==2.34.2'], 'module': 'edge_tts', 'group': 'common'},
+    'markdown': {'name': '公众号 Markdown 排版', 'packages': ['Markdown==3.11.2'], 'module': 'markdown', 'group': 'common'},
 }
 BASE_PACKAGES=['httpx==0.28.1','Pillow==12.3.0','requests==2.34.2']
 
@@ -97,6 +98,7 @@ class ConnectionEnvironment:
                     result = self._run([self.python, '-c', 'import importlib.metadata as m,importlib.util as u;print(m.version(' + repr(recipe['packages'][0].split('==')[0]) + ')) if u.find_spec(' + repr(recipe['module']) + ') else exit(1)'])
                     if result.returncode == 0:
                         state, version = 'ok', result.stdout.strip()
+                    if key=='markdown' and version!='3.11.2':state='missing'
                     if key=='browser' and state=='ok':
                         qr=self._run([self.python,'-c',"import cv2,numpy;assert callable(cv2.QRCodeDetector);assert numpy.zeros((4,4),dtype=numpy.uint8).shape==(4,4)"])
                         if qr.returncode:state='missing'

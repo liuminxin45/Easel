@@ -416,21 +416,52 @@ CREATE TABLE IF NOT EXISTS toolbox_work_options(work_id TEXT PRIMARY KEY,format 
                 for row in c.execute('SELECT id,created_at,result,document FROM toolbox_article_draft_ops WHERE work_id=? ORDER BY julianday(created_at),rowid',(wid,))]
             return work
     def upload(self,jid,name,body):
+        """Existing HTTP attachment limit; storage is shared with local exports."""
+        import io
+        if not isinstance(body,(bytes,bytearray,memoryview)) or not 0<len(body)<=20*1024*1024:
+            raise ValueError('附件需在 20 MB 以内')
+        return self._store_file(jid,name,io.BytesIO(body),20*1024*1024)
+
+    def register_file(self,jid,name,source,*,max_bytes=2*1024**3):
+        """Register a trusted local export using the same atomic file writer.
+
+        This is an internal port, not an HTTP path input. The caller resolves
+        its approved source; the destination remains the private file registry.
+        """
+        source=pathlib.Path(source)
+        if not source.is_file():raise ValueError('本地导出文件不存在')
+        with source.open('rb') as stream:
+            return self._store_file(jid,name,stream,max_bytes)
+
+    def _store_file(self,jid,name,stream,max_bytes):
         import os
         ident(jid)
-        if not isinstance(name,str) or not 1<=len(name)<=240 or pathlib.PureWindowsPath(name).name!=name or any(ord(x)<32 for x in name):raise ValueError('附件名称无效')
-        if not 0<len(body)<=20*1024*1024:raise ValueError('附件需在 20 MB 以内')
-        sha=hashlib.sha256(body).hexdigest();directory=self.root/'data/toolbox/files'/jid;directory.mkdir(parents=True,exist_ok=True);path=directory/name
-        with self.store.connect() as c:
-            c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_files WHERE id=?',(jid,)).fetchone()
-            if old:
-                if old['sha256']!=sha or old['name']!=name:raise ValueError('同一附件 ID 不能用于不同文件')
-                return {k:old[k] for k in ('id','name','mime','size')}
-            temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
-            with temp.open('xb') as stream:stream.write(body);stream.flush();os.fsync(stream.fileno())
-            os.replace(temp,path);mime=mimetypes.guess_type(name)[0] or 'application/octet-stream'
-            c.execute('INSERT INTO toolbox_files VALUES(?,?,?,?,?,?)',(jid,name,str(path),mime,len(body),sha))
-        return {'id':jid,'name':name,'mime':mime,'size':len(body)}
+        if not isinstance(name,str) or not 1<=len(name)<=240 or pathlib.PureWindowsPath(name).name!=name or name in ('.','..') or any(ord(x)<32 for x in name):raise ValueError('附件名称无效')
+        if type(max_bytes) is not int or not 1<=max_bytes<=2*1024**3:raise ValueError('文件大小上限无效')
+        directory=self.root/'data/toolbox/files'/jid;directory.mkdir(parents=True,exist_ok=True);path=directory/name
+        temporary=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
+        hasher=hashlib.sha256();size=0
+        try:
+            with temporary.open('xb') as output:
+                while chunk:=stream.read(1024*1024):
+                    size+=len(chunk)
+                    if size>max_bytes:raise ValueError('文件超过本次允许的大小')
+                    hasher.update(chunk);output.write(chunk)
+                if not size:raise ValueError('文件不能为空')
+                output.flush();os.fsync(output.fileno())
+            sha=hasher.hexdigest()
+            with self.store.connect() as c:
+                c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_files WHERE id=?',(jid,)).fetchone()
+                if old:
+                    if old['sha256']!=sha or old['name']!=name:raise ValueError('同一附件 ID 不能用于不同文件')
+                    # A replay cannot silently bless a replaced or damaged file.
+                    self.file(jid)
+                    return {key:old[key] for key in ('id','name','mime','size')}
+                os.replace(temporary,path);mime=mimetypes.guess_type(name)[0] or 'application/octet-stream'
+                c.execute('INSERT INTO toolbox_files VALUES(?,?,?,?,?,?)',(jid,name,str(path),mime,size,sha))
+            return {'id':jid,'name':name,'mime':mime,'size':size}
+        finally:
+            temporary.unlink(missing_ok=True)
     def file(self,fid):
         ident(fid)
         with self.store.connect() as c:
@@ -445,5 +476,7 @@ CREATE TABLE IF NOT EXISTS toolbox_work_options(work_id TEXT PRIMARY KEY,format 
         value['path']=str(path)
         roots=[self.root/'data/artifacts',self.root/'data/toolbox/files',self.root/'data/workbench']
         if not any(path.is_relative_to(p.resolve()) for p in roots) or not path.is_file():raise ValueError('附件文件不可用')
-        if value.get('sha256') and hashlib.sha256(path.read_bytes()).hexdigest()!=value['sha256']:raise ValueError('附件校验失败')
+        if value.get('sha256'):
+            with path.open('rb') as stream:actual=hashlib.file_digest(stream,'sha256').hexdigest()
+            if actual!=value['sha256']:raise ValueError('附件校验失败')
         return value,path

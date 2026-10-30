@@ -10,7 +10,6 @@ import json
 import os
 import pathlib
 import re
-import subprocess
 import sys
 import threading
 
@@ -38,7 +37,127 @@ class EaselAccounts:
         self.vault = vault or DPAPIVault(self.root / 'data/media-vault')
         with self.store.connect() as c:
             c.executescript('CREATE TABLE IF NOT EXISTS media_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL); CREATE TABLE IF NOT EXISTS media_account_sessions(id TEXT PRIMARY KEY,document TEXT NOT NULL);')
+            c.execute('CREATE TABLE IF NOT EXISTS easel_native_account_bindings(platform TEXT PRIMARY KEY,session_id TEXT NOT NULL)')
         self.runner, self.autostart = runner, autostart
+
+    def _native_session(self, platform, *, create=False):
+        if platform not in PLATFORMS:
+            raise ValueError('请选择已支持的平台')
+        with self.store.connect() as c:
+            bound = c.execute('SELECT session_id FROM easel_native_account_bindings WHERE platform=?', (platform,)).fetchone()
+            if bound:
+                return self._get(c, bound['session_id'])
+            candidates = [json.loads(row['document']) for row in c.execute(
+                "SELECT document FROM media_account_sessions WHERE json_extract(document,'$.platform')=?", (platform,))]
+        if len(candidates) > 1:
+            # The native page has one current login per platform. Ambiguous old
+            # sessions remain untouched; a fresh native-owned browser is safe.
+            if not create:
+                return None
+            candidates = [self.command({'id': 'native-current-account-' + platform, 'action': 'create', 'platform': platform})['result']['session']]
+        if not candidates:
+            if not create:
+                return None
+            candidates = [self.command({'id': 'native-account-' + platform, 'action': 'create', 'platform': platform})['result']['session']]
+        selected = candidates[0]
+        with self.store.connect() as c:
+            c.execute('INSERT INTO easel_native_account_bindings VALUES(?,?) ON CONFLICT(platform) DO NOTHING', (platform, selected['id']))
+        return selected
+
+    def native_context(self):
+        """Use the same native login lifecycle as Easel's default web app."""
+        if not getattr(self, '_native_context', None):
+            from easel.web_services.accounts import create_accounts_context
+            from easel_workbench.runtime.connection_environment import service as environment_service
+            from easel_workbench.runtime.easel_connection_support import safe_env
+            environment = environment_service(self.box)
+            python = environment.python if environment.python.is_file() else pathlib.Path(sys.executable)
+            def profile_base(platform):
+                session = self._native_session(platform, create=True)
+                return self.root / 'data/easel-accounts' / session['id'] / ('profiles-' + str(session.get('_profile_generation', 0)))
+            self._native_context = create_accounts_context(
+                self.root, scripts=pathlib.Path(__file__).resolve().parents[2] / 'skills/shared/scripts',
+                profiles=self.root / 'data/easel-native-browser', profile_base=profile_base,
+                cookie_path=self.root / 'data/easel-native-browser/bilibili/cookies.json',
+                environment=lambda: safe_env(environment.child_environment(), self.root), python=python,
+                credential_store={'_wechat_web_account': lambda: {},
+                                  '_wechat_clear_credentials': lambda: None},
+                credentials_as_browser_login=False)
+        return self._native_context
+
+    def close_native(self):
+        """Release native owned process handles without creating another context."""
+        analytics = getattr(self, '_native_analytics_context', None)
+        if analytics is not None:
+            analytics._stop_analytics_on_shutdown()
+        native = getattr(self, '_native_context', None)
+        if native is not None:
+            native._stop_login_processes_on_shutdown()
+
+    def prepare_native_login(self, platform, operation_id=None):
+        native = self.native_context()
+        process = native.LOGIN_PROCESSES.get('wechat-oa-mp' if platform == 'wechat-oa' else platform)
+        if process is not None and process.poll() is None:
+            return  # Native lifecycle reuses the same process and QR.
+        session = self._native_session(platform, create=True)
+        if session.get('_native_logged_out'):
+            if not operation_id:
+                raise IntegrationConflict('新登录需要准确操作标识')
+            operation = 'native-login-' + digest(operation_id)[:40]
+            fresh = self.command({'id': operation, 'action': 'create', 'platform': platform})['result']['session']
+            with self.store.connect() as c:
+                c.execute('UPDATE easel_native_account_bindings SET session_id=? WHERE platform=?', (fresh['id'], platform))
+            session = fresh
+        if session.get('state') in ('login', 'checking', 'unknown') and not session.get('_native_managed'):
+            raise IntegrationConflict('原账号操作尚未核对，不能另起一次登录')
+        with self.store.connect() as c:
+            current = self._get(c, session['id'])
+            current.update(state='login', logged_in=False, _native_managed=True,
+                           _auth_mode='browser', revision=current['revision'] + 1)
+            self._put(c, current)
+
+    def record_native_logout(self, platform):
+        self.record_native_observation(platform, {'loggedIn': False})
+        session = self._native_session(platform)
+        if session is not None:
+            with self.store.connect() as c:
+                current = self._get(c, session['id'])
+                current['_native_logged_out'] = True
+                self._put(c, current)
+
+    def record_native_observation(self, platform, result):
+        """Project verified native identity into the existing delivery ledger."""
+        session = self._native_session(platform, create=bool(result.get('loggedIn')))
+        if session is None:
+            return
+        account = result.get('provider_user_id')
+        verified = result.get('loggedIn') is True and isinstance(account, str) and bool(re.fullmatch(r'[A-Za-z0-9_.:@-]{1,200}', account))
+        with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            latest = self._get(c, session['id'])
+            expected = latest.get('account')
+            mismatch = verified and expected and account != expected
+            latest.update(state='account_mismatch' if mismatch else 'connected' if verified else 'identity_unconfirmed' if result.get('loggedIn') else 'not_connected',
+                          logged_in=result.get('loggedIn') is True, identity_status='mismatch' if mismatch else 'resolved' if verified else 'not_provided',
+                          name=text(str(result.get('name') or '')[:200], 200), checked_at=stamp(),
+                          avatar=result.get('avatar') if isinstance(result.get('avatar'), str) and result['avatar'].startswith('https://') else '',
+                          _native_managed=True, _auth_mode='browser')
+            if verified and not mismatch:
+                latest['account'] = account
+                connection_id = latest.get('connection_id') or 'easel-' + digest(latest['id'])[:24]
+                old = self.distribution._get(c, 'connections', connection_id, False)
+                document = {**(old or {}), 'id': connection_id, 'platform': PLATFORMS[platform]['channel'],
+                            'account': account, 'label': latest['label'], 'enabled': True,
+                            'revision': (old or {}).get('revision', 0) + 1,
+                            'created_at': (old or {}).get('created_at', stamp()), 'updated_at': stamp(),
+                            'connector': 'easel', 'account_name': latest['name'],
+                            'identity_kind': 'provider_user_id', 'identity_status': 'resolved'}
+                if old and all(old.get(key) == document.get(key) for key in ('platform', 'account', 'label', 'enabled', 'connector', 'account_name', 'identity_kind', 'identity_status')):
+                    document = old
+                else:
+                    self.distribution._put(c, 'connections', document)
+                latest['connection_id'] = connection_id
+            self._put(c, latest)
 
     def _get(self, c, sid):
         row = c.execute('SELECT document FROM media_account_sessions WHERE id=?', (ident(sid),)).fetchone()
@@ -70,7 +189,7 @@ class EaselAccounts:
             if self.autostart:
                 from easel_workbench.runtime.distribution_runtime import process_identity
                 for item in documents:
-                    if item.get('state') in ('login','checking') and item.get('_owner_identity') and process_identity(item.get('_owner_pid'))!=item['_owner_identity']:
+                    if not item.get('_native_managed') and item.get('state') in ('login','checking') and item.get('_owner_identity') and process_identity(item.get('_owner_pid'))!=item['_owner_identity']:
                         item.update(state='unknown',error='原登录进程已结束；请核对身份，不会自动重放登录。')
                         self._put(c,item)
             sessions=[self._public(item) for item in documents]
@@ -92,6 +211,8 @@ class EaselAccounts:
                     raise IntegrationConflict('同一账号操作不能更换内容')
                 return json.loads(old['result'])
             action = value.get('action')
+            if self.runner is None and action in ('login', 'probe', 'credentials', 'sms', 'logout'):
+                raise IntegrationConflict('旧账号执行入口已退役，请使用 Easel 原生账号接口；历史回执仍可读取')
             if action == 'create':
                 if value.get('platform') not in PLATFORMS:
                     raise ValueError('请选择已支持的平台')
@@ -180,12 +301,7 @@ class EaselAccounts:
             if self.runner:
                 result = self.runner(payload)
             else:
-                from easel_workbench.runtime.connection_environment import service as environment_service
-                env = environment_service(self.box)
-                python = env.python if env.python.is_file() else pathlib.Path(sys.executable)
-                completed = subprocess.run([str(python), str(pathlib.Path(__file__).with_name('easel_account_worker.py'))], input=pack(payload), capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300,
-                                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-                result = json.loads(completed.stdout) if completed.returncode == 0 else {}
+                raise IntegrationConflict('旧账号执行器已退役，历史操作不会重新发起')
         except Exception:
             result = {}
         account = result.get('provider_user_id')

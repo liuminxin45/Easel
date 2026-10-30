@@ -5,6 +5,7 @@ import IdeasPage,{type IdeasPageDraft} from '../../components/IdeasPage';
 import TrendsPage from '../../components/TrendsPage';
 import CalendarPage from '../../components/CalendarPage';
 import BreakdownPage from '../../components/BreakdownPage';
+import type {Page} from '../../components/Sidebar';
 import {nativePageRoutes} from '../platform/native-routes';
 import type {OutputNode} from '../../lib/api';
 import {useWorkbench,useResource,useDraft,creatorLaunchSelection,workPath,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';

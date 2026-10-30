@@ -1,7 +1,12 @@
 import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import {useWorkbench,useOperation,useSessionMediaImage,fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
 import {renderMarkdown} from './lib/sanitize';
-export {InteractionNotice as Notice} from '../../components/InteractionNotice';
+import {InteractionNotice} from '../../components/InteractionNotice';
+
+/** Host reads stay quiet; actual errors and recovery warnings use the original UI. */
+export function Notice({message,sources=[]}:{message?:string;sources?:InteractionSource[]}){
+ return <InteractionNotice message={message} sources={sources.map(({error,feedback})=>({error,feedback}))}/>;
+}
 
 export function ActionButton({action,children,onClick,disabled,...props}:React.ButtonHTMLAttributes<HTMLButtonElement>&{action:Pick<InteractionSource,'busy'>}){
  const [invoked,setInvoked]=useState(false),working=invoked&&!!action.busy;

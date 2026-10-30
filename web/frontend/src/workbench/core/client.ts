@@ -92,7 +92,8 @@ export class WorkbenchClient {
     const state=this.resource(path),running=this.inflight.get(path);if(this.session.getState().expired){state.setState({data:null,loading:false,refreshing:false,feedback:undefined,error:'登录已过期，输入已保留。'});return Promise.resolve(null)}if(running)return running as Promise<T|null>;
     const oldMeta=this.cacheMeta.get(path),oldState=state.getState(),now=this.now();
     if(!force&&oldState.data!==null&&!oldState.stale&&oldMeta&&now-oldMeta.checkedAt<resourceFreshMs(path,oldState.data)){oldMeta.lastAccess=now;return Promise.resolve(oldState.data as T)}
-    state.setState({loading:oldState.data===null,refreshing:true,error:'',feedback:undefined});
+    // A retry is not recovery: retain a real failure until a successful read.
+    state.setState({loading:oldState.data===null,refreshing:true});
     const epoch=this.invalidations.get(path)??0,authEpoch=this.authEpoch,meta=oldMeta??{checkedAt:0,lastAccess:now,lastAttempt:now,bytes:0};meta.lastAttempt=now;meta.lastAccess=now;this.cacheMeta.set(path,meta);
     let job!:Promise<T|null>;
     job=(async()=>{let data:T|null=null,revalidate=false;try{

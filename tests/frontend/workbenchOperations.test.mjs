@@ -23,6 +23,28 @@ function fixture(fetcher,storage=new Map()){
  client.session.setState({config:{csrf:'fixture'},loading:false});return {client,storage};
 }
 
+test('a resource failure stays visible through retries and clears only after successful data',async()=>{
+ let mode='ok',held;
+ const {client}=fixture(async()=>{
+  if(mode==='offline')throw new TypeError('TEMP offline');
+  if(mode==='hold')return held.promise;
+  return json({works:[]});
+ });
+ const path='/api/works';await client.read(path,true);
+ mode='offline';await client.read(path,true);
+ const failure=client.resource(path).getState();assert.ok(failure.error);assert.ok(failure.feedback);
+ const observed=[];const stop=client.resource(path).subscribe(value=>observed.push(value));
+ mode='hold';held=deferred();const retry=client.read(path,true);
+ assert.equal(client.resource(path).getState().error,failure.error);assert.equal(client.resource(path).getState().feedback,failure.feedback);
+ held.resolve(json({error:'TEMP still unavailable'},503));await retry;
+ assert.ok(observed.every(value=>value.error&&value.feedback));
+ observed.length=0;held=deferred();const success=client.read(path,true);
+ assert.ok(client.resource(path).getState().error);
+ held.resolve(json({works:[]}));await success;stop();
+ assert.equal(client.resource(path).getState().error,'');assert.equal(client.resource(path).getState().feedback,undefined);
+ assert.equal(observed.filter(value=>!value.error).length,1);
+});
+
 test('a normal pending request is busy but not uncertain, and prevents double clicks',async()=>{
  const response=deferred();let posts=0;const {client}=fixture(async()=>{posts++;return response.promise});
  const first=client.mutate('account','/api/platform-accounts',{action:'login',session_id:'one'});

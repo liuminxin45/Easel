@@ -56,6 +56,8 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'easel/web_services/environment.py',
     'easel/web_services/analytics.py',
     'web/frontend/src/components/ThemeToggle.tsx',
+    # Same responsive native navigation wrapper is contributed upstream.
+    'web/frontend/src/components/ResponsiveSidebar.tsx',
     'web/frontend/src/components/OutputsPage.tsx',
     'web/frontend/src/components/ProfilePage.tsx',
     'web/frontend/src/components/BreakdownPage.tsx',

@@ -24,7 +24,16 @@ def script_or_style(name):
 def release_asset(project, release, name):
     """Only immutable manifest members, with matching bytes, are executable assets."""
     if not script_or_style(name):raise FileNotFoundError()
-    directory=release_directory(project,release)
+    try:
+        directory=release_directory(project,release)
+    except FileNotFoundError:
+        # A broken/replaced live package is an integrity error, not retirement.
+        original=pathlib.Path(project)/'releases'/release
+        if original.exists() or original.is_symlink():raise
+        from easel_workbench.runtime.archive_assets import archived_asset
+        archived=archived_asset(project,'releases',release,name)
+        if archived is None:raise
+        return archived
     manifest=json.loads((directory/'release.json').read_text(encoding='utf-8'))
     checksum=manifest.get('files',{}).get(name)
     if not isinstance(checksum,str) or not re.fullmatch(r'[a-f0-9]{64}',checksum):raise FileNotFoundError()

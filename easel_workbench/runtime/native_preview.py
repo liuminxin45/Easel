@@ -16,6 +16,11 @@ def selected(root):
 def member(root,release,name):
     if not re.fullmatch(r'native-[A-Za-z0-9_-]{1,80}',release) or not name or '\\' in name:raise FileNotFoundError()
     directory=(pathlib.Path(root)/'native-releases'/release).resolve();path=(directory/name).resolve()
+    if not directory.exists():
+        from easel_workbench.runtime.archive_assets import archived_asset
+        archived=archived_asset(root,'native-releases',release,name)
+        if archived is None:raise FileNotFoundError()
+        return archived[0]
     if not path.is_relative_to(directory) or not path.is_file():raise FileNotFoundError()
     manifest=json.loads((directory/'native-manifest.json').read_text(encoding='utf-8'));expected=manifest['files'].get(name)
     if not expected:raise FileNotFoundError()

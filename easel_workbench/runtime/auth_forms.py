@@ -21,8 +21,8 @@ def cookies(headers):
     except CookieError:return {}
 
 class Forms:
-    def __init__(self,state):
-        self.state=state;self.preflight={};self.lock=threading.RLock();self.web_root=getattr(state,'web_root',None)
+    def __init__(self,state,*,inert=False):
+        self.state=state;self.preflight={};self.lock=threading.RLock();self.web_root=getattr(state,'web_root',None);self.inert=inert
     def session(self,h):return self.state.session(cookies(h.headers).get(SESSION))
     def send(self,h,status,body='',location=None,set_cookie=None):
         from easel_workbench.runtime.http_content import encode
@@ -38,6 +38,10 @@ class Forms:
         h.send_header('Connection','close');h.end_headers();h.close_connection=True
         if h.command!='HEAD':h.wfile.write(payload)
     def layout(self,title,content):
+        # Native authentication only parses these original forms in an inert
+        # fragment. Its challenge/error receipt needs no retired UI assets.
+        if self.inert:
+            return '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>'+html.escape(title)+'</title><body>'+content+'</body></html>'
         from easel_workbench.runtime import web_assets as web_assets
         css=((pathlib.Path(self.web_root) if self.web_root else web_assets.root())/'style.css').read_text(encoding='utf-8')
         nonce=secrets.token_urlsafe(24)

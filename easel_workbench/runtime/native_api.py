@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import HTTPException
-from starlette.responses import JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response
 
 from easel.web_services.outputs import create_outputs_context
 from easel.web_services.planning import create_planning_context
@@ -35,6 +35,60 @@ PROFILE_FILES = {'identity.md': 'identity', 'style.md': 'voice',
                  'audience.md': 'audience', 'preferences.md': 'boundaries'}
 EXTRA_PROFILE_FILES = {'platforms.md', 'memory.md'}
 WRITE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+
+# A server-owned capability, never a request/response header supplied by a client.
+# HTML keeps the same opaque-origin script sandbox as the original OutputsPage.
+_HTML_PREVIEW = object()
+HTML_PREVIEW_CSP = (
+    "default-src 'none'; sandbox allow-scripts; frame-ancestors 'self'; "
+    "script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+    "img-src data: blob:; media-src data: blob:; font-src data:; "
+    "connect-src 'none'; form-action 'none'; base-uri 'none'; "
+    "frame-src 'none'; object-src 'none'; worker-src 'none'"
+)
+
+
+class _HtmlPreviewFileResponse(FileResponse):
+    async def __call__(self, scope, receive, send):
+        # A preview is one complete HTML document. FileResponse otherwise makes
+        # late range-error responses after the outer security policy has run.
+        scope = {**scope, 'headers': [(key, value) for key, value in scope['headers']
+                                    if key.lower() not in (b'range', b'if-range')]}
+        await super().__call__(scope, receive, send)
+
+
+def is_html_preview_response(response):
+    """Recognize only a successful HTML response created after output validation."""
+    return (
+        getattr(response, '_easel_html_preview', None) is _HTML_PREVIEW
+        and response.status_code == 200
+        and response.headers.get('content-type', '').split(';', 1)[0] == 'text/html'
+        and response.headers.get('content-security-policy') == HTML_PREVIEW_CSP
+        and not response.headers.get('content-disposition', '').lower().startswith('attachment')
+    )
+
+
+def _protect_html_preview(response, *, preview):
+    if response.headers.get('content-type', '').split(';', 1)[0] == 'text/html':
+        # These restrictions also apply when HTML is opened in a new tab or
+        # downloaded. No network, parent DOM, cookies, forms or nested frames.
+        if isinstance(response, FileResponse):
+            response = _HtmlPreviewFileResponse(
+                response.path, status_code=response.status_code,
+                headers=dict(response.headers), media_type=response.media_type,
+                background=response.background, stat_result=response.stat_result)
+        response.headers['Content-Security-Policy'] = HTML_PREVIEW_CSP
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Accept-Ranges'] = 'none'
+        if isinstance(response, FileResponse) and response.stat_result is None:
+            # The outer HEAD response omits the body before FileResponse.__call__.
+            response.stat_result = Path(response.path).stat()
+            response.set_stat_headers(response.stat_result)
+        if preview:
+            response._easel_html_preview = _HTML_PREVIEW
+        else:
+            response.headers['Content-Disposition'] = 'attachment'
+    return response
 
 
 def supports(path, method=None):
@@ -448,13 +502,13 @@ class NativeApi:
             raise HTTPException(404, '文件不存在')
         return value, path
 
-    async def _file(self, relative, media=False):
+    async def _file(self, relative, media=False, *, preview=False):
         registered = self._registered_file(relative)
         if registered:
             value, path = registered
             if media:
-                from starlette.responses import FileResponse
-                return FileResponse(path, media_type=value['mime'], headers={'Cache-Control': 'private, no-store'})
+                response = FileResponse(path, media_type=value['mime'], headers={'Cache-Control': 'private, no-store'})
+                return _protect_html_preview(response, preview=preview)
             kind = self.outputs._file_kind(value['name'])
             return {'path': relative, 'kind': kind, 'isBinary': kind != 'text',
                     'content': path.read_text(encoding='utf-8') if kind == 'text' else ''}
@@ -470,7 +524,8 @@ class NativeApi:
         actual_parts = resolved.relative_to((self.root / 'outputs').resolve()).parts
         if actual_parts[0].startswith(('_', '.')) and actual_parts != parts:
             raise HTTPException(403, '系统资料不能经目录别名展示')
-        return await (self.outputs.api_media(relative) if media else self.outputs.api_output(relative))
+        response = await (self.outputs.api_media(relative) if media else self.outputs.api_output(relative))
+        return _protect_html_preview(response, preview=preview) if media else response
 
     def _export_package(self, platform, fields):
         from easel.manual_publish import build_package
@@ -562,8 +617,9 @@ class NativeApi:
                         return {key: candidate['meta'][key] for key in ('work_id', 'version_id')}
             return {}
         file_match = re.fullmatch(r'/api/(output|media)/(.+)', path)
-        if file_match and method == 'GET':
-            return await self._file(unquote(file_match[2]), file_match[1] == 'media')
+        if file_match and method in {'GET', 'HEAD'}:
+            return await self._file(unquote(file_match[2]), file_match[1] == 'media',
+                                    preview=request.query_params.get('download') != '1')
         if file_match and method == 'DELETE':
             raise HTTPException(403, '原件与历史版本保留，请在准确作品版本中归档')
         if path == '/api/personas' and method == 'GET':

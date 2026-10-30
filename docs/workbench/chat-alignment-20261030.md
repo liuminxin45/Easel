@@ -45,10 +45,10 @@ original App entry and private entry both build independently with Node 24.19.0.
 
 ## Evidence
 
-Immutable pair:
+Active releases (the final frontend was switched independently):
 
-- Backend `workbench-20261030-061429`, manifest
-  `c718714d667b5f2ee05d4cfa7b835b265de341bda4b276f7bffc3b7313f43125`.
+- Backend `workbench-20261030-055311`, manifest
+  `da0d05c9d238b5376031160982abf8186671cdb53a3e5cb7e193267e1b1d0032`.
 - Frontend `native-easel-workbench-20261030061308`, manifest
   `b535be4d12ccb04a63c41bf73c949b8daf1522fe8497998b9f863fb4ebf6c8f3`.
 
@@ -79,3 +79,14 @@ single private UI change in an isolated source tree. Its backend members are
 byte-identical to the previously validated runtime. Concurrent collection,
 account and cache edits in the working checkout were excluded from this release;
 those files were preserved. Reports for this pair use the `isolated-*` prefix.
+
+The final frontend-only switch uses `scripts/activate_workbench_frontend.py`.
+Its optional acceptance `source_root` is limited to project-local validation
+sources, validates every original build input and is rechecked under the release
+lock. It supports isolated builds without reading concurrent edits as approved
+source. Twenty-two TEMP activation tests passed. Evidence for the live runtime
+and final UI uses the `pointer-*` prefix; `frontend-only-acceptance.json` binds
+that exact baseline. A new production turn had an unknown receipt, so no further
+backend restart was performed and that turn was not replayed. The static switch
+checks PID/creation-time identity and leaves the business database and admission
+controls untouched.

@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchHarnessModels, fetchHarnessSettings, saveHarnessSettings } from '../lib/api';
 import type { HarnessModel, HarnessSettingsResponse } from '../lib/api';
 import SettingsSelect from './SettingsSelect';
+import {defaultSettingsApi, type SettingsApi} from './SettingsApi';
+import {InteractionNotice,useFeedbackMessage} from './InteractionNotice';
 
-export default function HarnessSettings({ onChange, onSelect }: {
+export default function HarnessSettings({ onChange, onSelect, api = defaultSettingsApi, hostManaged = false }: {
+  api?: SettingsApi;
+  hostManaged?: boolean;
   onChange: (runtime: string) => void;
   onSelect: (runtime: string) => void;
 }) {
+  const {fetchHarnessModels, fetchHarnessSettings, saveHarnessSettings} = api;
   const [settings, setSettings] = useState<HarnessSettingsResponse | null>(null);
   const [runtime, setRuntime] = useState('api');
   const [model, setModel] = useState('');
   const [sandbox, setSandbox] = useState('workspace-write');
   const [autoApprove, setAutoApprove] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
+  const [note,setNote,reportNote]=useFeedbackMessage();
   const [catalogs, setCatalogs] = useState<Record<string, HarnessModel[]>>({});
   const [modelLoading, setModelLoading] = useState(false);
-  const [modelNote, setModelNote] = useState('');
+  const [modelNote,setModelNote,reportModelNote]=useFeedbackMessage();
   const [refresh, setRefresh] = useState(0);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const modelRequest = useRef(0);
@@ -35,7 +39,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
       onChange(value.runtime);
       onSelect(value.runtime);
     }).catch((error) => {
-      if (alive) setNote(`读取失败：${error instanceof Error ? error.message : String(error)}`);
+      if (alive) reportNote(error);
     }).finally(() => {
       if (alive) setSettingsLoading(false);
     });
@@ -56,7 +60,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
       if (!result.models.length) setModelNote('原生 CLI 没有返回模型，可使用默认模型或手动填写。');
     } catch (error) {
       if (modelRequest.current === sequence) {
-        setModelNote(`读取失败：${error instanceof Error ? error.message : String(error)}`);
+        reportModelNote(error);
       }
     } finally {
       if (modelRequest.current === sequence) setModelLoading(false);
@@ -71,7 +75,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
       onChange(value.runtime);
       setNote('已保存，请新建对话；旧对话仍保留在原底座，不迁移历史。');
     } catch (error) {
-      setNote(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      reportNote(error);
     } finally {
       setBusy(false);
     }
@@ -118,7 +122,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
             </span>
           </div>
           <p className="desc">{runtime === 'api' ? '模型 API 直连 · 无需安装 Agent，模型在下方配置'
-            : runtime === 'openclaw' ? 'OpenClaw 的模型、API 地址和 Key 在下方配置，保存后同步到 gateway'
+            : runtime === 'openclaw' ? (hostManaged ? 'OpenClaw 模型与供应商在下方配置；原生本地 CLI 使用本项目隔离配置，不启动或改写现有网关。' : 'OpenClaw 的模型、API 地址和 Key 在下方配置，保存后同步到 gateway')
             : `${selected?.protocol || ''} · 连接由适配器管理，无需另选连接方式`}</p>
           <p className="desc">安装时可选择 OpenClaw，也可先跳过，进入这里选择已安装的其它引擎。选择引擎可查看对应配置，只有「保存底座」才切换；认证沿用各引擎自身配置。</p>
           {selected && !selected.installed && (
@@ -152,7 +156,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
               placeholder={runtime === 'codex' ? '留空使用 Codex 原生配置' : 'provider/model；留空使用原生配置'} />
               <p className="desc">可从原生 CLI 列表选择，也可手动填写；留空沿用原生默认模型，不修改其它底座的供应商配置。
                 模型是否可用仍取决于当前账号、供应商和原生 CLI 支持。</p>
-              {modelNote && <p className="desc" role="status">{modelNote}</p>}
+              {(!hostManaged||!modelNote?.operationScope)&&<InteractionNotice sources={[{feedback:modelNote}]}/>}
             </div>
           </div>
           {runtime === 'codex' && (
@@ -193,7 +197,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
         </>
       )}
       {settings?.locked && <p className="desc">启动环境 EASEL_AGENT_RUNTIME 已固定底座，请修改启动环境后重启。</p>}
-      {note && <div className={`save-note${note.includes('失败') ? ' err' : ''}`} role="status">{note}</div>}
+      {(!hostManaged||!note?.operationScope)&&<InteractionNotice sources={[{feedback:note}]}/>}
     </section>
   );
 }

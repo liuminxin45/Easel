@@ -8,6 +8,8 @@ def is_scope_conflict(value):
     return isinstance(value,dict) and value.get('code') in CONFLICT_CODES
 
 def can_continue_partial(c,job):
+    from .native_continuation import continuation
+    if continuation(c,job):return True
     if not job or job['status']!='blocked' or not job['finished_at']:return False
     row=c.execute('SELECT document FROM toolbox_production_outcomes WHERE job_id=?',(job['id'],)).fetchone()
     if not row:return False

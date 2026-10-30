@@ -3,9 +3,10 @@ import {record,string} from './models';
 
 export class RequestError extends Error {
   status?:number; uncertain=false; unreachable=false; cancelled=false; timedOut=false;
-  constructor(message:string,properties:Partial<Pick<RequestError,'status'|'uncertain'|'unreachable'|'cancelled'|'timedOut'>>={}){super(message);this.name='RequestError';Object.assign(this,properties)}
+  operationScope?:string;operationId?:string;
+  constructor(message:string,properties:Partial<Pick<RequestError,'status'|'uncertain'|'unreachable'|'cancelled'|'timedOut'|'operationScope'|'operationId'>>={}){super(message);this.name='RequestError';Object.assign(this,properties)}
 }
-export interface RequestOptions {body?:JsonRecord;csrf?:string;id?:string;raw?:Blob;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string}
+export interface RequestOptions {body?:JsonRecord;csrf?:string;id?:string;raw?:Blob;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string;readOnly?:boolean}
 export interface ConditionalResponse<T> {status:'modified'|'not-modified';data?:T;etag?:string;serverTime?:string}
 export interface TransportOptions {fetcher?:typeof fetch;activities?:ActivityDelegate;onExpired?:()=>void;onConnectivity?:(reachable:boolean)=>void;authEpoch?:()=>number;readTimeout?:number;writeTimeout?:number;uploadTimeout?:number;retryDelay?:number}
 const abortError=()=>new RequestError('读取已取消',{cancelled:true});
@@ -17,7 +18,7 @@ export class ApiTransport {
   constructor(private options:TransportOptions={}){this.fetcher=options.fetcher??((...args)=>globalThis.fetch(...args))}
   async request<T=JsonRecord>(path:string,options:RequestOptions={}):Promise<T>{
     if(!path.startsWith('/api/')||path.startsWith('//'))throw new RequestError('请求地址无效');
-    const write=options.body!==undefined||options.raw!==undefined;
+    const write=(options.body!==undefined||options.raw!==undefined)&&!options.readOnly;
     const epoch=this.options.authEpoch?.();
     for(let attempt=0;;attempt++){
       if(options.signal?.aborted)throw abortError();
@@ -30,12 +31,12 @@ export class ApiTransport {
     }
   }
   private async attempt<T>(path:string,options:RequestOptions):Promise<T>{
-    const write=options.body!==undefined||options.raw!==undefined,controller=new AbortController(),epoch=this.options.authEpoch?.();
+    const post=options.body!==undefined||options.raw!==undefined,write=post&&!options.readOnly,controller=new AbortController(),epoch=this.options.authEpoch?.();
     const release=this.options.activities?.begin(write?'write':'read');
-    const timer=setTimeout(()=>controller.abort(),options.raw?this.options.uploadTimeout??45000:write?this.options.writeTimeout??12000:this.options.readTimeout??30000);
+    const timer=setTimeout(()=>controller.abort(),options.raw?this.options.uploadTimeout??45000:write?this.options.writeTimeout??30000:this.options.readTimeout??30000);
     const stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
     try{
-      const response=await this.fetcher(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,...(write?{method:'POST',headers:{'Content-Type':options.raw?'application/octet-stream':'application/json','X-CSRF-Token':options.csrf??'',...(options.id?{'X-Operation-Id':options.id}:{}),...(options.name?{'X-File-Name':encodeURIComponent(options.name)}:{})},body:options.raw??JSON.stringify(options.body)}:options.conditional&&options.etag?{headers:{'If-None-Match':options.etag}}:{})});
+      const response=await this.fetcher(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,...(post?{method:'POST',headers:{'Content-Type':options.raw?'application/octet-stream':'application/json','X-CSRF-Token':options.csrf??'',...(options.id?{'X-Operation-Id':options.id}:{}),...(options.name?{'X-File-Name':encodeURIComponent(options.name)}:{})},body:options.raw??JSON.stringify(options.body)}:options.conditional&&options.etag?{headers:{'If-None-Match':options.etag}}:{})});
       this.options.onConnectivity?.(true);
       if(response.status===401){if(epoch===this.options.authEpoch?.())this.options.onExpired?.();throw new RequestError('登录已过期，输入已保留，请重新登录。',{status:401})}
       const metadata={etag:response.headers.get('ETag')||undefined,serverTime:response.headers.get('X-Workbench-Server-Time')||undefined};
@@ -54,4 +55,5 @@ export class ApiTransport {
   get<T=JsonRecord>(path:string,signal?:AbortSignal):Promise<T>{return this.request<T>(path,{signal})}
   conditionalGet<T=JsonRecord>(path:string,etag?:string,signal?:AbortSignal):Promise<ConditionalResponse<T>>{return this.request<ConditionalResponse<T>>(path,{conditional:true,etag,signal})}
   post<T=JsonRecord>(path:string,body:JsonRecord,csrf:string,id?:string):Promise<T>{return this.request<T>(path,{body,csrf,id})}
+  query<T=JsonRecord>(path:string,body:JsonRecord,csrf:string):Promise<T>{return this.request<T>(path,{body,csrf,readOnly:true})}
 }

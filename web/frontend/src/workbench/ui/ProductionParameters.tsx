@@ -1,3 +1,4 @@
+import {ActionButton} from './common';
 import React,{useState} from 'react';
 import {useResource,array,record,string,type JsonRecord} from '@workbench/core';
 import {Notice,TextRecord} from './common';
@@ -8,8 +9,8 @@ export function ProductionParameters({versionId}:{versionId:string}){
  const execution=record(resource.data?.execution_prompt),snapshot=record(execution.creator_snapshot),profile=record(snapshot.profile),skills=array<JsonRecord>(snapshot.skills);
  return <details className="chat-production-details" onToggle={event=>{if(event.currentTarget.open)setOpened(true)}}>
   <summary>制作参数</summary>
-  <Notice message={resource.error}/>
-  {resource.error&&<button className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取制作参数</button>}
+  <Notice sources={[resource]}/>
+  {resource.error&&<ActionButton action={{busy:!!resource.refreshing}} className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取制作参数</ActionButton>}
   {!resource.data&&!resource.error&&<p role="status">正在读取本版制作记录…</p>}
   {resource.data&&<>
    <p><strong>作品版本：</strong>{versionId}</p>

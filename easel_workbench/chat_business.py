@@ -78,8 +78,11 @@ class ChatBusiness:
                     message['work']=copy.deepcopy(turn.get('work'))
                     message['business_receipt']=copy.deepcopy(turn.get('business_receipt'))
                 message['output_files']=[{'id':r['id'],'name':r['name'],'mime':r['mime'],'url':'/api/files/'+r['id']} for r in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=? ORDER BY rowid',(message['turnId'],))]
-                job=c.execute('SELECT status,error FROM toolbox_jobs WHERE id=?',(message['turnId'],)).fetchone()
-                if job:message.update(business_status=job['status'],business_error=job['error'])
+                job=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(message['turnId'],)).fetchone()
+                if job:
+                    from .runtime.production_retry import recovery
+                    from .runtime.production_outcome import read as read_outcome
+                    message.update(business_status=job['status'],business_error=job['error'],business_recovery=recovery(job,c,outcome=read_outcome(c,job['id'])))
             for work in result['linked_works']:
                 row=c.execute('SELECT title FROM toolbox_works WHERE id=?',(work['work_id'],)).fetchone()
                 if row:work['title']=row['title']
@@ -92,6 +95,8 @@ class ChatBusiness:
     def _selection(self,value):
         session=self._session(value);context=value.get('context') or {}
         if not isinstance(context,dict):raise ValueError('技能选择无效')
+        if session.get('runtime')=='api' and any(context.get(key) for key in ('skill_id','action_id','work_id','parent_version_id')):
+            raise PlanConflict('API 仅聊天模式没有本机技能和制作工具；请新建 Agent 对话')
         profile_id=context.get('profile_id') or session['profile_id']
         if profile_id!=session['profile_id']:raise PlanConflict('已有会话保持原画像，请新建会话后切换')
         if any(item['id']==context.get('skill_id') for item in self.upstream.entries()):
@@ -159,7 +164,11 @@ class ChatBusiness:
         linked=c.execute("SELECT 1 FROM easel_chat_turns WHERE session_id=? AND json_extract(document,'$.work.work_id')=?",(sid,wid)).fetchone()
         if not linked:raise PlanConflict('父版本不属于当前 Easel 会话')
         from .runtime.work_review import candidate,notes,source_data
-        job=candidate(self.box,c,wid,vid)
+        from .runtime.native_continuation import continuation
+        original=c.execute("SELECT * FROM toolbox_jobs WHERE id=? AND work_id=? AND kind IN ('create','change')",(vid,wid)).fetchone()
+        followup=continuation(c,original)
+        if followup and followup['session_id']!=sid:raise PlanConflict('中断版本须回到其原生会话继续')
+        job=dict(original) if followup else candidate(self.box,c,wid,vid)
         row=c.execute('SELECT document FROM toolbox_review_inputs WHERE job_id=?',(vid,)).fetchone()
         document=json.loads(row[0]) if row else {}
         snapshot=document.get('creator_snapshot')
@@ -186,10 +195,25 @@ class ChatBusiness:
             chain.append(raw['id']);cursor=raw['candidate_id']
             if not cursor:break
         raw_feedback=[dict(r) for r in c.execute("SELECT id,candidate_id,kind,text,scope,status,created_at FROM toolbox_jobs WHERE work_id=? AND kind IN ('feedback','accept','reject') ORDER BY rowid",(wid,)) if r['candidate_id'] in chain]
-        sources,_=source_data(self.box,c,wid,vid)
+        sources,_=source_data(self.box,c,wid,vid,allow_partial=bool(followup))
+        retained=None
+        if followup:
+            raw=c.execute('SELECT document FROM easel_chat_plans WHERE id=?',('plan-'+vid,)).fetchone()
+            if not raw:raise PlanConflict('中断版本缺少原始冻结制作方案')
+            plan=json.loads(raw[0])
+            if plan.get('snapshot')!=snapshot or plan.get('work',{}).get('work_id')!=wid:raise PlanConflict('原始制作方案与所选版本不一致')
+            directory=Path(plan['output_directory'])
+            try:directory=owned_output_path(self.root,directory.relative_to(self.root))
+            except ValueError as exc:raise PlanConflict('中断版本的原文件目录不属于当前项目') from exc
+            files=[]
+            for path in sorted(directory.rglob('*')) if directory.is_dir() else []:
+                safe=owned_output_path(self.root,path.relative_to(self.root))
+                if safe.is_file():files.append({'path':str(safe),'sha256':digest(safe.read_bytes())})
+            retained={'source_version_id':vid,'material':plan['request']['message'],'attachments':plan['attachments'],'files':files,
+                      'notice':'原回合已确认中断。保留原文件，仅在本轮新输出目录中完成后续版本。'}
         from .runtime.article_drafts import job_work
         parent_mode=job_work(self.box.options(wid,c),vid,c)['article_mode']
-        return {'work_id':wid,'version_id':vid,'format':self.box.options(wid,c)['format'],'article_mode':parent_mode,'snapshot':snapshot,
+        return {'continuation':retained,'work_id':wid,'version_id':vid,'format':self.box.options(wid,c)['format'],'article_mode':parent_mode,'snapshot':snapshot,
                 'artifacts':artifacts,'text':sources,'annotations':notes(c,wid,vid),'raw_feedback':raw_feedback,
                 'creation_options':document.get('creation_options'),
                 'source_article':source_article,
@@ -284,10 +308,11 @@ class ChatBusiness:
             raise ValueError('未能冻结独立交付核验合同，未开始制作')
         return document
 
-    def _workspace(self):
+    def _workspace(self,session=None):
         from easel.harnesses.base import RunRequest
         from easel.harnesses.workspace import harness_instructions
-        value=harness_instructions(RunRequest('',self.root,{'EASEL_AGENT_RUNTIME':'codex'}))
+        config=self.chat.execution_settings(session) if session else {'runtime':'codex','models':{},'sandbox':'workspace-write'}
+        value=harness_instructions(RunRequest('',self.root,{'EASEL_AGENT_RUNTIME':config['runtime']},model=config['models'].get(config['runtime'],''),sandbox=config['sandbox']))
         project=self.root/'AGENTS.md'
         if project.is_file():value+='\n\n## 本轮项目约定冻结\n'+project.read_text(encoding='utf-8-sig')
         return value
@@ -382,7 +407,7 @@ class ChatBusiness:
                       'library_revision':self.catalog.revision(),'parent':parent,'created_at':stamp()}
             document['source_article']=source_article
             document['review_input']=review_input
-            document['frozen_instructions']=self._workspace()
+            document['frozen_instructions']=self._workspace(session)
             document['instructions_sha256']=digest(document['frozen_instructions'])
             document['token']=digest(packed(document))
             c.execute('BEGIN IMMEDIATE')
@@ -418,7 +443,7 @@ class ChatBusiness:
             if plan['token']!=token or plan['signature']!=digest(packed(original)):
                 raise PlanConflict('消息、素材或技能与已确认方案不同，未发送')
             if plan['library_revision']!=self.catalog.revision():raise PlanConflict('项目技能已有变化，请重新确认方案')
-            if digest(self._workspace())!=plan['instructions_sha256']:raise PlanConflict('项目会话约定已有变化，请重新确认方案')
+            if digest(self._workspace(self._session(value)))!=plan['instructions_sha256']:raise PlanConflict('项目会话约定已有变化，请重新确认方案')
             current_files=self._attachments(value)
             if current_files!=plan['attachments']:raise PlanConflict('素材与确认方案不一致')
             if self._parent(value)!=plan.get('parent'):raise PlanConflict('父版反馈或素材已有变化，请重新确认修改方案')
@@ -432,7 +457,7 @@ class ChatBusiness:
         output=self.root/'outputs'/session['id']
         if snapshot['task']=='native':output=output/key(value.get('turnId') or value.get('turn_id') or value.get('id'))
         return {'snapshot':snapshot,'actual_prompt':self._instruction(snapshot,message,attachments,output,source_article=self._news_source(value),reference_work=self._parent(value)),
-                'work':None,'frozen_instructions':self._workspace()}
+                'work':None,'frozen_instructions':self._workspace(session)}
 
     def accept(self,c,turn):
         """Join version registration to the native chat acceptance transaction."""
@@ -468,7 +493,7 @@ class ChatBusiness:
               'submission_started_at':stamp(),'delivery_state':'not_started',
               'active_skills':[{k:s[k] for k in ('id','name','version','sha256')} for s in turn['snapshot']['skills'] if s.get('execution_role')=='active'],
               'reserved_skills':[{k:s[k] for k in ('id','name','version','sha256')} for s in turn['snapshot']['skills'] if s.get('execution_role')=='reserved_independent'],
-              'runner':'easel.harnesses.codex.CodexAdapter'}
+              'runner':turn['runner'],'execution_settings':turn.get('execution_settings')}
         c.execute('INSERT INTO creator_model_calls VALUES(?,?,?,?)',(call['id'],task_id,packed(call),stamp()))
         if turn.get('work'):
             wid=turn['work']['work_id']
@@ -525,14 +550,15 @@ class ChatBusiness:
             row=c.execute('SELECT document FROM creator_model_calls WHERE id=?',(call_id,)).fetchone()
             if not row:raise PlanConflict('会话调用登记不存在')
             call=json.loads(row[0])
-            if call.get('native_turn_id') and call['native_turn_id']!=turn['native_turn_id']:raise PlanConflict('实际回合与调用登记不同')
+            if call.get('native_turn_id') and call['native_turn_id']!=turn.get('native_turn_id'):raise PlanConflict('实际回合与调用登记不同')
+            execution_id=(turn.get('execution_identity') or {}).get('id') or turn.get('native_turn_id')
             call.update(status='running',started_at=call.get('started_at') or stamp(),delivery_state='accepted',
-                        native_id=turn['native_id'],native_turn_id=turn['native_turn_id'])
+                        native_id=turn['native_id'],native_turn_id=turn.get('native_turn_id'),execution_identity=turn.get('execution_identity'))
             c.execute('UPDATE creator_model_calls SET document=?,updated_at=? WHERE id=?',(packed(call),stamp(),call_id))
             if work:
-                c.execute("UPDATE toolbox_jobs SET dispatch_started=1,status='running',started_at=?,turn_id=? WHERE id=?",(stamp(),turn['native_turn_id'],work['version_id']))
+                c.execute("UPDATE toolbox_jobs SET dispatch_started=1,status='running',started_at=?,turn_id=? WHERE id=?",(stamp(),execution_id,work['version_id']))
                 run=read_run(c,work['version_id']);run['model_call_id']=call_id;run['native_id']=turn['native_id'];_put_run(c,run)
-                step(c,work['version_id'],'production','running',native_turn_id=turn['native_turn_id'])
+                step(c,work['version_id'],'production','running',native_turn_id=turn.get('native_turn_id'),execution_identity=turn.get('execution_identity'))
         return {'model_call_id':call_id}
 
     def finished(self,turn):
@@ -549,5 +575,5 @@ class ChatBusiness:
             with self.store.connect() as c:c.execute("UPDATE toolbox_jobs SET status='uncertain',dispatch_started=1,error=?,reply=? WHERE id=?",(turn.get('error') or '原生会话未取得明确完成回执，请先核对。',turn.get('output',''),jid))
             return {**work,'status':'uncertain','replayed':False}
         from .runtime.production_delivery import record_delivery
-        record_delivery(self.box,jid,turn['output'],turn['native_turn_id'],product_roots=[self.root/'outputs'/turn['session_id']/turn['id']/'products'])
+        record_delivery(self.box,jid,turn['output'],turn.get('native_turn_id',''),product_roots=[self.root/'outputs'/turn['session_id']/turn['id']/'products'],execution_identity=turn.get('execution_identity'))
         return {**work,'status':self.box.work(work['work_id'])['state']}

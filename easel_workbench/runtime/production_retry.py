@@ -181,7 +181,9 @@ def recovery(job, connection, *, outcome=None, now=None):
         action = 'resend' if phase in ('retry_wait', 'failed', 'exhausted') else None
         code = code or ('codex_send_failed' if status == 'error' else None)
         message = MESSAGES.get(code, '正在连接 Codex。' if phase == 'sending' else '等待发送到 Codex。')
-    return {'job_id': job['id'], 'failure_kind': kind, 'send_state': send_state, 'phase': phase, 'status': phase,
+    from .native_continuation import continuation
+    followup=continuation(connection,job) if production else None
+    return {'can_continue':bool(followup),'continuation':followup,'job_id': job['id'], 'failure_kind': kind, 'send_state': send_state, 'phase': phase, 'status': phase,
             'can_retry': not sent and not input_failed and (status == 'error' or phase == 'retry_wait'),
             'attempt_count': state.get('attempt_count', 0), 'auto_retry_count': state.get('auto_retry_count', 0),
             'max_auto_retries': MAX_AUTO_RETRIES, 'next_retry_at': state.get('next_retry_at') if phase == 'retry_wait' else None,

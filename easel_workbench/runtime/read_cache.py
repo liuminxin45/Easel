@@ -10,7 +10,7 @@ GROUPS={
  'creator':('creator_profiles','creator_profile_history','creator_skills','creator_skill_versions','creator_skill_pointers','creator_task_runs','creator_model_calls','creator_work_owners'),
  'learning':('learning_evidence','learning_proposals','learning_analysis_queue','learning_operations'),
  'creative_quality':('learning_runs','learning_correction_links','learning_quality_acknowledgements'),
- 'news':('articles','runs','provenance','periodical_batches','periodical_issues','periodical_items','periodical_themes','news_feedback'),
+ 'news':('articles','runs','provenance','periodical_batches','periodical_issues','periodical_items','periodical_themes','news_feedback','collection_source_versions'),
  'works':('toolbox_works','toolbox_jobs','toolbox_files','toolbox_work_options','toolbox_article_drafts','toolbox_article_inputs','toolbox_text_versions','toolbox_production_outcomes','toolbox_dispatch_retries','toolbox_review_notes','toolbox_review_events','toolbox_review_inputs','toolbox_completions','toolbox_style_presets','artifacts','toolbox_direct_turns','toolbox_archive'),
  'studio':('studio_records',),
  'distribution':('distribution_connections','distribution_revisions','distribution_approvals','distribution_deliveries','distribution_attempts','distribution_observations','distribution_check_monitor_state'),

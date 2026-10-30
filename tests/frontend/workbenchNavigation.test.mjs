@@ -29,3 +29,29 @@ test('a late session response cannot take over after the user leaves the chat fl
  const win=windowFor('/toolbox'),nav=new NavigationService({window:win,viewport:()=>null});nav.start();nav.navigate('/chat?fresh=1',{intent:'flow'});const ticket=nav.ticket();nav.navigate('/works',{intent:'module'});
  assert.equal(nav.finishFlow('/chat/late-session',ticket),false);assert.equal(nav.snapshot().path,'/works');
 });
+
+for(const close of ['button','back'])test('same-page acknowledgement retains its layer and filters after '+close,()=>{
+ const win=windowFor('/toolbox'),nav=new NavigationService({window:win,viewport:()=>null});nav.start();nav.navigate('/news?sources=one');let dismissed=0;
+ let release;release=nav.registerLayer(()=>{dismissed++;release()});
+ nav.replace('/news?sources=one,two',{preserveScroll:true,preserveLayers:true});
+ assert.equal(dismissed,0);assert.equal(nav.snapshot().path,'/news?sources=one,two');assert.ok(win.history.state.nativeLayer);
+ if(close==='button')release();else nav.back();
+ assert.equal(nav.snapshot().path,'/news?sources=one,two');assert.equal(new URLSearchParams(win.location.search).get('path'),'/news?sources=one,two');assert.equal(win.history.state.nativeLayer,undefined);
+ nav.back();assert.equal(nav.snapshot().path,'/toolbox');
+});
+
+test('preserveLayers never bypasses dismissal when navigating to another page',()=>{
+ const win=windowFor('/news'),nav=new NavigationService({window:win,viewport:()=>null});nav.start();let dismissed=0;
+ let release;release=nav.registerLayer(()=>{dismissed++;release()});
+ nav.replace('/settings',{preserveLayers:true});assert.equal(dismissed,1);assert.equal(nav.snapshot().path,'/settings');
+});
+
+test('navigation preserves independent card offsets without persisting card contents',()=>{
+ const win=windowFor('/news?sources=one'),region={dataset:{nativeScrollRegion:'news:one'},scrollTop:840,scrollLeft:0};
+ const viewport={scrollTop:180,scrollLeft:0,getBoundingClientRect:()=>({top:0,bottom:900}),querySelectorAll:selector=>selector==='[data-native-scroll-region]'?[region]:[]};
+ const nav=new NavigationService({window:win,viewport:()=>viewport});nav.start();nav.navigate('/news/a/exact?source=one');
+ const position=win.history.state.nativeNavigation.returnTo.position;
+ assert.equal(position.regions['news:one'].top,840);assert.equal(position.top,180);
+ region.scrollTop=0;nav.back();assert.equal(win.history.state.nativeNavigation.position.regions['news:one'].top,840);
+ assert.ok(!JSON.stringify(position).includes('body'));
+});

@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS provenance(article_id TEXT NOT NULL,run TEXT NOT NULL
 ''')
             if 'published_at_raw' not in {r[1] for r in c.execute('pragma table_info(articles)')}: c.execute('alter table articles add column published_at_raw TEXT')
             if 'source_event_id' not in {r[1] for r in c.execute('pragma table_info(articles)')}: c.execute('alter table articles add column source_event_id TEXT')
+            for field,kind in (('source_order','INTEGER'),('hot','TEXT'),('fetched_at','TEXT'),('source_protocol_id','TEXT')):
+                if field not in {r[1] for r in c.execute('pragma table_info(articles)')}:c.execute('alter table articles add column '+field+' '+kind)
+            from easel_workbench.runtime.source_registry import migrate as source_migrate
+            source_migrate(c)
             c.execute('create unique index if not exists articles_source_event on articles(source_job,source_event_id) where source_event_id is not null')
             from easel_workbench.runtime import notifications as notifications
             notifications.migrate(c)
@@ -58,14 +62,15 @@ CREATE TABLE IF NOT EXISTS provenance(article_id TEXT NOT NULL,run TEXT NOT NULL
         required={'schema_version','source_job','feed_id','run_id','run_at','final_text','articles'}
         if not isinstance(d,dict) or not required<=d.keys() or d['schema_version']!=1: raise ValueError('invalid schema')
         job=d['source_job']
-        if job not in SOURCES or d['feed_id']!=SOURCES[job]['feed']: raise ValueError('source/feed mismatch')
+        registry=self.sources(include_deleted=True);meta=registry.get(job)
+        if not meta or d['feed_id']!=meta['feed']: raise ValueError('source/feed mismatch')
         when=dt.datetime.fromisoformat(d['run_at'])
         if when.tzinfo is None: raise ValueError('run_at requires timezone')
         if not isinstance(d['run_id'],str) or not 1<=len(d['run_id'])<=250: raise ValueError('invalid run id')
         if not isinstance(d['final_text'],str) or not 1<=len(d['final_text'])<=200000: raise ValueError('invalid final text')
         if not isinstance(d['articles'],list) or not 1<=len(d['articles'])<=100: raise ValueError('articles must contain 1..100')
         for a in d['articles']:
-            if not isinstance(a,dict) or not isinstance(a.get('title'),str) or not 1<=len(a['title'])<=500 or not isinstance(a.get('body'),str) or len(a['body'])>100000 or not isinstance(a.get('url'),str) or not url_ok(a['url']): raise ValueError('invalid article')
+            if not isinstance(a,dict) or not isinstance(a.get('title'),str) or not 1<=len(a['title'])<=(500 if meta['builtin'] else 1000) or not isinstance(a.get('body'),str) or len(a['body'])>100000 or not isinstance(a.get('url'),str) or not (url_ok(a['url']) or not meta['builtin'] and a['url']==''): raise ValueError('invalid article')
             if a.get('published_at'): dt.datetime.fromisoformat(a['published_at'])
             article_identity(job,a)
         hash_=digest(d['final_text']); rid=digest(job+'\0'+d['run_id']+'\0'+hash_); count=0
@@ -75,10 +80,15 @@ CREATE TABLE IF NOT EXISTS provenance(article_id TEXT NOT NULL,run TEXT NOT NULL
                 aid=article_identity(job,a)
                 count+=c.execute('insert or ignore into articles(id,source_job,title,body,url,publisher,published_at,run_at,run,source_event_id) values(?,?,?,?,?,?,?,?,?,?)',(aid,job,a['title'],a['body'],a['url'],a.get('publisher',''),a.get('published_at'),d['run_at'],rid,a.get('source_event_id'))).rowcount
                 c.execute('update articles set publisher=?,published_at_raw=coalesce(published_at_raw,?) where id=?',(a.get('publisher',''),a.get('published_at_raw'),aid))
+                c.execute('update articles set source_order=coalesce(source_order,?),hot=coalesce(hot,?),fetched_at=coalesce(fetched_at,?) where id=?',(a.get('source_order'),a.get('hot'),a.get('fetched_at'),aid))
+                c.execute('update articles set source_protocol_id=coalesce(source_protocol_id,?) where id=?',(a.get('source_protocol_id'),aid))
                 c.execute('insert or ignore into provenance values(?,?)',(aid,rid))
             from easel_workbench.runtime import notifications as notifications
             notifications.news(c,rid,job,count)
-        return {'inserted':count,'run':rid,'source':SOURCES[job]['name'],'url':'https://leopc.tail2ce65.ts.net:8443/','status':'已推送'}
+        return {'inserted':count,'run':rid,'source':meta['name'],'url':'https://leopc.tail2ce65.ts.net:8443/','status':'已推送'}
+    def sources(self,include_deleted=False):
+        from easel_workbench.runtime.source_registry import SourceRegistry
+        return SourceRegistry(self,self.path.parent.parent).entries(include_deleted=include_deleted)
     def articles(self,q='',source='',state='',page=1):
         terms=[]; vals=[]
         if q: terms.append('(title like ? or body like ?)'); vals += ['%'+q+'%']*2
@@ -118,13 +128,15 @@ ORDER BY julianday(COALESCE(t.created_at,a.run_at)) DESC,t.rowid DESC,a.id''',va
             chosen=(day or days[0]) if days else None
             day_where=' where '+' and '.join(terms+[date_sql+'=?'])
             items=[dict(r) for r in c.execute('select * from articles'+day_where+' order by julianday(run_at) desc,id',vals+[chosen])]
-        if source and SOURCES.get(source,{}).get('order')=='rank-prefix':
+        if source and self.sources(include_deleted=True).get(source,{}).get('order')=='rank-prefix':
             # Rank is explicitly supplied by the source, never inferred from language.
             # Other sources retain the existing collection-time/hash ordering.
             def rank_key(row):
                 match=re.match(r'^#(\d+)\s',row['title'])
                 return (int(match[1]) if match else 10**9,row['id'])
             items.sort(key=rank_key)
+        elif source and not self.sources(include_deleted=True).get(source,{}).get('builtin',True):
+            items.sort(key=lambda row:(-(dt.datetime.fromisoformat(row['run_at']).timestamp()),row.get('source_order') or 0,row['id']))
         return {'items':items,'day':chosen,'days':days,'total':len(items),
                 'previous_day':next((d for d in days if chosen and d<chosen),None),
                 'next_day':next((d for d in reversed(days) if chosen and d>chosen),None)}

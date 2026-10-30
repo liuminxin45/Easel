@@ -2,6 +2,7 @@ import React,{createContext,useCallback,useContext,useEffect,useMemo,useRef,useS
 import {useStore} from 'zustand';
 import {createStore} from 'zustand/vanilla';
 import {createWorkbenchClient,type ClientOptions,type PendingOperation,type ResourceState,type WorkbenchClient} from './client';
+import {interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
 import type {ActivityDelegate,JsonRecord,NavigationDelegate,StudioAction} from './models';
 
 const Context=createContext<{client:WorkbenchClient;navigation?:NavigationDelegate}|null>(null);
@@ -24,7 +25,7 @@ export function useWorkbench(){
   return {...session,client,api:client.api,service:client.service,ready:!!session.config&&!session.expired,persistenceError:persistence.error,legacyPending:client.legacyPending(),navigation,navigate:(path:string,options?:Parameters<NavigationDelegate['navigate']>[1])=>navigation.navigate(path,options),replace:(path:string,options?:Parameters<NavigationDelegate['replace']>[1])=>navigation.replace(path,options),back:()=>navigation.back(),refresh:()=>client.refresh()};
 }
 const emptyResource=createStore<ResourceState>(()=>({data:null,loading:false,error:'',revision:0,stale:false}));
-export interface ResourceResult<T> {data:T|null;loading:boolean;error:string;revision:number;reload:()=>Promise<T|null>}
+export interface ResourceResult<T> {data:T|null;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;reload:()=>Promise<T|null>}
 export function useResource<T=JsonRecord>(path:string|null|undefined,options:{interval?:number}={}):ResourceResult<T>{
   const {client}=useWorkbench(),store=useMemo(()=>path?client.resource(path):emptyResource,[client,path]),state=useStore(store);
   const reload=useCallback(()=>path?client.read<T>(path,true):Promise.resolve(null),[client,path]);
@@ -48,7 +49,15 @@ export function useCommand(scope='studio'):CommandResult{
   return {...state,run,retry,clearNotice:()=>store.setState({notice:''})};
 }
 /** Generic non-Studio mutation status uses the same persistent command identity. */
-export function useOperation(scope:string){const {client}=useWorkbench(),store=useMemo(()=>client.operation(scope),[client,scope]),state=useStore(store);return {...state,retry:()=>client.retry(scope)}}
-export function useAsyncAction(){const [busy,setBusy]=useState(false),[error,setError]=useState(''),lock=useRef(false);const run=useCallback(async<T,>(action:()=>Promise<T>):Promise<T|undefined>=>{if(lock.current)return undefined;lock.current=true;setBusy(true);setError('');try{return await action()}catch(error){setError(error instanceof Error?error.message:'操作未完成');return undefined}finally{lock.current=false;setBusy(false)}},[]);return {busy,error,run,setError}}
+export function useOperation(scope:string){
+  const {client}=useWorkbench(),store=useMemo(()=>client.operation(scope),[client,scope]),state=useStore(store);
+  return {...state,retry:()=>client.reconcile(scope)};
+}
+export function useAsyncAction(){
+ const context=useContext(Context),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState<InteractionFeedback|undefined>(),[recovery,setRecovery]=useState<{scope:string;id:string}|null>(null),lock=useRef(false);
+ useEffect(()=>{if(!context||!recovery)return;const store=context.client.operation(recovery.scope),update=()=>{const current=store.getState();if(current.pending?.id!==recovery.id){setFeedback(current.feedback);setRecovery(null)}};const release=store.subscribe(update);update();return release},[context?.client,recovery?.scope,recovery?.id]);
+ const run=useCallback(async<T,>(action:()=>Promise<T>):Promise<T|undefined>=>{if(lock.current)return undefined;lock.current=true;setBusy(true);setFeedback(undefined);setRecovery(null);try{return await action()}catch(error){setFeedback(interactionFeedback(error));const detail=error as {operationScope?:string;operationId?:string};if(detail?.operationScope&&detail.operationId)setRecovery({scope:detail.operationScope,id:detail.operationId});return undefined}finally{lock.current=false;setBusy(false)}},[]);
+ return {busy,feedback,error:feedback?.kind==='error'?feedback.message:'',run,setError:(message:string)=>{setRecovery(null);setFeedback(message?{kind:'error',message}:undefined)}};
+}
 
 export function useUsage(){return useWorkbench().client.usage}

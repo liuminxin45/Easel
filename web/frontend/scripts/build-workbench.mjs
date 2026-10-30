@@ -8,6 +8,7 @@ import react from '@vitejs/plugin-react';
 const frontend=path.resolve(import.meta.dirname,'..'),root=path.resolve(frontend,'../..');
 if(process.version!=='v24.19.0')throw Error('Node 24.19.0 required');
 execFileSync(process.execPath,['node_modules/typescript/bin/tsc','-p','tsconfig.workbench.json'],{cwd:frontend,stdio:'inherit'});
+execFileSync(process.execPath,[path.join(root,'scripts/audit_workbench_interactions.mjs')],{cwd:root,stdio:'inherit'});
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const release=process.env.NATIVE_RELEASE_ID||'native-easel-workbench-'+new Date().toISOString().replace(/\D/g,'').slice(0,14);
 if(!/^native-[\w-]{1,80}$/.test(release))throw Error('Invalid release');
@@ -19,7 +20,7 @@ const sources=()=>{
     .filter(n=>fs.statSync(path.join(frontend,'src',n)).isFile())
     .map(n=>'web/frontend/src/'+n.replaceAll('\\','/'));
   files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
-    'easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','LICENSE');
+    'scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','LICENSE');
   return Object.fromEntries(files.sort().map(n=>[n,sha(fs.readFileSync(path.join(root,n)))]));
 };
 const inputs=sources();

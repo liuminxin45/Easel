@@ -37,6 +37,23 @@ def legacy():
     return base,automation
 
 
+class HistoricalAuditConnection:
+    """Keep the original row-hash contract across the nullable snapshot migration.
+
+    Only the retained-row SELECT is projected. Non-null snapshots and changes
+    to any original field still fail the original historical audit.
+    """
+    def __init__(self,connection):self.connection=connection
+    def execute(self,sql,parameters=()):
+        if sql=='SELECT * FROM collection_tasks WHERE id=?':
+            columns=[row[1] for row in self.connection.execute('PRAGMA table_info(collection_tasks)')]
+            if 'source_snapshot' in columns:
+                snapshot=self.connection.execute('SELECT source_snapshot FROM collection_tasks WHERE id=?',parameters).fetchone()
+                if snapshot and snapshot[0] is not None:raise ValueError('Retained historical task unexpectedly has a source snapshot')
+                sql='SELECT '+','.join('"'+name+'"' for name in columns if name!='source_snapshot')+' FROM collection_tasks WHERE id=?'
+        return self.connection.execute(sql,parameters)
+
+
 def idle(database=None):
     base,automation=legacy()
     evidence=read(OLD/'evidence/simplify-workbench-20261029/activation-evidence.json')
@@ -47,7 +64,7 @@ def idle(database=None):
     database=Path(database or OLD/'data/desk.sqlite').resolve()
     with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row
-        status=automation.busy_state(c,audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
+        status=automation.busy_state(HistoricalAuditConnection(c),audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
         for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}
@@ -55,6 +72,7 @@ def idle(database=None):
                 for ident,raw in c.execute('select id,document from '+table):
                     value=json.loads(raw)
                     active=value.get('status') in ('running','dispatching','requested','sending','submitting','accepted')
+                    if table=='media_install_jobs':active=value.get('state') in ('queued','running')
                     if table=='media_account_sessions':active=value.get('state') in ('login','checking')
                     if table=='easel_chat_turns':
                         active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'

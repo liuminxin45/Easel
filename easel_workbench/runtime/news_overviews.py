@@ -106,7 +106,11 @@ class Overviews:
             records={r['article_id']:dict(r) for r in c.execute('SELECT * FROM overviews')}
             sources={r['article_id']:dict(r) for r in c.execute('SELECT * FROM overview_sources')}
         result=[]
+        registry=self.store.sources(include_deleted=True)
         for row in rows:
+            if not registry.get(row['source_job'],{}).get('builtin',True):
+                result.append({**row,'original_title':row['title'],'overview':None,'overview_status':'source_only','overview_error':None})
+                continue
             record=records.get(row['id']);current=record if record and record['input_hash']==fingerprint(row) else None
             status=current['status'] if current else 'pending';summary=reading_summary(current['summary']) if current and status=='ready' else None
             if status=='ready' and not summary:status='pending'
@@ -116,11 +120,13 @@ class Overviews:
         return result
     def tick(self,runner=None,limit=16,sources=None):
         with locked(self.root/'data/news-overviews.lock',timeout=.1):
+            registry=self.store.sources(include_deleted=True)
             with self.store.connect() as c:rows=[dict(r) for r in c.execute('SELECT * FROM articles ORDER BY CASE WHEN source_job IN (\'xinquji\',\'github-trending\',\'product-hunt\',\'hacker-news\') THEN 0 ELSE 1 END,run_at DESC,id')]
             now=time.time();pending=[]
             with self.connect() as c:
                 for row in rows:
-                    if row['source_job'] not in SOURCES or SOURCES[row['source_job']].get('kind')=='periodical' or (sources and row['source_job'] not in sources):continue
+                    meta=registry.get(row['source_job'],{})
+                    if not meta.get('builtin',True) or not meta or meta.get('kind')=='periodical' or (sources and row['source_job'] not in sources):continue
                     record=c.execute('SELECT * FROM overviews WHERE article_id=?',(row['id'],)).fetchone();hash_=fingerprint(row)
                     if not record or record['input_hash']!=hash_ or record['status']=='ready' and not reading_summary(record['summary']):
                         c.execute('INSERT OR REPLACE INTO overviews VALUES(?,?,\'pending\',NULL,NULL,0,0,?)',(row['id'],hash_,stamp()));record=None

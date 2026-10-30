@@ -2,7 +2,7 @@ export interface Artifact {
   url: string;
   name: string;
   downloadUrl?: string;
-  kind: 'image' | 'html' | 'video' | 'audio' | 'pdf' | 'file';
+  kind: 'image' | 'html' | 'video' | 'audio' | 'pdf' | 'file' | 'text';
 }
 
 function hasUnsafeCharacters(value: string): boolean {

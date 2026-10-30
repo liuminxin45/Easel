@@ -21,6 +21,12 @@ PRIVATE_PREFIX='easel_workbench'
 FRONTEND=ROOT/'web/frontend/src'
 PRIVATE_UI=FRONTEND/'workbench'
 UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
+    # Optional host settings ports and native CLI/ACP receipt callbacks.
+    'easel/harnesses/acp.py','easel/harnesses/rpc.py','easel/harnesses/openclaw.py',
+    'web/frontend/src/components/SettingsPanel.tsx','web/frontend/src/components/HarnessSettings.tsx',
+    'web/frontend/src/components/SettingsApi.ts','web/frontend/src/components/EnvBoard.tsx',
+    # Shared accessible settings control; no private service imports.
+    'web/frontend/src/components/SettingsSelect.tsx','web/frontend/src/components/SettingsSelect.css',
     'web/frontend/package-lock.json','web/frontend/tsconfig.app.json',
     # Optional generic turn receipt/frozen instruction ports; defaults remain upstream-owned.
     'easel/harnesses/base.py','easel/harnesses/codex.py','easel/harnesses/workspace.py',
@@ -29,8 +35,17 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/src/components/Sidebar.tsx','web/frontend/src/components/SkillPage.tsx',
     'web/frontend/src/components/QuestionCards.tsx','web/frontend/src/components/SkillDrawer.tsx',
     'web/frontend/src/lib/api.ts','web/frontend/src/lib/artifacts.ts',
+    # Reviewed generic feedback projection; contains no private dependencies or I/O.
+    'web/frontend/src/lib/interaction.ts',
+    'web/frontend/src/components/InteractionNotice.tsx',
     # Generic capability catalog and authorized artifact presentation ports.
     'web/frontend/src/components/BrushEntry.tsx','web/frontend/src/components/ArtifactGallery.tsx'}
+UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
+    'web/frontend/src/components/TrendsView.tsx','web/frontend/src/components/TrendSourcesDialog.tsx',
+    'web/frontend/src/components/DashboardPage.tsx','web/frontend/src/styles/index.css'})
+# Shared, I/O-free board presentation; private data ports stay in workbench/.
+UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
+    'web/frontend/src/components/IdeasView.tsx'})
 WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
     'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
 

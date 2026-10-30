@@ -28,6 +28,9 @@ test('Escape is captured by the dropdown, not the surrounding settings dialog', 
       const cleanup = callback();
       if (cleanup) cleanups.push(cleanup);
     },
+    useLayoutEffect: () => {},
+    React: { createElement: (...args) => ({ args }) },
+    createPortal: element => element,
     window: {
       innerHeight: 800, innerWidth: 1200,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -41,6 +44,8 @@ test('Escape is captured by the dropdown, not the surrounding settings dialog', 
     anchor: {
       getBoundingClientRect: () => ({ top: 100, bottom: 130, left: 20, width: 100 }),
       focus: () => { focused += 1; },
+      getAttribute: () => null,
+      closest: () => null,
     },
     items: [], current: '', onClose: () => { closed += 1; },
   });
@@ -70,11 +75,56 @@ test('a dropdown in a native dialog stays inside its top layer', () => {
     useRef: () => ({ current: null }),
     useState: () => [{ top: 100, left: 20, width: 240 }, () => {}],
     useEffect: () => {},
+    useLayoutEffect: () => {},
     React: { createElement: (...args) => ({ args }) },
     createPortal: (element, parent) => ({ element, parent }),
     document: { body },
   });
   const props = { items: [], current: '', onPick: () => {}, onClose: () => {} };
-  assert.equal(component({ ...props, anchor: { closest: () => dialog } }).parent, dialog);
-  assert.equal(component({ ...props, anchor: { closest: () => null } }).parent, body);
+  assert.equal(component({ ...props, anchor: { closest: () => dialog, getAttribute: () => null } }).parent, dialog);
+  assert.equal(component({ ...props, anchor: { closest: () => null, getAttribute: () => null } }).parent, body);
+});
+
+function placement(rect, viewport, contentHeight) {
+  let position = null;
+  const menu = { style: {}, scrollHeight: contentHeight };
+  const component = runInNewContext(outputText, {
+    useRef: () => ({ current: menu }),
+    useState: () => [null, update => { position = update(position); }],
+    useLayoutEffect: effect => effect(), useEffect: () => {},
+    ResizeObserver: class { observe() {} disconnect() {} },
+    window: { innerWidth: viewport.width, innerHeight: viewport.height,
+      visualViewport: { ...viewport, addEventListener() {}, removeEventListener() {} },
+      addEventListener() {}, removeEventListener() {} },
+    React: { createElement: (...args) => ({ args }) },
+    createPortal: element => element,
+    document: { body: {} },
+  });
+  component({ anchor: { getBoundingClientRect: () => rect, closest: () => null, getAttribute: () => null },
+    items: [{ value: 'a', label: 'Long wrapped option' }], current: '', onPick() {}, onClose() {} });
+  return position;
+}
+
+test('menu uses measured content and opens above a bottom-edge trigger without leaving the viewport', () => {
+  const result = placement({ top: 550, bottom: 590, left: 300, width: 200 }, { width: 390, height: 640 }, 500);
+  assert.equal(result.width, 240);
+  assert.equal(result.left, 142);
+  assert.equal(result.top, 226);
+  assert.equal(result.maxHeight, 320);
+});
+
+test('small and zoomed visual viewports bound both menu width and scroll height', () => {
+  const result = placement({ top: 120, bottom: 164, left: 80, width: 300 },
+    { width: 220, height: 240, offsetLeft: 40, offsetTop: 100 }, 400);
+  assert.equal(result.width, 204);
+  assert.equal(result.left, 48);
+  assert.equal(result.top, 168);
+  assert.equal(result.maxHeight, 164);
+});
+
+test('short menus below the trigger size to actual wrapped content', () => {
+  const result = placement({ top: 20, bottom: 54, left: 20, width: 260 }, { width: 1280, height: 900 }, 96);
+  assert.equal(result.top, 58);
+  assert.equal(result.width, 260);
+  assert.equal(result.maxHeight, 320);
 });

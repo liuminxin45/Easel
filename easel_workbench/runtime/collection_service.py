@@ -36,6 +36,10 @@ def validate_schedule(schedule):
     if not isinstance(schedule,dict):raise ValueError('采集计划无效')
     kind=schedule.get('kind')
     if kind=='interval':
+        if 'seconds' in schedule:
+            seconds=schedule['seconds']
+            if type(seconds) not in (int,float) or not 1<=seconds<=86400:raise ValueError('采集间隔无效')
+            return {'kind':kind,'seconds':seconds}
         minutes=schedule.get('minutes');offset=schedule.get('offset_minutes',0)
         if type(minutes) is not int or not 1<=minutes<=10080 or type(offset) is not int or not 0<=offset<minutes:raise ValueError('采集间隔无效')
         return {'kind':kind,'minutes':minutes,'offset_minutes':offset}
@@ -51,7 +55,7 @@ def slot(schedule,now,direction=1):
     """Next strictly-future slot, or latest slot <= now; fixed Beijing calendar."""
     schedule=validate_schedule(schedule);now=now.astimezone(TZ)
     if schedule['kind']=='interval':
-        period=schedule['minutes']*60;offset=schedule['offset_minutes']*60
+        period=schedule.get('seconds') or schedule['minutes']*60;offset=schedule.get('offset_minutes',0)*60
         number=int((now.timestamp()-offset)//period)+(1 if direction>0 else 0)
         return dt.datetime.fromtimestamp(number*period+offset,TZ)
     values=[]
@@ -67,7 +71,7 @@ def slot(schedule,now,direction=1):
 
 def schedule_label(value):
     value=validate_schedule(value)
-    if value['kind']=='interval':return '每'+str(value['minutes'])+'分钟'
+    if value['kind']=='interval':return '每'+str(value['seconds'])+'秒' if 'seconds' in value else '每'+str(value['minutes'])+'分钟'
     label='、'.join(value['times'])
     return ('每天 ' if value['kind']=='daily' else '每周'+''.join('一二三四五六日'[i] for i in value['weekdays'])+' ')+label
 
@@ -91,6 +95,9 @@ CREATE TABLE IF NOT EXISTS collection_schedule_state(source_id TEXT PRIMARY KEY,
 CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_for TEXT NOT NULL,task_id TEXT NOT NULL,PRIMARY KEY(source_id,scheduled_for));
 ''')
             if 'resume_from' not in {row[1] for row in c.execute('PRAGMA table_info(collection_tasks)')}:c.execute('ALTER TABLE collection_tasks ADD COLUMN resume_from TEXT')
+            if 'source_snapshot' not in {row[1] for row in c.execute('PRAGMA table_info(collection_tasks)')}:c.execute('ALTER TABLE collection_tasks ADD COLUMN source_snapshot TEXT')
+        from easel_workbench.runtime.source_registry import SourceRegistry
+        self.registry=SourceRegistry(store,self.root)
 
     def configuration(self):
         path=self.root/'data/collection-config.json'
@@ -99,21 +106,22 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
         if not isinstance(value,dict) or type(value.get('enabled',False)) is not bool:raise ValueError('采集服务配置无效')
         return value
 
-    def definitions(self):
-        registry_path=self.root/'sources.json';plan_path=self.root/'collection_schedules.json'
-        registry=json.loads((registry_path if registry_path.exists() else ROOT/'sources.json').read_text(encoding='utf-8'))
+    def definitions(self,connection=None):
+        plan_path=self.root/'collection_schedules.json'
         plans=json.loads((plan_path if plan_path.exists() else Path(__file__).with_name('collection_schedules.json')).read_text(encoding='utf-8'))
         if plans.get('schema_version')!=1 or plans.get('timezone')!='Asia/Shanghai':raise ValueError('采集计划版本或时区无效')
         config=self.configuration();overrides=config.get('sources',{})
         if not isinstance(overrides,dict):raise ValueError('来源设置无效')
         result={}
-        for source,meta in registry.items():
-            if source not in plans['sources']:continue
+        for source,meta in self.registry.entries(connection).items():
+            if meta['builtin'] and source not in plans['sources']:continue
             override=overrides.get(source,{})
             if not isinstance(override,dict):raise ValueError('来源设置无效')
-            result[source]={'id':source,'name':meta['name'],'enabled':override.get('enabled',True) is True,
-                            'schedule':validate_schedule(override.get('schedule',plans['sources'][source])),'internal':False}
-        if config.get('internal_jobs') not in (None,[]):raise ValueError('采集只支持当前九个来源，不支持内部或历史回填计划')
+            enabled=meta['enabled'] if meta['revision'] else override.get('enabled',True) is True
+            schedule=override.get('schedule',plans['sources'][source]) if meta['builtin'] else {'kind':'interval','seconds':meta['refresh_seconds']}
+            result[source]={**meta,'id':source,'name':meta['name'],'enabled':enabled,
+                            'schedule':validate_schedule(schedule),'internal':False}
+        if config.get('internal_jobs') not in (None,[]):raise ValueError('采集不支持内部或历史回填计划')
         return result
 
     def _sources(self,value,definitions):
@@ -140,18 +148,23 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
                 c.execute('INSERT INTO collection_operations VALUES(?,?,?)',(jid,signature,row['id']))
                 return row['id'],True
         now=timestamp(self.clock());c.execute('INSERT INTO collection_runs VALUES(?,?,?,?,?)',(jid,trigger,scope,now,retry_of))
+        definitions=self.definitions(c)
         for source in sources:
             task=active.get(source)
             if not task:
                 task=uuid.uuid4().hex
-                c.execute('INSERT INTO collection_tasks(id,source_id,status,phase,created_at,force,warnings,retry_of,resume_from) VALUES(?,?,?,?,?,?,?,?,?)',
-                          (task,source,'queued','queued',now,int(force),packed(warnings or []),retry_of,(resume_from or {}).get(source)))
+                parent=(resume_from or {}).get(source)
+                prior=c.execute('SELECT source_snapshot FROM collection_tasks WHERE id=?',(parent,)).fetchone() if parent else None
+                snapshot=prior['source_snapshot'] if prior and prior['source_snapshot'] else packed(definitions[source])
+                c.execute('INSERT INTO collection_tasks(id,source_id,status,phase,created_at,force,warnings,retry_of,resume_from,source_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                          (task,source,'queued','queued',now,int(force),packed(warnings or []),retry_of,parent,snapshot))
             c.execute('INSERT INTO collection_run_tasks VALUES(?,?)',(jid,task))
         c.execute('INSERT INTO collection_operations VALUES(?,?,?)',(jid,signature,jid))
         return jid,False
 
     def enqueue(self,value):
         if not isinstance(value,dict):raise ValueError('采集请求无效')
+        if set(value)-{'id','scope','source'}:raise ValueError('采集请求包含无关字段')
         jid=identity(value.get('id'));signature=packed(value)
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
@@ -161,13 +174,14 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
                 run_id,reused=old['run_id'],True
             else:
                 if not self.configuration().get('enabled',False):raise ValueError('采集服务尚未启用')
-                sources=self._sources(value,self.definitions())
+                sources=self._sources(value,self.definitions(c))
                 if not sources:raise ValueError('当前没有启用的采集来源')
                 run_id,reused=self._enqueue(c,jid,sources,signature,'manual',True)
         return {**self.get(run_id),'reused':reused}
 
     def _task(self,row,definitions):
         value=dict(row);meta=definitions.get(value['source_id'],{})
+        if value.get('source_snapshot'):meta=json.loads(value['source_snapshot'])
         return {key:value[key] for key in ('id','source_id','status','phase','created_at','started_at','finished_at','heartbeat','attempts','fetched','selected','inserted','duplicates','error','message','retry_of','resume_from')}|{'name':meta.get('name',value['source_id']),'warnings':json.loads(value['warnings'])}
 
     def _get(self,c,jid,definitions):
@@ -224,9 +238,9 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
                 selected,reused=old['run_id'],True
             else:
                 if not self.configuration().get('enabled',False):raise ValueError('采集服务尚未启用')
-                definitions=self.definitions();run=self._get(c,run_id,definitions)
+                definitions=self.definitions(c);run=self._get(c,run_id,definitions)
                 if run['status'] in ACTIVE:raise ValueError('本轮采集尚未结束，请先查看原进度')
-                sources=[task['source_id'] for task in run['tasks'] if task['status'] in ('failed','blocked','partial') and definitions.get(task['source_id'],{}).get('enabled')]
+                sources=[task['source_id'] for task in run['tasks'] if task['status'] in ('failed','blocked','partial')]
                 if not sources:raise ValueError('本轮没有需要重试的来源')
                 resume={task['source_id']:task['id'] for task in run['tasks'] if task['source_id'] in sources}
                 selected,reused=self._enqueue(c,jid,sources,signature,'retry',False,run_id,scope=run['scope'],resume_from=resume)
@@ -237,6 +251,7 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
         now=self.clock().astimezone(TZ);definitions=self.definitions();result=[]
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
+            definitions=self.definitions(c)
             for source,meta in definitions.items():
                 if not meta['enabled']:continue
                 plan=meta['schedule'];plan_hash=hashlib.sha256(packed(plan).encode()).hexdigest()
@@ -260,12 +275,10 @@ CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_fo
 
     def claim(self,owner,owner_pid=None,owner_creation=None,lease_seconds=90):
         if not self.configuration().get('enabled',False):return None
-        enabled=[source for source,meta in self.definitions().items() if meta['enabled']]
-        if not enabled:return None
         now=self.clock();seconds=now.timestamp()
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
-            row=c.execute("SELECT * FROM collection_tasks WHERE status='queued' AND next_attempt<=? AND source_id IN ("+','.join('?' for _ in enabled)+") ORDER BY rowid LIMIT 1",(seconds,*enabled)).fetchone()
+            row=c.execute("SELECT * FROM collection_tasks WHERE status='queued' AND next_attempt<=? ORDER BY rowid LIMIT 1",(seconds,)).fetchone()
             if not row:return None
             token=uuid.uuid4().hex
             c.execute("UPDATE collection_tasks SET status='running',phase='fetching',started_at=coalesce(started_at,?),attempts=attempts+1,owner=?,owner_pid=?,owner_creation=?,lease_token=?,lease_until=?,heartbeat=? WHERE id=? AND status='queued'",

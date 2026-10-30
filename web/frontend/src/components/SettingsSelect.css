@@ -1,0 +1,39 @@
+/* Shared portal surface: it must not depend on a settings/page ancestor. */
+.model-dd {
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border, #dce1e8);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--text, #242a34);
+  box-shadow: var(--shadow-md, 0 10px 30px rgb(0 0 0 / 16%));
+  font: 13px/1.5 var(--font-sans, system-ui, sans-serif);
+  text-align: left;
+}
+.model-dd .dd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.model-dd .dd-item > span { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.model-dd .dd-item > small { flex: none; color: var(--text-secondary, #586475); font-size: 11px; }
+.model-dd .dd-item.active { background: var(--accent-soft, #edf0fa); font-weight: 600; }
+.model-dd .dd-item:hover { background: var(--surface-hover, #f0f2f5); }
+.model-dd .dd-item:focus-visible { outline: 2px solid var(--accent-end, #5666bc); outline-offset: -2px; }
+.model-dd .dd-empty { display: grid; justify-items: start; gap: 8px; padding: 10px; color: var(--text-secondary, #586475); }
+.model-dd .dd-pull { padding: 6px 10px; border: 1px solid var(--border, #dce1e8); border-radius: 5px; background: var(--surface-2, #f6f7f9); color: var(--text, #242a34); font: inherit; cursor: pointer; }
+.model-dd .dd-pull:focus-visible { outline: 2px solid var(--accent-end, #5666bc); outline-offset: 2px; }
+.model-dd .dd-pull:disabled { opacity: .6; cursor: default; }
+/* Native selectors throughout both app shells use the same opaque theme. */
+select option, select optgroup { background: var(--surface, #fff); color: var(--text, #242a34); }
+@media (pointer: coarse), (max-width: 640px) {
+  .model-dd .dd-item, .model-dd .dd-pull { min-height: 44px; }
+}

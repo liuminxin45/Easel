@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import './SettingsSelect.css';
 
 export default function SettingsSelect({ value, options, disabled = false, label, title, className = '', onChange }: {
   value: string;
@@ -11,6 +12,7 @@ export default function SettingsSelect({ value, options, disabled = false, label
   onChange: (value: string) => void;
 }) {
   const anchor = useRef<HTMLButtonElement | null>(null);
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const selected = options.find(option => option.value === value);
   const close = () => {
@@ -21,7 +23,7 @@ export default function SettingsSelect({ value, options, disabled = false, label
   return (
     <span className={`settings-select-wrap ${className}`}>
       <button type="button" className="proto-trigger settings-select" ref={anchor}
-        title={title} aria-label={label} aria-haspopup="listbox" aria-expanded={open && !disabled} disabled={disabled}
+        title={title} aria-label={label} aria-haspopup="listbox" aria-controls={open && !disabled ? listId : undefined} aria-expanded={open && !disabled} disabled={disabled}
         onClick={() => setOpen(!open)}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -35,14 +37,16 @@ export default function SettingsSelect({ value, options, disabled = false, label
         </svg>
       </button>
       {open && !disabled && (
-        <OptionsDropdown anchor={anchor.current} items={options} current={value}
+        <OptionsDropdown id={listId} label={label} anchor={anchor.current} items={options} current={value}
           focusOptions onPick={(next) => { onChange(next); close(); }} onClose={close} />
       )}
     </span>
   );
 }
 
-export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pulling, focusOptions = false, onPick, onClose }: {
+export function OptionsDropdown({ id, label, anchor, items, current, emptyHint, onPull, pulling, focusOptions = false, onPick, onClose }: {
+  id?: string;
+  label?: string;
   anchor: HTMLElement | null;
   items: { value: string; label: string }[];
   current: string;
@@ -54,33 +58,54 @@ export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pul
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const positioned = pos !== null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!anchor) return;
     const measure = () => {
+      const menu = ref.current;
+      if (!menu) return;
       const rect = anchor.getBoundingClientRect();
-      const width = Math.min(Math.max(rect.width, 240), 380, window.innerWidth - 16);
-      const below = window.innerHeight - rect.bottom;
-      const estimate = Math.min(items.length, 8) * 30 + 10;
-      const openUp = below < Math.min(estimate, 240) && rect.top > estimate;
-      setPos({
-        top: openUp ? rect.top - Math.min(estimate, 240) - 4 : rect.bottom + 4,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        width,
-      });
+      const viewport = window.visualViewport;
+      const edgeLeft = (viewport?.offsetLeft || 0) + 8;
+      const edgeTop = (viewport?.offsetTop || 0) + 8;
+      const edgeRight = edgeLeft + (viewport?.width || window.innerWidth) - 16;
+      const edgeBottom = edgeTop + (viewport?.height || window.innerHeight) - 16;
+      const width = Math.max(1, Math.min(Math.max(rect.width, 240), 380, edgeRight - edgeLeft));
+      // Measure wrapped labels at their final width, including touch-sized rows.
+      menu.style.width = `${width}px`;
+      const desired = Math.min(menu.scrollHeight + 2, 320);
+      const below = Math.max(0, edgeBottom - rect.bottom - 4);
+      const above = Math.max(0, rect.top - edgeTop - 4);
+      const openUp = below < desired && above > below;
+      const maxHeight = Math.max(1, Math.min(320, openUp ? above : below, edgeBottom - edgeTop));
+      const height = Math.min(desired, maxHeight);
+      const next = {
+        top: Math.max(edgeTop, Math.min(openUp ? rect.top - height - 4 : rect.bottom + 4, edgeBottom - height)),
+        left: Math.max(edgeLeft, Math.min(rect.left, edgeRight - width)),
+        width, maxHeight,
+      };
+      setPos(previous => previous && Object.keys(next).every(key => previous[key as keyof typeof next] === next[key as keyof typeof next]) ? previous : next);
     };
     measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(anchor);
+    observer.observe(ref.current!);
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
+    window.visualViewport?.addEventListener('resize', measure);
+    window.visualViewport?.addEventListener('scroll', measure);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
+      window.visualViewport?.removeEventListener('resize', measure);
+      window.visualViewport?.removeEventListener('scroll', measure);
     };
-  }, [anchor, items.length]);
+  }, [anchor, items, emptyHint, pulling]);
 
   useEffect(() => {
-    const onDown = (event: MouseEvent) => {
+    const onDown = (event: PointerEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)
           && !(anchor && anchor.contains(event.target as Node))) onClose();
     };
@@ -90,12 +115,16 @@ export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pul
         event.stopPropagation();
         onClose();
         anchor?.focus();
+      } else if (event.key === 'Tab') {
+        // Restore the trigger before the browser advances to its next tab stop.
+        onClose();
+        anchor?.focus();
       }
     };
-    document.addEventListener('mousedown', onDown);
+    document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey, true);
     return () => {
-      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('keydown', onKey, true);
     };
   }, [anchor, onClose]);
@@ -107,9 +136,8 @@ export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pul
     (selected || first)?.focus();
   }, [positioned, focusOptions]);
 
-  if (!pos) return null;
   return createPortal(
-    <div ref={ref} className="model-dd" role="listbox" onClick={(event) => event.stopPropagation()}
+    <div ref={ref} id={id} className="model-dd" role="listbox" aria-label={label || anchor?.getAttribute('aria-label') || '选择选项'} onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation();
         const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
@@ -121,22 +149,24 @@ export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pul
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
           : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
         options[next].focus();
+        options[next].scrollIntoView({ block: 'nearest' });
       }}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}>
+      style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, width: pos?.width, maxHeight: pos?.maxHeight, visibility: pos ? 'visible' : 'hidden' }}>
       {items.length === 0 && (
         <div className="dd-empty">
           <span>{emptyHint || '该端点没有返回模型'}</span>
           {onPull && (
-            <button className="dd-pull" onMouseDown={(event) => { event.preventDefault(); onPull(); }} disabled={pulling}>
+            <button type="button" className="dd-pull" onClick={onPull} disabled={pulling}>
               {pulling ? <><span className="spin" />拉取中</> : '立即拉取'}
             </button>
           )}
         </div>
       )}
       {items.map((item) => (
-        <div key={item.value} role="option" aria-selected={item.value === current} tabIndex={0}
+        <div key={item.value} role="option" aria-selected={item.value === current} tabIndex={-1}
           className={`dd-item${item.value === current ? ' active' : ''}`}
-          onMouseDown={(event) => { event.preventDefault(); onPick(item.value); }}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onPick(item.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();

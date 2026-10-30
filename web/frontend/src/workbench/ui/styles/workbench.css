@@ -1,4 +1,18 @@
 /* Workbench adapters over Easel's original presentation, not a second theme. */
+.ew-page>.page-scroll.ideas-page { padding: 28px 32px 60px; }
+.ew-page>.ideas-page { font-size: 16px; line-height: 1.6; }
+.ew-page>.ideas-page .btn-sm { font-size: 13px; }
+@media(min-width:801px){.ew-main:has(>.ew-page>.ideas-page)>.ew-topbar{display:none}}
+.ew-page>.page-scroll.trends-page { padding: 28px 32px 60px; }
+.ew-page:has(>.trends-page),.ew-page:has(>.native-news-reading) { scrollbar-gutter: auto; }
+.ew-page>.subnav { position: sticky; top: 0; z-index: 5; background: var(--bg-elev); }
+@media(min-width:801px){.ew-main:has(>.ew-page>.trends-page)>.ew-topbar,.ew-main:has(>.ew-page>.native-news-reading)>.ew-topbar{display:none}}
+.native-news-controls { padding: 0 12px 8px; font-size: 12px; color: var(--text-secondary); }
+.native-news-controls label { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.native-news-controls select { min-width: 0; width: 100%; font-size: 12px; }
+.native-news-window { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.native-news-window .btn { font-size: 12px; padding: 3px 7px; }
+@media(max-width:800px){.ew-page>.page-scroll.trends-page{padding:20px 16px 48px}}
 .ew-app{font-size:15px;line-height:1.65;color:var(--text);background:var(--bg)}
 .ew-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.ew-page{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.ew-page>.page-scroll{height:auto;min-height:100%;overflow:visible;padding:28px 36px 64px}.ew-topbar{height:54px;min-height:54px;padding:8px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface)}
 .ew-page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}.ew-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.ew-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0}.ew-toolbar>.field{width:auto;min-width:150px;max-width:100%;flex:1}.ew-muted,.ew-row>small{color:var(--text-secondary)}.ew-preserve{white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit}.ew-json{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;max-height:500px;overflow:auto}
@@ -14,3 +28,57 @@
 
 .ew-page .composer{position:relative}.chat-command-menu{position:absolute;bottom:calc(100% + 8px);left:0;right:0;z-index:40;max-height:min(360px,45vh);overflow:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 32px #0002;text-align:left}.chat-command-menu button{display:flex;flex-direction:column;gap:3px;width:100%;padding:11px 12px;text-align:left;border:0;border-radius:8px;background:none;color:var(--text);cursor:pointer}.chat-command-menu button.active,.chat-command-menu button:hover{background:var(--bg-subtle,var(--surface-2))}.chat-command-menu button span{color:var(--text-secondary);font-size:12px}.chat-production-details{width:100%;max-width:860px;margin:12px auto;text-align:left;font-size:14px;padding:8px 4px}.chat-production-details>summary{cursor:pointer;color:var(--text-secondary);padding:8px 0}.chat-task-status{max-width:860px;margin:8px auto 20px;color:var(--text-secondary);font-size:13px;padding:0 8px}.chat-task-status[role=alert]{color:var(--danger,#b1392f)}.chat-task-status p{margin:6px 0}.ew-work-chat>.chat-page{height:auto;min-height:620px}.ew-page .chat-input{max-height:180px;overflow-y:auto}.ew-page .attach-chip{max-width:100%}.ew-page .attach-chip>span{overflow-wrap:anywhere}
 @media(max-width:800px){.ew-chat-layout>.chat-page{min-height:100%;height:auto}.ew-chat-layout .chat-hero{padding:28px 14px}.ew-work-chat>.chat-page{min-height:440px}.ew-work-chat .chat-input-inner{min-width:0}.ew-page .chat-command-menu button{min-height:44px}.ew-page .composer-hint{font-size:11px}}
+
+/* Shared Easel settings, hosted by the private navigation and server ports. */
+.ew-settings-host .settings-panel{max-height:calc(100dvh - 24px)}
+.ew-settings-host .settings-main{overscroll-behavior:contain;scroll-padding:16px}
+.ew-settings-host :is(button,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:700px){
+ .ew-settings-host .settings-panel{width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0}
+ .ew-settings-host .settings-head{padding:12px;flex-wrap:wrap;gap:8px}
+ .ew-settings-host .settings-actions{gap:6px}
+ .ew-settings-host .settings-body{flex-direction:column}
+ .ew-settings-host .settings-nav{width:auto;flex-direction:row;overflow:auto;border-right:0;border-bottom:1px solid var(--border);padding:6px}
+ .ew-settings-host .settings-nav small{display:none}
+ .ew-settings-host .settings-main{padding:12px}
+ .ew-settings-host .tabbar{overflow:auto;flex-shrink:0}
+ .ew-settings-host :is(button,input,select){min-height:44px}
+ .ew-settings-host .settings-field{flex-direction:column;align-items:stretch}
+ .ew-settings-host .settings-field-label{width:auto}
+ .ew-settings-host .settings-foot{padding:10px 12px}
+}
+@media(prefers-reduced-motion:reduce){.ew-settings-host .settings-panel{animation:none}}
+
+.ew-settings-host .settings-mobile-label{display:none}
+.ew-settings-host :is(.settings-base-cell,.settings-key-cell){min-width:0;width:100%}
+@media(max-width:700px){
+ .ew-settings-host .settings-main .panel-top{flex-wrap:wrap;gap:8px}
+ .ew-settings-host .settings-main .panel-top .desc{flex:1 1 220px}
+ .ew-settings-host .st-env .panel-top .btn{white-space:nowrap;flex:1 1 auto}
+ .ew-settings-host .st-env .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .ew-settings-host .st-env .card{min-width:0;padding:12px}
+ .ew-settings-host .st-env .card-name{font-size:15px;line-height:1.45;overflow-wrap:anywhere}
+ .ew-settings-host .st-env .card-desc{font-size:13px;line-height:1.5}
+ .ew-settings-host .st-env .card-foot{flex-wrap:wrap;gap:6px}
+ .ew-settings-host .st-env .card-foot button{white-space:nowrap}
+ .ew-settings-host .prow.head{display:none}
+ .ew-settings-host .prow:not(.head){display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:16px}
+ .ew-settings-host .prow>.step{display:none}
+ .ew-settings-host .prow>.pname{font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+ .ew-settings-host .prow>:is(.tag,.proto-trigger){align-self:flex-start;white-space:nowrap}
+ .ew-settings-host .prow .model-cell{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+ .ew-settings-host .prow .model-cell>input{flex:1 1 180px;min-width:0}
+ .ew-settings-host .prow .settings-mobile-label{display:block;flex:0 0 100%;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
+ .ew-settings-host .prow :is(.cell-text,.stt){white-space:normal;overflow-wrap:anywhere}
+ .ew-settings-host .prow>.cell-text:nth-child(4):before{content:'模型 · ';color:var(--text-tertiary)}
+ .ew-settings-host .prow>.cell-text:nth-child(5):before{content:'API 地址 · ';color:var(--text-tertiary)}
+ .ew-settings-host .prow input{width:100%;min-width:0;font-size:16px}
+ .ew-settings-host .stub-row{flex-wrap:wrap;gap:8px}
+ .ew-settings-host .stub-row .future{margin-left:0}
+}
+/* Shared action feedback: submitting and reconnecting are neutral states. */
+.ew-action-status{color:var(--text-secondary);font-size:13px;line-height:1.5;margin:8px 0}
+.ew-action-spinner{display:inline-block;flex:0 0 12px;width:12px;height:12px;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:ew-action-spin .7s linear infinite}
+.ew-action-spinner.is-idle{visibility:hidden;animation:none}
+@keyframes ew-action-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ew-action-spinner{animation:none}}

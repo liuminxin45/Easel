@@ -57,12 +57,21 @@ def stream(service, turn_id, after=0, accepted=False,authenticated=None):
         'Cache-Control':'no-store, no-transform','X-Accel-Buffering':'no','Content-Encoding':'identity'})
 
 
-async def handle(service,business,path,request,value=None,*,authenticated=None):
+async def handle(service,business,path,request,value=None,*,authenticated=None,serve_file=None):
     method=request.method
     get=method in ('GET','HEAD')
     if not (path.startswith('/api/chat/') or path=='/api/skills' or path.startswith('/api/skill/')):
         return None
     try:
+        match=re.fullmatch(r'/api/chat/products/([A-Za-z0-9_-]+)(?:/files/([a-f0-9]{64}))?',path)
+        if match and get:
+            from .chat_products import ChatProducts
+            products=ChatProducts(business)
+            if match[2]:
+                if serve_file is None:raise ValueError('文件响应端口未连接')
+                metadata,file=await asyncio.to_thread(products.file,match[1],match[2])
+                return serve_file(metadata,file,request.headers,request.query_params.get('download')=='1')
+            return response(await asyncio.to_thread(products.describe,match[1]))
         if path=='/api/skills' and get:return response(await asyncio.to_thread(business.skills))
         if path=='/api/chat/artifacts' and get:return response(business.upstream.library())
         match=re.fullmatch(r'/api/skill/([a-z0-9-]+)',path)

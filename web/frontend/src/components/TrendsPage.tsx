@@ -7,6 +7,8 @@ import TrendSourcesDialog from './TrendSourcesDialog';
 
 interface TrendsPageProps {
   onUseTopic: (title: string) => void;   // 一键做成内容 → 跳 chat
+  refreshAll?: () => Promise<unknown>;
+  listLimit?: number;
 }
 
 class TrendBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -21,13 +23,14 @@ export default function TrendsPage(props: TrendsPageProps) {
   return <TrendBoundary><TrendsPanel {...props} /></TrendBoundary>;
 }
 
-function TrendsPanel({ onUseTopic }: TrendsPageProps) {
+function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15 }: TrendsPageProps) {
   const [sources, setSources] = useState<TrendSource[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
   const [groups, setGroups] = useState<TrendGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [updated, setUpdated] = useState(0);
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [managerOpen, setManagerOpen] = useState(false);
@@ -51,13 +54,13 @@ function TrendsPanel({ onUseTopic }: TrendsPageProps) {
     setGroups((prev) => prev.filter((g) => pfs.includes(g.platform)));
     setLoading(true);
     setError('');
-    fetchTrends(pfs.join(','), 15)
+    fetchTrends(pfs.join(','), listLimit)
       .then((d) => { if (requestId.current === id) { setGroups(d.trends); setUpdated(d.updated); setWarnings(d.warnings); } })
       .catch((e: unknown) => {
         if (requestId.current === id) setError(e instanceof Error ? e.message : '热点拉取失败，请稍后重试。');
       })
       .finally(() => { if (requestId.current === id) setLoading(false); });
-  }, []);
+  }, [listLimit]);
 
   const discover = useCallback(() => {
     const id = ++discoveryId.current;
@@ -93,12 +96,20 @@ function TrendsPanel({ onUseTopic }: TrendsPageProps) {
     return () => window.clearTimeout(timer);
   }, [groups, selected, load]);
 
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { if (refreshAll) await refreshAll(); await discover(); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : '刷新失败，请重试。'); }
+    finally { setRefreshing(false); }
+  };
+
   const toggle = (k: string) =>
     setSelected((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
 
-  return <><TrendsView sources={sources} selected={selected} groups={groups} ready={ready} loading={loading}
+  return <><TrendsView sources={sources} selected={selected} groups={groups} ready={ready} loading={loading} refreshing={refreshing||loading||groups.some(group=>group.error?.code==='busy')}
     updated={updated} error={error||saveError} warnings={warnings} saved={saved}
-    onToggle={toggle} onRefresh={()=>{void discover()}} onManage={()=>setManagerOpen(true)}
+    onToggle={toggle} onRefresh={()=>{void refresh()}} onManage={()=>setManagerOpen(true)}
     onSave={(g,it)=>{void save(`${g.platform}:${it.id}`,it.title,g.label)}} onUse={(_,it)=>onUseTopic(it.title)}/>
     {managerOpen&&<TrendSourcesDialog onClose={()=>setManagerOpen(false)} onChanged={addedId=>{
       void discover().then(()=>{if(addedId)setSelected(prev=>[...new Set([...prev,addedId])])});

@@ -14,10 +14,10 @@ function readPreference(): Theme | null {
   }
 }
 
-export default function ThemeToggle() {
+export default function ThemeToggle({theme:controlledTheme,onChange}:{theme?:Theme;onChange?:(theme:Theme)=>void}={}) {
   const [preference, setPreference] = useState(readPreference);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia(DARK_QUERY).matches);
-  const theme = preference ?? (systemDark ? 'dark' : 'light');
+  const theme = controlledTheme ?? preference ?? (systemDark ? 'dark' : 'light');
   const dark = theme === 'dark';
 
   useEffect(() => {
@@ -43,6 +43,7 @@ export default function ThemeToggle() {
   const toggle = () => {
     const next = dark ? 'light' : 'dark';
     setPreference(next);
+    onChange?.(next);
     try { localStorage.setItem(THEME_KEY, next); } catch { /* Still switch for this visit. */ }
   };
 

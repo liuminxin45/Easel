@@ -1357,6 +1357,11 @@ def cmd_whoami(a) -> int:
                 account = _account_identity(response)
                 if account is not None:
                     result.update(loggedIn=True, **account)
+                    body = response.get("body") or {}
+                    user = body.get("user_info") or body.get("user") or {}
+                    stable_id = user.get("uid") or user.get("sec_uid") or user.get("open_id")
+                    if stable_id:
+                        result["provider_user_id"] = str(stable_id)
                 elif not logged:
                     body = response.get("body") if isinstance(response, dict) else None
                     status = body.get("status_code") if isinstance(body, dict) else None

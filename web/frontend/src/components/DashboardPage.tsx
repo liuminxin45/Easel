@@ -4,6 +4,7 @@ import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
   fetchAnalyticsPlatforms, fetchAccountAnalytics,
 } from '../lib/api';
+import type {ReactNode} from 'react';
 import type {
   TrendGroup, ScheduleItem, OutputNode, AccountItem, Idea,
   AnalyticsPlatform, AccountAnalytics, AccountWhoami,
@@ -37,11 +38,14 @@ interface DashboardProps {
   agentRuntime: string;
   onNavigate: (page: Page) => void;
   onUseTopic: (title: string) => void;
+  persistAnalytics?: boolean;
+  verifyAccountsOnMount?: boolean;
+  listMaxHeight?: number;
 }
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
-export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic }: DashboardProps) {
+export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight }: DashboardProps) {
   const [trends, setTrends] = useState<TrendGroup[]>([]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [outputs, setOutputs] = useState<OutputNode[]>([]);
@@ -61,6 +65,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const [anaPlats, setAnaPlats] = useState<AnalyticsPlatform[]>([]);
   const [anaSel, setAnaSel] = useState('');
   const [anaData, setAnaData] = useState<Record<string, AccountAnalytics | 'loading' | 'error'>>(() => {
+    if (!persistAnalytics) return {};
     try {
       const cache = JSON.parse(localStorage.getItem('easel_analytics') || '{}') as Record<string, AccountAnalytics | 'loading' | 'error'>;
       return Object.fromEntries(Object.entries(cache).filter(([platform, value]) =>
@@ -72,7 +77,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const [anaErrors, setAnaErrors] = useState<Record<string, string>>({});
   const [anaWin, setAnaWin] = useState<'last' | 'day' | 'week' | 'month' | 'year'>('week');
   // whoami 自愈：登录态以真实 profile 为准（与账号页共享 localStorage 缓存）
-  const [whoamiMap, setWhoamiMap] = useState<Record<string, AccountWhoami>>(() => getWhoamiCache());
+  const [whoamiMap, setWhoamiMap] = useState<Record<string, AccountWhoami>>(() => persistAnalytics ? getWhoamiCache() : {});
   // 与 AccountsPage 同款：卸载后不再触发 setState（whoami 每个平台要起浏览器，最慢数秒）
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -88,14 +93,14 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
     fetchIdeas().then(setIdeas).catch(() => {});
     fetchAnalyticsPlatforms().then((ps) => {
       setAnaPlats(ps);
-      const cache = getWhoamiCache();
+      const cache = persistAnalytics ? getWhoamiCache() : {};
       const isLog = (p: AnalyticsPlatform) => p.loggedIn || !!cache[p.platform]?.loggedIn;
       const first = ps.find(isLog);
       if (first) setAnaSel((s) => s || first.platform);
       // 开页后台自愈：对非 API 式的归因平台真校验（whoami），刷新登录态；
       // B 站走 cookie、公众号走凭证/官方 API 判定，都不起浏览器。
       const API_BASED = new Set(['bilibili', 'wechat-oa']);
-      verifyStale(ps.filter((p) => !API_BASED.has(p.platform)).map((p) => p.platform), {
+      if (verifyAccountsOnMount) verifyStale(ps.filter((p) => !API_BASED.has(p.platform)).map((p) => p.platform), {
         alive: () => aliveRef.current,
         onUpdate: (platform, r) => {
           setWhoamiMap((m) => ({ ...m, [platform]: r }));
@@ -116,7 +121,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
         const next = { ...d, [platform]: r };
         const cache = Object.fromEntries(Object.entries(next).filter(([, value]) =>
           value && typeof value === 'object'));
-        try { localStorage.setItem('easel_analytics', JSON.stringify(cache)); } catch { /* quota */ }
+        try { if (persistAnalytics) localStorage.setItem('easel_analytics', JSON.stringify(cache)); } catch { /* quota */ }
         return next;
       }))
       .catch((error: unknown) => {
@@ -126,6 +131,10 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
       })
       .finally(() => anaPending.current.delete(platform));
   };
+
+  const board = (id: string, label: string, children: ReactNode) => listMaxHeight === undefined ? children : (
+    <div className="dash-card-list" style={{maxHeight: listMaxHeight, overflowY: 'auto'}} role="region" aria-label={label} tabIndex={0} data-native-scroll-region={'dashboard:'+id}>{children}</div>
+  );
 
   const hour = new Date().getHours();
   const greet = hour < 6 ? '夜深了' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
@@ -195,7 +204,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconFire size={16} /> 今日热点</span>
             <button className="dash-more" onClick={() => onNavigate('trends')}>热点雷达 →</button>
           </div>
-          <DashboardTrends groups={trends} onRead={(_,it)=>onUseTopic(it.title)}/>
+          {board('news','今日热点列表',<DashboardTrends groups={trends} onRead={(_,it)=>onUseTopic(it.title)}/>)}
         </div>
 
         {/* 选题库 */}
@@ -204,6 +213,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconIdea size={16} /> 选题库 · 待做</span>
             <button className="dash-more" onClick={() => onNavigate('ideas')}>全部 →</button>
           </div>
+          {board('ideas','待做选题列表',<>
           {pendingIdeas.length === 0 && <div className="dash-empty">还没攒选题，去热点雷达收藏几个吧</div>}
           {pendingIdeas.slice(0, 5).map((it) => (
             <div key={it.id} className="dash-idea" onClick={() => onUseTopic(it.title)} title="点击做成内容">
@@ -211,6 +221,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
               {it.source && <span className="badge">{it.source}</span>}
             </div>
           ))}
+          </>)}
         </div>
 
         {/* 近期排期 */}
@@ -219,6 +230,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconCalendar size={16} /> 近期排期</span>
             <button className="dash-more" onClick={() => onNavigate('calendar')}>日历 →</button>
           </div>
+          {board('schedule','近期排期列表',<>
           {upcoming.length === 0 && <div className="dash-empty">暂无排期，去日历安排一条吧</div>}
           {upcoming.map((s) => (
             <div key={s.id} className="dash-sched" onClick={() => onNavigate('calendar')}>
@@ -227,6 +239,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
               <span className="badge">{STATUS_LABEL[s.status] || s.status}</span>
             </div>
           ))}
+          </>)}
         </div>
 
         {/* 最近产物 */}
@@ -235,6 +248,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconOutputs size={16} /> 最近产物</span>
             <button className="dash-more" onClick={() => onNavigate('outputs')}>内容库 →</button>
           </div>
+          {board('outputs','最近产物列表',<>
             {outputsLoading && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
             {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={loadOutputs}>重试</button></div>}
             {!outputsLoading && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
@@ -244,6 +258,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
               <span className="badge">{g.meta?.platform || (g.type === 'dir' ? `${g.fileCount ?? 0} 文件` : '单文件')}</span>
             </div>
           ))}
+          </>)}
         </div>
 
         {/* 创作数据（归因层）：选平台自动拉取登录账号的粉丝/获赞/关注 + 多窗口增长 + 近7日环比 + 最新笔记 */}

@@ -30,7 +30,7 @@ else:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import login_state  # noqa: E402
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("EASEL_ROOT") or Path(__file__).resolve().parents[3]).resolve()
 LOGIN_DIR = PROJECT_ROOT / "outputs" / "_login"
 PROFILE_NAME = "WeixinMpProfile"
 MP_HOME = "https://mp.weixin.qq.com/"
@@ -803,6 +803,11 @@ def cmd_whoami(a):
                         break
                     page.wait_for_timeout(500)
                 out["loggedIn"] = bool(_extract_token(page.url))
+                if out["loggedIn"]:
+                    observed = page.evaluate("() => ({user_name:window.wx?.data?.user_name,app_id:window.wx?.data?.app_id})")
+                    stable_id = observed.get("user_name") or observed.get("app_id")
+                    if isinstance(stable_id, str) and re.fullmatch(r"(?:gh_|wx)[A-Za-z0-9_]{4,100}", stable_id):
+                        out["provider_user_id"] = stable_id
                 if not out["loggedIn"] and not page.query_selector(
                         "img.login__type__container__scan__qrcode, img[src*='qrcode']"):
                     out["error"] = "公众号账号页面尚未就绪，请稍后重试"

@@ -1,4 +1,3 @@
-import SettingsSelect from './SettingsSelect';
 import { useState } from 'react';
 import type { ChatSession } from '../lib/store';
 import type { PersonaItem } from '../lib/api';
@@ -13,7 +12,7 @@ import ThemeToggle from './ThemeToggle';
 
 export type Page = 'dashboard' | 'chat' | 'trends' | 'ideas' | 'calendar' | 'publish' | 'breakdown' | 'skills' | 'outputs' | 'accounts' | 'profile';
 
-interface SidebarProps {
+export interface SidebarProps {
   currentPage: Page;
   onPageChange: (page: Page) => void;
   personas: PersonaItem[];
@@ -37,6 +36,7 @@ interface SidebarProps {
   brand?:string;logo?:ReactNode;themeControl?:ReactNode;rootRef?:Ref<HTMLDivElement>;
   navigationLabel?:string;rootLabel?:string;personaOptions?:{value:string;label:string}[];
   statusText?:string;settingsTitle?:string;
+  theme?:'light'|'dark';onThemeChange?:(theme:'light'|'dark')=>void;assetUrl?:(path:string)=>string;
 }
 
 // 主导航（精简）；热点雷达/选题库/内容日历/发布中心 收进「工作台」，不占侧栏
@@ -67,7 +67,7 @@ export default function Sidebar({
   apiDirect,
   agentRuntime,
   onOpenSettings,
-  navigation,hasMessages,canDeleteSession=true,brand,logo,themeControl,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,
+  navigation,hasMessages,canDeleteSession=true,brand,logo,themeControl,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,theme,onThemeChange,assetUrl,
 }: SidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -126,20 +126,15 @@ export default function Sidebar({
     <div className="sidebar" ref={rootRef} role={rootLabel?'complementary':undefined} aria-label={rootLabel}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          {logo||<img className="sidebar-logo-icon" src="./static/easel-icon-transparent.png" alt="" />}
+          {logo||<img className="sidebar-logo-icon" src={assetUrl?.('static/easel-icon-transparent.png')||'./static/easel-icon-transparent.png'} alt="" />}
           <h1>{brand||'Easel'}</h1>
-          {themeControl||<ThemeToggle />}
+          {themeControl||<ThemeToggle theme={theme} onChange={onThemeChange} />}
         </div>
-        <SettingsSelect className="persona-control" label="选择用户画像"
+        <select className="persona-select" value={selectedPersona}
           title="选择用户画像（一个对话对应一个画像：切换会新建一个对话）"
-          value={selectedPersona}
-          options={personaOptions||[{ value: '', label: '通用模式' },
-            ...personas.map(p => ({ value: p.name, label: p.name })),
-            { value: '__new__', label: '+ 新建画像…' }]}
-          onChange={(value) => {
-            if (value === '__new__') { onNewProfile(); return; }
-            onPersonaChange(value);
-          }} />
+          onChange={event=>{const value=event.target.value;if(value==='__new__'){onNewProfile();return}onPersonaChange(value)}}>
+          {(personaOptions||[{value:'',label:'通用模式'},...personas.map(persona=>({value:persona.name,label:persona.name})),{value:'__new__',label:'+ 新建画像…'}]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
       </div>
 
       <nav className="sidebar-nav" aria-label={navigationLabel}>

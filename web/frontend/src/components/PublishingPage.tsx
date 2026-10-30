@@ -4,7 +4,9 @@ import type { PublishingPolicy } from '../lib/api';
 import AutomatedPublishPage from './PublishPage';
 import ManualPublishPage from './ManualPublishPage';
 
-export default function PublishingPage({ persona }: { persona: string }) {
+export interface PublishingAgentActions { adapt: (prompt: string) => Promise<void>; check: (content: string) => Promise<void> }
+
+export default function PublishingPage({ persona, agentActions }: { persona: string; agentActions?: PublishingAgentActions }) {
   const [policy, setPolicy] = useState<PublishingPolicy | null>(null);
   const [mode, setMode] = useState<PublishingPolicy['mode']>('automated');
   const [error, setError] = useState('');
@@ -45,7 +47,7 @@ export default function PublishingPage({ persona }: { persona: string }) {
           : '保留原有账号检查、预检、确认及自动提交流程。'}</span>
     </div>
     <div className="publishing-mode-content">
-      {manual ? <ManualPublishPage persona={persona} /> : <AutomatedPublishPage persona={persona} />}
+      {manual ? <ManualPublishPage persona={persona} agentActions={agentActions} /> : <AutomatedPublishPage persona={persona} />}
     </div>
   </div>;
 }

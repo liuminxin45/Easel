@@ -26,7 +26,9 @@ class EaselFrontend:
                 c.execute(sql)
 
     def plans(self):
-        with self.store.connect() as c:return {'items':[json.loads(r['document']) for r in c.execute('SELECT document FROM easel_plans ORDER BY rowid DESC')],'automatic_publication':False}
+        with self.store.connect() as c:
+            rows = [json.loads(r['document']) for r in c.execute('SELECT document FROM easel_plans ORDER BY rowid DESC')]
+        return {'items': [row for row in rows if not row.get('deleted')], 'automatic_publication': False}
 
     def topics(self):
         # Existing work drafts remain available; board changes never alter a

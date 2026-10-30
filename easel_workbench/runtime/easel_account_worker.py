@@ -57,49 +57,6 @@ def main():
                 args += ['--platform', platform]
         if payload['action'] == 'login':
             args += ['--qr-out', str(directory / 'qr.png'), '--status-file', str(directory / 'login.json'), '--timeout', '180']
-        # Preserve real stable IDs that Easel's display-only whoami omits.
-        original_identity = getattr(module, '_account_identity', None)
-        if original_identity:
-            def identity(account, *args, **kwargs):
-                result = original_identity(account, *args, **kwargs)
-                if not isinstance(result,dict):return result
-                if platform=='wechat-oa' and hasattr(account,'evaluate'):
-                    observed=account.evaluate("() => ({user_name:window.wx?.data?.user_name,app_id:window.wx?.data?.app_id})")
-                    uid=observed.get('user_name') or observed.get('app_id')
-                    if isinstance(uid,str) and __import__('re').fullmatch(r'(?:gh_|wx)[A-Za-z0-9_]{4,100}',uid):result['provider_user_id']=uid
-                if isinstance(account, dict):
-                    uid = account.get('userId') or account.get('id') or account.get('uid') or account.get('finderUsername')
-                    if platform=='douyin':
-                        body=account.get('body') or {}; user=body.get('user_info') or body.get('user') or {}
-                        if result is not None:uid=user.get('uid') or user.get('sec_uid') or user.get('open_id')
-                    if uid:
-                        result['provider_user_id'] = str(uid)
-                return result
-            module._account_identity = identity
-        visible_identity=getattr(module,'_visible_account_identity',None)
-        if visible_identity:
-            def visible(page,cfg):
-                result=visible_identity(page,cfg)
-                try:
-                    if platform=='zhihu':
-                        actual=module._authenticated_account(page.context,cfg)
-                        if actual and actual.get('id'):result['provider_user_id']=str(actual['id'])
-                    elif platform=='kuaishou':
-                        import platform_readback
-                        actual=platform_readback.read_kuaishou_account(page)
-                        if actual.get('platform_account_id'):result['provider_user_id']=str(actual['platform_account_id'])
-                except Exception:pass
-                return result
-            module._visible_account_identity=visible
-        observed_identity={}
-        if platform=='bilibili':
-            original_api=module._api
-            def api(url,*args,**kwargs):
-                result=original_api(url,*args,**kwargs)
-                nav=result.get('data') or {}
-                if nav.get('isLogin') is True and nav.get('mid'):observed_identity['id']=str(nav['mid'])
-                return result
-            module._api=api
         sys.argv = [str(source / (name + '.py')), *args]
         capture = io.StringIO()
         with contextlib.redirect_stdout(capture), contextlib.redirect_stderr(io.StringIO()):
@@ -122,7 +79,6 @@ def main():
                     break
             except ValueError:
                 continue
-        if platform=='bilibili' and observed_identity.get('id') and result.get('loggedIn') is True:result['provider_user_id']=observed_identity['id']
     public = {k: result.get(k) for k in ('loggedIn', 'provider_user_id', 'name','avatar')}
     print(json.dumps(public, ensure_ascii=False))
 

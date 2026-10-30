@@ -1,3 +1,7 @@
-:root{--native-height:100dvh;--native-keyboard-inset:0px;color-scheme:light;--native-bg:#f5f7f8;--native-ink:#172a2d;--native-line:#dbe5e6}
-:root[data-native-theme=dark]{color-scheme:dark;--native-bg:#101c20;--native-ink:#e8eff0;--native-line:#30434a}
-*{box-sizing:border-box}html,body,#root{margin:0;width:100%;height:100%;min-height:0}body{font-family:system-ui,'Segoe UI','Microsoft YaHei UI','Noto Sans CJK SC',sans-serif;color:var(--native-ink);background:var(--native-bg)}body,#root{height:var(--native-height);overflow:hidden}.native-host{height:100%;min-height:0;isolation:isolate}.native-loading,.native-boot-failure{display:grid;align-content:center;justify-content:center;gap:16px;padding:24px;min-height:100%;font-size:16px;line-height:24px}.native-host-notice{position:relative;z-index:11000;padding:12px 16px;background:#fff3cf;color:#513a00;font-size:14px;line-height:20px}.native-host-notice a{margin-left:8px;color:inherit}button,input,textarea,select{font:inherit}[hidden]{display:none!important}:focus-visible{outline-offset:3px}img,video{max-width:100%}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+/* Viewport and offline shell only; Easel owns typography and controls. */
+:root{--native-height:100dvh;--native-keyboard-inset:0px}
+body,#root{height:var(--native-height);overflow:hidden}
+.native-host{height:100%;min-height:0;isolation:isolate}
+.native-loading,.native-boot-failure{display:grid;align-content:center;justify-content:center;gap:16px;padding:24px;min-height:100%}
+.native-host-notice{position:relative;z-index:11000;padding:12px 16px;background:var(--yellow-soft);color:var(--text);font-size:14px;line-height:20px}
+.native-host-notice a{margin-left:8px;color:inherit}

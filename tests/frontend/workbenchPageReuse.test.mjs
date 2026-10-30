@@ -10,6 +10,9 @@ const native={};
 for(const name of ['DashboardPage','OutputsPage','IdeasPage','TrendsPage','CalendarPage','BreakdownPage','ProfilePage'])native[name]=function NativePage(){};
 const element=(type,props)=>({type,props});
 const record=value=>value&&typeof value==='object'?value:{};
+const routeSource=readFileSync(new URL('../../web/frontend/src/workbench/platform/native-routes.ts',import.meta.url),'utf8');
+const routeModule={};
+runInNewContext(ts.transpileModule(routeSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports:routeModule});
 
 function load(name,{data={},vm={},choices=[]}={}){
  const source=readFileSync(new URL('../../web/frontend/src/workbench/ui/'+name,import.meta.url),'utf8');
@@ -25,6 +28,7 @@ function load(name,{data={},vm={},choices=[]}={}){
   if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}]};
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='@workbench/core')return core;
+  if(specifier==='../platform/native-routes')return routeModule;
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
   if(specifier==='./management')return {SkillTask:function SkillTask(){}};

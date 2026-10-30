@@ -250,7 +250,10 @@ class ChatBusiness:
                  'work':work,'authorization':{'production':snapshot['task'] in ('poster','article','image','change','native'),
                                                'discussion_only':snapshot['task']=='discuss','publish':False,'adopt':False}}
         if snapshot['task']=='native':
-            sections.append('按上方 Easel 原生 SKILL 完成本轮任务，不套用工作台贴图或文章交付格式。使用 frozen_skill_files 的版本副本，运行脚本时仍以项目根为工作目录读取实际配置。成品写入 output_directory/products 并返回文件链接。未配置的服务先明确缺项；本轮没有发布、修改账号或写入长期偏好的授权，相关动作须另行明确确认。已有画像与账号以工作台记录为准；长期更新先展示候选，通过画像或技能服务确认发布，不直接改写数据库或默认版本。')
+            bundle=payload['frozen_skill_files'];folder=self.root/'outputs/_sessions/skill-inputs'/snapshot['snapshot_sha256']
+            payload['frozen_skill_library']={'root':str(folder),'manifest':str(folder/'native-library.json'),'sha256':digest(packed(bundle))}
+            payload['frozen_skill_files']=[file for file in bundle if file['original_path'] in {skill['entry'] for skill in snapshot['skills']}]
+            sections.append('按上方 Easel 原生 SKILL 完成本轮任务，不套用工作台贴图或文章交付格式。使用 frozen_skill_files 的版本副本，跨技能依赖和脚本从 frozen_skill_library.root 按原相对路径读取，完整路径与 SHA 见其 manifest。运行脚本时仍以项目根为工作目录读取实际配置。成品写入 output_directory/products 并返回文件链接。未配置的服务先明确缺项；本轮没有发布、修改账号或写入长期偏好的授权，相关动作须另行明确确认。已有画像与账号以工作台记录为准；长期更新先展示候选，通过画像或技能服务确认发布，不直接改写数据库或默认版本。')
         sections.append('## 本轮冻结输入\n'+packed(payload))
         return '\n\n'.join(sections)
 
@@ -326,6 +329,12 @@ class ChatBusiness:
                     except FileExistsError:
                         if digest(target.read_bytes())!=fingerprint:raise PlanConflict('本地冻结技能副本发生变化')
             result.append({'original_path':name,'path':str(target),'sha256':fingerprint})
+        if write and snapshot['task']=='native':
+            manifest=owned_output_path(self.root,folder.relative_to(self.root)/'native-library.json');raw=packed(result).encode('utf-8')
+            try:
+                with manifest.open('xb') as handle:handle.write(raw)
+            except FileExistsError:
+                if manifest.read_bytes()!=raw:raise PlanConflict('本地冻结技能清单发生变化')
         return result
 
     @staticmethod

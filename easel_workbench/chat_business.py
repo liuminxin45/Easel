@@ -32,11 +32,17 @@ class ChatBusiness:
         self.root=Path(root or box.root).resolve()
         self.catalog=ProjectSkillCatalog(self.root)
         self.creator=box.creator
+        from .upstream_skills import UpstreamSkills
+        source_root=Path(__file__).resolve().parents[1]
+        selector=self.root/'data/active-workbench.json'
+        approved=(source_root/'workbench-release.json').is_file() and selector.is_file() and json.loads(selector.read_text(encoding='utf-8'))['release']==source_root.name
+        self.upstream=UpstreamSkills(self.root,self.creator,source_root if approved else None)
+        self.upstream.environment=lambda:self.chat.settings.environment() if self.chat and hasattr(self.chat,'settings') else self.chat._environment() if self.chat else {}
         self.chat=None
         with self.store.connect() as c:
             c.execute('CREATE TABLE IF NOT EXISTS easel_chat_plans(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,signature TEXT NOT NULL,document TEXT NOT NULL)')
 
-    def skills(self):
+    def skills(self,include_upstream=True):
         from .skills import launch_metadata
         from .project_skill_sync import matches_source
         result=[];revision=self.catalog.revision()
@@ -44,17 +50,18 @@ class ChatBusiness:
             try:release=self.creator.detail('skill',item['id'])
             except ValueError:continue
             available=matches_source(self.creator,release)
-            row={'id':item['id'],'skill_id':item['id'],'name':item['id'],'display_name':item['name'],
+            row={'id':item['id'],'skill_id':item['id'],'name':item['id'],'display_name':item['name'],'origin':'workbench',
                  'description':item['description'],'layer':item['layer'],'needsApi':False,'apiConfigured':True,
                  'version':release['version'],'source_revision':revision,'sha256':release['sha256'],
                  'available':available,'reason':'' if available else '项目技能迁入版本尚未激活',**launch_metadata(release)}
             row['launch_actions']=[{**action,'requires_plan':action['task'] in ('poster','article','change','image'),
                                    **({'requires_context':True} if action['task'] not in ('poster','article','discuss','image') else {})} for action in row['launch_actions']]
             result.append(row)
-        return result
+        return (self.upstream.items() if include_upstream else [])+result
 
     def skill(self,sid):
-        item=next((r for r in self.skills() if r['id']==sid),None)
+        if any(item['id']==sid for item in self.upstream.entries()):return self.upstream.detail(sid)
+        item=next((r for r in self.skills(False) if r['id']==sid),None)
         if not item:raise ValueError('找不到项目内置技能')
         release=self.creator.detail('skill',sid)
         metadata,body=parse_skill(release['prompt'])
@@ -87,6 +94,12 @@ class ChatBusiness:
         if not isinstance(context,dict):raise ValueError('技能选择无效')
         profile_id=context.get('profile_id') or session['profile_id']
         if profile_id!=session['profile_id']:raise PlanConflict('已有会话保持原画像，请新建会话后切换')
+        if any(item['id']==context.get('skill_id') for item in self.upstream.entries()):
+            if context.get('action_id','native')!='native':raise PlanConflict('Easel 原生技能须使用原生执行入口')
+            if context.get('work_id') or context.get('parent_version_id'):raise PlanConflict('原生技能不改写已有工作台作品版本')
+            snapshot=self.upstream.snapshot(self.creator.detail('profile',profile_id),context['skill_id'],context.get('version'))
+            if context.get('skill_revision')!=snapshot['skills'][0]['source_revision']:raise PlanConflict('Easel 技能库修订已变化，请重新选择技能')
+            return session,{'id':'native','task':'native','requires_plan':False},snapshot
         parent=self._parent(value)
         if parent:
             if context.get('action_id')=='discuss':
@@ -108,7 +121,7 @@ class ChatBusiness:
             snapshot['snapshot_sha256']=digest(packed(snapshot))
             return session,{'id':'change','task':'change','requires_plan':True,'format':parent['format']},snapshot
         sid=context.get('skill_id') or 'topic-research'
-        source=next((s for s in self.skills() if s['id']==sid),None)
+        source=next((s for s in self.skills(False) if s['id']==sid),None)
         if not source or not source['available']:raise ValueError('此项目技能尚不可调用')
         actions=source['launch_actions']
         action_id=context.get('action_id') or ('discuss' if sid=='topic-research' else actions[0]['id'] if actions else '')
@@ -234,8 +247,10 @@ class ChatBusiness:
                  'source_article':source_article,
                  'reference_work':reference_work,
                  'delivery_contract':{k:review_input[k] for k in ('learning_snapshot','style_delivery_contract','frozen_reference_assets') if k in review_input} if review_input else None,
-                 'work':work,'authorization':{'production':snapshot['task'] in ('poster','article','image','change'),
+                 'work':work,'authorization':{'production':snapshot['task'] in ('poster','article','image','change','native'),
                                                'discussion_only':snapshot['task']=='discuss','publish':False,'adopt':False}}
+        if snapshot['task']=='native':
+            sections.append('按上方 Easel 原生 SKILL 完成本轮任务，不套用工作台贴图或文章交付格式。使用 frozen_skill_files 的版本副本，运行脚本时仍以项目根为工作目录读取实际配置。成品写入 output_directory/products 并返回文件链接。未配置的服务先明确缺项；本轮没有发布、修改账号或写入长期偏好的授权，相关动作须另行明确确认。已有画像与账号以工作台记录为准；长期更新先展示候选，通过画像或技能服务确认发布，不直接改写数据库或默认版本。')
         sections.append('## 本轮冻结输入\n'+packed(payload))
         return '\n\n'.join(sections)
 
@@ -287,8 +302,12 @@ class ChatBusiness:
             for resource in group.get('resources',[]):
                 if not resource.get('available'):continue
                 row=c.execute('SELECT bytes FROM creator_skill_blobs WHERE sha256=?',(resource['sha256'],)).fetchone()
-                if not row or digest(bytes(row[0]))!=resource['sha256']:raise PlanConflict('冻结技能资源缺失或字节不符')
-                raw=bytes(row[0]);name=resource['path']
+                if not row and snapshot['task']=='native':
+                    raw=self.upstream._read(self.root/resource['path'])
+                elif row:raw=bytes(row[0])
+                else:raise PlanConflict('冻结技能资源缺失或字节不符')
+                if digest(raw)!=resource['sha256']:raise PlanConflict('冻结技能资源缺失或字节不符')
+                name=resource['path']
                 if name in files and files[name]!=raw:raise PlanConflict('技能资源同路径存在不同版本，请先明确适用组合')
                 files[name]=raw
         result=[]
@@ -401,11 +420,14 @@ class ChatBusiness:
         message=text(value.get('message',''),100000)
         attachments=self._attachments(value)
         if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
-        return {'snapshot':snapshot,'actual_prompt':self._instruction(snapshot,message,attachments,self.root/'outputs'/session['id'],source_article=self._news_source(value),reference_work=self._parent(value)),
+        output=self.root/'outputs'/session['id']
+        if snapshot['task']=='native':output=output/key(value.get('turnId') or value.get('turn_id') or value.get('id'))
+        return {'snapshot':snapshot,'actual_prompt':self._instruction(snapshot,message,attachments,output,source_article=self._news_source(value),reference_work=self._parent(value)),
                 'work':None,'frozen_instructions':self._workspace()}
 
     def accept(self,c,turn):
         """Join version registration to the native chat acceptance transaction."""
+        if turn['snapshot']['task']=='native':self.upstream.accept(c,turn['snapshot'])
         self._bundle(turn['snapshot'],True,c)
         if (turn.get('work') or {}).get('internal_correction'):
             from .native_corrections import accept as accept_correction
@@ -510,7 +532,9 @@ class ChatBusiness:
             calls=c.execute('SELECT id FROM creator_model_calls WHERE task_id=?',(turn.get('work',{}).get('version_id') if turn.get('work') else turn['id'],)).fetchall()
         for call in calls:finish_call(self.box,call[0],'completed' if turn['status']=='completed' else 'unknown',turn.get('output'),turn.get('error'))
         work=turn.get('work')
-        if not work:return {'session_id':turn['session_id'],'model_status':turn['status']}
+        if not work:
+            if turn['snapshot']['task']=='native':self.upstream.receive(turn)
+            return {'session_id':turn['session_id'],'model_status':turn['status']}
         jid=work['version_id']
         if turn['status']!='completed':
             with self.store.connect() as c:c.execute("UPDATE toolbox_jobs SET status='uncertain',dispatch_started=1,error=?,reply=? WHERE id=?",(turn.get('error') or '原生会话未取得明确完成回执，请先核对。',turn.get('output',''),jid))

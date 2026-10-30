@@ -5,23 +5,28 @@ import ChatPage,{type ChatCommand} from '../../components/ChatPage';
 import {type SkillItem} from '../../lib/api';
 import {generateSessionTitle,type ChatSession} from '../../lib/store';
 import type {Artifact as ChatArtifact} from '../../lib/artifacts';
+import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
 import {useWorkbench,useResource,useDraft,useAsyncAction,array,record,string,workPath,type DraftAttachment,type JsonRecord,fileDownload,type Artifact} from '@workbench/core';
 import {Notice} from './common';
 import {IconSkills} from './components/icons';
 
-export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
-export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string}
+export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;display_name?:string;origin?:string;source_revision?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
+export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
 export interface NativeSession extends ChatSession {profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[]}
 export interface NativeSessions {sessions:NativeSession[]}
 export function nativeSkillChoices(skills:NativeSkill[],versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
- return skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
+ const choices=skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
   const id=skill.skill_id||skill.id||skill.name,workflow=skill.execution_kind==='workflow'||id==='content-production';
-  const label=workflow&&action.task==='poster'?'生成贴图':workflow&&action.task==='article'?'撰写文章':skill.name+' · '+action.label;
-  return {id:id+':'+action.id,label,group:skill.name,description:skill.reason||skill.description,disabled:skill.available===false,selection:{skill_id:id,version:skill.version,action_id:action.id,label,...(action.path?{path:action.path}:{}),task:action.task,requires_plan:action.requires_plan??['poster','article','image','change'].includes(action.task||action.format||'')}};
+  const position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0];
+  const native=skill.origin==='easel',label=native?(position?.item.label||skill.display_name||skill.name):workflow&&action.task==='poster'?'生成贴图':workflow&&action.task==='article'?'撰写文章':(skill.display_name||skill.name)+' · '+action.label;
+  const fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!;
+  return {id:id+':'+action.id,label,...(native?{prompt:`帮我做「${label}」`}:{}),tab:native?(position?.tab.id||fallback.id):'extensions',tabLabel:native?(position?.tab.label||fallback.label):'工作台扩展',group:native?(position?.group.label||'其他内置技能'):(skill.display_name||skill.name),status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description||skill.reason,disabled:skill.available===false,selection:{skill_id:id,version:skill.version,action_id:action.id,label,...(native?{source_revision:skill.source_revision}:{}),...(action.path?{path:action.path}:{}),task:action.task,requires_plan:action.requires_plan??['poster','article','image','change'].includes(action.task||action.format||'')}};
  }));
+ const order=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.map(item=>item.skill))).filter(Boolean);
+ return choices.sort((a,b)=>{const ai=order.indexOf(a.selection.skill_id),bi=order.indexOf(b.selection.skill_id);return (a.tab==='extensions'?10000:ai<0?9999:ai)-(b.tab==='extensions'?10000:bi<0?9999:bi)});
 }
 export function nativeSkillDestination(selection:NativeSelection,profileId:string,versionContext=false):string|null{
- if(['poster','article','discuss'].includes(selection.task||selection.action_id)||(versionContext&&['change','review'].includes(selection.task||selection.action_id)))return null;
+ if(['poster','article','discuss','native'].includes(selection.task||selection.action_id)||(versionContext&&['change','review'].includes(selection.task||selection.action_id)))return null;
  if(!selection.path)return '/toolbox?section=skills&item='+encodeURIComponent(selection.skill_id);
  const url=new URL(selection.path,'https://workbench.invalid');
  if(url.origin!=='https://workbench.invalid')return '/toolbox?section=skills';
@@ -34,7 +39,7 @@ export function nativeSkillInputTarget(selection:NativeSelection):{key:string;fi
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]{
  return array<Artifact>(record(message).output_files).filter(file=>!!file.id&&!!file.mime&&!!file.name).flatMap(file=>{
-  const kind:ChatArtifact['kind']|null=file.mime.startsWith('image/')?'image':file.mime.startsWith('video/')?'video':file.mime.startsWith('audio/')?'audio':file.mime==='application/pdf'?'pdf':file.mime==='text/html'?'html':file.mime.startsWith('text/')?'file':null;
+  const kind:ChatArtifact['kind']|null=file.mime.startsWith('image/')?'image':file.mime.startsWith('video/')?'video':file.mime.startsWith('audio/')?'audio':file.mime==='application/pdf'?'pdf':file.mime==='text/html'?'html':'file';
   return kind?[{url:'/api/files/'+encodeURIComponent(file.id),downloadUrl:fileDownload(file),name:file.name,kind}]:[];
  });
 }
@@ -63,7 +68,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const submit=()=>void action.run(async()=>{
   if(!session)throw Error('会话尚未读回，输入已保留');if(runtime.state.getState().running||session.pendingTurnId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
-  const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
+  const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.source_revision?{skill_revision:draft.command.source_revision}:{}),...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
   if(draft.command?.requires_plan){const result=await vm.api.post<JsonRecord>('/api/chat/plan',{message:turn.message,sessionId:id,turnId:turn.turnId,attachments:turn.attachments,context},vm.config?.csrf||'');if(!result.plan_token)throw Error('制作方案未返回冻结凭据，输入仍保留');runtime.connect({...turn,context:{...context,plan_token:result.plan_token}},profileId);}
   else runtime.connect(turn,profileId);
@@ -79,7 +84,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   const context:JsonRecord={...record(original.context),skill_id:string(refs[0]!.id),version:refs[0]!.version};delete context.plan_token;
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:message.content,attachments:message.attachments||[],context,inputs:{text:draft.text,files:draft.files,command:draft.command},state:'connecting'};
   // Retry is an explicit new conversational turn, not an implicit production action.
-  if(!['discuss',''].includes(string(turn.context.action_id)))throw Error('请在成品页恢复原任务或显式选择制作技能');
+  if(!['discuss','','native'].includes(string(turn.context.action_id)))throw Error('请在成品页恢复原任务或显式选择制作技能');
   turn.inputs={text:'',files:[]};runtime.connect(turn,profileId);
  });
  const activeTurn=draft.pending?.turnId||session?.pendingTurnId,shown:ChatSession=session?{...session,messages:(session.messages||[]).filter(message=>!((running||!!session.pendingTurnId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)))}:{id,title:'对话',messages:[],created:0};

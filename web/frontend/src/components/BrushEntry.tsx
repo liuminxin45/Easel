@@ -5,7 +5,7 @@ import type { CapabilityItem } from '../lib/capabilityMenu';
 const DOT: Record<string, string> = { done: 's-done', ready: 's-ready', need: 's-need', incoming: 's-incoming' };
 
 /** 笔入口：点开「能做的都在这」→ 选一项自动填进输入框。纯前端，选中即预填，不自动发送。 */
-export interface BrushChoice {id:string;label:string;description?:string;disabled?:boolean;group?:string}
+export interface BrushChoice {id:string;label:string;description?:string;disabled?:boolean;group?:string;tab?:string;tabLabel?:string;status?:string}
 export default function BrushEntry({ onPick, items, onSelect, registerLayer, disabled=false }: { onPick: (text: string) => void;
   items?:BrushChoice[];onSelect?:(id:string)=>void;registerLayer?:(close:()=>void)=>(()=>void)|undefined;disabled?:boolean }) {
   const [open, setOpen] = useState(false);
@@ -13,7 +13,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
   const [q, setQ] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const menu = useMemo(()=>items ? {tabs:[{id:'available',label:'技能与能力',groups:Array.from(new Set(items.map(item=>item.group||'已接入能力'))).map(label=>({label,items:items.filter(item=>(item.group||'已接入能力')===label).map(item=>({id:item.id,label:item.label,desc:item.description,skill:item.id,status:item.disabled?'need':'ready'}))}))}]} : CAPABILITY_MENU,[items]);
+  const menu = useMemo(()=>items ? {tabs:Array.from(new Set(items.map(item=>item.tab||'available'))).map(id=>({id,label:items.find(item=>(item.tab||'available')===id)?.tabLabel||'技能与能力',groups:Array.from(new Set(items.filter(item=>(item.tab||'available')===id).map(item=>item.group||'已接入能力'))).map(label=>({label,items:items.filter(item=>(item.tab||'available')===id&&(item.group||'已接入能力')===label).map(item=>({id:item.id,label:item.label,desc:item.description,skill:item.id,status:item.status||(item.disabled?'need':'ready')}))}))}))} : CAPABILITY_MENU,[items]);
 
   useEffect(()=>{if(!open)return;const close=()=>{setOpen(false);wrapRef.current?.querySelector<HTMLButtonElement>('.brush-btn')?.focus()};const release=registerLayer?.(close);const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();close()}};document.addEventListener('keydown',key);return()=>{release?.();document.removeEventListener('keydown',key)}},[open,registerLayer]);
   useEffect(()=>{if(disabled)setOpen(false)},[disabled]);
@@ -32,7 +32,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
     () => menu.tabs.flatMap((t) => t.groups.flatMap((g) => g.items)),
     [menu],
   );
-  const pipeline = useMemo(() => all.find((x) => x.status === 'incoming'), [all]);
+  const pipeline = useMemo(() => all.find((x) => x.status === 'incoming') || (items?.some(item=>item.tab==='make') ? CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items)).find(item=>item.status==='incoming') : undefined), [all,items]);
 
   const ql = q.trim().toLowerCase();
   const hit = (it: CapabilityItem) => !ql || `${it.label}${it.desc || ''}${it.skill || ''}`.toLowerCase().includes(ql);
@@ -88,7 +88,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
             {pipeline && hit(pipeline) && (
               <div className="brush-grp">
                 <div className="brush-grp-name">整片级 · 走独立管线</div>
-                <button type="button" className="brush-item brush-item-pipe" onClick={() => pick(pipeline, true)}>
+                <button type="button" className="brush-item brush-item-pipe" disabled={disabled||!!items&&(!pipeline.id||!items.some(item=>item.id===pipeline.id&&!item.disabled))} title={items?'上游标记为接入中，尚无可执行技能入口':undefined} onClick={() => pick(pipeline, true)}>
                   <span className={`brush-dot ${DOT[pipeline.status || 'ready'] || 's-ready'}`} />
                   <span className="brush-il">{pipeline.label}</span>
                   <span className="brush-chip-pipe">管线</span>

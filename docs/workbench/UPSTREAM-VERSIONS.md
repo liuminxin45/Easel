@@ -31,6 +31,8 @@
 
 ## 以后跟进官方
 
+使用项目维护技能 [easel-upstream-sync](../../.agents/skills/easel-upstream-sync/SKILL.md)：`git pull --rebase` 更新 → 解决冲突并验证 → mark 准确基线。它独立于内容制作技能目录；只创建技能不会执行同步或部署。
+
 先获取并对比，保留已集成基线不动：
 
 ```powershell
@@ -42,9 +44,9 @@ git diff --stat easel-upstream/2026-10-30-5a597e5 upstream/main
 
 以上标签是本次基线。以后从历史索引选取当时已集成的最新标签，并把新的官方完整 SHA 固定到同步分支；不要在实现期间反复跟随移动中的 `main`。
 
-1. 在干净工作区、总调度确认文件归属后，从当前私有集成分支建立 `codex/easel-sync-<日期>`，三方合并准确的官方提交，保留私有历史。不能用重置或覆盖方式替换本工程。
+1. 在干净工作区、总调度确认文件归属后，从当前私有 HEAD 建立新的 `codex/easel-sync-日期时间`，保留旧分支及旧 SHA；执行 `git -c rebase.updateRefs=false pull --rebase --no-autostash upstream main`。新同步分支承接私有改动，旧分支不重写；不能用重置或覆盖方式替换本工程。准确官方目标取本次 fetch 成功后的 `FETCH_HEAD^{commit}`。
 2. 按适配点清单审查原组件与公共服务的变化，再修正私有适配器。通用修复与私有业务分别提交；共通内容继续直接复用原实现。
-3. 确认合并结果后，在同一候选中同步 `upstream-base.json` 和 `scripts/workbench_release.py` 当前的基线 SHA 字段；后者现有 `easel_base`、`upstream_commit` 两处，不能漏改。运行基座审计、相关架构/业务测试，以及原 Easel 与工作台的独立检查和构建。
+3. 确认 rebase 结果后，在同一候选中同步 `upstream-base.json` 和 `scripts/workbench_release.py` 当前的基线 SHA 字段；后者现有 `easel_base`、`upstream_commit` 两处，不能漏改。运行基座审计、相关架构/业务测试，以及原 Easel 与工作台的独立检查和构建。
 4. 只有验收通过才把新基线作为正式交付。新增日期与 SHA 命名的历史快照，记录旧/新官方 SHA、tree、核验时间、fork 提交、发布配对、适配差异和证据；更新此索引，不重写旧快照。当前基线指针及技能声明均属于构建输入，变化后须重新冻结和验收配对版本。
 5. 为新的官方 SHA 创建独立 annotated tag，禁止强制移动旧标签。检查 `origin` 为自有 fork，使用完整 refspec 只推本次分支和标签，不用 `--tags`，不向 `upstream` 推送。本分支包含私有业务，未来向官方贡献时另行整理通用补丁。
 

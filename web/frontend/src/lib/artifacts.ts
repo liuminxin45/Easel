@@ -1,7 +1,8 @@
 export interface Artifact {
   url: string;
   name: string;
-  kind: 'image' | 'html' | 'video' | 'audio' | 'pdf';
+  downloadUrl?: string;
+  kind: 'image' | 'html' | 'video' | 'audio' | 'pdf' | 'file';
 }
 
 function hasUnsafeCharacters(value: string): boolean {

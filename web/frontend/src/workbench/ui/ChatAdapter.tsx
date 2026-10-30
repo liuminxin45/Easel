@@ -43,8 +43,8 @@ export function ChatAdapter({id,title='新对话',work,text,files,onText,onFiles
   composer={{text,attachments:files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:onText,onUpload:async incoming=>onFiles(await vm.service.attach(incoming,files)),
    onRemoveAttachment:id=>onFiles(files.filter(file=>file.id!==id)),commands:choices,selectedCommand:selectedView,
    onCommandSelect:(id,rest)=>onCommand?.(choices.find(c=>c.id===id)?.selection||null,rest),busy,disabled,canSend,label,sendLabel,status,
-   placeholder:'说说你想做什么，输入 / 或点 + 选择技能，可粘贴或拖入素材…',registerLayer:vm.navigation.registerLayer}}
-  emptyState={{brand:'创作工作台',icon:<IconSkills size={32}/>,title:work?'继续这份作品':'想创作点什么？',subtitle:work?'材料保留在作品草稿中。继续讨论，或选择当前格式的制作技能；其它格式请新建对话。':'先聊目标，或用 / 和 + 选择生成贴图、撰写文章。制作前会核对方案。',suggestions:[]}}
+   placeholder:'说说你想做什么，输入 / 或点画笔选择技能，可粘贴或拖入素材…',registerLayer:vm.navigation.registerLayer}}
+  emptyState={{brand:'创作工作台',icon:<IconSkills size={32}/>,title:work?'继续这份作品':'想创作点什么？',subtitle:work?'材料保留在作品草稿中。继续讨论，或选择当前格式的制作技能；其它格式请新建对话。':'先聊目标，或用 / 或画笔选择生成贴图、撰写文章。发送后开始制作。',suggestions:[]}}
   notice={notice} footer={footer}
   renderMessageExtra={(_,index)=>{const event=projection.events.get(index);if(!event)return null;
    const issue=record(work?.production_issue),error=(issue.job_id===event.id?string(issue.message):'')||string(event.error),pending=['queued','running','dispatching'].includes(event.status),technical=/Traceback|Exception|RuntimeError|FileNotFound|ModuleNotFound|rollout|thread\/|RPC/i.test(error);

@@ -1,14 +1,15 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import MessageBubble from './MessageBubble';
 import QuestionCards from './QuestionCards';
 import type {QuestionServices} from './QuestionCards';
 import BrushEntry from './BrushEntry';
+import type {Artifact} from '../lib/artifacts';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
 import { IconArrowUp, IconStop, IconPlus, IconFile } from './icons';
 
-export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; }
+export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; group?:string; }
 export interface ChatComposerBindings {
   text: string;
   attachments: UploadedFile[];
@@ -50,6 +51,7 @@ interface ChatPageProps {
   renderMessageExtra?: (message: ChatMessage, index: number) => ReactNode;
   linkifyArtifactPaths?: boolean;
   questionServices?:QuestionServices;
+  messageArtifacts?:(message:ChatMessage)=>Artifact[];
 }
 
 // 空态推荐（贴合 Easel 社媒创作场景）
@@ -67,7 +69,7 @@ function greeting(): string {
 }
 
 export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered, onQuestionClosed,
-  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices }: ChatPageProps) {
+  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices,messageArtifacts }: ChatPageProps) {
   const [localInput, setLocalInput] = useState('');
   const [localAttachments, setLocalAttachments] = useState<UploadedFile[]>([]);
   const input = composer?.text ?? localInput;
@@ -167,13 +169,13 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     if (!isEmpty) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session.messages, stream?.content, stream?.thinking, stream?.activity, stream?.stillWorking, isEmpty]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
       el.style.height = Math.min(el.scrollHeight, 180) + 'px';
     }
-  }, [input]);
+  }, [input, isEmpty]);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -221,8 +223,8 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
         </div>
       )}
       <div className="composer-top">
-        {composer ? null : apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
-          : <BrushEntry onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
+        {apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
+          : <BrushEntry items={composer?.commands} onSelect={id=>{const choice=composer?.commands?.find(item=>item.id===id);pickCommand(id);if(!input.trim()&&choice)setInput(`帮我${choice.label}`);requestAnimationFrame(()=>textareaRef.current?.focus())}} registerLayer={composer?.registerLayer} disabled={busy||composer?.disabled} onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
         <textarea
           ref={textareaRef}
           className="chat-input"
@@ -242,12 +244,12 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       <input ref={fileInputRef} type="file" multiple hidden
         onChange={(e) => { if (e.target.files) doUpload(e.target.files); e.target.value = ''; }} />
       <div className="composer-bar">
-        <button className="composer-attach-btn" onClick={() => composer?.commands ? setCommandMenu(value => !value) : fileInputRef.current?.click()}
-          aria-label={composer?.commands ? '添加素材或选择技能' : undefined} aria-expanded={composer?.commands ? showCommands : undefined}
-          disabled={busy || uploading || composer?.disabled} title={composer ? '添加素材或选择技能' : `添加素材（图片/文档）；超过 ${maxMb}MB 的大文件将自动存为本地素材（不走上传）`}>
+        <button className="composer-attach-btn" onClick={() => fileInputRef.current?.click()}
+          aria-label="添加素材"
+          disabled={busy || uploading || composer?.disabled} title={composer ? '添加素材（图片/文档）' : `添加素材（图片/文档）；超过 ${maxMb}MB 的大文件将自动存为本地素材（不走上传）`}>
           <IconPlus size={15} /> {uploading ? '上传中…' : '素材'}
         </button>
-        <span className="composer-hint">{composer?.status || (isStreaming ? '生成中…' : 'Enter 发送 · Shift+Enter 换行')}</span>
+        <span className="composer-hint">{isStreaming ? '生成中…' : 'Enter 发送 · Shift+Enter 换行'}</span>
         {isStreaming ? (
           <button className="send-btn" onClick={onStop} title="停止生成"><IconStop size={15} /></button>
         ) : (
@@ -255,6 +257,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
             title={composer?.sendLabel || '发送'} aria-label={composer?.sendLabel || '发送'}><IconArrowUp size={17} /></button>
         )}
       </div>
+      {composer?.status && <div className="composer-hint" role="status">{composer.status}</div>}
       {uploadError && <p className="notice-error" role="alert">{uploadError}</p>}
       {showCommands && <div className="chat-command-menu" role="menu" aria-label="选择技能">
         <button type="button" role="menuitem" onClick={() => { setCommandMenu(false); fileInputRef.current?.click(); }}>上传素材</button>
@@ -347,6 +350,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
                 stillWorking={live ? stream!.stillWorking : ''}
                 actions={actions}
                 linkifyArtifactPaths={linkifyArtifactPaths}
+                artifacts={messageArtifacts?.(msg)}
               />
               {renderMessageExtra?.(msg, i)}
               {!live && msg.questions && <QuestionCards questions={msg.questions} onDone={onQuestionAnswered} onClosed={onQuestionClosed} services={questionServices} />}

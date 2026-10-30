@@ -6,7 +6,7 @@ import {test} from 'node:test';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const root=new URL('../../web/frontend/src/',import.meta.url);
 const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
-const react={useState:value=>[value,()=>{}],useRef:value=>({current:value}),useEffect:fn=>{fn()},useMemo:fn=>fn()};
+const react={useState:value=>[value,()=>{}],useRef:value=>({current:value}),useLayoutEffect:()=>{},useEffect:fn=>{fn()},useMemo:fn=>fn()};
 function load(file,imports={},globals={}){
  const source=readFileSync(new URL(file,root),'utf8'),exports={};
  const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;

@@ -5,6 +5,7 @@ import { linkifyOutputs, externalizeMediaLinks } from '../lib/linkifyOutputs';
 import { IconCopy, IconCheck, IconRetry } from './icons';
 import { extractArtifacts } from '../lib/artifacts';
 import ArtifactGallery from './ArtifactGallery';
+import type {Artifact} from '../lib/artifacts';
 
 export interface BubbleActions {
   onCopy: () => void;
@@ -20,6 +21,7 @@ interface MessageBubbleProps {
   stillWorking?: string;   // 防呆心跳提示（未卡住）；仅流式时的独立提示，不替代思考/活动
   actions?: BubbleActions;
   linkifyArtifactPaths?: boolean;
+  artifacts?:Artifact[];
 }
 
 function ActionBar({ actions }: { actions: BubbleActions }) {
@@ -41,7 +43,7 @@ function ActionBar({ actions }: { actions: BubbleActions }) {
   );
 }
 
-export default function MessageBubble({ message, isStreaming, thinking, activity, stillWorking, actions, linkifyArtifactPaths = true }: MessageBubbleProps) {
+export default function MessageBubble({ message, isStreaming, thinking, activity, stillWorking, actions, linkifyArtifactPaths = true,artifacts }: MessageBubbleProps) {
   const rendered = useMemo(() => {
     if (message.role === 'user') return { html: '', artifacts: [], archives: [] };
     // 助手正文里裸露的产物路径先转成前端可用链接（文件直开、图片内联、目录跳内容库）。
@@ -121,8 +123,8 @@ export default function MessageBubble({ message, isStreaming, thinking, activity
         <div className="message-bubble assistant">
           {livePanel}
           {message.content && <div dangerouslySetInnerHTML={{ __html: rendered.html }} />}
-          {!isStreaming && (rendered.artifacts.length > 0 || rendered.archives.length > 0) && (
-            <ArtifactGallery artifacts={rendered.artifacts} archives={rendered.archives} />
+          {!isStreaming && ((artifacts||rendered.artifacts).length > 0 || rendered.archives.length > 0) && (
+            <ArtifactGallery artifacts={artifacts||rendered.artifacts} archives={rendered.archives} />
           )}
           {isStreaming && <span className="streaming-cursor" />}
         </div>

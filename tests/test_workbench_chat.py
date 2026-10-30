@@ -77,6 +77,87 @@ def test_session_metadata_commands_are_versioned_and_preserve_native_binding(ser
     with pytest.raises(ChatConflict):s.create_session({'id':'collision','session_id':'upstream-existing'})
 
 
+@pytest.mark.parametrize('decision', ['允许本次', '拒绝'])
+def test_question_official_ack_terminal_event_and_restart_never_regrant(service, decision):
+    async def scenario():
+        s,a=service
+        class QuestionAdapter:
+            async def run(self,request,emit,ask,bind):
+                bind('native-permission');request.on_native_turn('native-permission','native-permission-turn')
+                self.result=await ask([{'questionId':'permission','options':[{'label':'允许本次'},{'label':'拒绝'}]}])
+        adapter=QuestionAdapter()
+        original=harnesses.adapter
+        harnesses.adapter=lambda name:adapter
+        try:
+            turn=await s.submit(value(),snapshot=snapshot(s),actual_prompt='Frozen')
+            while not s.questions('workbench-session')['questions']:await asyncio.sleep(.001)
+            q=s.questions('workbench-session')['questions'][0]
+            assert s.question_status(q['id'],'workbench-session',turn['id'])=={'status':'pending'}
+            with pytest.raises(ChatConflict):s.answer(q['id'],{'permission':[decision]},'workbench-session','different-turn')
+            from easel_workbench.chat_api import handle
+            response=await handle(s,None,'/api/chat/question/answer',SimpleNamespace(method='POST'),
+                {'questionId':q['id'],'sessionId':'workbench-session','turnId':turn['id'],'answers':{'permission':[decision]}})
+            ack=json.loads(response.body)
+            assert response.status_code==200 and ack['ok'] and ack['answered'] and ack['status']=='answered'
+            again=s.answer(q['id'],{'permission':[decision]},'workbench-session',turn['id'])
+            assert not again['ok'] and again['status']=='answered'
+            await completed(s,turn['id'])
+            assert adapter.result=={'permission':[decision]}
+            closed=[e for e in s.read_events(turn['id']) if e['event']=='question_closed']
+            assert len(closed)==1 and json.loads(closed[0]['data'])=={'id':q['id'],'status':'answered'}
+            recovered=ChatService(s.box)
+            assert recovered.question_status(q['id'],'workbench-session',turn['id'])=={'status':'answered'}
+            assert not recovered.answer(q['id'],{'permission':[decision]},'workbench-session',turn['id'])['ok']
+            assert not s.questions('workbench-session')['questions']
+        finally:
+            harnesses.adapter=original
+            await s.close()
+    asyncio.run(scenario())
+
+
+def test_interrupted_pending_question_expires_without_creating_a_new_turn(service):
+    async def scenario():
+        s,a=service;a.question=True
+        turn=await s.submit(value(),snapshot=snapshot(s),actual_prompt='Frozen')
+        while not s.questions('workbench-session')['questions']:await asyncio.sleep(.001)
+        q=s.questions('workbench-session')['questions'][0]
+        # Another process cannot resume an in-memory native permission future.
+        recovered=ChatService(s.box)
+        assert recovered.question_status(q['id'],'workbench-session',turn['id'])=={'status':'expired'}
+        assert not recovered.answer(q['id'],{'permission':['允许本次']},'workbench-session',turn['id'])['ok']
+        await s.close()
+        assert s.question_status(q['id'])['status']=='expired'
+        assert len(a.requests)==1
+        assert any(e['event']=='question_closed' for e in s.read_events(turn['id']))
+    asyncio.run(scenario())
+
+
+def test_first_accepted_title_manual_rename_and_legacy_repair(service):
+    async def scenario():
+        s,a=service
+        first=await s.submit({**value(),'initial_title':'首条消息提取标题'},snapshot=snapshot(s),actual_prompt='Frozen')
+        await completed(s,first['id'])
+        assert s.history('workbench-session')['session']['title']=='首条消息提取标题'
+        second=await s.submit({**value('second'),'initial_title':'不能覆盖第一条'},snapshot=snapshot(s),actual_prompt='Second')
+        await completed(s,second['id'])
+        assert s.history('workbench-session')['session']['title']=='首条消息提取标题'
+        s.create_session({'id':'legacy-create','session_id':'legacy'})
+        old=await s.submit({**value('legacy-turn'),'sessionId':'legacy'},snapshot=snapshot(s),actual_prompt='Old')
+        await completed(s,old['id'])
+        session=s.history('legacy')['session']
+        repaired=s._command('auto-title',{'id':'repair','expected_revision':session['revision'],'title':'历史首条标题'},'legacy')['session']
+        assert repaired['title']=='历史首条标题'
+        s.create_session({'id':'manual-create','session_id':'manual'})
+        s.rename_session('manual',{'id':'manual-name','expected_revision':1,'title':'新对话'})
+        manual=await s.submit({**value('manual-turn'),'sessionId':'manual','initial_title':'不能覆盖手动标题'},snapshot=snapshot(s),actual_prompt='Manual')
+        await completed(s,manual['id'])
+        session=s.history('manual')['session']
+        assert session['title']=='新对话' and session['title_source']=='manual'
+        with pytest.raises(ChatConflict):s._command('auto-title',{'id':'bad-repair','expected_revision':session['revision'],'title':'替换'},'manual')
+        await s.close()
+    asyncio.run(scenario())
+
+
 def test_actual_upstream_request_has_root_session_frozen_input_and_receipts(service):
     async def scenario():
         s,a=service;started=[];finished=[]

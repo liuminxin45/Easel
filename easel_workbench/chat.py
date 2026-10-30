@@ -141,6 +141,7 @@ class ChatService:
                 if persona is not None:
                     text(persona, 200, True)
                 session = {'id': session_id, 'title': text(value.get('title', '新对话'), 200, True),
+                           'title_source': 'manual' if value.get('title') not in (None, '新对话', 'New Chat') else 'default',
                            'profile_id': profile_id, 'persona': persona, 'runtime': 'codex',
                            'created': int(time.time() * 1000), 'updated': now(), 'sessionKey': session_id,
                            'revision': 1, 'archived': False, 'pendingTurnId': None}
@@ -153,6 +154,20 @@ class ChatService:
                     raise ChatConflict('已有对话保持原画像；切换画像请新建对话')
                 if action == 'rename':
                     session['title'] = text(value.get('title'), 200, True)
+                    session['title_source'] = 'manual'
+                elif action == 'auto-title':
+                    if session.get('title_source') == 'manual' or session['title'] not in ('新对话', 'New Chat'):
+                        raise ChatConflict('保留已经命名的对话')
+                    # Old clients did not record title provenance. Their operation receipts
+                    # distinguish an untouched placeholder from an explicit manual rename.
+                    operations = c.execute('SELECT result FROM easel_chat_operations').fetchall()
+                    for row in operations:
+                        old = json.loads(row[0]).get('session', {})
+                        if old.get('id') == session_id and old.get('revision', 1) > 1:
+                            raise ChatConflict('历史对话有手动操作，保留原名')
+                    if not c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?', (session_id,)).fetchone():
+                        raise ChatConflict('空对话不自动命名')
+                    session.update(title=text(value.get('title'), 200, True), title_source='automatic')
                 else:
                     if session.get('pendingTurnId'):
                         raise ChatConflict('这份对话尚有运行或待核对回合，不能归档')
@@ -186,6 +201,8 @@ class ChatService:
         if turn['status'] not in TERMINAL and turn_id not in self._tasks:
             turn.update(status='unknown', delivery_state='unknown', recovery='核对原生会话；不会自动重发。')
         if not private:
+            turn['skill_refs'] = [{'id': skill['id'], 'version': skill['version']}
+                                  for skill in turn.get('snapshot', {}).get('skills', [])]
             for field in ('actual_prompt', 'frozen_instructions', 'snapshot', 'request_signature'):
                 turn.pop(field, None)
         return turn
@@ -280,6 +297,15 @@ class ChatService:
                 raise ChatConflict('此对话已经归档或仍有回合运行／待核对；没有重复发送')
             if frozen['profile']['id'] != session['profile_id'] or context.get('profile_id', session['profile_id']) != session['profile_id']:
                 raise ChatConflict('对话、技能和作品必须使用同一画像')
+            initial_title = value.get('initial_title')
+            if initial_title is not None:
+                text(initial_title, 200, True)
+                first = not c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?', (session_id,)).fetchone()
+                legacy_manual = 'title_source' not in session and any(
+                    (old := json.loads(row[0]).get('session', {})).get('id') == session_id and old.get('revision', 1) > 1
+                    for row in c.execute('SELECT result FROM easel_chat_operations'))
+                if first and not legacy_manual and session.get('title_source', 'default') == 'default' and session['title'] in ('新对话', 'New Chat'):
+                    session.update(title=initial_title, title_source='automatic')
             turn = {'id': turn_id, 'operation_id': operation, 'session_id': session_id, 'runtime': 'codex',
                     'message': message, 'context': copy.deepcopy(context), 'snapshot': frozen,
                     'actual_prompt': actual_prompt, 'actual_prompt_sha256': hashlib.sha256(actual_prompt.encode()).hexdigest(),
@@ -351,13 +377,44 @@ class ChatService:
     def questions(self, session_id):
         with self.store.connect() as c:
             self._session(c, session_id)
-        return {'questions': [{k: copy.deepcopy(v) for k, v in record.items() if k != 'future'}
-                              for record in self._questions.values() if record['session_id'] == session_id]}
+        return {'questions': [{k: copy.deepcopy(v) for k, v in record.items() if k not in ('future', 'close')}
+                              for record in self._questions.values() if record['session_id'] == session_id and not record['future'].done()]}
 
-    def answer(self, question_id, answers, session_id):
+    def question_status(self, question_id, session_id=None, turn_id=None):
+        identity(question_id)
+        record = self._questions.get(question_id)
+        if record:
+            if session_id and record['session_id'] != session_id or turn_id and record['turn_id'] != turn_id:
+                raise ChatConflict('问题与会话或回合不一致')
+            status = record['status']
+            if status == 'pending' and record['future'].done():
+                status = 'expired'
+            return {'status': status}
+        # Terminal states live with the existing turn receipt, not a second queue.
+        filters, parameters = [], []
+        if session_id:
+            filters.append('session_id=?'); parameters.append(session_id)
+        if turn_id:
+            filters.append('id=?'); parameters.append(turn_id)
+        with self.store.connect() as c:
+            rows = c.execute('SELECT document FROM easel_chat_turns' + (' WHERE ' + ' AND '.join(filters) if filters else ''), parameters).fetchall()
+        for row in rows:
+            turn = json.loads(row[0])
+            for question in turn.get('questions', []):
+                if question['id'] == question_id:
+                    if turn_id and turn['id'] != turn_id:
+                        raise ChatConflict('问题与回合不一致')
+                    status = question['status']
+                    return {'status': 'expired' if status == 'pending' else status}
+        return {'status': 'closed'}
+
+    def answer(self, question_id, answers, session_id, turn_id=None):
         record = self._questions.get(identity(question_id))
-        if not record or record['session_id'] != session_id or record['future'].done():
+        if record and (record['session_id'] != session_id or turn_id and record['turn_id'] != turn_id):
             raise ChatConflict('此问题不属于当前运行回合，未提交回答')
+        if not record or record['future'].done():
+            status = self.question_status(question_id, session_id, turn_id)['status']
+            return {'ok': False, 'answered': False, 'expired': True, 'status': status, 'error': '此问题已处理或关闭'}
         if not isinstance(answers, dict):
             raise ValueError('回答格式无效')
         ids = {q['questionId'] for q in record['questions']}
@@ -371,7 +428,8 @@ class ChatService:
             if key == 'permission' and items not in (['允许本次'], ['拒绝']):
                 raise ValueError('请选择本次允许或拒绝')
         record['future'].set_result(copy.deepcopy(answers))
-        return {'answered': True, 'id': question_id}
+        record['close']('answered')
+        return {'ok': True, 'answered': True, 'id': question_id, 'status': 'answered'}
 
     async def stop(self, session_id, turn_id=None):
         with self.store.connect() as c:
@@ -486,12 +544,25 @@ class ChatService:
             identifier = 'harness_' + uuid.uuid4().hex
             future = asyncio.get_running_loop().create_future()
             safe_questions = json.loads(scrub(json.dumps(questions, ensure_ascii=False)))
-            self._questions[identifier] = {'id': identifier, 'session_id': turn['session_id'],
-                'turn_id': turn_id, 'status': 'pending', 'questions': safe_questions, 'future': future}
+            question = {'id': identifier, 'session_id': turn['session_id'], 'turn_id': turn_id,
+                        'status': 'pending', 'questions': safe_questions,
+                        'expiresAtMs': int((time.time() + self.timeout) * 1000)}
+            turn.setdefault('questions', []).append(question)
+            def close_question(status):
+                if question['status'] != 'pending':
+                    return
+                question['status'] = status
+                record['status'] = status
+                emit('question_closed', json.dumps({'id': identifier, 'status': status}, ensure_ascii=False))
+                persist()
+            record = {**question, 'future': future, 'close': close_question}
+            self._questions[identifier] = record
             try:
-                emit('question', json.dumps({'id': identifier, 'questions': safe_questions}, ensure_ascii=False))
+                emit('question', json.dumps(question, ensure_ascii=False))
+                persist()
                 return await asyncio.wait_for(future, self.timeout)
             finally:
+                close_question('expired' if turn_id not in self._stop_requested else 'stopped')
                 self._questions.pop(identifier, None)
 
         try:

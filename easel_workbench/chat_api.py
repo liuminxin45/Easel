@@ -80,6 +80,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None):
                 return response(service.create_session(value))
             sid=identity(value.get('session_id') or value.get('sessionId'))
             if action=='rename':return response(service.rename_session(sid,value))
+            if action=='auto-title':return response(service._command(action,value,sid))
             if action=='archive':return response(service.archive_session(sid,value))
             raise ValueError('不支持的对话操作')
         match=re.fullmatch(r'/api/chat/sessions/([A-Za-z0-9_.-]+)',path)
@@ -114,13 +115,12 @@ async def handle(service,business,path,request,value=None,*,authenticated=None):
         if path=='/api/chat/question/answer' and method=='POST':
             qid=identity(value.get('id') or value.get('questionId'))
             record=service._questions.get(qid)
-            if not record:raise ChatConflict('此问题已关闭，请核对原回合')
-            sid=value.get('sessionId') or value.get('session_id') or record['session_id']
-            return response(service.answer(qid,value.get('answers'),sid))
+            sid=value.get('sessionId') or value.get('session_id') or (record or {}).get('session_id')
+            return response(service.answer(qid,value.get('answers'),sid,value.get('turnId')))
         if path=='/api/chat/question/status' and method=='POST':
             ids=value.get('questionIds',[])
             if not isinstance(ids,list) or len(ids)>100:raise ValueError('问题列表无效')
-            return response({'questions':{identity(qid):{'status':'pending' if qid in service._questions else 'closed'} for qid in ids}})
+            return response({'questions':{identity(qid):service.question_status(qid,value.get('sessionId'),value.get('turnId')) for qid in ids}})
         return response({'error':'对话接口或方法不存在'},404)
     except (ChatConflict,PlanConflict) as exc:return response({'error':str(exc)},409)
     except (ValueError,TypeError,KeyError) as exc:return response({'error':str(exc)},400)

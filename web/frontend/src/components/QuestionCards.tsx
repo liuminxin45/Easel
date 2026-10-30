@@ -44,7 +44,7 @@ function QuestionCard({ question, onAnswered, onClosed,services }: { question: C
           setClosed(next);
           closedCallback.current?.(next);
         }
-      });
+      }).catch(() => { /* A disconnected status probe cannot close or replay a question. */ });
     };
     tick();
     const timer = setInterval(tick, 5000);

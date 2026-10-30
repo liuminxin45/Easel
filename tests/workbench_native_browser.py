@@ -176,7 +176,7 @@ def direct_send_checks(browser,f,out,report,check,expect):
             assert saved['snapshot']['task']==format and turn['business_status']=='completed'
             report['simulated_executions'].append({'profile':profile,'format':format,'turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
             check(profile,format+' sends directly without a modal and exposes exact frozen parameters by the product')
-        page.get_by_role('button',name='打开本轮作品版本').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
         parameters(page.locator('.ew-work-preview'),turn);check(profile,'work product view shows the same exact version parameters')
         page.get_by_role('button',name='修改这版').click();page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
         textarea=page.get_by_role('textbox',name='对话输入');page.wait_for_function("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').command?.action_id==='change'",arg=sid)
@@ -231,7 +231,7 @@ def main():
                         assert len(f['adapter'].requests)==before_create, 'creating metadata must not start a model turn'
                         check(profile,'new chat persists server session before any send')
                         textarea.fill('IME原字');textarea.dispatch_event('keydown',{'key':'Enter','code':'Enter','isComposing':True,'keyCode':229});assert len(f['adapter'].requests)==before_create;expect(textarea).to_have_value('IME原字');check(profile,'IME confirmation does not send a native turn')
-                        page.get_by_role('button',name='添加素材或选择技能',exact=True).click();expect(page.get_by_role('menu')).to_be_visible();page.go_back();expect(page.get_by_role('menu')).not_to_be_visible();expect(textarea).to_have_value('IME原字');check(profile,'browser back closes the native plus menu and preserves input')
+                        page.get_by_role('button',name='看看能做什么',exact=True).click();expect(page.get_by_role('dialog',name='能做的都在这')).to_be_visible();page.go_back();expect(page.get_by_role('dialog',name='能做的都在这')).not_to_be_visible();expect(textarea).to_have_value('IME原字');check(profile,'browser back closes the official brush menu and preserves input')
                         textarea.fill('先讨论本次目标 '+profile);textarea.press('Enter');expect(page.get_by_text('这是隔离讨论输出，未调用模型。',exact=False)).to_be_visible(timeout=20000)
                         page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000);check(profile,'default discussion uses native session and real token events')
                         for format,label in [('poster','生成贴图'),('article','撰写文章')]:
@@ -241,7 +241,7 @@ def main():
                             if format=='poster':page.locator('input[type=file]').set_input_files({'name':'TEMP原始素材.txt','mimeType':'text/plain','buffer':b'Original TEMP evidence bytes'})
                             expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled(timeout=20000);textarea.press('Enter');expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible();expect(textarea).to_have_value('',timeout=20000)
                             history=wait_history(page,f['origin'],sid,prior,files=True);turn=history['session']['messages'][-1]
-                            expect(page.locator('.chat-turn-outputs figure')).to_have_count(2 if format=='poster' else 4,timeout=20000);expect(page.get_by_role('button',name='打开本轮作品版本').last).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
+                            expect(page.get_by_role('region',name='对话产物预览').last).to_be_visible(timeout=20000);expect(page.get_by_role('button',name='打开成品页').last).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
                             assert turn['output_files'] and turn['business_status']=='completed',turn
                             with f['box'].store.connect() as c:
                                 saved=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(turn['turnId'],)).fetchone()[0])
@@ -251,14 +251,14 @@ def main():
                             assert f['adapter'].requests[-1].native_id=='temp-native-'+sid
                             for file in turn['output_files']:assert page.request.get(f['origin']+'/api/files/'+file['id']).ok
                             if format=='poster':
-                                expect(page.locator('.chat-turn-outputs img').last).to_be_visible(timeout=20000)
-                                page.wait_for_function('()=>Array.from(document.querySelectorAll(".chat-turn-outputs img")).every(i=>i.complete&&i.naturalWidth>0)')
+                                expect(page.locator('.artifact-gallery img').last).to_be_visible(timeout=20000)
+                                page.wait_for_function('()=>Array.from(document.querySelectorAll(".artifact-gallery img")).every(i=>i.complete&&i.naturalWidth>0)')
                             check(profile,format+' slash action sends the exact frozen plan once and shows actual files in the same chat')
                             report['simulated_executions'].append({'profile':profile,'format':format,'turn_id':turn['turnId'],'work':saved['work'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
                         assert len(history['linked_works'])==2
                         page.screenshot(path=str(out/(profile+'-native-products.png')),full_page=True)
                         # Production version details must return to this same native session.
-                        page.get_by_role('button',name='打开本轮作品版本').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
+                        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
                         if mobile:page.locator('.ew-work-tabs').get_by_role('button',name='对话',exact=True).click()
                         page.get_by_text('本轮操作与技能',exact=True).click();page.get_by_label('发送方式',exact=True).select_option('feedback');feedback='只记录这版原话：背景太乱 '+profile
                         page.get_by_role('textbox',name='对话输入').fill(feedback);before_feedback=len(f['adapter'].requests)

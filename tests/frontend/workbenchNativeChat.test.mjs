@@ -13,15 +13,17 @@ const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:i
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
 function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride}={}){
  let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
- const react={useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
- const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft},invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
+ const react={useMemo:fn=>{const index=cursor++;if(!(index in hooks))hooks[index]=fn();return hooks[index]},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
+ const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
+ vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/core/react.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,Error});
- const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:resources,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
+ const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:resources,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
  const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{}};
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
- return {calls,resources,lib,vm,components,render,effects,get draft(){return draft},set draft(next){draft=next}};
+ return {calls,resources,lib,runtime,vm,components,render,effects,get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 test('native commands come from exact server releases and contextual actions route to their business page',()=>{
@@ -84,8 +86,8 @@ test('business-only skill selection preserves chat input and navigates without c
  assert.equal(f.draft.text,'  原字经验  ');assert.equal(f.draft.command,null);assert.equal(f.calls.stream.length,0);assert.match(f.calls.navigate[0],/skill_version=3/);
 });
 test('historical turn products use registered file IDs and open the exact business version',()=>{
- const f=fixture(),tree=f.lib.NativeTurnOutputs({message:{turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}}}),output=nodes(tree).find(n=>n.props?.file);
- assert.equal(output.props.file.id,'registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters)?.props.versionId,'exact-version');nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
+ const f=fixture(),message={turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}},tree=f.lib.NativeTurnOutputs({message});
+ assert.equal(f.lib.nativeArtifacts(message)[0].url,'/api/files/registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters),undefined);nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
 });
 test('production parameters load only when opened and show the exact version profile skills and frozen bytes',()=>{
  let opened=false;const paths=[],parameters={execution_prompt:{body:'  本轮冻结原字\n保留全部内容  ',sha256:'a'.repeat(64),creator_snapshot:{profile:{id:'history-profile',name:'历史作者',revision:9},skills:[{id:'content-production',name:'内容生产',version:2}],trial:true}}};
@@ -126,3 +128,41 @@ test('a legacy unknown create receipt blocks new native forwarding',async()=>{
 test('automatic legacy entry inherits the profile pin instead of the current global release',async()=>{const f=legacyEntry({saved:{material:'原字'},profilePins:{poster:{'content-production':2}}});f.open();await tick();assert.equal(f.calls.create[0][1].version,2);const explicit=legacyEntry({search:'skill=content-production&skill_version=3',profilePins:{poster:{'content-production':2}}});explicit.open();await tick();assert.equal(explicit.calls.create[0][1].version,3)});
 
 test('legacy migration preserves explicit editable recipe and product article intent without inferred controls',async()=>{const f=legacyEntry({format:'article',saved:{material:'原字',article_mode:'product',creative:{recipe:{prompt_text:'  明确可编辑要求\n保留原字  '},intent:{tone:'inferred-control'},values:{text:50}}}});f.open();await tick();const text=f.calls.create[0][2];assert.equal(f.calls.create[0][5],'product');assert.match(text,/明确可编辑要求\n保留原字  /);assert.match(text,/文章类型为产品文章/);assert.ok(!text.includes('inferred-control'));assert.ok(!text.includes('50'))});
+
+
+test('switching views retains the application stream, latest live step, and closed question set',async()=>{
+ const f=fixture({postOverride:(_path,body)=>({questions:Object.fromEntries((body.questionIds||[]).map(id=>[id,{status:'pending'}]))})});
+ f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0],owner=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ callbacks[16].onAccepted();callbacks[7]('第一步');callbacks[7]('第二步');
+ assert.equal(owner.state.getState().stream.activity,'第二步');
+ const other=f.runtime.sessionRuntime(f.vm.client,'another-session');assert.notEqual(other,owner);
+ assert.equal(f.runtime.sessionRuntime(f.vm.client,'session-one'),owner);assert.equal(f.calls.stream.length,1);
+ const q={id:'permission-one',questions:[{questionId:'permission'}]};callbacks[13](q);await tick();
+ assert.equal(owner.state.getState().stream.questions.length,1);owner.closeQuestion(q.id);
+ callbacks[13](q);await tick();assert.equal(owner.state.getState().stream.questions.length,0);
+ f.vm.client.authenticationEpoch++;f.vm.client.session.setState({config:null});
+ assert.equal(owner.state.getState().stream,undefined);assert.ok(f.draft.pending,'auth change preserves input operation identity');
+});
+
+test('lost permission acknowledgement queries status and never posts another grant',async()=>{
+ const f=fixture({postOverride:(path,body)=>{if(path.endsWith('/answer'))throw Error('lost HTTP acknowledgement');return {questions:{q:{status:'answered'}}}}});
+ const owner=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ assert.equal((await owner.answer({questionId:'q',answers:{permission:['允许本次']}})).ok,true);
+ assert.equal(f.calls.post.filter(x=>x.path.endsWith('/answer')).length,1);
+ assert.equal(f.calls.post.at(-1).path,'/api/chat/question/status');
+});
+
+test('terminal question replay is checked before it becomes an actionable card',async()=>{
+ const f=fixture({postOverride:()=>({questions:{old:{status:'answered'}}})});f.render().chat.onSend();await tick();
+ const callbacks=f.calls.stream[0];callbacks[13]({id:'old',questions:[{questionId:'permission'}]});await tick();
+ const owner=f.runtime.sessionRuntime(f.vm.client,'session-one');assert.equal(owner.state.getState().stream.questions.length,0);assert.ok(owner.closed.has('old'));
+});
+
+
+test('explicit ordinary retry pins the original skill version and preserves a later draft',async()=>{
+ const f=fixture({receipt:{turn_id:'old-turn',execution_status:'completed',delivery_state:'accepted',context:{profile_id:'oil-pig'},skill_refs:[{id:'topic-research',version:2}]}});
+ f.resources.session.messages=[{role:'user',content:'原问题',attachments:[{id:'source',name:'素材.txt',path:'source'}]},{role:'assistant',content:'原回答',turnId:'old-turn'}];
+ f.render().chat.onResend(0);await tick();assert.equal(f.calls.stream.length,1);
+ const args=f.calls.stream[0];assert.equal(args[0],'原问题');assert.equal(args[16].context.version,2);assert.equal(args[16].context.skill_id,'topic-research');
+ args[16].onAccepted();assert.equal(f.draft.text,'  原字材料\n保留  ');
+});

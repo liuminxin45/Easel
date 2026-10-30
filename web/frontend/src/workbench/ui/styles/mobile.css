@@ -82,6 +82,7 @@
   html[data-native-platform] .outputs-viewer-content table,
   html[data-native-platform] .skill-result table { display: block; max-inline-size: 100%; overflow-x: auto; }
   html[data-native-platform] .message-bubble pre,
+  html[data-native-platform] .copyable-text pre,
   html[data-native-platform] .outputs-viewer-content pre,
   html[data-native-platform] .skill-result pre { max-inline-size: 100%; overflow-x: auto; }
   html[data-native-platform] .artifact-header,

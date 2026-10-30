@@ -9,11 +9,15 @@ export type WhoamiEntry = AccountWhoami & { ts: number };
 const versions: Record<string, number> = {};
 
 type CacheStorage=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
+interface WhoamiStoragePolicy { automaticVerification?: boolean }
 let hostStorage:CacheStorage|undefined;
+let automaticVerification=true;
 let storageGeneration=0;
 /** Hosts with server-owned account data may use an ephemeral display cache. */
-export function bindWhoamiStorage(storage:CacheStorage):()=>void {
- hostStorage=storage;storageGeneration++;return ()=>{if(hostStorage===storage){hostStorage=undefined;storageGeneration++}};
+export function bindWhoamiStorage(storage:CacheStorage,policy:WhoamiStoragePolicy={}):()=>void {
+ hostStorage=storage;automaticVerification=policy.automaticVerification??true;
+ const generation=++storageGeneration;
+ return ()=>{if(hostStorage===storage&&generation===storageGeneration){hostStorage=undefined;automaticVerification=true;storageGeneration++}};
 }
 export function getWhoamiCache(): Record<string, WhoamiEntry> {
   try { return JSON.parse((hostStorage??localStorage).getItem(KEY) || '{}'); } catch { return {}; }
@@ -51,6 +55,7 @@ interface VerifyOpts {
 const WHOAMI_CONCURRENCY = 2;
 
 export function verifyStale(platforms: string[], opts: VerifyOpts = {}): void {
+  if (!opts.force && !automaticVerification) return;
   const generation=storageGeneration;
   const ttlMs = opts.ttlMs ?? WHOAMI_TTL_MS;
   const cache = getWhoamiCache();

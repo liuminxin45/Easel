@@ -1,6 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import './SettingsSelect.css';
 
 export default function SettingsSelect({ value, options, disabled = false, label, title, className = '', onChange }: {
   value: string;

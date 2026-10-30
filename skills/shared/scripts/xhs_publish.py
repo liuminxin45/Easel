@@ -1388,6 +1388,9 @@ def cmd_whoami(a) -> int:
                 account = _authenticated_account(ctx)
                 if account is not None:
                     result["loggedIn"] = True
+                    stable_id = account.get("userId") or account.get("id") or account.get("uid")
+                    if isinstance(stable_id, (str, int)) and str(stable_id).strip():
+                        result["provider_user_id"] = str(stable_id)
                     if not all(_account_identity(account).values()):
                         account = _self_profile_account(ctx, account)
                     result.update(_account_identity(account))

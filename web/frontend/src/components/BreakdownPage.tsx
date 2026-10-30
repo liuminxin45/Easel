@@ -1,20 +1,26 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { runAgent, createIdea } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { IconFire, IconIdea, IconSkills } from './icons';
 
 interface BreakdownPageProps {
   persona: string;
+  onAnalyze?: (input: string, persona: string) => Promise<string>;
+  inputState?: { value: string; onChange: (value: string) => void };
+  resultContent?: ReactNode;
+  analysisBusy?: boolean;
 }
 
-export default function BreakdownPage({ persona }: BreakdownPageProps) {
-  const [input, setInput] = useState('');
+export default function BreakdownPage({ persona, onAnalyze, inputState, resultContent, analysisBusy = false }: BreakdownPageProps) {
+  const [localInput, setLocalInput] = useState('');
+  const input = inputState?.value ?? localInput;
+  const setInput = inputState?.onChange ?? setLocalInput;
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
   const run = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || analysisBusy) return;
     setLoading(true); setResult('');
     const prompt =
       `你是爆款内容拆解专家。拆解下面这条内容，用中文分点输出：\n` +
@@ -26,8 +32,8 @@ export default function BreakdownPage({ persona }: BreakdownPageProps) {
       `6. **借这个套路${persona ? `、结合我的画像「${persona}」` : ''}可做的 3 个选题**\n\n` +
       `待拆解内容：\n${input}`;
     try {
-      const res = await runAgent(prompt, persona);
-      setResult(res.response);
+      if (onAnalyze) setResult(await onAnalyze(input, persona));
+      else { const res = await runAgent(prompt, persona); setResult(res.response); }
     } catch (e) {
       setResult(e instanceof Error ? e.message : '拆解失败，请重试');
     } finally { setLoading(false); }
@@ -55,8 +61,8 @@ export default function BreakdownPage({ persona }: BreakdownPageProps) {
           placeholder="把对标账号的爆款文案 / 你收藏的内容粘贴进来…"
           onChange={(e) => setInput(e.target.value)} />
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" disabled={loading || !input.trim()} onClick={run}>
-            <IconSkills size={15} /> {loading ? '拆解中…' : '开始拆解'}
+          <button className="btn btn-primary" disabled={loading || analysisBusy || !input.trim()} onClick={run}>
+            <IconSkills size={15} /> {loading || analysisBusy ? '拆解中…' : '开始拆解'}
           </button>
           {result && <button className="btn" onClick={saveToIdeas}><IconIdea size={14} /> 存入选题库</button>}
           {result && <button className="btn btn-ghost" onClick={() => { setResult(''); setInput(''); }}>清空</button>}
@@ -66,11 +72,12 @@ export default function BreakdownPage({ persona }: BreakdownPageProps) {
         {result && !loading && (
           <div className="panel" style={{ marginTop: 18 }}>
             <div className="panel-title"><IconFire size={14} /> 拆解结果</div>
-            <div className="skill-body-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(result) }} />
+            {resultContent || <div className="skill-body-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(result) }} />}
           </div>
         )}
       </div>
 
+      {!result && resultContent}
       {toast && <div className="toast ok"><span className="toast-icon">✓</span>{toast}</div>}
     </div>
   );

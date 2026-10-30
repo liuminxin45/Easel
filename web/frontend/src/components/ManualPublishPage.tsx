@@ -1,3 +1,4 @@
+import type {PublishingAgentActions} from './PublishingPage';
 import { useEffect, useRef, useState } from 'react';
 import { createSchedule, executeSkill, exportManualPackage, fetchOutputs, mediaUrl, runAgent, streamChat } from '../lib/api';
 import type { OutputFile } from '../lib/api';
@@ -25,7 +26,7 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function ManualPublishPage({ persona }: { persona: string }) {
+export default function ManualPublishPage({ persona, agentActions }: { persona: string; agentActions?: PublishingAgentActions }) {
   const initial = useRef(loadPublishDraft()).current;
   const [title, setTitle] = useState(initial.title);
   const [body, setBody] = useState(initial.body);
@@ -83,6 +84,11 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
       + '严格按以下格式返回，每个平台一段，不加额外说明：\n'
       + selected.map((p) => `===${p.label}===\n<排版后的正文>`).join('\n')
       + `\n\n标题：${title}\n正文：${body}`;
+    if (agentActions) {
+      setAdapting(true);
+      void agentActions.adapt(prompt).catch(error => showToast(error instanceof Error ? error.message : '未能打开原生对话')).finally(() => setAdapting(false));
+      return;
+    }
     let acc = '';
     const base = { ...overrides };
     setAdapting(true);
@@ -101,6 +107,7 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
     setChecking(true);
     const content = `标题：${title}\n${PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => `${p.label}：${effective(p.key)}`).join('\n\n')}\n话题：${tags}`;
     try {
+      if (agentActions) { await agentActions.check(content); return; }
       const [general, consistency] = await Promise.all([
         runAgent(`仅给审核建议，不发布、不调用发布脚本。检查内容中的事实依据、夸大表述、版权和标题正文一致性，给出修改建议；不能确认的事项明确列出，不能保证平台审核结果。\n${content}`),
         persona ? executeSkill('persona-check', content, persona) : Promise.resolve(null),

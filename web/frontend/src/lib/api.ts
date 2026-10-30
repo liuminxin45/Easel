@@ -6,7 +6,19 @@ function getBasePath(): string {
 
 const BASE = getBasePath();
 
+/** Optional authenticated host transport. The ordinary Easel app keeps fetch. */
+export interface EaselApiTransport {
+  request<T>(path: string, options?: RequestInit): Promise<T>;
+  mediaUrl?(path: string): string;
+}
+let hostTransport: EaselApiTransport | undefined;
+export function bindEaselApiTransport(transport: EaselApiTransport): () => void {
+  hostTransport = transport;
+  return () => { if (hostTransport === transport) hostTransport = undefined; };
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  if (hostTransport) return hostTransport.request<T>(url, options);
   // 全部是动态应用接口（登录态/数据等），禁止浏览器 HTTP 缓存——否则 /api/accounts 等可能被启发式
   // 缓存住旧响应（曾表现为“扫码登录后卡片仍显示未登录”）。调用方可用 options.cache 覆盖。
   const res = await fetch(`${BASE}${url}`, { cache: 'no-store', ...options });
@@ -186,15 +198,15 @@ export interface PersonaFile {
   content: string;
 }
 
-export function fetchPersonaFiles(name: string): Promise<{ name: string; files: PersonaFile[] }> {
+export function fetchPersonaFiles(name: string): Promise<{ name: string; files: PersonaFile[]; revision?:number }> {
   return request(`/api/persona/${encodeURIComponent(name)}/files`);
 }
 
-export function savePersonaFile(name: string, filename: string, content: string): Promise<{ ok: boolean }> {
+export function savePersonaFile(name: string, filename: string, content: string, expectedRevision?:number): Promise<{ ok: boolean; revision?:number }> {
   return request(`/api/persona/${encodeURIComponent(name)}/file`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filename, content }),
+    body: JSON.stringify({ filename, content,...(expectedRevision===undefined?{}:{expected_revision:expectedRevision}) }),
   });
 }
 
@@ -206,6 +218,7 @@ export function deletePersona(name: string): Promise<{ ok: boolean; deleted: str
 import { parseTrends, parseTrendSources, parseTrendManagement } from './trendValidation';
 
 async function trendRequest(url: string, options: RequestInit = {}, timeout = 10000): Promise<unknown> {
+  if (hostTransport) return hostTransport.request(url, { ...options, signal: options.signal ?? AbortSignal.timeout(timeout) });
   try {
     const response = await fetch(`${BASE}${url}`, { cache: 'no-store', ...options, signal: AbortSignal.timeout(timeout) });
     if (!response.body) throw new Error('热点接口未返回数据。');
@@ -397,6 +410,7 @@ export function fetchOutputContent(path: string): Promise<OutputContent> {
 
 /** 媒体文件（图片/视频/音频/HTML/PDF）的原样 URL，用于 <img>/<video>/iframe/下载。 */
 export function mediaUrl(path: string): string {
+  if (hostTransport?.mediaUrl) return hostTransport.mediaUrl(path);
   return `${BASE}/api/media/${path.split('/').map(encodeURIComponent).join('/')}`;
 }
 

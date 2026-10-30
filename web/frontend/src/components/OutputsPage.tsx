@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { fetchOutputs, fetchOutputContent, mediaUrl, deleteOutput } from '../lib/api';
 import type { OutputNode, OutputMeta } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
@@ -79,9 +79,12 @@ interface OutputsPageProps {
   /** 从对话跳转进来的目录（outputs 相对路径，不含 outputs/ 前缀）；消费后由父层清空 */
   jumpPath?: string;
   onJumpHandled?: () => void;
+  /** Host-owned metadata and lifecycle actions; the native gallery stays shared. */
+  renderProjectDetails?: (project: OutputNode) => ReactNode;
+  canDelete?: (node: OutputNode) => boolean;
 }
 
-export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProps) {
+export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true }: OutputsPageProps) {
   const [roots, setRoots] = useState<OutputNode[]>([]);
   const [treeError, setTreeError] = useState('');
   const [treeLoading, setTreeLoading] = useState(true);
@@ -112,6 +115,18 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
     return filter === 'all' ? fs : fs.filter((f) => f.kind === filter);
   }, [currentNodes, filter]);
 
+  const selectedProject = useMemo(() => {
+    let nodes = roots;
+    let selected: OutputNode | undefined;
+    for (const name of stack) {
+      const node = nodes.find(candidate => candidate.type === 'dir' && candidate.name === name);
+      if (!node) break;
+      if (node.meta) selected = node;
+      nodes = node.children || [];
+    }
+    return selected;
+  }, [roots, stack]);
+
   const atTop = stack.length === 0;
   const atProjectRoot = stack.length === 1;
   // 当前项目的展示头（进入项目后才有），用于「成品/素材」分区
@@ -134,6 +149,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
 
   const remove = useCallback(async (node: OutputNode, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canDelete(node)) return;
     const isDir = node.type === 'dir';
     const label = isDir ? `项目/文件夹「${node.meta?.title || node.name}」及其全部内容` : `文件「${node.name}」`;
     if (!window.confirm(`确定删除${label}？\n此操作不可恢复。`)) return;
@@ -144,7 +160,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
     } catch (err) {
       alert((err as Error).message || '删除失败');
     }
-  }, [load]);
+  }, [load, canDelete]);
 
   const open = useCallback(async (f: OutputNode) => {
     const seq = ++reqSeq.current;
@@ -158,24 +174,28 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
     }
   }, []);
 
-  // 等内容树加载后区分文件与目录；文件链接直接打开预览。
+  // Resolve the declared path, which may differ from a virtual node's display name.
   useEffect(() => {
     if (!jumpPath || roots.length === 0) return;
-    const parts = jumpPath.split('/').filter(Boolean);
-    const parent: string[] = [];
-    let nodes = roots;
-    let node: OutputNode | undefined;
-    for (const part of parts) {
-      node = nodes.find(candidate => candidate.name === part);
-      if (!node || node.type !== 'dir') break;
-      parent.push(part);
-      nodes = node.children || [];
+    const wanted = jumpPath.split('/').filter(Boolean).join('/');
+    const find = (nodes: OutputNode[], parents: string[]): {node: OutputNode; parents: string[]} | undefined => {
+      for (const node of nodes) {
+        const path = node.type === 'dir' ? [...parents, node.name] : parents;
+        if (node.path === wanted) return {node, parents: path};
+        if (node.type === 'dir') {
+          const match = find(node.children || [], path);
+          if (match) return match;
+        }
+      }
+      return undefined;
+    };
+    const found = find(roots, []);
+    if (found) {
+      setStack(found.parents);
+      setFilter('all');
+      if (found.node.type === 'file') void open(found.node);
+      else setSelected(null);
     }
-    if (node?.path !== parts.join('/')) node = undefined;
-    setStack(parent);
-    setFilter('all');
-    if (node?.type === 'file') void open(node);
-    else setSelected(null);
     onJumpHandled?.();
   }, [jumpPath, roots, open, onJumpHandled]);
 
@@ -210,7 +230,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
       <div key={d.path} className="card card-hover gcard" onClick={() => enterDir(d.name)}>
         <div className="gcard-thumb">
           <span className="gcard-kind">{m?.kind ? (KIND_LABEL[m.kind] || m.kind) : '文件夹'}</span>
-          <button className="gcard-del" title="删除" onClick={(e) => remove(d, e)}><IconTrash size={14} /></button>
+          {canDelete(d) && <button className="gcard-del" title="删除" onClick={(e) => remove(d, e)}><IconTrash size={14} /></button>}
           {cover ? <Thumb f={cover} big /> : <div className="gcard-ph"><IconFolder size={38} /></div>}
         </div>
         <div className="gcard-meta">
@@ -231,7 +251,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
     <div key={f.path} className="card card-hover gcard" onClick={() => open(f)}>
       <div className="gcard-thumb">
         <span className="gcard-kind">{kindLabel(f)}</span>
-        <button className="gcard-del" title="删除" onClick={(e) => remove(f, e)}><IconTrash size={14} /></button>
+        {canDelete(f) && <button className="gcard-del" title="删除" onClick={(e) => remove(f, e)}><IconTrash size={14} /></button>}
         <Thumb f={f} />
       </div>
       <div className="gcard-meta">
@@ -266,6 +286,8 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
         </div>
         <button className="btn btn-sm" onClick={load} disabled={treeLoading}><IconRefresh size={14} /> {treeLoading ? '读取中…' : '刷新'}</button>
       </div>
+
+      {selectedProject && renderProjectDetails?.(selectedProject)}
 
       {treeError && <div className="notice-error" role="alert">内容读取失败：{treeError} <button className="btn btn-sm" onClick={load}>重试</button></div>}
       {treeLoading && roots.length === 0 && <div className="loading" role="status">正在读取内容库…</div>}
@@ -336,9 +358,9 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
               <button className="icon-btn" onClick={() => setSelected(null)}>×</button>
             </div>
             <div className="drawer-body">{preview()}</div>
-            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+            {canDelete(selected) && <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-sm btn-danger" onClick={(e) => remove(selected, e)}><IconTrash size={13} /> 删除此文件</button>
-            </div>
+            </div>}
           </div>
         </div>
       )}

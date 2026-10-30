@@ -1,0 +1,10 @@
+#!/bin/sh
+# The private workbench is delivered to its fork. Official upstream is read-only.
+target=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
+case "$1:$target" in
+  upstream:*|*:https://github.com/zju-real/easel*|*:git@github.com:zju-real/easel*|*:ssh://git@github.com/zju-real/easel*)
+    echo 'Rejected: the official Easel repository is read-only for this private fork.' >&2
+    exit 1
+    ;;
+esac
+exit 0

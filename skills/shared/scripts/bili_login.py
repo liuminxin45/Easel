@@ -31,7 +31,7 @@ UA = "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 BiliDroid/7.0.
 GEN_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code"
 POLL_URL = "https://passport.bilibili.com/x/passport-tv-login/qrcode/poll"
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("EASEL_ROOT") or Path(__file__).resolve().parents[3]).resolve()
 DEFAULT_QR_OUT = PROJECT_ROOT / "outputs" / "_login" / "bilibili.png"
 DEFAULT_COOKIE = PROJECT_ROOT / "cookies.json"
 
@@ -197,6 +197,8 @@ def cmd_whoami(a) -> int:
             if nav.get("isLogin"):
                 result = {"loggedIn": True, "name": (nav.get("uname") or "")[:40],
                           "avatar": nav.get("face") or ""}
+                if nav.get("mid"):
+                    result["provider_user_id"] = str(nav["mid"])
         except Exception as e:  # noqa: BLE001 — whoami 永远输出 JSON
             result["error"] = str(e)
     print(json.dumps(result, ensure_ascii=False))

@@ -8,8 +8,15 @@ export const WHOAMI_TTL_MS = 600_000; // 10 分钟，与后端 WHOAMI_TTL 对齐
 export type WhoamiEntry = AccountWhoami & { ts: number };
 const versions: Record<string, number> = {};
 
+type CacheStorage=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
+let hostStorage:CacheStorage|undefined;
+let storageGeneration=0;
+/** Hosts with server-owned account data may use an ephemeral display cache. */
+export function bindWhoamiStorage(storage:CacheStorage):()=>void {
+ hostStorage=storage;storageGeneration++;return ()=>{if(hostStorage===storage){hostStorage=undefined;storageGeneration++}};
+}
 export function getWhoamiCache(): Record<string, WhoamiEntry> {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse((hostStorage??localStorage).getItem(KEY) || '{}'); } catch { return {}; }
 }
 
 /** 写缓存；r 为 null 则删除该平台条目。附带 ts 供 TTL 判定（旧格式无 ts→视为过期）。 */
@@ -19,7 +26,7 @@ export function setWhoamiCache(platform: string, r: AccountWhoami | null): void 
     const c = getWhoamiCache();
     if (r) c[platform] = { ...r, ts: Date.now() };
     else delete c[platform];
-    localStorage.setItem(KEY, JSON.stringify(c));
+    (hostStorage??localStorage).setItem(KEY, JSON.stringify(c));
   } catch { /* 配额 / 隐私模式：忽略 */ }
 }
 
@@ -44,6 +51,7 @@ interface VerifyOpts {
 const WHOAMI_CONCURRENCY = 2;
 
 export function verifyStale(platforms: string[], opts: VerifyOpts = {}): void {
+  const generation=storageGeneration;
   const ttlMs = opts.ttlMs ?? WHOAMI_TTL_MS;
   const cache = getWhoamiCache();
   const todo = opts.force ? platforms : platforms.filter((p) => !isFresh(cache[p], ttlMs));
@@ -51,12 +59,12 @@ export function verifyStale(platforms: string[], opts: VerifyOpts = {}): void {
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < todo.length) {
-      if (opts.alive && !opts.alive()) return;
+      if (generation!==storageGeneration||(opts.alive && !opts.alive())) return;
       const p = todo[next++];
       const version = versions[p] || 0;
       try {
         const r = await accountWhoami(p);
-        if ((versions[p] || 0) !== version) continue;
+        if (generation!==storageGeneration||(opts.alive&&!opts.alive())||(versions[p] || 0) !== version) continue;
         setWhoamiCache(p, r);
         if (!opts.alive || opts.alive()) opts.onUpdate?.(p, r);
       } catch {

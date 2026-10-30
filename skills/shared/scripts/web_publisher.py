@@ -1556,6 +1556,8 @@ def cmd_whoami(a) -> int:
                 account = _authenticated_account(browser, cfg)
                 if account is not None:
                     result.update(loggedIn=True, **_account_identity(account))
+                    if account.get("id") or account.get("finderUsername"):
+                        result["provider_user_id"] = str(account.get("id") or account["finderUsername"])
                     print(json.dumps(result, ensure_ascii=False))
                     return 0
                 _navigate_login(page, cfg.get("whoami_url") or cfg.get("login_probe_url") or cfg["publish_url"])
@@ -1575,6 +1577,13 @@ def cmd_whoami(a) -> int:
                 result["loggedIn"] = logged
                 if logged:
                     result.update(_account_identity(account) if account else _visible_account_identity(page, cfg))
+                    identity_account = account or _authenticated_account(browser, cfg) or {}
+                    stable_id = identity_account.get("id") or identity_account.get("finderUsername")
+                    if a.platform == "kuaishou":
+                        observed = platform_readback.read_kuaishou_account(page)
+                        stable_id = observed.get("platform_account_id")
+                    if stable_id:
+                        result["provider_user_id"] = str(stable_id)
                 elif cfg.get("profile") == "ChannelsProfile":
                     login_url = any(marker in (page.url or "").lower() for marker in _LOGIN_MARKERS)
                     login_visible = any(element.is_visible() for selector in cfg["logged_out_selector"].split(",")

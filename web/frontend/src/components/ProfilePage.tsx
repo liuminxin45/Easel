@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics } from '../lib/api';
 import type { PersonaItem, PersonaFile, AccountAnalytics } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
@@ -50,11 +50,28 @@ function mergeWechatBlock(existing: string, block: string): string {
   return head ? `${head}\n\n${wrapped}` : wrapped;
 }
 
+export interface ProfilePageDraft {
+  fields: Record<string, string>;
+  revision?: number;
+}
+
+export interface ProfilePageDraftStore {
+  read: (name: string) => ProfilePageDraft | null;
+  write: (name: string, draft: ProfilePageDraft) => void;
+  remove: (name: string) => void;
+}
+
 interface ProfilePageProps {
   persona: string;
   onUsePersona: (name: string) => void;
   onNewProfile: () => void;
   onDeleted: (name: string) => void;
+  personaLabel?: (name: string) => string;
+  allowAccountImport?: boolean;
+  allowDelete?: boolean;
+  onFileSaved?: () => void;
+  renderDetailExtension?: (name: string) => ReactNode;
+  draftStore?: ProfilePageDraftStore;
 }
 
 const DIM_META: Record<string, { label: string; icon: string }> = {
@@ -126,7 +143,7 @@ export default function ProfilePage(props: ProfilePageProps) {
                 <div className="profile-avatar"><IconProfile size={22} /></div>
                 {p.name === props.persona && <span className="badge badge-accent">当前使用</span>}
               </div>
-              <h2>{p.name}</h2>
+              <h2>{props.personaLabel?.(p.name)||p.name}</h2>
               <p className="profile-summary-description">{p.description || '还没有定位简介，打开画像完善你的创作方向。'}</p>
               <div className="profile-summary-actions">
                 <button className="btn" onClick={() => setViewedPersona(p.name)}>查看 / 编辑</button>
@@ -139,7 +156,7 @@ export default function ProfilePage(props: ProfilePageProps) {
   );
 }
 
-function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: ProfilePageProps & {
+function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, personaLabel, allowAccountImport = true, allowDelete = true, onFileSaved, renderDetailExtension, draftStore }: ProfilePageProps & {
   onBack: () => void;
   inUse: boolean;
 }) {
@@ -149,45 +166,94 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [savingFile, setSavingFile] = useState('');
+  const [fileRevision, setFileRevision] = useState<number | undefined>(undefined);
+  const [serverRevision, setServerRevision] = useState<number | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState('');
   const [fetchingWx, setFetchingWx] = useState(false);
+  const changedFields = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (!persona) { setFiles([]); return; }
     let ignore = false;   // 切 persona 丢弃旧请求（F2）
     setLoading(true);
     setError('');
-    setEditing(false);
+    const saved = draftStore?.read(persona);
+    changedFields.current = { ...saved?.fields };
+    setEditing(!!saved && Object.keys(saved.fields).length > 0);
+    setFileRevision(undefined);
+    setServerRevision(undefined);
     fetchPersonaFiles(persona)
       .then((d) => {
         if (ignore) return;
         setFiles(d.files);
-        setDrafts(Object.fromEntries(d.files.map((f) => [f.filename, f.content])));
+        setServerRevision(d.revision);
+        setFileRevision(saved && Object.keys(saved.fields).length ? saved.revision : d.revision);
+        setDrafts({ ...Object.fromEntries(d.files.map((f) => [f.filename, f.content])), ...saved?.fields });
       })
       .catch(() => { if (!ignore) setError('加载画像失败'); })
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [persona]);
+  }, [persona, draftStore]);
+
+  const updateDraft = (filename: string, content: string) => {
+    const fields = { ...changedFields.current };
+    if (content === files.find((file) => file.filename === filename)?.content) delete fields[filename];
+    else fields[filename] = content;
+    changedFields.current = fields;
+    setDrafts((current) => ({ ...current, [filename]: content }));
+    if (Object.keys(fields).length) draftStore?.write(persona, { fields, revision: fileRevision });
+    else draftStore?.remove(persona);
+  };
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   const handleSave = async (filename: string) => {
+    if (savingFile) return;
+    const submitted = drafts[filename] ?? '';
+    const expectedRevision = fileRevision;
     setSavingFile(filename);
     try {
-      await savePersonaFile(persona, filename, drafts[filename] ?? '');
-      setFiles((prev) => prev.map((f) => f.filename === filename ? { ...f, content: drafts[filename] ?? '' } : f));
+      const result = await savePersonaFile(persona, filename, submitted, expectedRevision);
+      setFiles((prev) => prev.map((f) => f.filename === filename ? { ...f, content: submitted } : f));
+      if (result.revision !== undefined) setFileRevision(result.revision);
+      if (result.revision !== undefined) setServerRevision(result.revision);
+      const fields = { ...changedFields.current };
+      if (fields[filename] === submitted) delete fields[filename];
+      changedFields.current = fields;
+      if (Object.keys(fields).length) draftStore?.write(persona, { fields, revision: result.revision ?? expectedRevision });
+      else draftStore?.remove(persona);
+      onFileSaved?.();
       showToast(`已保存 ${DIM_META[filename]?.label || filename} ✓`);
     } catch (e) {
+      if (draftStore && e && typeof e === 'object' && 'status' in e && e.status === 409) {
+        // Refresh only the read view. The user's draft keeps its captured parent
+        // until they explicitly review the current server version below.
+        try {
+          const current = await fetchPersonaFiles(persona);
+          setFiles(current.files); setServerRevision(current.revision);
+        } catch { /* The draft and its parent remain intact if this read fails. */ }
+      }
       showToast(e instanceof Error ? e.message : '保存失败');
     } finally {
       setSavingFile('');
     }
   };
 
+  const reviewRetainedDraft = () => {
+    if (serverRevision === undefined || !draftStore) return;
+    setFileRevision(serverRevision);
+    draftStore.write(persona, { fields: { ...changedFields.current }, revision: serverRevision });
+    setEditing(true);
+  };
+
+  const needsDraftReview = draftStore && fileRevision !== undefined && serverRevision !== undefined
+    && fileRevision !== serverRevision && Object.keys(changedFields.current).length > 0;
+
   // 「平台运营」一键抓取公众号数据：复用数据中心同一个 mp 后台会话接口，把粉丝量级/内容形式
   // 抓完“直接落盘”并刷新视图——不进编辑态、不用用户点保存（否则会露出原始 markdown 破坏观感）。
   const handleFetchWechat = async (filename: string) => {
+    if (!allowAccountImport) return;
     setFetchingWx(true);
     try {
       const a = await fetchAccountAnalytics('wechat-oa');
@@ -197,7 +263,8 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
       }
       const base = files.find((f) => f.filename === filename)?.content ?? '';
       const merged = mergeWechatBlock(base, buildWechatBlock(a));
-      await savePersonaFile(persona, filename, merged);
+      const result = await savePersonaFile(persona, filename, merged, fileRevision);
+      if (result.revision !== undefined) setFileRevision(result.revision);
       // 同步更新 files（视图）与 drafts（若正在编辑也一致），无需手动保存
       setFiles((prev) => prev.map((f) => f.filename === filename ? { ...f, content: merged } : f));
       setDrafts((p) => ({ ...p, [filename]: merged }));
@@ -210,6 +277,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
   };
 
   const handleDelete = async () => {
+    if (!allowDelete) return;
     if (!window.confirm(`确定删除画像「${persona}」吗？\n此操作不可恢复，将删除该画像的全部六维文件。`)) return;
     setDeleting(true);
     try {
@@ -237,21 +305,26 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
       </div>
       <div className="profile-head">
         <div>
-          <h1 className="page-title">{persona}</h1>
+          <h1 className="page-title">{personaLabel?.(persona)||persona}</h1>
           <p className="page-subtitle">六个维度构成一个完整人设，可随时编辑保存。</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className={`btn ${editing ? 'btn-primary' : ''}`} onClick={() => setEditing((v) => !v)}>
             {editing ? '完成编辑' : '✏️ 编辑资料'}
           </button>
-          <button className="btn" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+          {allowDelete && <button className="btn" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
             disabled={deleting} onClick={handleDelete}>
             {deleting ? '删除中…' : '🗑 删除画像'}
-          </button>
+          </button>}
         </div>
       </div>
 
       {error && <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 12 }}>{error}</div>}
+      {needsDraftReview && <div className="profile-mode-note" role="status">
+        <span>服务器画像已有新修订，原输入和原修订仍保留。请先查看当前内容，再明确继续编辑。</span>
+        {editing ? <button className="btn btn-sm" onClick={() => setEditing(false)}>查看当前修订</button>
+          : <button className="btn btn-sm" onClick={reviewRetainedDraft}>已核对当前修订，保留输入继续编辑</button>}
+      </div>}
 
       {loading ? (
         <div className="loading"><div className="spinner" />加载中…</div>
@@ -264,7 +337,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
               <div className="profile-dim-head">
                 <div className="profile-dim-title">{meta.icon} {meta.label}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {f.filename === 'platforms.md' && (
+                  {allowAccountImport && f.filename === 'platforms.md' && (
                     <button className="btn btn-sm" disabled={fetchingWx}
                       title="用已登录的公众号后台会话抓取粉丝/内容数据，写入本栏（与数据中心同源）"
                       onClick={() => handleFetchWechat(f.filename)}>
@@ -272,7 +345,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
                     </button>
                   )}
                   {editing && (
-                    <button className="btn btn-sm btn-primary" disabled={!dirty || savingFile === f.filename}
+                    <button className="btn btn-sm btn-primary" disabled={!dirty || !!savingFile}
                       onClick={() => handleSave(f.filename)}>
                       {savingFile === f.filename ? '保存中…' : dirty ? '保存' : '已保存'}
                     </button>
@@ -284,7 +357,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
                   className="field"
                   style={{ minHeight: 150, fontFamily: "'SF Mono','Consolas',monospace", fontSize: 13 }}
                   value={drafts[f.filename] ?? ''}
-                  onChange={(e) => setDrafts((p) => ({ ...p, [f.filename]: e.target.value }))}
+                  onChange={(e) => updateDraft(f.filename, e.target.value)}
                 />
               ) : (
                 <div className="card" style={{ padding: '14px 18px' }}>
@@ -296,6 +369,8 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse }: Prof
           );
         })
       )}
+
+      {renderDetailExtension?.(persona)}
 
       {toast && <div className="toast ok"><span className="toast-icon">✓</span>{toast}</div>}
     </div>

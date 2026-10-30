@@ -1,0 +1,4 @@
+interface:
+  display_name: "Easel 官方基线同步"
+  short_description: "通过 rebase 同步 Easel 官方代码，解决冲突并核验后登记准确版本基线"
+  default_prompt: "使用 $easel-upstream-sync 更新 Easel 官方代码，解决 rebase 冲突，验证通过后标记最新已集成基线。"

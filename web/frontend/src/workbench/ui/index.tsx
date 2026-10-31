@@ -40,15 +40,16 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const nativeId=p.startsWith('/chat/')?decodeURIComponent(p.slice(6)):q.get('session')||'',activeSession=sessions.data?.sessions.find(session=>session.id===nativeId),profile=q.get('profile')||activeSession?.profile_id||activeSession?.persona||selected.profile_id;
  const open=(target:string)=>{navigate(target,{intent:'module'})};
  const createChat=async(wantedProfile=profile,command?:NativeSelection,text='',files:DraftAttachment[]=[],articleId?:string,articleMode?:'auto'|'product',topicTitle?:string)=>{let created:string|undefined;const ticket=navigation.ticket?.();await chatAction.run(async()=>{
+  if(articleId&&topicTitle){const article=await vm.api.get<JsonRecord>('/api/news/'+encodeURIComponent(articleId));if(string(article.id)!==articleId)throw Error('新闻来源标识不匹配，请重新打开原文');text=[text,string(article.body)].filter(Boolean).join('\n\n');}
   const response=await vm.client.mutate<JsonRecord>('chat:create','/api/chat/sessions',{action:'create',profile_id:wantedProfile}),session=record(response.session||record(response.result).session||response),id=string(session.id);if(!id)throw Error('服务器尚未返回会话标识');
   if((text||command||files.length)&&!vm.client.drafts.set('chat:'+id,{text,files,...(command?{command}:{}),...(articleId?{article_id:articleId}:{}),...(articleMode?{article_mode:articleMode}:{})}))throw Error('本机输入暂未保存，原窗口仍保留，请恢复存储后再带入对话。');created=id;void sessions.reload();
   const target='/chat/'+encodeURIComponent(id)+(p==='/chat'&&q.has('skill')?'?'+q.toString():'');if(ticket&&navigation.finishFlow)navigation.finishFlow(target,ticket);else navigate(target,{intent:'flow'});
-  if(topicTitle){const turn:FrozenTurn={turnId:crypto.randomUUID(),message:text,attachments:[],context:{profile_id:wantedProfile},inputs:{text,files:[]},state:'connecting',initial_title:generateSessionTitle(topicTitle)};sessionRuntime(vm.client,id).connect(turn,wantedProfile);}
+  if(topicTitle){const turn:FrozenTurn={turnId:crypto.randomUUID(),message:text,attachments:[],context:{profile_id:wantedProfile,...(articleId?{article_id:articleId}:{})},inputs:{text,files:[],...(articleId?{article_id:articleId}:{})},state:'connecting',initial_title:generateSessionTitle(topicTitle)};sessionRuntime(vm.client,id).connect(turn,wantedProfile);}
 
  });return created};
- const useTopic=(title:string)=>{if(!title.trim())return;
-  const prompt=topicPrompt(title);
-  void createChat(profile,undefined,prompt,[],undefined,undefined,title);
+ const useTopic=(title:string,sourceId?:string,note?:string)=>{if(!title.trim())return;
+  const prompt=[topicPrompt(title),note].filter(Boolean).join("\n\n");
+  void createChat(profile,undefined,prompt,[],sourceId,undefined,title);
  };
  const changeProfile=(id:string)=>{if(id==='__new__'){open('/toolbox?section=profiles&item=new');return}patch({profile_id:id});void createChat(id)};
  const sessionCommand=(action:string,id:string,extra:JsonRecord={})=>void chatAction.run(async()=>{const current=sessions.data?.sessions.find(value=>value.id===id);await vm.client.mutate('chat:'+action+':'+id,'/api/chat/sessions',{action,session_id:id,expected_revision:current?.revision,...extra});});

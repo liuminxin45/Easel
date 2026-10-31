@@ -8,8 +8,8 @@ export function SubNav({path}:{path?:string}){
  const vm=useWorkbench(),current=Object.entries(nativePageRoutes).find(([,route])=>route===(path||vm.navigation.path))?.[0] as Page||'dashboard';
  return <EaselSubNav current={current} onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')}/>;
 }
-export function Dashboard({profileId,onUseTopic}:{profileId:string;onUseTopic:(title:string)=>void}){return <NativeDashboard profileId={profileId} onUseTopic={onUseTopic}/>}
+export function Dashboard({profileId,onUseTopic}:{profileId:string;onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){return <NativeDashboard profileId={profileId} onUseTopic={onUseTopic}/>}
 export function Library({format: _format='',history: _history=false}:{format?:string;history?:boolean}){const vm=useWorkbench(),search=new URL(vm.navigation.path,location.origin).searchParams;return <NativeLibrary jumpPath={search.get('path')||(search.get('session')?'native-session-'+search.get('session'):undefined)}/>}
-export function Research({profileId,search,onUseTopic}:{profileId:string;search:URLSearchParams;onUseTopic:(title:string)=>void}){
+export function Research({profileId,search,onUseTopic}:{profileId:string;search:URLSearchParams;onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  return search.get('pane')==='breakdown'?<NativeBreakdown profileId={profileId} search={search}/>:<NativeTopics onUseTopic={onUseTopic}/>;
 }

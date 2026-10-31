@@ -252,7 +252,11 @@ def main():
                         textarea.fill('先讨论本次目标 '+profile);textarea.press('Enter');expect(page.get_by_text('这是隔离讨论输出，未调用模型。',exact=False)).to_be_visible(timeout=20000)
                         page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000);check(profile,'default discussion uses native session and real token events')
                         for format,label in [('poster','生成贴图'),('article','撰写文章')]:
-                            f['adapter'].prefix_next=(profile=='mobile' and format=='poster');before=len(f['adapter'].requests);prior=page.request.get(f['origin']+'/api/chat/sessions/'+sid).json()['session']['messages'][-1]['turnId'];textarea.fill('/'+label+'  原始'+label+'材料 '+profile+'  ');textarea.press('Enter')
+                            f['adapter'].prefix_next=(profile=='mobile' and format=='poster');before=len(f['adapter'].requests);prior=page.request.get(f['origin']+'/api/chat/sessions/'+sid).json()['session']['messages'][-1]['turnId'];textarea.fill('/'+label+'  原始'+label+'材料 '+profile+'  ')
+                            # The official composer allows draft editing while
+                            # streaming. An enabled textarea is not send-ready.
+                            expect(page.get_by_role('menu',name='选择技能').get_by_role('menuitem').filter(has_text=re.compile('^/'+re.escape(label)))).to_be_visible(timeout=20000)
+                            expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled(timeout=20000);textarea.press('Enter')
                             expect(page.get_by_text(label+' · v',exact=False)).to_be_visible();expect(textarea).to_have_value(' 原始'+label+'材料 '+profile+'  ')
                         
                             if format=='poster':page.locator('input[type=file]').set_input_files({'name':'TEMP原始素材.txt','mimeType':'text/plain','buffer':b'Original TEMP evidence bytes'})
@@ -303,10 +307,13 @@ def main():
                         textarea=page.get_by_role('textbox',name='对话输入');wait_history(page,f['origin'],sid,prior);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000);assert len(f['adapter'].requests)==before+1
                         check(profile,'refresh reconnects existing native turn without a duplicate submission')
                         textarea.fill('  未发送长草稿\n'+('原字保留 '+profile+'\n')*250);raw=textarea.input_value();page.reload(wait_until='domcontentloaded');textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_have_value(raw,timeout=20000)
-                        page.wait_for_function("()=>{const e=document.querySelector('textarea[aria-label=\"对话输入\"]');return e&&e.scrollHeight>e.clientHeight}");page.get_by_role('textbox',name='对话输入').evaluate('(e)=>{e.scrollTop=e.scrollHeight}');assert textarea.evaluate('e=>e.scrollHeight>e.clientHeight')
+                        # Autosizing can replace a transient geometry between
+                        # separate evaluations. Verify the exact retained input
+                        # really scrolls in one observation of the same node.
+                        page.wait_for_function("raw=>{const e=document.querySelector('textarea[aria-label=\"对话输入\"]');if(!e||e.value!==raw||e.scrollHeight<=e.clientHeight)return false;e.scrollTop=e.scrollHeight;return e.scrollTop>0}",arg=raw)
                         check(profile,'long raw draft survives reload and scrolls inside the native composer')
                         textarea.fill('UNKNOWN_RECEIPT '+profile);before=len(f['adapter'].requests);page.get_by_role('button',name='发送',exact=True).click()
-                        status=page.get_by_role('status').filter(has_text='正在恢复原任务状态');expect(status.first).to_be_visible(timeout=20000);expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible(timeout=20000)
+                        status=page.get_by_role('status').filter(has_text='原任务执行结果待核对');expect(status.first).to_be_visible(timeout=20000);expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible(timeout=20000)
                         assert len(f['adapter'].requests)==before+1
                         check(profile,'unknown native receipt stays blocked during automatic recovery and refresh without replay')
                         page.screenshot(path=str(out/(profile+'-unknown-receipt.png')),full_page=True)

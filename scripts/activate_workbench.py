@@ -93,6 +93,14 @@ def idle(database=None):
             if value.get('status') not in ('requested','uncertain'):continue
             previous=retained.get(path.stem)
             if previous and sha(path)==previous['cache_sha256']:continue
+            from collection_receipt_retention import retained as reviewed_retention
+            reviewed=reviewed_retention(ROOT,path.stem,path) if re.fullmatch('[a-f0-9]{64}',path.stem) else None
+            if reviewed:
+                status.setdefault('retained_collection_unknown',[]).append({
+                    'id':path.stem,'status':value['status'],'cache_sha256':sha(path),
+                    'audit_path':reviewed['audit_path'],'audit_sha256':reviewed['audit_sha256'],
+                    'replayed':False,'non_running_ephemeral':True})
+                continue
             status['busy']=True
             status.setdefault('additional',[]).append({'table':'collection_model_receipt','id':path.stem,'status':value['status']})
     return status

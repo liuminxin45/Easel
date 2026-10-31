@@ -11,5 +11,15 @@ export function viewportInsets(layoutHeight:number,visual?:{height:number;offset
  return {height:Math.min(layoutHeight,Math.max(0,visual.height)),bottom:Math.max(0,layoutHeight-visual.height-visual.offsetTop)};
 }
 export function bindViewport(coordinator:ActivityCoordinator):()=>void {
- const viewport=window.visualViewport;const update=()=>{const metrics=viewportInsets(innerHeight,viewport||undefined),style=document.documentElement.style,height=metrics.height+'px',bottom=metrics.bottom+'px';if(style.getPropertyValue('--native-height')!==height)style.setProperty('--native-height',height);if(style.getPropertyValue('--native-keyboard-inset')!==bottom)style.setProperty('--native-keyboard-inset',bottom)};let end:undefined|(()=>void);const start=()=>{end?.();end=coordinator.begin('composition')},finish=()=>{end?.();end=undefined};update();viewport?.addEventListener('resize',update);viewport?.addEventListener('scroll',update);window.addEventListener('resize',update);document.addEventListener('compositionstart',start);document.addEventListener('compositionend',finish);return()=>{finish();viewport?.removeEventListener('resize',update);viewport?.removeEventListener('scroll',update);window.removeEventListener('resize',update);document.removeEventListener('compositionstart',start);document.removeEventListener('compositionend',finish)};
+ const viewport=window.visualViewport;const update=()=>{const metrics=viewportInsets(innerHeight,viewport||undefined),style=document.documentElement.style,height=metrics.height+'px',bottom=metrics.bottom+'px';if(style.getPropertyValue('--native-height')!==height)style.setProperty('--native-height',height);if(style.getPropertyValue('--native-keyboard-inset')!==bottom)style.setProperty('--native-keyboard-inset',bottom)};
+ let end:undefined|(()=>void),owner:EventTarget|null=null,blurTimer:ReturnType<typeof setTimeout>|undefined;
+ const finish=()=>{if(blurTimer!==undefined)clearTimeout(blurTimer);blurTimer=undefined;owner=null;end?.();end=undefined};
+ const start=(event:CompositionEvent)=>{finish();owner=event.target;end=coordinator.begin('composition')};
+ const focusOut=(event:FocusEvent)=>{if(!end||event.target!==owner)return;if(blurTimer!==undefined)clearTimeout(blurTimer);blurTimer=setTimeout(()=>{blurTimer=undefined;
+  // A window blur/hidden page alone does not prove IME cancellation. Only an
+  // actual focus departure from the composing element releases a missing end.
+  if(owner instanceof Node&&owner!==document.activeElement&&!owner.contains(document.activeElement))finish();
+ },0)};
+ update();viewport?.addEventListener('resize',update);viewport?.addEventListener('scroll',update);window.addEventListener('resize',update);document.addEventListener('compositionstart',start);document.addEventListener('compositionend',finish);document.addEventListener('focusout',focusOut);
+ return()=>{finish();viewport?.removeEventListener('resize',update);viewport?.removeEventListener('scroll',update);window.removeEventListener('resize',update);document.removeEventListener('compositionstart',start);document.removeEventListener('compositionend',finish);document.removeEventListener('focusout',focusOut)};
 }

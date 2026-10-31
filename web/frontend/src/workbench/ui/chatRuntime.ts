@@ -9,6 +9,7 @@ export interface FrozenTurn {turnId:string;message:string;attachments:UploadedFi
 export interface SessionDraft {text:string;files:DraftAttachment[];article_id?:string;article_mode?:'auto'|'product';command?:NativeSelection|null;pending?:FrozenTurn}
 const emptyStream=():StreamState=>({content:'',thinking:'',activity:'',questions:[]});
 const recovering=():InteractionFeedback=>({kind:'status',message:'连接暂时中断，正在恢复原任务状态。输入已保留。'});
+const awaitingReceipt=(receipt:JsonRecord):InteractionFeedback=>({kind:'status',message:'原任务执行结果待核对。'+(string(receipt.error)?string(receipt.error)+' ':'')+'输入已保留，不会重复发送。'});
 export class SessionRuntime {
  readonly state=createStore<{stream?:StreamState;running:boolean;accepted:boolean;error:string;feedback?:InteractionFeedback}>(()=>({running:false,accepted:false,error:''}));
  readonly blocked=new Set<string>();readonly completed=new Set<string>();readonly closed=new Set<string>();
@@ -32,11 +33,15 @@ export class SessionRuntime {
     const receipt=await this.client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(this.id)+'?turn_id='+encodeURIComponent(turn.turnId),AbortSignal.timeout(3000));
     if(epoch!==this.client.authenticationEpoch||this.saved()?.turnId!==turn.turnId)return;
     const status=string(receipt.execution_status)||string(receipt.stop_reason);
-    if(string(receipt.turn_id)===turn.turnId&&receipt.delivery_state!=='unknown'){
+    if(string(receipt.turn_id)===turn.turnId){
+     if(receipt.delivery_state!=='unknown'){
      if(['completed','stopped','failed'].includes(status)){
       this.acknowledge(turn);this.completed.add(turn.turnId);this.blocked.delete(turn.turnId);this.patch({pending:undefined});this.state.setState({running:false,stream:undefined,feedback:undefined,error:status==='failed'?string(receipt.error):''});void this.reload();void this.client.invalidate(['chat','works','studio']);return;
      }
-     if(['running','accepted','submitting'].includes(status)){this.blocked.delete(turn.turnId);this.connect(turn,profileId,true);return}
+      if(['running','accepted','submitting'].includes(status)){this.blocked.delete(turn.turnId);this.connect(turn,profileId,true);return}
+     }
+     this.state.setState({feedback:awaitingReceipt(receipt),error:string(receipt.error)});
+     this.scheduleRecovery(turn,profileId,Math.min(delay*2,15000));return;
     }
    }catch{/* Only read the original receipt; an unavailable read never starts another turn. */}
    this.state.setState({feedback:recovering()});this.scheduleRecovery(turn,profileId,Math.min(delay*2,15000));
@@ -63,12 +68,13 @@ export class SessionRuntime {
   this.patch({pending:{...turn,state:resumeOnly?turn.state:'connecting'}});
   const active=()=>this.owner===token;
   const change=(update:(stream:StreamState)=>StreamState)=>{if(active())this.state.setState({error:'',feedback:undefined,stream:update(this.state.getState().stream||emptyStream())})};
-  let finalizing=false;
+  let finalizing=false,transportInterrupted=false;
+  const interruptionMessage='连接中断，正在核对原任务；不会重新发送。';
   const verify=()=>void(async()=>{if(finalizing||!active())return;finalizing=true;try{
    const receipt=await this.client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(this.id)+'?turn_id='+encodeURIComponent(turn.turnId));if(!active())return;
    const terminal=string(receipt.execution_status)||string(receipt.stop_reason),known=string(receipt.turn_id)===turn.turnId&&['completed','stopped','failed'].includes(terminal)&&receipt.delivery_state!=='unknown';
    if(known){this.clearRecovery();this.state.setState({error:'',feedback:undefined});this.acknowledge(turn);this.completed.add(turn.turnId);this.patch({pending:undefined});if(receipt.error)this.state.setState({error:string(receipt.error)});if(['failed','unknown'].includes(string(receipt.hook_status)))this.state.setState({error:string(receipt.hook_error)||'模型回复已保留，作品记录仍待核对；不会重新制作。'})}
-   else{this.blocked.add(turn.turnId);this.state.setState({feedback:recovering(),error:string(receipt.error)||'原回合结果尚未核对，已保留原请求，不会重复发送。'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}})}
+   else{this.blocked.add(turn.turnId);this.state.setState({feedback:string(receipt.turn_id)===turn.turnId?awaitingReceipt(receipt):recovering(),error:string(receipt.error)||'原回合结果尚未核对，已保留原请求，不会重复发送。'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}})}
    if(!active())return;this.owner=undefined;this.state.setState({running:false,stream:undefined});void this.reload();if(!known)this.scheduleRecovery(turn,profileId);const linked=string(record(receipt.work).work_id);void this.client.invalidate(['chat','works','studio',...(linked?['work:'+linked]:[])]);
   }catch(error){if(!active())return;this.owner=undefined;this.blocked.add(turn.turnId);this.state.setState({running:false,feedback:recovering(),error:error instanceof Error?error.message:'暂未取得原回执，输入仍保留'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}});this.scheduleRecovery(turn,profileId)}})();
   const fail=(error:Error)=>{if(!active())return;this.state.setState({error:error.message});const detail=error as Error&{status?:number;terminal?:boolean};if(detail.terminal){verify();return}const rejected=!resumeOnly&&!this.saved()?.accepted&&!!detail.status&&detail.status>=400&&detail.status<500;this.blocked.add(turn.turnId);this.patch({pending:{...turn,state:rejected?'rejected':'unknown',accepted:this.saved()?.accepted}});this.owner=undefined;this.state.setState({running:false,feedback:rejected?undefined:recovering()});if(!rejected)this.scheduleRecovery(turn,profileId);if(detail.status===401)void this.client.api.get('/api/config').catch(()=>{});void this.reload()};
@@ -81,10 +87,13 @@ export class SessionRuntime {
   };
   this.controller=streamChat(turn.message,profileId,this.id,chunk=>change(old=>({...old,content:old.content+chunk})),verify,fail,
    chunk=>change(old=>({...old,thinking:old.thinking+chunk})),activity=>change(old=>({...old,activity,stillWorking:undefined})),
-   ()=>{if(active())this.state.setState({feedback:recovering(),error:'连接中断，正在核对原任务；不会重新发送。'})},turn.turnId,resumeOnly,
+   ()=>{if(active()){transportInterrupted=true;this.state.setState({feedback:recovering(),error:interruptionMessage})}},turn.turnId,resumeOnly,
    ()=>{if(active()){this.owner=undefined;this.blocked.add(turn.turnId);this.state.setState({running:false,feedback:recovering(),error:'原任务暂时无法核对，输入与请求标识仍保留。'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}});this.scheduleRecovery(turn,profileId)}},turn.attachments,
    question=>void receiveQuestion(question),note=>change(old=>({...old,stillWorking:note})),closed=>{if(active())this.closeQuestion(closed.id)},
-   {basePath:'',context:turn.context,initialTitle:turn.initial_title,headers:{'X-CSRF-Token':this.client.session.getState().config?.csrf||''},onAccepted:()=>{if(active()){this.acknowledge(turn);void this.client.invalidate(['chat'])}}});
+   {basePath:'',context:turn.context,initialTitle:turn.initial_title,headers:{'X-CSRF-Token':this.client.session.getState().config?.csrf||''},onAccepted:()=>{if(active()){this.acknowledge(turn);void this.client.invalidate(['chat'])}},onConnectionRestored:()=>{
+    if(!active()||!transportInterrupted)return;transportInterrupted=false;
+    if(this.state.getState().error===interruptionMessage)this.state.setState({error:'',feedback:undefined});
+   }});
  }
  saved(){return this.client.drafts.get<SessionDraft>('chat:'+this.id)?.pending}
  async stop(){const turn=this.saved();if(!turn)return;const epoch=this.client.authenticationEpoch;

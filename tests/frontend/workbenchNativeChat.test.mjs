@@ -12,6 +12,7 @@ const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value
 function module(file,imports,globals={}){const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
 const {RequestError}=module('workbench/core/transport.ts',{'./models':{record,string}},{Error});
 const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
+const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
 function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride}={}){
@@ -21,9 +22,8 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/core/react.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,useContext:()=>({client:vm.client}),Context:{},useEffect:react.useEffect,interactionFeedback,Error,RequestError});
- const core={useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:path?.startsWith('/api/chat/products/')?resources.product||null:path?resources:null,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
+ const core={...productionRecovery,useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:path?.startsWith('/api/chat/products/')?resources.product||null:path?.startsWith('/api/works/')?resources.work||null:path?resources:null,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
  const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{},ArtifactGallery:()=>{},CopyableText:()=>{},Completion:()=>{}};
- core.nativeContinuationPath=()=>null;
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./common':{Notice:()=>{}}});
  const timers=new Map();
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
@@ -32,6 +32,74 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  return {calls,resources,lib,runtime,vm,components,render,effects,runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+const continuationButtons=value=>nodes(value).filter(node=>node.type==='button'&&node.props.children==='继续制作');
+function interruptedMessage(){return {role:'assistant',content:'已保留原文件',status:'stopped',turnId:'interrupted-version',work:{work_id:'exact-work',version_id:'interrupted-version'},business_recovery:{job_id:'interrupted-version',failure_kind:'production',send_state:'submitted',action:'edit_materials',error_code:'native_interrupted',can_continue:true,continuation:{session_id:'session-one',work_id:'exact-work',version_id:'interrupted-version',profile_id:'oil-pig',skill_id:'content-production',skill_version:2}}};}
+
+test('a confirmed stopped receipt clears transient and raw interruption notices while preserving later draft and attachments',async()=>{
+ const error='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';
+ const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'stopped',delivery_state:'interrupted',error}});
+ f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();callbacks[8]();
+ const later={...f.draft,text:'  后写的新草稿\n不许清空  ',files:[{id:'later-attachment',name:'后加素材.png'}]};f.draft=later;
+ callbacks[4]();await tick();await tick();const state=f.runtime.sessionRuntime(f.vm.client,'session-one').state.getState();
+ assert.equal(state.error,'');assert.equal(state.feedback,undefined);assert.equal(state.running,false);assert.equal(f.draft.pending,undefined);
+ assert.equal(f.draft.text,later.text);assert.deepEqual(plain(f.draft.files),later.files);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
+});
+test('the latest confirmed interrupted production shows one top continuation action for the original session and frozen version',()=>{
+ const f=fixture(),message=interruptedMessage();f.resources.session.messages=[{role:'user',content:'原始贴图请求'},message];
+ f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[{id:'preserved-file',name:'原文件.png',mime:'image/png'}],incomplete:true};
+ const ui=f.render(),buttons=continuationButtons(ui.chat.notice);assert.equal(buttons.length,1);
+ assert.ok(nodes(ui.chat.notice).some(node=>node.props.children==='本轮已中断，原文件已保留。'));
+ const extra=ui.chat.renderMessageExtra(ui.chat.session.messages.at(-1)),wrapper=extra.type(extra.props),products=wrapper.type(wrapper.props);
+ assert.equal(continuationButtons(products).length,0,'the message must not repeat its top continuation action');
+ buttons[0].props.onClick();const destination=new URL(f.calls.navigate[0],'https://example.test');
+ assert.equal(destination.pathname,'/chat/session-one');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'interrupted-version',skill:'content-production',skill_version:'2',action:'change',continue:'1'});
+ assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'  原字材料\n保留  ');
+ const standalone=f.lib.NativeTurnOutputs({message}),standaloneProducts=standalone.type(standalone.props);
+ assert.equal(continuationButtons(standaloneProducts).length,1,'standalone registered products retain the default continuation action');
+});
+test('continuation requires server authorization and exact stopped turn session profile work and version identities',()=>{
+ const f=fixture(),message=interruptedMessage(),path=f.lib.confirmedContinuation(message,'session-one','oil-pig');
+ assert.ok(path);assert.equal(path,productionRecovery.nativeContinuationPath(message.business_recovery,'exact-work','interrupted-version'));
+ const invalid=[
+  {...message,status:'unknown'},
+  {...message,status:'completed'},
+  {...message,turnId:'another-turn'},
+  {...message,work:{...message.work,work_id:'another-work'}},
+  {...message,work:{...message.work,version_id:'another-version'}},
+  {...message,business_recovery:{...message.business_recovery,can_continue:false}},
+  {...message,business_recovery:{...message.business_recovery,send_state:'unknown'}},
+  {...message,business_recovery:{...message.business_recovery,job_id:'another-version'}},
+  ...[{session_id:'another-session'},{profile_id:'another-profile'},{skill_version:0}].map(patch=>({...message,business_recovery:{...message.business_recovery,continuation:{...message.business_recovery.continuation,...patch}}}))
+ ];
+ for(const candidate of invalid){assert.equal(f.lib.confirmedContinuation(candidate,'session-one','oil-pig'),null);f.resources.session.messages=[candidate];assert.equal(continuationButtons(f.render().chat.notice).length,0);}
+});
+test('an unresolved or active turn prevents every continuation action and a newer response supersedes an older interruption',()=>{
+ for(const state of ['connecting','accepted','unknown','server-pending','running']){
+  const f=fixture(),message=interruptedMessage();f.resources.session.messages=[message];f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[]};
+  if(state==='server-pending')f.resources.session.pendingTurnId='another-turn';
+  else if(state==='running')f.runtime.sessionRuntime(f.vm.client,'session-one').state.setState({running:true});
+  else f.draft={...f.draft,pending:{turnId:'another-turn',state}};
+  const ui=f.render();assert.equal(continuationButtons(ui.chat.notice).length,0,state);
+  const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,state+' must block the message action too');
+  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);
+ }
+ const f=fixture();f.resources.session.messages=[interruptedMessage(),{role:'assistant',turnId:'newer-turn',status:'completed',content:'后来已完成'}];
+ assert.equal(continuationButtons(f.render().chat.notice).length,0);
+});
+test('opening the confirmed continuation prepares the pinned skill without replaying the old request or replacing later input',async()=>{
+ const message=interruptedMessage(),path=productionRecovery.nativeContinuationPath(message.business_recovery,'exact-work','interrupted-version');
+ for(const text of ['', '  我后来补写的要求\n保留  ']){
+  const files=text?[{id:'later-file',name:'后来添加.png'}]:[],f=fixture({search:path.split('?')[1],draft:{text,files}});
+  f.resources.session.messages=[message];f.resources.work={id:'exact-work',title:'原始贴图',versions:[{id:'interrupted-version',recovery:message.business_recovery}]};
+  f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[]};
+  const ui=f.render();for(const effect of [...f.effects])effect();await tick();
+  assert.equal(continuationButtons(ui.chat.notice).length,0,'the continuation page already represents this action');
+  const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,'the continuation page must not offer its message action again');
+  assert.equal(f.draft.command.skill_id,'content-production');assert.equal(f.draft.command.version,2);assert.equal(f.draft.command.action_id,'change');
+  if(text)assert.equal(f.draft.text,text);else assert.match(f.draft.text,/请继续完成《原始贴图》/);
+  assert.deepEqual(plain(f.draft.files),files);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.post.length,0);assert.equal(f.calls.navigate.length,0);
+ }
+});
 
 test('editing a draft and identical history polls preserve the native scroll dependency',()=>{
  const f=fixture();f.resources.session.messages=[{role:'user',content:'原问题'},{role:'assistant',content:'保留阅读位置'}];
@@ -100,9 +168,9 @@ test('a known timeout receipt is reported as execution uncertainty until the sam
  assert.doesNotMatch(runtime.state.getState().feedback.message,/连接暂时中断/);
  callbacks[16].onConnectionRestored();assert.ok(f.draft.pending,'late transport recovery must not resolve an unknown receipt');
  await f.runRecovery();assert.match(runtime.state.getState().feedback.message,/原任务执行结果待核对/);
- f.vm.api.get=async path=>{f.calls.get.push(path);return {turn_id:'exact-turn',execution_status:'stopped',delivery_state:'interrupted'}};
+ f.vm.api.get=async path=>{f.calls.get.push(path);return {turn_id:'exact-turn',execution_status:'stopped',delivery_state:'interrupted',error:'原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。'}};
  await f.runRecovery();assert.equal(f.draft.pending,undefined);assert.equal(f.draft.text,'新草稿不能被恢复清空');
- assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().running,false);
+ assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().error,'');assert.equal(runtime.state.getState().running,false);
  assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
 });
 test('one production send freezes the exact plan and immediately streams without a confirmation dialog',async()=>{

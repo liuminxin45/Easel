@@ -34,8 +34,8 @@ function setup(narrow=true){
  function render(){cursor=0;refCursor=0;return exports.default(props)}
  const children=tree=>tree.props.children;
  const panel=tree=>children(tree).find(node=>node.props?.className?.startsWith('sidebar-panel'));
- const trigger=tree=>children(tree).find(node=>node.props?.className==='mobile-nav-bar').props.children[0];
- const native=tree=>panel(tree).props.children.find(node=>node.type===Sidebar);
+ const trigger=tree=>children(tree).find(node=>node.props?.className==='mobile-nav-bar').props.children;
+ const native=tree=>panel(tree).props.children;
  const open=()=>{trigger(render()).props.onClick();return render()};
  return {render,panel,trigger,native,open,props,calls,Element};
 }
@@ -61,13 +61,18 @@ test('same-page and same-session actions dismiss the drawer without relying on a
  }
 });
 
-test('backdrop and close controls dismiss the same mounted sidebar',()=>{
+test('drawer directly renders the original sidebar without an added header or close button',()=>{
+ const view=setup(),opened=view.open();
+ assert.equal(view.panel(opened).props.children,view.native(opened));
+ assert.equal(typeof view.native(opened).type,'function');
+ assert.equal(view.trigger(opened).type,'button');
+ assert.equal(view.trigger(opened).props['aria-label'],'打开导航');
+});
+
+test('backdrop dismisses the same mounted original sidebar',()=>{
  const view=setup(),opened=view.open(),sidebarType=view.native(opened).type;
  opened.props.children.find(node=>node.props?.className?.startsWith('sidebar-backdrop')).props.onClick();
  assert.equal(view.trigger(view.render()).props['aria-expanded'],false);
- const reopened=view.open();
- const header=view.panel(reopened).props.children[0];
- header.props.children.find(node=>node.props?.['aria-label']==='关闭导航').props.onClick();
  const closed=view.render();
  assert.equal(view.panel(closed).props.inert,true);
  assert.equal(view.native(closed).type,sidebarType);

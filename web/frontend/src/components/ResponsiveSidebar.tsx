@@ -13,7 +13,6 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const query = window.matchMedia(NARROW_SCREEN);
@@ -61,7 +60,7 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
       }
     };
     document.addEventListener('keydown', onKeyDown);
-    closeRef.current?.focus();
+    (focusable()[0] || panel).focus({ preventScroll: true });
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       siblings.forEach((node, index) => { node.inert = previousInert[index]; });
@@ -88,7 +87,6 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-      <span>Easel</span>
     </div>
     <div ref={backdropRef} className={`sidebar-backdrop${narrow && open ? ' is-open' : ''}`}
       aria-hidden="true" onClick={dismiss} />
@@ -96,14 +94,6 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
       role={narrow ? 'dialog' : undefined} aria-modal={narrow && open ? true : undefined}
       aria-label={narrow ? '主导航' : undefined} aria-hidden={narrow && !open ? true : undefined}
       inert={narrow && !open} tabIndex={-1} onClickCapture={onNavigationClick}>
-      <div className="sidebar-mobile-header">
-        <span>导航</span>
-        <button ref={closeRef} type="button" className="sidebar-close" aria-label="关闭导航" onClick={dismiss}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg>
-        </button>
-      </div>
       <Sidebar {...props}
         onPageChange={page => { dismiss(); props.onPageChange(page); }}
         onSessionSelect={id => { dismiss(); props.onSessionSelect(id); }}

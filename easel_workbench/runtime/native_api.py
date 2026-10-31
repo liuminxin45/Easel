@@ -323,22 +323,31 @@ class NativeApi:
             key for key in requested.split(',') if key in available))
         limit = max(1, min(int(request.query_params.get('limit', '1000')), 1000))
         groups = []
+        warnings = []
         for key in selected:
             rows = self.store.article_day(source=key)['items']
             latest = status.get(key, {}).get('last_task') or {}
-            failed = latest.get('status') == 'failed'
+            outcome = latest.get('status')
+            incomplete = outcome in {'failed', 'blocked', 'partial', 'cancelled'}
             busy = latest.get('status') in {'queued', 'running'}
-            groups.append({'platform': key, 'label': available[key]['label'], 'ok': not failed,
-                           'status': 'stale' if failed and rows else 'error' if failed else 'fresh',
-                           'stale': (failed or busy) and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
+            source_warnings = [str(value) for value in latest.get('warnings', []) if value]
+            warnings.extend(available[key]['label'] + '：' + value for value in source_warnings)
+            message = str(latest.get('error') or latest.get('message') or '上次采集未完成')
+            if outcome == 'partial' and not latest.get('error'):
+                message = '本轮采集不完整，已保留实际结果'
+            groups.append({'platform': key, 'label': available[key]['label'], 'ok': not incomplete,
+                           'status': 'stale' if incomplete and rows else 'error' if incomplete else 'fresh',
+                           'stale': (incomplete or busy) and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
                            'last_attempt_at': _seconds(latest.get('created_at')),
+                           'finished_at': latest.get('finished_at'), 'collection_status': outcome,
+                           'warnings': source_warnings,
                            'error': {'code': 'busy', 'message': '正在采集，先显示已保存结果'} if busy else
-                                    {'code': 'collection_failed', 'message': str(latest.get('error') or '上次采集未完成')} if failed else None,
+                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete else None,
                            'items': [{'id': item['id'], 'title': item['title'], 'hot': str(item.get('hot') or ''),
                                       'url': item.get('url', ''), 'published_at': item.get('published_at'),
                                       'heat': {'value': None, 'text': str(item.get('hot') or ''), 'unit': ''}}
                                      for item in rows[:limit]]})
-        return {'version': 1, 'trends': groups, 'updated': int(time.time()), 'warnings': []}
+        return {'version': 1, 'trends': groups, 'updated': int(time.time()), 'warnings': list(dict.fromkeys(warnings))}
 
     def _ideas(self):
         return [{**item, 'created': item.get('created', _seconds(item.get('created_at')))}
@@ -656,6 +665,11 @@ class NativeApi:
                 if method == 'DELETE' and key:
                     return await self.planning.api_ideas_delete(ident(key))
                 req = self.planning.IdeaItem(**fields)
+                if req.source_id is not None:
+                    with self.store.connect() as connection:
+                        exists = connection.execute('SELECT 1 FROM articles WHERE id=?', (req.source_id,)).fetchone()
+                    if not exists:
+                        raise HTTPException(400, '选题来源不存在，请重新选择准确资讯')
                 return await (self.planning.api_ideas_update(ident(key), req) if key else self.planning.api_ideas_create(req))
             if method in {'POST', 'PUT', 'DELETE'}:
                 return await self._mutate(request, body, idea)

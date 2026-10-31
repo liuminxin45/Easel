@@ -22,7 +22,7 @@ function subscribeDashboardLayout(change:()=>void){
  return()=>media.removeEventListener('change',change);
 }
 
-export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTopic:(title:string)=>void}){
+export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  const vm=useWorkbench(),status=useResource<JsonRecord>('/api/status');
  const compact=useSyncExternalStore(subscribeDashboardLayout,compactDashboard,()=>false);
  return <DashboardPage persona={profileId} gatewayStatus={status.data?.gateway===true?'connected':'disconnected'}
@@ -42,7 +42,7 @@ export function NativeLibrary({jumpPath}:{jumpPath?:string}){
  return <OutputsPage jumpPath={jumpPath} canDelete={()=>false} renderProjectDetails={renderProject}/>;
 }
 
-export function NativeTopics({onUseTopic}:{onUseTopic:(title:string)=>void}){
+export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  const vm=useWorkbench(),draftStore=useMemo(()=>({
   read:()=>vm.client.drafts.get<IdeasPageDraft>('easel:topic-form'),
   write:(draft:IdeasPageDraft)=>{vm.client.drafts.set('easel:topic-form',draft)},
@@ -51,10 +51,10 @@ export function NativeTopics({onUseTopic}:{onUseTopic:(title:string)=>void}){
  return <IdeasPage onUseTopic={onUseTopic} draftStore={draftStore}/>;
 }
 
-export function NativeTrends({onUseTopic}:{onUseTopic:(title:string)=>void}){
+export function NativeTrends({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  const vm=useWorkbench();
  const refreshAll=useCallback(()=>vm.service.collectAll(),[vm.service]);
- return <TrendsPage onUseTopic={onUseTopic} refreshAll={refreshAll} listLimit={1000} quietBackgroundRefresh/>;
+ return <TrendsPage onUseTopic={onUseTopic} onRead={id=>vm.navigate('/news/a/'+encodeURIComponent(id))} refreshAll={refreshAll} listLimit={1000} quietBackgroundRefresh/>;
 }
 
 export function NativeCalendar(){return <CalendarPage/>}
@@ -80,7 +80,7 @@ export function NativeBreakdown({profileId,search}:{profileId:string;search:URLS
   resultContent={draft.task_id?<SkillTask id={draft.task_id}/>:undefined}/></>;
 }
 
-export interface WorkbenchNativePageProps {page:Page;profileId:string;onUseTopic:(title:string)=>void;search?:URLSearchParams}
+export interface WorkbenchNativePageProps {page:Page;profileId:string;onUseTopic:(title:string,sourceId?:string,note?:string)=>void;search?:URLSearchParams}
 export function WorkbenchNativePage({page,profileId,onUseTopic,search=new URLSearchParams()}:WorkbenchNativePageProps){
  switch(page){
   case 'dashboard':return <NativeDashboard profileId={profileId} onUseTopic={onUseTopic}/>;

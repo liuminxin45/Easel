@@ -245,7 +245,7 @@ def main():
                         page.keyboard.press('Escape')
                         mark(profile, 'nav.selectors', 'profile_options', 'closing native option popup preserves the selected profile', select.input_value() == before)
                         # Selector inspection already opened the narrow drawer.
-                        if width <= 760: page.locator('.sidebar-close').click()
+                        if width <= 760: page.keyboard.press('Escape')
                         open_sidebar_settings()
                         expect(page.get_by_role('dialog', name='设置', exact=True)).to_be_visible()
                         inspect(page, profile, 'settings.panel', 'model_section')

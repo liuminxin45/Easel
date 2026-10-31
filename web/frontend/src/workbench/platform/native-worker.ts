@@ -10,11 +10,20 @@ export async function nativeWorkerVersion(worker:ServiceWorker|null,timeout=600)
 }
 export async function prepareNativeWorker(registration:ServiceWorkerRegistration,release:string,timeout=12000):Promise<boolean>{
  const deadline=Date.now()+timeout;
- try{await registration.update()}catch{/* The installed worker remains available while offline. */}
+ if(timeout<=0)return false;
+ // Some WebViews leave update() pending when a suspended request never resumes.
+ // An offline rejection still permits checking the installed controller.
+ const updated=await new Promise<boolean>(resolve=>{let settled=false;
+  const finish=(value:boolean)=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value)};
+  const timer=setTimeout(()=>finish(false),Math.max(0,deadline-Date.now()));
+  try{void registration.update().then(()=>finish(true),()=>finish(true))}catch{finish(true)}
+ });
+ if(!updated)return false;
  while(Date.now()<deadline){
-  const state=await nativeWorkerVersion(navigator.serviceWorker.controller);
-  if(state?.release===release&&state.shell_ready)return true;
-  await new Promise<void>(resolve=>setTimeout(resolve,100));
+  const state=await nativeWorkerVersion(navigator.serviceWorker.controller,Math.min(600,deadline-Date.now()));
+  if(Date.now()<deadline&&state?.release===release&&state.shell_ready)return true;
+  const remaining=deadline-Date.now();
+  if(remaining>0)await new Promise<void>(resolve=>setTimeout(resolve,Math.min(100,remaining)));
  }
  return false;
 }

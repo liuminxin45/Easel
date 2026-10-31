@@ -334,9 +334,9 @@ export function deleteSchedule(id: string): Promise<{ ok: boolean }> {
 
 // ---- 选题库 ----
 export interface Idea {
-  id: string; title: string; note: string; source: string; status: string; created: number;
+  id: string; title: string; note: string; source: string; status: string; created: number; source_id?: string;
 }
-export type IdeaInput = { title: string; note?: string; source?: string; status?: string };
+export type IdeaInput = { title: string; note?: string; source?: string; status?: string; source_id?: string };
 export function fetchIdeas(): Promise<Idea[]> { return request('/api/ideas'); }
 export function createIdea(item: IdeaInput): Promise<Idea> {
   return request('/api/ideas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });

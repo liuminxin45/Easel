@@ -11,7 +11,7 @@ export const NEXT: Record<string, string> = { pending: 'doing', doing: 'done', d
 export interface IdeasViewProps {
  byStatus:Record<string,Idea[]>;form:IdeaInput|null;editId:string|null;toast:string;busy?:boolean;notice?:ReactNode;
  openNew:()=>void;openEdit:(idea:Idea)=>void;setForm:(form:IdeaInput|null)=>void;
- save:()=>void;advance:(idea:Idea)=>void;remove:(idea:Idea)=>void;schedule:(idea:Idea)=>void;onUseTopic:(title:string)=>void;
+ save:()=>void;advance:(idea:Idea)=>void;remove:(idea:Idea)=>void;schedule:(idea:Idea)=>void;onUseTopic:(title:string,sourceId?:string,note?:string)=>void;
 }
 export default function IdeasView({byStatus,form,editId,toast,busy,notice,openNew,openEdit,setForm,save,advance,remove,schedule,onUseTopic}:IdeasViewProps){
   return (
@@ -44,7 +44,7 @@ export default function IdeasView({byStatus,form,editId,toast,busy,notice,openNe
                   {it.source && <span className="badge" style={{ marginTop: 6 }}>{it.source}</span>}
                   {it.note && <div className="idea-note">{it.note}</div>}
                   <div className="idea-foot">
-                    <button className="idea-act" onClick={() => onUseTopic(it.title)}><IconChat size={13} /> 做内容</button>
+                    <button className="idea-act" onClick={() => onUseTopic(it.title,it.source_id,it.note)}><IconChat size={13} /> 做内容</button>
                     <button className="idea-act" onClick={() => schedule(it)}><IconCalendar size={13} /> 排期</button>
                     <button className="idea-act next" onClick={() => advance(it)} title="推进状态">
                       {COLUMNS.find((c) => c.key === NEXT[it.status])?.label} <IconChevron size={12} />

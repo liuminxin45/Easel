@@ -145,6 +145,7 @@ class IdeaItem(BaseModel):
     note: str = ''
     source: str = ''
     status: str = 'pending'
+    source_id: str | None = None
 
 async def api_ideas_list():
     return _read_ideas()
@@ -153,6 +154,8 @@ async def api_ideas_create(req: IdeaItem):
     items = _read_ideas()
     st = req.status if req.status in IDEA_STATUSES else 'pending'
     item = {'id': uuid.uuid4().hex[:12], 'title': req.title.strip() or '未命名选题', 'note': req.note, 'source': req.source, 'status': st, 'created': int(time.time())}
+    if req.source_id is not None:
+        item['source_id'] = req.source_id
     items.insert(0, item)
     _write_ideas(items)
     return item
@@ -162,6 +165,9 @@ async def api_ideas_update(iid: str, req: IdeaItem):
     for it in items:
         if it.get('id') == iid:
             it.update({'title': req.title.strip() or it.get('title', '未命名选题'), 'note': req.note, 'source': req.source, 'status': req.status if req.status in IDEA_STATUSES else it.get('status', 'pending')})
+            # Older clients omit this optional binding when editing an idea.
+            if req.source_id is not None:
+                it['source_id'] = req.source_id
             _write_ideas(items)
             return it
     raise HTTPException(404, '选题不存在')

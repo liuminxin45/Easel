@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchIdeas, createIdea, updateIdea, deleteIdea, createSchedule } from '../lib/api';
 import type { Idea, IdeaInput } from '../lib/api';
 import IdeasView,{NEXT} from './IdeasView';
+import {InteractionNotice} from './InteractionNotice';
 
 interface IdeasPageProps {
-  onUseTopic: (title: string) => void;
+  onUseTopic: (title: string, sourceId?: string, note?: string) => void;
   draftStore?: IdeasPageDraftStore;
 }
 
@@ -25,8 +26,15 @@ export default function IdeasPage({ onUseTopic, draftStore }: IdeasPageProps) {
   const [editId, setEditId] = useState<string | null>(currentDraft.current.editId);
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const errorRevision = useRef(0), readRevision = useRef(0);
+  const reportError = useCallback((caught: unknown) => { errorRevision.current++; setError(caught instanceof Error ? caught.message : '选题操作失败，请重新读取后重试。'); }, []);
 
-  const load = useCallback(() => { fetchIdeas().then(setIdeas).catch(() => {}); }, []);
+  const load = useCallback(async () => {
+    const request = ++readRevision.current, revision = errorRevision.current;
+    try { const items = await fetchIdeas(); if (request !== readRevision.current) return; setIdeas(items); if (revision === errorRevision.current) setError(''); }
+    catch (caught) { if (request === readRevision.current) reportError(caught); }
+  }, [reportError]);
   useEffect(() => { load(); }, [load]);
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2200); };
@@ -49,7 +57,7 @@ export default function IdeasPage({ onUseTopic, draftStore }: IdeasPageProps) {
   const openNew = () => { const saved = draftStore?.read(); showForm(saved?.form ? saved : { editId: null, form: { ...EMPTY } }); };
   const openEdit = (it: Idea) => {
     const saved = draftStore?.read();
-    showForm(saved?.editId === it.id ? saved : { editId: it.id, form: { title: it.title, note: it.note, source: it.source, status: it.status }, revision: (it as Idea & { revision?: number }).revision });
+    showForm(saved?.editId === it.id ? saved : { editId: it.id, form: { title: it.title, note: it.note, source: it.source, status: it.status, ...(it.source_id?{source_id:it.source_id}:{}) }, revision: (it as Idea & { revision?: number }).revision });
   };
   const save = async () => {
     if (!form || !form.title.trim() || busy) return;
@@ -60,20 +68,24 @@ export default function IdeasPage({ onUseTopic, draftStore }: IdeasPageProps) {
       if (JSON.stringify(currentDraft.current) === JSON.stringify(submitted)) showForm({ form: null, editId: null });
       const stored = draftStore?.read();
       if (stored && JSON.stringify({ form: stored.form, editId: stored.editId, revision: stored.revision }) === JSON.stringify({ form: submitted.form, editId: submitted.editId, revision: submitted.revision })) draftStore?.remove();
-      load();
+      await load();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '保存失败，原输入已保留');
+      reportError(error);
     } finally { setBusy(false); }
   };
-  const advance = async (it: Idea) => { await updateIdea(it.id, { ...it, status: NEXT[it.status] }); load(); };
-  const remove = async (it: Idea) => { await deleteIdea(it.id); load(); };
+  const advance = async (it: Idea) => { try { await updateIdea(it.id, { ...it, status: NEXT[it.status] }); await load(); } catch (caught) { reportError(caught); } };
+  const remove = async (it: Idea) => { try { await deleteIdea(it.id); await load(); } catch (caught) { reportError(caught); } };
   const schedule = async (it: Idea) => {
     // 用本地日期（日历页按本地渲染）：toISOString 是 UTC，东八区 0-8 点会落到「昨天」
     const d = new Date();
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    await createSchedule({ title: it.title, date, platform: '', time: '', status: 'idea', note: it.note });
-    showToast('已加入日历（今天）');
+    try {
+      await createSchedule({ title: it.title, date, platform: '', time: '', status: 'idea', note: it.note });
+      showToast('已加入日历（今天）');
+      await load();
+    } catch (caught) { reportError(caught); }
   };
 
-  return <IdeasView {...{byStatus,form,editId,toast,busy,openNew,openEdit,setForm,save,advance,remove,schedule,onUseTopic}}/>;
+  const notice = error ? <><InteractionNotice message={error}/><button className="btn btn-sm" onClick={()=>void load()}>重新读取选题</button></> : undefined;
+  return <IdeasView {...{byStatus,form,editId,toast,busy,notice,openNew,openEdit,setForm,save,advance,remove,schedule,onUseTopic}}/>;
 }

@@ -75,6 +75,36 @@ test('a done event with unknown receipt retains the frozen turn and only GET rec
  f.vm.api.get=async path=>{f.calls.get.push(path);return {turn_id:'exact-turn',execution_status:'completed',delivery_state:'accepted'}};
  await f.runRecovery();assert.equal(f.draft.pending,undefined);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
 });
+
+test('silent SSE restoration clears only the transport warning without acknowledging or resubmitting the turn',async()=>{
+ const f=fixture();f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];
+ callbacks[16].onAccepted();f.draft={...f.draft,text:'恢复期间继续输入'};
+ callbacks[8]();const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ assert.match(runtime.state.getState().feedback.message,/连接暂时中断/);
+ const pending=plain(f.draft.pending);callbacks[16].onConnectionRestored();
+ assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().error,'');
+ assert.equal(runtime.state.getState().running,true);assert.equal(runtime.state.getState().accepted,true);
+ assert.deepEqual(plain(f.draft.pending),pending);assert.equal(f.draft.text,'恢复期间继续输入');
+ assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
+ callbacks[8]();runtime.state.setState({error:'授权状态暂未核对',feedback:{kind:'status',message:'授权状态暂未核对'}});
+ callbacks[16].onConnectionRestored();assert.equal(runtime.state.getState().error,'授权状态暂未核对');
+});
+
+test('a known timeout receipt is reported as execution uncertainty until the same interrupted turn is confirmed',async()=>{
+ const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown',error:'Codex 本轮超时，等待核对原回合。'}});
+ f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();
+ f.draft={...f.draft,text:'新草稿不能被恢复清空'};callbacks[8]();callbacks[4]();await tick();await tick();
+ const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ assert.match(runtime.state.getState().feedback.message,/原任务执行结果待核对/);
+ assert.match(runtime.state.getState().feedback.message,/Codex 本轮超时/);
+ assert.doesNotMatch(runtime.state.getState().feedback.message,/连接暂时中断/);
+ callbacks[16].onConnectionRestored();assert.ok(f.draft.pending,'late transport recovery must not resolve an unknown receipt');
+ await f.runRecovery();assert.match(runtime.state.getState().feedback.message,/原任务执行结果待核对/);
+ f.vm.api.get=async path=>{f.calls.get.push(path);return {turn_id:'exact-turn',execution_status:'stopped',delivery_state:'interrupted'}};
+ await f.runRecovery();assert.equal(f.draft.pending,undefined);assert.equal(f.draft.text,'新草稿不能被恢复清空');
+ assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().running,false);
+ assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
+});
 test('one production send freezes the exact plan and immediately streams without a confirmation dialog',async()=>{
  const command={skill_id:'content-production',version:2,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true,trial:true},f=fixture({draft:{text:'原字贴图',files:[{id:'attached',name:'素材.txt'}],command}});
  f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.text,'原字贴图','input stays until real acceptance');

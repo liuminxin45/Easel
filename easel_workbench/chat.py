@@ -637,7 +637,15 @@ class ChatService:
                         delivery_state='interrupted' if confirmed else 'unknown')
             emit('activity', '已停止' if confirmed else '未取得明确停止回执，原回合等待核对；不会自动重发。')
         except (HarnessError, asyncio.TimeoutError) as error:
-            turn.update(status='unknown', delivery_state='unknown', error=scrub(str(error)) if isinstance(error, HarnessError) else 'Codex 本轮超时，等待核对原回合。')
+            # wait_for cancels the native adapter before raising TimeoutError.
+            # Its exact thread/turn interruption callback is positive evidence
+            # of a stopped turn; an unacknowledged cancellation remains unknown.
+            confirmed_timeout = isinstance(error, asyncio.TimeoutError) and turn.get('interrupt_confirmed') is True
+            turn.update(status='stopped' if confirmed_timeout else 'unknown',
+                        delivery_state='interrupted' if confirmed_timeout else 'unknown',
+                        error=scrub(str(error)) if isinstance(error, HarnessError) else
+                        'Codex 本轮超时，原生接口已确认中断；原回合与文件保留，未重新制作。' if confirmed_timeout else
+                        'Codex 本轮超时，等待核对原回合。')
             emit('error', turn['error'])
         except Exception as error:
             turn.update(status='unknown', delivery_state='unknown', error='Codex 执行或结果记录异常，请核对原回合。', error_type=type(error).__name__)

@@ -87,12 +87,16 @@ def receipt(tmp_path_factory, monkeypatch):
     files = {}
     for name in POLICIES:
         source = PROJECT / name
-        assert sha(source) == retention.POLICY_SOURCES[name]
+        # Build the exact reviewed LF artifact even when a fresh Windows Git
+        # checkout converts working files to CRLF. Production still validates
+        # raw source/frozen bytes; the fixture does not relax that boundary.
+        reviewed = source.read_bytes().replace(b'\r\n', b'\n')
+        assert hashlib.sha256(reviewed).hexdigest() == retention.POLICY_SOURCES[name]
         for base in (root, package):
             target = base / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-        files[name] = sha(source)
+            target.write_bytes(reviewed)
+        files[name] = hashlib.sha256(reviewed).hexdigest()
     manifest = {'schema': 1, 'release': 'workbench-fixture',
                 'architecture': 'easel-workbench-extension', 'files': files}
     write(package / 'workbench-release.json', manifest)

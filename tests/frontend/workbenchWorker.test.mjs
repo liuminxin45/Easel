@@ -22,6 +22,35 @@ test('an unavailable legacy handshake does not claim that offline upgrade is rea
  const valid=setup(worker({release:'new',shell_ready:true}));assert.equal(await valid.prepareNativeWorker({update:async()=>{throw Error('offline')}},'new',100),true);
 });
 
+test('a WebView update that never settles cannot outlive the total worker preparation deadline',async()=>{
+ const f=setup(worker({release:'new',shell_ready:true}));
+ const completed=await Promise.race([
+  f.prepareNativeWorker({update:()=>new Promise(()=>{})},'new',30),
+  new Promise(resolve=>setTimeout(()=>resolve('unbounded update'),150)),
+ ]);
+ assert.equal(completed,false);
+});
+
+test('worker handshakes and retry delays consume the same remaining preparation budget',async()=>{
+ const waits=[],exports={};let now=0;
+ class Channel {constructor(){this.port1={close(){},onmessage:null};this.port2={close(){}}}}
+ runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{
+  exports,MessageChannel:Channel,navigator:{serviceWorker:{controller:{postMessage(){}}}},Date:{now:()=>now},
+  setTimeout:(fn,ms)=>{waits.push(ms);return setImmediate(()=>{now+=ms;fn()})},clearTimeout:clearImmediate,
+ });
+ assert.equal(await exports.prepareNativeWorker({update:async()=>{}},'new',45),false);
+ assert.ok(waits.every(ms=>ms<=45),JSON.stringify(waits));
+ assert.equal(now,45);
+});
+
+test('a delayed worker reply cannot claim readiness after the deadline already elapsed',async()=>{
+ const exports={};let now=0;
+ class Channel {constructor(){this.port1={close(){},onmessage:null};this.port2={close(){},postMessage:value=>this.port1.onmessage?.({data:value})}}}
+ const controller={postMessage:(_,ports)=>{now=60;ports[0].postMessage({release:'new',shell_ready:true})}};
+ runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports,MessageChannel:Channel,navigator:{serviceWorker:{controller}},Date:{now:()=>now},setTimeout,clearTimeout});
+ assert.equal(await exports.prepareNativeWorker({update:async()=>{}},'new',45),false);
+});
+
 const template=readFileSync(new URL('../../easel_workbench/assets/native-sw-template.js',import.meta.url),'utf8');
 const origin='https://workbench.test',release='current-release';
 const shell=version=>'<html><meta name="native-release" content="'+version+'"><body>'+version+'</body></html>';

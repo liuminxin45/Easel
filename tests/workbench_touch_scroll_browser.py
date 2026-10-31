@@ -303,7 +303,16 @@ def main():
                         check(profile, 'navigation backdrop swipe does not scroll or dismiss its background',
                               page.locator('.dash-page').evaluate('element=>element.scrollTop') == background_before
                               and page.locator('.sidebar-panel').get_attribute('aria-modal') == 'true' and len(writes) == action_count)
-                        page.locator('.sidebar-close').click()
+                        # The minimal drawer has no extra header/close control.
+                        # Close through its actual touch backdrop, as on mobile.
+                        page.touchscreen.tap(width - 20, 600)
+                        expect(page.locator('.sidebar-toggle')).to_have_attribute('aria-expanded', 'false')
+                        expect(page.locator('.sidebar-panel')).to_have_attribute('aria-hidden', 'true')
+                        expect(backdrop).not_to_be_visible()
+                        expect(page.locator('.sidebar-toggle')).to_be_focused()
+                        check(profile, 'touching the navigation backdrop closes only the drawer and retains background state',
+                              page.locator('.dash-page').evaluate('element=>element.scrollTop') == background_before
+                              and page.locator('.sidebar-panel').get_attribute('inert') is not None and len(writes) == action_count)
 
                         go('/settings?panel=more')
                         expect(page.get_by_role('dialog', name='设置', exact=True)).to_be_visible()

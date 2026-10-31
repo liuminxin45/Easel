@@ -130,6 +130,7 @@ def seed(fixture, image, video):
                                  'reason': LONG, 'conditions': {'description': LONG}, 'evidence_refs': []})['result']['skill']
     return {'work': work, 'version': work, 'article': article, 'session': session['id'], 'skill': detail['id'], 'skill_version': candidate['version'],
             'image_path': '__workbench__/mobile-audit-image/封面.png',
+            'news_article': next(item['id'] for item in box.store.article_day()['items'] if item['title'].startswith(MARK)),
             'topics': 3, 'calendar_items': 8, 'news_items': 20, 'output_folder': str(folder)}
 
 
@@ -550,6 +551,7 @@ def main():
                                 continue
                             run('dashboard.main', '/toolbox', '.dash-page', marker=MARK)
                             run('trends.main', '/news', '.trends-page', marker=MARK)
+                            run('news.reading', '/news/a/' + ids['news_article'], '.ew-page', marker=MARK)
                             def source_manager(kind='rss'):
                                 page.get_by_role('button', name='数据源', exact=True).click()
                                 expect(page.locator('.trend-manager-form')).to_be_visible()
@@ -646,7 +648,7 @@ def main():
                                 run('chat.artifacts', chat_path, '.artifact-gallery', 'video', before=lambda: artifact_media(2, 'video'))
                                 run('chat.artifacts', chat_path, '.artifact-gallery', 'audio', before=lambda: artifact_media(3, 'audio'))
                                 run('chat.execution-details', chat_path, '.chat-turn-outputs', 'seeded_product_receipt', marker=MARK)
-                                run('trends.detail-alias', '/news/a/mobile-audit-news', '.trends-page', 'current_alias_behavior', marker=MARK)
+                                # Former title-only detail alias is replaced by the actual news.reading route above.
                                 run('calendar.day', '/toolbox?section=calendar', '.overlay .modal', 'day_list_many_items', marker=MARK,
                                     before=lambda: page.locator('.cal-more').first.click())
                                 run('work.draft', '/works/mobile-audit-draft', '.ew-work', 'existing_draft_edit', marker=MARK)
@@ -817,7 +819,8 @@ def main():
     finally:
         report['covered_surfaces'] = sorted({item['surface_id'] for item in report['checks'] if item.get('rendered')})
         inventory = read(ROOT / 'docs/workbench/MOBILE-COVERAGE-20261031.json')
-        report['not_yet_covered_surfaces'] = sorted(set(inventory['acceptance']['required_private_surface_ids']) - set(report['covered_surfaces']))
+        report['not_yet_covered_surfaces'] = sorted(((set(inventory['acceptance']['required_private_surface_ids']) - {'trends.detail-alias'}) | {'news.reading'}) - set(report['covered_surfaces']))
+        report['retired_surface_mappings'] = {'trends.detail-alias': 'news.reading'}
         report['all_required_private_surfaces_covered'] = not report['not_yet_covered_surfaces']
         report['keyboard_scope'] = {'overlay_cycles_observed': True, 'all_observed_cycles_retained': not report.get('keyboard_observations'),
                                     'observations_are_not_layout_passes': True}

@@ -6,8 +6,9 @@ import TrendsView from './TrendsView';
 import TrendSourcesDialog from './TrendSourcesDialog';
 
 interface TrendsPageProps {
-  onUseTopic: (title: string) => void;   // 一键做成内容 → 跳 chat
+  onUseTopic: (title: string, sourceId?: string, note?: string) => void;   // 一键做成内容 → 跳 chat
   refreshAll?: () => Promise<unknown>;
+  onRead?: (sourceId: string) => void;
   listLimit?: number;
   quietBackgroundRefresh?: boolean;
 }
@@ -24,7 +25,7 @@ export default function TrendsPage(props: TrendsPageProps) {
   return <TrendBoundary><TrendsPanel {...props} /></TrendBoundary>;
 }
 
-function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15, quietBackgroundRefresh = false }: TrendsPageProps) {
+function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBackgroundRefresh = false }: TrendsPageProps) {
   const [sources, setSources] = useState<TrendSource[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
@@ -41,10 +42,10 @@ function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15, quietBackgroundRe
   const discoveryId = useRef(0);
   const initialized = useRef(false);
 
-  const save = async (key: string, title: string, source: string) => {
+  const save = async (key: string, title: string, source: string, sourceId: string) => {
     if (saved.has(key)) return;
     try {
-      await createIdea({ title, source, status: 'pending' });
+      await createIdea({ title, source, source_id: sourceId, status: 'pending' });
       setSaved((prev) => new Set(prev).add(key));
     } catch { setSaveError('收藏失败，请稍后重试。'); }
   };
@@ -109,8 +110,8 @@ function TrendsPanel({ onUseTopic, refreshAll, listLimit = 15, quietBackgroundRe
 
   return <><TrendsView sources={sources} selected={selected} groups={groups} ready={ready} loading={loading} refreshing={refreshing||loading||groups.some(group=>group.error?.code==='busy')}
     updated={updated} error={error||saveError} warnings={warnings} saved={saved}
-    onToggle={toggle} onRefresh={()=>{void refresh()}} onManage={()=>setManagerOpen(true)}
-    onSave={(g,it)=>{void save(`${g.platform}:${it.id}`,it.title,g.label)}} onUse={(_,it)=>onUseTopic(it.title)}/>
+    onRead={onRead?(_,it)=>onRead(it.id):undefined} onToggle={toggle} onRefresh={()=>{void refresh()}} onManage={()=>setManagerOpen(true)}
+    onSave={(g,it)=>{void save(`${g.platform}:${it.id}`,it.title,g.label,it.id)}} onUse={(_,it)=>onUseTopic(it.title,it.id)}/>
     {managerOpen&&<TrendSourcesDialog onClose={()=>setManagerOpen(false)} onChanged={addedId=>{
       void discover().then(()=>{if(addedId)setSelected(prev=>[...new Set([...prev,addedId])])});
     }}/>}</>;

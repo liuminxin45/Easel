@@ -37,7 +37,7 @@ interface DashboardProps {
   apiDirect: boolean;
   agentRuntime: string;
   onNavigate: (page: Page) => void;
-  onUseTopic: (title: string) => void;
+  onUseTopic: (title: string, sourceId?: string, note?: string) => void;
   persistAnalytics?: boolean;
   verifyAccountsOnMount?: boolean;
   listMaxHeight?: number;
@@ -204,7 +204,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconFire size={16} /> 今日热点</span>
             <button className="dash-more" onClick={() => onNavigate('trends')}>热点雷达 →</button>
           </div>
-          {board('news','今日热点列表',<DashboardTrends groups={trends} onRead={(_,it)=>onUseTopic(it.title)}/>)}
+          {board('news','今日热点列表',<DashboardTrends groups={trends} onRead={(_,it)=>onUseTopic(it.title,it.id)}/>)}
         </div>
 
         {/* 选题库 */}
@@ -216,7 +216,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           {board('ideas','待做选题列表',<>
           {pendingIdeas.length === 0 && <div className="dash-empty">还没攒选题，去热点雷达收藏几个吧</div>}
           {pendingIdeas.slice(0, 5).map((it) => (
-            <div key={it.id} className="dash-idea" onClick={() => onUseTopic(it.title)} title="点击做成内容">
+            <div key={it.id} className="dash-idea" onClick={() => onUseTopic(it.title,it.source_id,it.note)} title="点击做成内容">
               <span className="dash-idea-title">{it.title}</span>
               {it.source && <span className="badge">{it.source}</span>}
             </div>

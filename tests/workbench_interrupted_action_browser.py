@@ -114,6 +114,13 @@ def main():
                     return [request for request in requests if request['method'] == 'POST'
                             and request['path'] in ('/api/chat/plan', '/api/chat/stream')]
 
+                def stream_requests():
+                    # Initial production is POST /stream; actual resume uses
+                    # GET /jobs/<turn>/stream. Count both so reconnect cannot
+                    # hide behind the different event-stream route.
+                    return [request for request in requests if request['path'] == '/api/chat/stream'
+                            or re.fullmatch(r'/api/chat/jobs/[^/]+/stream', request['path'])]
+
                 def session(page, sid):
                     response = page.request.get(fixture['origin'] + '/api/chat/sessions/' + sid)
                     assert response.ok, response.text()
@@ -174,9 +181,18 @@ def main():
                 report['fixture'] = {'session_id': sid, 'turn_id': turn_id, 'work': work, 'recovery': recovery,
                                      'original': original, 'later_draft': later, 'retained_files': retained,
                                      'original_receipt_sha256': expected_hash, 'native_proof': proof}
+                streams_before_restore = list(stream_requests())
+                check('before reload there is exactly one original production stream and no resume stream',
+                      len(streams_before_restore) == 1 and streams_before_restore[0]['method'] == 'POST')
                 page.reload(wait_until='domcontentloaded')
                 page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))?.pending", arg=sid)
+                expect(page.get_by_role('status', name='制作中断', exact=True)).to_be_visible()
+                expect(page.get_by_role('alert')).to_have_count(0)
+                page.wait_for_timeout(600)
                 check('same-session pending state clears only after the actual stopped receipt is read')
+                check('confirmed stopped session directly clears old unknown pending without opening any GET or POST stream',
+                      stream_requests() == streams_before_restore and len(adapter.requests) == 1)
+                report['restore_stream_requests'] = {'before_reload': streams_before_restore, 'after_restore': list(stream_requests())}
 
                 for width, theme in ((390, 'light'), (320, 'dark'), (1440, 'light')):
                     if width != 390:
@@ -223,8 +239,41 @@ def main():
                                            arg={'sid': sid, 'skill': identity['skill_id'], 'version': identity['skill_version']})
                     page.wait_for_timeout(400)
                     check(str(width) + '-' + theme + ' navigation preserves later draft and never starts another plan, stream or model call',
-                          len(production_posts()) == before_posts and len(adapter.requests) == before_calls)
+                          len(production_posts()) == before_posts and len(adapter.requests) == before_calls
+                          and stream_requests() == streams_before_restore)
                     screenshot(page, str(width) + '-' + theme + '-continuation-context.png')
+
+                # Re-enter the original session with a real locally edited
+                # draft, leave it for the actual dashboard, then return using
+                # browser history. Neither entry is an execution request.
+                reentry = new_page(390, 'dark')
+                reentry_posts, reentry_calls = len(production_posts()), len(adapter.requests)
+                reentry.goto(fixture['origin'] + '/native/?' + urlencode({'path': '/chat/' + sid}), wait_until='domcontentloaded')
+                reentry_top = reentry.get_by_role('status', name='制作中断', exact=True)
+                expect(reentry_top).to_be_visible()
+                reentry_composer = reentry.get_by_role('textbox', name='对话输入', exact=True)
+                reentry_draft = later + ' 移动端离开后仍保留。'
+                reentry_composer.fill(reentry_draft)
+                reentry.wait_for_function("({sid,text})=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))?.text===text",
+                                          arg={'sid': sid, 'text': reentry_draft})
+                reentry.goto(fixture['origin'] + '/native/?' + urlencode({'path': '/'}), wait_until='domcontentloaded')
+                expect(reentry_composer).to_have_count(0)
+                check('leaving the stopped session preserves the real edited local draft',
+                      reentry.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))?.text", sid) == reentry_draft)
+                reentry.go_back(wait_until='domcontentloaded')
+                expect(reentry_top).to_be_visible()
+                expect(reentry_top).to_contain_text('本轮已中断，原文件已保留。')
+                expect(reentry.get_by_role('button', name='继续制作', exact=True)).to_have_count(1)
+                expect(reentry.get_by_role('alert')).to_have_count(0)
+                expect(reentry.get_by_role('status').filter(has_text='正在恢复原任务状态')).to_have_count(0)
+                expect(reentry_composer).to_have_value(reentry_draft)
+                reentry.wait_for_timeout(600)
+                check('390 dark leave and return restores the same session, unique action and draft without any stream, plan or production',
+                      parse_qs(urlsplit(reentry.url).query).get('path') == ['/chat/' + sid]
+                      and reentry.evaluate('()=>document.documentElement.dataset.theme') == 'dark'
+                      and len(production_posts()) == reentry_posts and len(adapter.requests) == reentry_calls
+                      and stream_requests() == streams_before_restore)
+                screenshot(reentry, '390-dark-stopped-session-reentry.png')
 
                 # A clean device has no later local draft: continuation may
                 # prefill, but it still must never execute without Send.
@@ -247,6 +296,8 @@ def main():
                       and final['status'] == 'stopped' and all(sha(file) == digest for file, digest in retained.items())
                       and products['incomplete'] is True and products['can_adopt'] is False
                       and final_turn['actual_prompt'] == turn['actual_prompt'] and final_turn['snapshot'] == turn['snapshot'])
+                check('all stopped-session refreshes, entries and continuations keep the unique original production stream',
+                      stream_requests() == streams_before_restore and len(adapter.requests) == 1)
                 check('actual 320/390 mobile and desktop browsers have no JavaScript errors', not errors)
                 report['errors'], report['requests'], report['products'] = errors, requests, products
                 report['passed'] = True

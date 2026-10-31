@@ -29,11 +29,70 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
  const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
- return {calls,resources,lib,runtime,vm,components,render,effects,runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
+ return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const continuationButtons=value=>nodes(value).filter(node=>node.type==='button'&&node.props.children==='继续制作');
 function interruptedMessage(){return {role:'assistant',content:'已保留原文件',status:'stopped',turnId:'interrupted-version',work:{work_id:'exact-work',version_id:'interrupted-version'},business_recovery:{job_id:'interrupted-version',failure_kind:'production',send_state:'submitted',action:'edit_materials',error_code:'native_interrupted',can_continue:true,continuation:{session_id:'session-one',work_id:'exact-work',version_id:'interrupted-version',profile_id:'oil-pig',skill_id:'content-production',skill_version:2}}};}
+const historicalInterruption='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';
+const retainedDraft=()=>({text:'  后写的新要求\n逐字保留  ',files:[{id:'later-file',name:'后来添加.png'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}});
+const savedTurn=(turnId='interrupted-version',state='unknown')=>({turnId,state,message:'旧冻结输入',attachments:[],context:{profile_id:'oil-pig'},inputs:{text:'旧冻结输入',files:[]}});
+
+test('confirmed explicit stop clears stale connection notices while preserving all later editable input',async()=>{
+ const f=fixture();f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();callbacks[8]();
+ const later=retainedDraft();f.draft={...later,pending:f.draft.pending};const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ await runtime.stop();const state=runtime.state.getState();assert.equal(state.error,'');assert.equal(state.feedback,undefined);assert.equal(state.running,false);assert.equal(state.stream,undefined);
+ assert.deepEqual(plain(f.draft),later);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,1);assert.equal(f.calls.post[0].path,'/api/chat/stop');
+ callbacks[3]('迟到分片不能复活已停止回合');callbacks[8]();assert.equal(runtime.state.getState().stream,undefined);assert.equal(runtime.state.getState().feedback,undefined);
+});
+test('an unconfirmed stop preserves the unresolved turn and later editable input',async()=>{
+ const f=fixture({postOverride:()=>({stopped:false})});f.render().chat.onSend();await tick();f.calls.stream[0][16].onAccepted();f.calls.stream[0][8]();
+ f.draft={...retainedDraft(),pending:f.draft.pending};const before=plain(f.draft),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one'),state=runtime.state.getState();
+ await assert.rejects(runtime.stop(),/尚未确认/);assert.deepEqual(plain(f.draft),before);assert.equal(runtime.state.getState(),state);assert.equal(f.calls.stream.length,1);
+});
+test('server-confirmed history restores either a fresh saved turn or an existing runtime before automatic resume',async()=>{
+ for(const mode of ['fresh-saved','existing-runtime','existing-runtime-without-saved']){
+  const later=retainedDraft(),f=fixture({draft:{...later,pending:savedTurn()}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  if(mode.startsWith('existing-runtime'))runtime.connect(savedTurn(),'oil-pig',true);
+  f.draft={...later,...(mode==='existing-runtime-without-saved'?{}:{pending:f.draft.pending})};runtime.state.setState({error:historicalInterruption,feedback:{kind:'status',message:'连接暂时中断，正在恢复原任务状态。输入已保留。'}});
+  f.resources.session.messages=[{...interruptedMessage(),business_error:historicalInterruption}];
+  const originalStreams=f.calls.stream.length;f.render();for(const effect of [...f.effects])effect();await tick();
+  const state=runtime.state.getState();assert.equal(state.error,'',mode);assert.equal(state.feedback,undefined,mode);assert.equal(state.running,false,mode);assert.equal(state.stream,undefined,mode);
+  assert.deepEqual(plain(f.draft),later,mode);assert.equal(f.calls.stream.length,originalStreams,mode+' must not subscribe before restoring server history');assert.equal(f.calls.post.length,0);
+  assert.equal(continuationButtons(f.render().chat.notice).length,1,mode+' exposes continuation after local stale state is reconciled');
+  if(originalStreams){f.calls.stream[0][3]('迟到旧回调');assert.equal(runtime.state.getState().stream,undefined);}
+ }
+});
+test('restoring the confirmed original turn cancels unknown receipt polling without reacknowledging later input',async()=>{
+ const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}});f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();callbacks[4]();await tick();await tick();
+ assert.equal(f.recoveryCount,1);const later=retainedDraft();f.draft={...later,pending:f.draft.pending};const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ runtime.state.setState({error:historicalInterruption});runtime.restoreStopped('exact-turn',historicalInterruption);
+ assert.equal(f.recoveryCount,0);assert.deepEqual(plain(f.draft),later);assert.equal(runtime.state.getState().error,'');assert.equal(runtime.state.getState().feedback,undefined);
+ const getCount=f.calls.get.length;callbacks[4]();callbacks[3]('迟到输出');await tick();assert.equal(f.calls.get.length,getCount);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
+});
+test('restoring an interrupted turn preserves a distinct hook failure instead of treating it as a historical notice',()=>{
+ const later=retainedDraft(),f=fixture({draft:{...later,pending:savedTurn()}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one'),hookError='模型原回执已保留，作品记录待核对；没有重跑模型。';
+ runtime.state.setState({error:hookError,feedback:{kind:'status',message:'连接暂时中断'}});f.resources.session.messages=[{...interruptedMessage(),business_error:historicalInterruption}];
+ f.render();for(const effect of [...f.effects])effect();assert.equal(runtime.state.getState().error,hookError);assert.equal(runtime.state.getState().feedback,undefined);assert.deepEqual(plain(f.draft),later);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.post.length,0);
+});
+test('restoring one stopped history cannot clear a different saved or active turn or an unrelated runtime',()=>{
+ for(const mode of ['saved-other','active-other','active-same-saved-other','unrelated']){
+  const later=retainedDraft(),f=fixture({draft:later}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  if(mode==='active-other')runtime.connect(savedTurn('another-turn'),'oil-pig',true);
+  if(mode==='active-same-saved-other')runtime.connect(savedTurn(),'oil-pig',true);
+  f.draft={...later,...(mode==='unrelated'?{}:{pending:savedTurn('another-turn')})};runtime.state.setState({error:historicalInterruption,feedback:{kind:'status',message:'仍需核对当前回合'}});
+  const before=plain(f.draft),state=runtime.state.getState();runtime.restoreStopped('interrupted-version',historicalInterruption);
+  assert.deepEqual(plain(f.draft),before,mode);assert.equal(runtime.state.getState(),state,mode);assert.equal(f.calls.post.length,0);
+ }
+});
+test('unknown unauthorized or still-pending server history never authorizes restoring the local turn',()=>{
+ for(const mode of ['unknown','not-authorized','server-pending','wrong-work']){
+  const message={...interruptedMessage(),business_error:historicalInterruption},f=fixture({draft:{...retainedDraft(),pending:savedTurn()}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  if(mode==='unknown')message.status='unknown';if(mode==='not-authorized')message.business_recovery.can_continue=false;if(mode==='server-pending')f.resources.session.pendingTurnId='interrupted-version';if(mode==='wrong-work')message.work.work_id='other-work';
+  f.resources.session.messages=[message];runtime.blocked.add('interrupted-version');runtime.state.setState({error:historicalInterruption,feedback:{kind:'status',message:'原任务执行结果待核对'}});
+  const state=runtime.state.getState(),before=plain(f.draft);f.render();for(const effect of [...f.effects])effect();assert.deepEqual(plain(f.draft),before,mode);assert.equal(runtime.state.getState(),state,mode);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.post.length,0);
+ }
+});
 
 test('a confirmed stopped receipt clears transient and raw interruption notices while preserving later draft and attachments',async()=>{
  const error='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';

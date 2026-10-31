@@ -15,13 +15,13 @@ export function productArtifacts(files:unknown):PreviewArtifact[]{
  }).sort((a,b)=>Number(b.kind==='image')-Number(a.kind==='image'));
 }
 
-export function ChatTurnProducts({message,showNavigation=true}:{message:unknown;showNavigation?:boolean}){
+export function ChatTurnProducts({message,showNavigation=true,showContinuation=true}:{message:unknown;showNavigation?:boolean;showContinuation?:boolean}){
  const vm=useWorkbench(),value=record(message),tid=string(value.turnId||value.id),product=useResource<JsonRecord>(tid?'/api/chat/products/'+encodeURIComponent(tid):null,{interval:10000}),[opened,setOpened]=useState(false);
  const data=product.data,wid=string(data?.work_id),vid=string(data?.version_id),decision=string(record(data?.decision).kind),blocks=array<JsonRecord>(data?.text_blocks),fallback=array<JsonRecord>(data?.files).filter(file=>file.partial),issue=string(value.business_error),continuationPath=nativeContinuationPath(value.business_recovery,wid,vid);
  if(!data&&!issue)return null;
  const hasProducts=array(data?.files).length>0||blocks.length>0;
  return <div className="chat-turn-outputs">
-  {continuationPath&&<button className="btn btn-sm btn-primary" onClick={()=>vm.navigate(continuationPath,{intent:'flow'})}>继续制作</button>}
+  {showContinuation&&continuationPath&&<button className="btn btn-sm btn-primary" onClick={()=>vm.navigate(continuationPath,{intent:'flow'})}>继续制作</button>}
   {issue&&<details><summary>作品交付仍需核对</summary><p className="ew-preserve">{issue}</p></details>}
   {data?.incomplete===true&&hasProducts&&<p className="chat-task-status">本轮未完成；以下为已保存文件，可查看和保存，尚不能采纳。</p>}
   {fallback.length>0&&<ArtifactGallery artifacts={productArtifacts(fallback)}/>}

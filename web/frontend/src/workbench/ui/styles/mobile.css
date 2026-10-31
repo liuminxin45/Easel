@@ -90,6 +90,20 @@
   html[data-native-platform] .artifact-footer { flex-wrap: wrap; }
   html[data-native-platform] .artifact-name { flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
   html[data-native-platform] .artifact-arrow { min-inline-size: 44px; min-block-size: 44px; }
+  /* Reserve the arrows' space instead of covering narrow artwork with controls. */
+  html[data-native-platform] .artifact-stage:has(.artifact-arrow) { padding-inline: 56px; }
+  html[data-native-platform] .artifact-image-link { align-items: center; min-inline-size: 44px; min-block-size: 44px; }
+  html[data-native-platform] .artifact-stage .artifact-image-link img { max-block-size: min(42dvh, 360px); }
+  html[data-native-platform] .artifact-footer a { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 44px; min-block-size: 44px; }
+  html[data-native-platform] .copyable-text .artifact-header { flex-wrap: nowrap; }
+  html[data-native-platform] .copyable-text pre,
+  html[data-native-platform] .copyable-text pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+  html[data-native-platform] .composer-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
+  html[data-native-platform] .composer-hint { min-inline-size: 0; overflow-wrap: anywhere; }
+  html[data-native-platform] .chat-product-actions,
+  html[data-native-platform] .chat-task-status,
+  html[data-native-platform] .chat-linked-works { display: flex; flex-wrap: wrap; min-inline-size: 0; gap: 8px; }
+  html[data-native-platform] .chat-product-actions > [role="status"] { flex-basis: 100%; overflow-wrap: anywhere; }
   html[data-native-platform] .ew-work { overflow-y: auto; min-block-size: 0; }
   html[data-native-platform] .ew-grid,
   html[data-native-platform] .ew-editor-grid,
@@ -173,11 +187,19 @@
   html[data-native-platform] .icon-btn,
   html[data-native-platform] .settings-close,
   html[data-native-platform] .session-act,
+  html[data-native-platform] .msg-action,
+  html[data-native-platform] .composer-attach-btn,
+  html[data-native-platform] .brush-btn,
+  html[data-native-platform] .brush-close,
+  html[data-native-platform] .brush-tab,
+  html[data-native-platform] .question-card__other,
+  html[data-native-platform] .question-card__submit,
   html[data-native-platform] .new-chat-btn,
   html[data-native-platform] .settings-gear,
   html[data-native-platform] .send-btn { min-block-size: 44px; min-inline-size: 44px; max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
   html[data-native-platform] .idea-card-actions { display: flex; position: static; flex-wrap: wrap; margin-block-end: 8px; }
   html[data-native-platform] .session-actions { display: flex; }
+  html[data-native-platform] .msg-actions { opacity: 1; flex-wrap: wrap; }
   html[data-native-platform] .idea-title { padding-inline-end: 0; }
   html[data-native-platform] .trend-save,
   html[data-native-platform] .trend-use { opacity: 1; min-block-size: 44px; }

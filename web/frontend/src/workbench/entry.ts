@@ -1,16 +1,6 @@
 // Keep startup recovery independent of React and the application's large chunks.
-export {};
-// Retired root-scope workers still intercept navigation with the old recovery
-// shell. Remove only that registration, retaining drafts and caches.
-if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-  void navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(
-    registrations.filter(registration => {
-      const worker = registration.active || registration.waiting || registration.installing;
-      return registration.scope === location.origin + '/' && worker
-        && new URL(worker.scriptURL).pathname === '/sw.js';
-    }).map(registration => registration.unregister()),
-  )).catch(() => { /* Startup remains available when worker inspection is denied. */ });
-}
+import {retireLegacyWorker} from './retireLegacyWorker';
+void retireLegacyWorker();
 const getBootStatus = () => document.getElementById('native-boot-status');
 const timer = setTimeout(() => {
   const node = getBootStatus();

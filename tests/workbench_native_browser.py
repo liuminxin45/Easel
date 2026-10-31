@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -119,6 +120,12 @@ def wait_history(page,origin,sid,previous_turn=None,files=False):
     raise AssertionError({'reason':'accurate native turn did not finish','history':result})
 
 
+def turn_view(page,history):
+    # Official ChatPage renders one direct wrapper per history message. Wait
+    # inside this exact turn so a previous product cannot satisfy readiness.
+    return page.locator('.chat-thread > div').nth(len(history['session']['messages'])-1)
+
+
 def direct_send_checks(browser,f,out,report,check,expect):
     """Only the changed send/parameter surfaces; no unrelated page matrix."""
     for profile,width,mobile in [('desktop',1280,False),('mobile',390,True)]:
@@ -177,7 +184,7 @@ def direct_send_checks(browser,f,out,report,check,expect):
             if plan:assert sent[0]['body']['context']['plan_token']==plan['plan_token']
             if format=='poster':assert not any(request['path'].startswith('/api/creative/prompts/') for request in requests),'parameters should load only on expansion'
             expect(page.locator('.artifact-gallery').last.locator('.artifact-count')).to_have_text('1 / 2')
-            page.get_by_role('button',name='打开成品页').last.click()
+            turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click()
             expect(page.get_by_role('button',name='修改这版')).to_be_visible()
             saved=parameters(page.locator('.ew-work-preview'),turn)
             assert saved['snapshot']['task']==format and turn['business_status']=='completed'
@@ -185,14 +192,14 @@ def direct_send_checks(browser,f,out,report,check,expect):
             check(profile,format+' sends directly without a modal and exposes exact frozen parameters by the product')
             page.goto(f['origin']+'/native/chat/'+sid)
             expect(textarea).to_be_enabled()
-        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
         parameters(page.locator('.ew-work-preview'),turn);check(profile,'work product view shows the same exact version parameters')
         page.get_by_role('button',name='修改这版').click();page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
         textarea=page.get_by_role('textbox',name='对话输入');page.wait_for_function("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').command?.action_id==='change'",arg=sid)
         textarea.fill('修改准确版本，一次发送 '+profile);page.get_by_role('button',name='发送',exact=True).click();expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
         history=wait_history(page,f['origin'],sid,previous,files=True);turn=history['session']['messages'][-1];previous=turn['turnId']
         page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(page.locator('.artifact-gallery')).to_have_count(3)
-        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
         saved=parameters(page.locator('.ew-work-preview'),turn);assert saved['snapshot']['task']=='change'
         report['simulated_executions'].append({'profile':profile,'format':'change','turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
         check(profile,'version modification sends once without a modal and keeps its exact parent')
@@ -251,7 +258,7 @@ def main():
                             if format=='poster':page.locator('input[type=file]').set_input_files({'name':'TEMP原始素材.txt','mimeType':'text/plain','buffer':b'Original TEMP evidence bytes'})
                             expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled(timeout=20000);textarea.press('Enter');expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible();expect(textarea).to_have_value('',timeout=20000)
                             history=wait_history(page,f['origin'],sid,prior,files=True);turn=history['session']['messages'][-1]
-                            expect(page.get_by_role('region',name='对话产物预览').last).to_be_visible(timeout=20000);expect(page.get_by_role('button',name='打开成品页').last).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
+                            expect(turn_view(page,history).get_by_role('region',name='对话产物预览')).to_be_visible(timeout=20000);expect(turn_view(page,history).get_by_role('button',name='查看产物',exact=True)).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
                             assert turn['output_files'] and turn['business_status']=='completed',turn
                             with f['box'].store.connect() as c:
                                 saved=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(turn['turnId'],)).fetchone()[0])
@@ -268,7 +275,7 @@ def main():
                         assert len(history['linked_works'])==2
                         page.screenshot(path=str(out/(profile+'-native-products.png')),full_page=True)
                         # Production version details must return to this same native session.
-                        page.get_by_role('button',name='打开成品页').last.click();expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
+                        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
                         if mobile:page.locator('.ew-work-tabs').get_by_role('button',name='对话',exact=True).click()
                         page.get_by_text('本轮操作与技能',exact=True).click();page.get_by_label('发送方式',exact=True).select_option('feedback');feedback='只记录这版原话：背景太乱 '+profile
                         page.get_by_role('textbox',name='对话输入').fill(feedback);before_feedback=len(f['adapter'].requests)
@@ -305,7 +312,9 @@ def main():
                         page.screenshot(path=str(out/(profile+'-unknown-receipt.png')),full_page=True)
                         # Existing domain pages remain real authenticated views.
                         before_pages=len(f['adapter'].requests)
-                        for route,heading in [('/toolbox','今天，想创作点什么？'),('/works','内容库'),('/toolbox?section=profiles','创作画像'),('/settings','设置'),('/toolbox?section=skills','技能库')]:
+                        # The official dashboard greeting follows local time;
+                        # the selected profile opens its named detail page.
+                        for route,heading in [('/toolbox',re.compile(r'^(?:夜深了|上午好|中午好|下午好|晚上好) 👋$')),('/works','内容库'),('/toolbox?section=profiles','油猪大侠'),('/settings','设置'),('/toolbox?section=skills','技能库')]:
                             page.goto(f['origin']+'/native/?'+urlencode({'path':route}),wait_until='domcontentloaded');expect(page.get_by_role('heading',name=heading,exact=True).first).to_be_visible(timeout=20000)
                         page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname',has_text='content-production')).click();expect(page.get_by_role('button',name='版本与试用',exact=True)).to_be_visible(timeout=20000);page.get_by_role('button',name='版本与试用',exact=True).click();expect(page.get_by_role('combobox',name='技能版本')).to_be_visible(timeout=20000)
                         page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=skills'}));page.get_by_role('button',name='整理经验',exact=True).click();expect(page.get_by_role('heading',name='整理经验',exact=True)).to_be_visible(timeout=20000)
@@ -334,7 +343,7 @@ def main():
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=news_sid)
                     check('desktop','legacy news draft is preserved while native explicit candidate freezes actual source provenance')
                     # Expiry preserves user input and never invokes another model.
-                    textarea=page.get_by_role('textbox',name='对话输入');textarea.fill('  401仍须保留原字  ');before=len(f['adapter'].requests);f['auth'].expired=True;textarea.press('Enter');expect(page.get_by_text('登录已过期，输入已保留。',exact=False)).to_be_visible(timeout=20000);assert len(f['adapter'].requests)==before
+                    textarea=page.get_by_role('textbox',name='对话输入');textarea.fill('  401仍须保留原字  ');before=len(f['adapter'].requests);f['auth'].expired=True;textarea.press('Enter');expect(page.get_by_role('alert').filter(has_text='登录已过期，输入已保留。')).to_be_visible(timeout=20000);assert len(f['adapter'].requests)==before
                     assert page.evaluate('Object.entries(localStorage).some(([k,v])=>k.includes("draft")&&v.includes("401仍须保留原字"))')
                     check('desktop','owner 401 preserves exact draft and makes no model call')
                     context.close()

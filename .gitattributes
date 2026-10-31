@@ -1,1 +1,5 @@
 scripts/git-hooks/* text eol=lf
+
+# Spec Kit locks hash exact bytes; preserve released assets on every checkout.
+/.agents/skills/speckit/** -text
+/.specify/** -text

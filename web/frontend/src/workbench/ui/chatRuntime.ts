@@ -49,6 +49,17 @@ export class SessionRuntime {
   (timer as unknown as {unref?:()=>void}).unref?.();this.recoveryTimer=timer;
  }
  clear(){this.clearRecovery();this.owner=undefined;this.controller?.abort();this.controller=undefined;this.activeTurn=undefined;this.closed.clear();this.blocked.clear();this.completed.clear();this.state.setState({stream:undefined,running:false,accepted:false,error:'',feedback:undefined})}
+ /** Called only after history authorizes this exact interrupted version. */
+ restoreStopped(turnId:string,historicalError:string){
+  const saved=this.saved();
+  if(saved&&saved.turnId!==turnId||this.activeTurn&&this.activeTurn!==turnId||!saved&&this.activeTurn!==turnId)return;
+  const state=this.state.getState();
+  if(!saved&&!this.owner&&!state.running&&!state.feedback&&(!historicalError||state.error!==historicalError))return;
+  this.clearRecovery();this.owner=undefined;this.controller?.abort();this.controller=undefined;
+  this.completed.add(turnId);this.blocked.delete(turnId);
+  if(saved)this.patch({pending:undefined});
+  this.state.setState({running:false,stream:undefined,feedback:undefined,...(historicalError&&state.error===historicalError?{error:''}:{})});
+ }
  closeQuestion(id:string){this.closed.add(id);const stream=this.state.getState().stream;if(stream)this.state.setState({stream:{...stream,questions:stream.questions.filter(q=>q.id!==id)}})}
  async status(ids:string[]){const value=await this.client.api.post<JsonRecord>('/api/chat/question/status',{questionIds:ids,sessionId:this.id,...(this.activeTurn?{turnId:this.activeTurn}:{})},this.client.session.getState().config?.csrf||'');return record(value.questions) as Record<string,{status:string}>}
  async answer(payload:{questionId:string;answers:Record<string,string[]>}){
@@ -100,7 +111,7 @@ export class SessionRuntime {
   const result=await this.client.api.post<JsonRecord>('/api/chat/stop',{sessionId:this.id,turnId:turn.turnId},this.client.session.getState().config?.csrf||'');
   if(epoch!==this.client.authenticationEpoch)return;
   if(result.stopped!==true)throw Error('尚未确认原任务已经停止，请继续核对回执');
-  this.owner=undefined;this.controller?.abort();this.state.setState({running:false,stream:undefined});this.clearRecovery();this.completed.add(turn.turnId);this.patch({pending:undefined});void this.reload();
+  this.owner=undefined;this.controller?.abort();this.state.setState({running:false,stream:undefined,error:'',feedback:undefined});this.clearRecovery();this.completed.add(turn.turnId);this.patch({pending:undefined});void this.reload();
  }
 }
 const coordinators=new WeakMap<WorkbenchClient,Map<string,SessionRuntime>>();

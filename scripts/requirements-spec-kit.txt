@@ -1,0 +1,18 @@
+# Spec Kit v2.0.0, release commit 3555899af8b99741e9613cbe722f15351eedfbcb.
+# Official release wheel, verified against the release SHA256SUMS.txt.
+specify-cli @ https://github.com/liuminxin45/spec-kit/releases/download/v2.0.0/specify_cli-2.0.0-py3-none-any.whl#sha256=5360a9458655b5bef18e29515e6cbb7fcd7710197037243302df4754ae2f0edd
+annotated-doc==0.0.5
+click==8.5.0
+colorama==0.4.6
+json5==0.17.3
+markdown-it-py==4.2.0
+mdurl==0.1.2
+packaging==26.3
+pathspec==1.1.1
+platformdirs==4.14.0
+pygments==2.21.0
+pyyaml==6.0.3
+readchar==4.2.2
+rich==15.0.0
+shellingham==1.5.4
+typer==0.27.3

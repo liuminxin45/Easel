@@ -1,0 +1,323 @@
+[
+  {
+    "id": "speckit/knowledge::bootstrap",
+    "type": "workflow",
+    "path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237/bootstrap.yml",
+    "description": "Knowledge bootstrap with evidence and review",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/knowledge",
+    "version": "1.0.0",
+    "pack_sha256": "cf4605c3e824e237ff41a49fe7dc91175e5e7ae3146139764e1d2b4011ad37da",
+    "pack_path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/knowledge::maintain",
+    "type": "workflow",
+    "path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237/maintain.yml",
+    "description": "Knowledge maintain with evidence and review",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/knowledge",
+    "version": "1.0.0",
+    "pack_sha256": "cf4605c3e824e237ff41a49fe7dc91175e5e7ae3146139764e1d2b4011ad37da",
+    "pack_path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/knowledge::release",
+    "type": "workflow",
+    "path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237/release.yml",
+    "description": "Knowledge release with evidence and review",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/knowledge",
+    "version": "1.0.0",
+    "pack_sha256": "cf4605c3e824e237ff41a49fe7dc91175e5e7ae3146139764e1d2b4011ad37da",
+    "pack_path": ".specify/packs/p-dfef556ae8933bd1cf83/1.0.0-cf4605c3e824e237",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/workflows::coding-lite",
+    "type": "workflow",
+    "path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6/coding-lite.yml",
+    "description": "Bounded coding or defect repair",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "validation",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_code",
+        "check": "builtin/validation-receipts"
+      },
+      {
+        "id": "ui",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_visible_ui",
+        "check": "builtin/ui-evidence"
+      },
+      {
+        "id": "runtime",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_runtime",
+        "check": "builtin/runtime-evidence"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/workflows",
+    "version": "1.0.0",
+    "pack_sha256": "0addd0258920dda6a572a18b3797ed6d70b25f93f6ff7ad94df736fb0bf9c873",
+    "pack_path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/workflows::engineering-change",
+    "type": "workflow",
+    "path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6/engineering-change.yml",
+    "description": "Cross-module or public contract change",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "validation",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_code",
+        "check": "builtin/validation-receipts"
+      },
+      {
+        "id": "ui",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_visible_ui",
+        "check": "builtin/ui-evidence"
+      },
+      {
+        "id": "runtime",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_runtime",
+        "check": "builtin/runtime-evidence"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/workflows",
+    "version": "1.0.0",
+    "pack_sha256": "0addd0258920dda6a572a18b3797ed6d70b25f93f6ff7ad94df736fb0bf9c873",
+    "pack_path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/workflows::investigation",
+    "type": "workflow",
+    "path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6/investigation.yml",
+    "description": "Establish a cause from observations before choosing a fix",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "validation",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_code",
+        "check": "builtin/validation-receipts"
+      },
+      {
+        "id": "ui",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_visible_ui",
+        "check": "builtin/ui-evidence"
+      },
+      {
+        "id": "runtime",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_runtime",
+        "check": "builtin/runtime-evidence"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/workflows",
+    "version": "1.0.0",
+    "pack_sha256": "0addd0258920dda6a572a18b3797ed6d70b25f93f6ff7ad94df736fb0bf9c873",
+    "pack_path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/workflows::validation-only",
+    "type": "workflow",
+    "path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6/validation-only.yml",
+    "description": "Verify a supplied artifact or behavior without product edits",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "validation",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_code",
+        "check": "builtin/validation-receipts"
+      },
+      {
+        "id": "ui",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_visible_ui",
+        "check": "builtin/ui-evidence"
+      },
+      {
+        "id": "runtime",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_runtime",
+        "check": "builtin/runtime-evidence"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/workflows",
+    "version": "1.0.0",
+    "pack_sha256": "0addd0258920dda6a572a18b3797ed6d70b25f93f6ff7ad94df736fb0bf9c873",
+    "pack_path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6",
+    "scope": [],
+    "layer": "project"
+  },
+  {
+    "id": "speckit/workflows::delivery",
+    "type": "workflow",
+    "path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6/delivery.yml",
+    "description": "Prepare an authorized delivery with current checks and human acceptance",
+    "gates": [
+      {
+        "id": "request",
+        "phase": "contract",
+        "kind": "machine",
+        "check": "builtin/request-contract"
+      },
+      {
+        "id": "validation",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_code",
+        "check": "builtin/validation-receipts"
+      },
+      {
+        "id": "ui",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_visible_ui",
+        "check": "builtin/ui-evidence"
+      },
+      {
+        "id": "runtime",
+        "phase": "ai_accept",
+        "kind": "machine",
+        "when": "changes_runtime",
+        "check": "builtin/runtime-evidence"
+      },
+      {
+        "id": "review",
+        "phase": "ai_accept",
+        "kind": "judgment",
+        "check": "builtin/criteria-review"
+      }
+    ],
+    "requires": [],
+    "pack_id": "speckit/workflows",
+    "version": "1.0.0",
+    "pack_sha256": "0addd0258920dda6a572a18b3797ed6d70b25f93f6ff7ad94df736fb0bf9c873",
+    "pack_path": ".specify/packs/p-b0602c1f3b54543d74b3/1.0.0-0addd0258920dda6",
+    "scope": [],
+    "layer": "project"
+  }
+]

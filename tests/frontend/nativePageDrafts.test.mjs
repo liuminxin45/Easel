@@ -20,7 +20,7 @@ function component(name,api){
   useState:initial=>{const index=cursor++;if(!(index in hooks))hooks[index]=typeof initial==='function'?initial():initial;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},
   useRef:initial=>{const index=cursor++;return hooks[index]??=( {current:initial} )},
   useEffect:(effect,deps)=>{const index=cursor++,previous=hooks[index];if(!previous||deps.some((value,i)=>!Object.is(value,previous[i]))){hooks[index]=deps;effects.push(effect)}},
-  useCallback:fn=>{cursor++;return fn},useMemo:fn=>{cursor++;return fn()},
+  useCallback:(fn,deps)=>{const index=cursor++,previous=hooks[index];if(!previous||deps.some((value,i)=>!Object.is(value,previous.deps[i])))hooks[index]={fn,deps};return hooks[index].fn},useMemo:fn=>{cursor++;return fn()},
  };
  const exports={};
  runInNewContext(compiled,{exports,Error,JSON,Object,setTimeout:()=>0,window:{confirm:()=>true},require:specifier=>{
@@ -29,6 +29,7 @@ function component(name,api){
   if(specifier==='../lib/api')return api;
   if(specifier==='../lib/sanitize')return {renderMarkdown:value=>value};
   if(specifier==='./IdeasView')return {__esModule:true,default:'IdeasView',NEXT:{pending:'doing',doing:'done',done:'pending'}};
+  if(specifier==='./InteractionNotice')return {InteractionNotice:'InteractionNotice'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});
   throw Error('Unexpected import '+specifier);
  }});
@@ -104,4 +105,38 @@ test('idea input survives 401/reload and an accepted save clears only its exact 
  const exact=view.save();finish({id:'idea-a'});await exact;view=reloaded.render(props).props;
  assert.equal(view.form,null);assert.equal(saved,null);
  assert.deepEqual(calls.map(value=>value[1].title),['unsent original','unsent original','typed during save']);
+});
+
+test('idea read failures retain the populated board and draft until a later successful retry',async()=>{
+ let mode='ok',pending;const rows=[{id:'source-topic',title:'原题',note:'原始备注',source:'TEMP',source_id:'news-original',status:'pending'}];
+ const api={fetchIdeas:async()=>{if(mode==='fail')throw Error('503 选题读取失败');if(mode==='hold')return await new Promise(resolve=>{pending=resolve});return rows},updateIdea:async()=>rows[0]};
+ let saved=null;const store={read:()=>saved,write:value=>{saved=json(value)},remove:()=>{saved=null}},props={onUseTopic:()=>{},draftStore:store};
+ const page=component('IdeasPage',api);page.render(props);await page.effects();let view=page.render(props).props;
+ view.openEdit(view.byStatus.pending[0]);view=page.render(props).props;view.setForm({...view.form,note:'  未提交原字\n第二行  '});
+ mode='fail';await view.advance(rows[0]);view=page.render(props).props;
+ assert.equal(view.byStatus.pending[0].title,'原题');assert.equal(saved.form.source_id,'news-original');
+ assert.equal(nodes(view.notice,node=>node.type==='InteractionNotice')[0].props.message,'503 选题读取失败');
+ mode='hold';button(view.notice,'重新读取选题').props.onClick();await new Promise(resolve=>setImmediate(resolve));view=page.render(props).props;
+ assert.ok(view.notice,'retry must not clear the genuine error while the read is pending');assert.equal(view.form.note,'  未提交原字\n第二行  ');
+ pending(rows);await new Promise(resolve=>setImmediate(resolve));view=page.render(props).props;
+ assert.equal(view.notice,undefined);assert.equal(view.form.note,'  未提交原字\n第二行  ');assert.equal(saved.form.source_id,'news-original');
+});
+
+test('all rejected idea mutations resolve without unhandled rejection and retain exact inputs',async()=>{
+ const row={id:'i',title:'旧看板',note:'备注',source:'来源',source_id:'source-id',status:'pending'};let reject=true;
+ const fail=async()=>{if(reject)throw Error('409 操作被拒绝');return {id:'i'}};
+ const page=component('IdeasPage',{fetchIdeas:async()=>[row],updateIdea:fail,deleteIdea:fail,createSchedule:fail,createIdea:fail}),props={onUseTopic:()=>{}};
+ page.render(props);await page.effects();let view=page.render(props).props;
+ for(const action of ['advance','remove','schedule']){await assert.doesNotReject(()=>view[action](row));view=page.render(props).props;assert.equal(nodes(view.notice,node=>node.type==='InteractionNotice')[0].props.message,'409 操作被拒绝');assert.equal(view.byStatus.pending[0].title,'旧看板');}
+ view.openEdit(row);view=page.render(props).props;view.setForm({...view.form,title:'原字草稿'});view=page.render(props).props;await assert.doesNotReject(()=>view.save());view=page.render(props).props;assert.equal(view.form.title,'原字草稿');assert.ok(view.notice);
+ reject=false;await view.advance(row);view=page.render(props).props;assert.equal(view.notice,undefined);assert.equal(view.form.title,'原字草稿');
+});
+
+test('an older successful read cannot erase a newer mutation error',async()=>{
+ const row={id:'i',title:'仍保留',note:'',source:'',status:'pending'};let hold=false,finish;
+ const page=component('IdeasPage',{fetchIdeas:async()=>hold?await new Promise(resolve=>{finish=resolve}):[row],updateIdea:async()=>row,deleteIdea:async()=>{throw Error('删除失败，旧选题保留')}}),props={onUseTopic:()=>{}};
+ page.render(props);await page.effects();let view=page.render(props).props;
+ hold=true;const advancing=view.advance(row);await new Promise(resolve=>setImmediate(resolve));await view.remove(row);finish([row]);await advancing;view=page.render(props).props;
+ assert.equal(view.byStatus.pending[0].title,'仍保留');assert.equal(nodes(view.notice,node=>node.type==='InteractionNotice')[0].props.message,'删除失败，旧选题保留');
+ hold=false;button(view.notice,'重新读取选题').props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.equal(page.render(props).props.notice,undefined);
 });

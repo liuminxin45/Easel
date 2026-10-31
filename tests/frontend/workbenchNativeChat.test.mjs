@@ -251,11 +251,18 @@ test('a definite unaccepted 403 409 or 422 lets the user correct and send again 
  for(const status of [403,409,422]){const f=fixture();f.render().chat.onSend();await tick();const error=Object.assign(Error('TEMP definite rejection'),{status});f.calls.stream[0][5](error);assert.equal(f.draft.pending.state,'rejected');f.render().chat.composer.onTextChange('修正后的原字 '+status);f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,2,'definite '+status+' must release the owner');assert.equal(f.calls.stream[1][0],'修正后的原字 '+status);assert.equal(f.calls.stream[1][10],false)}
  const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}});f.render().chat.onSend();await tick();f.calls.stream[0][16].onAccepted();f.calls.stream[0][4]();await tick();await tick();f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.pending.state,'unknown');
 });
-test('news provenance belongs to the frozen turn and clears with the accepted input',async()=>{
+test('news provenance survives an accepted discussion until explicit production',async()=>{
  const f=fixture({draft:{text:'新闻原字',files:[],article_id:'exact-news',article_mode:'product'}});f.render().chat.onSend();await tick();
  assert.equal(f.calls.stream[0][16].context.article_id,'exact-news');assert.equal(f.calls.stream[0][16].context.article_mode,'product');assert.equal(f.draft.article_id,'exact-news');
- f.calls.stream[0][16].onAccepted();assert.equal(f.draft.article_id,undefined);assert.equal(f.draft.article_mode,undefined);assert.equal(f.draft.pending.context.article_mode,'product');assert.equal(f.draft.pending.context.article_id,'exact-news');
+ f.calls.stream[0][16].onAccepted();assert.equal(f.draft.article_id,'exact-news');assert.equal(f.draft.article_mode,'product');assert.equal(f.draft.pending.context.article_mode,'product');assert.equal(f.draft.pending.context.article_id,'exact-news');
 });
+test('explicit poster acceptance clears only the consumed news binding and keeps the frozen provenance',async()=>{
+ const command={skill_id:'content-production',version:3,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true};
+ const f=fixture({draft:{text:'新闻原字',files:[],article_id:'exact-news',command}});f.render().chat.onSend();await tick();
+ assert.equal(f.calls.post[0].body.context.article_id,'exact-news');f.calls.stream[0][16].onAccepted();
+ assert.equal(f.draft.article_id,undefined);assert.equal(f.draft.pending.context.article_id,'exact-news');
+});
+
 test('native change binds the selected parent, while a new format in the same session creates another work',async()=>{
  for(const action of ['change','article']){const command={skill_id:'content-production',version:2,action_id:action,task:action,label:action,requires_plan:true},f=fixture({draft:{text:'请求',files:[],command},search:'work=exact-work&version=exact-parent'});f.render().chat.onSend();await tick();const context=f.calls.post[0].body.context;assert.equal(context.work_id,action==='change'?'exact-work':undefined);assert.equal(context.parent_version_id,action==='change'?'exact-parent':undefined)}
  const discussion=fixture({search:'work=exact-work&version=exact-parent'});discussion.render().chat.onSend();await tick();assert.equal(discussion.calls.stream[0][16].context.action_id,'discuss');assert.equal(discussion.calls.stream[0][16].context.parent_version_id,'exact-parent');

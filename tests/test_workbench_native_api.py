@@ -47,6 +47,47 @@ def test_native_ideas_reuse_original_handlers_and_preserve_one_operation(command
     assert conflict.status_code == 409
 
 
+def test_native_idea_exact_source_survives_save_edit_and_get(commands):
+    with commands.store.connect() as c:
+        c.execute('INSERT INTO articles(id,source_job,title,body,url,run_at,run) VALUES(?,?,?,?,?,?,?)',
+                  ('exact-article', 'source', 'Original source', 'Exact body', 'https://example.test/original',
+                   '2026-11-01T00:00:00+08:00', 'original-run'))
+    created, idea = call(commands, '/api/ideas', 'POST',
+                         {'title': 'New angle', 'note': 'Original angle', 'source_id': 'exact-article'}, 'bound-idea')
+    assert created.status_code == 200 and idea['source_id'] == 'exact-article'
+    for index, fields in enumerate(({'title': 'Edited angle', 'note': 'Edited note'},
+                                    {'title': 'Null from older client', 'source_id': None})):
+        edited, value = call(commands, '/api/ideas/' + idea['id'], 'PUT', fields, 'edit-bound-' + str(index))
+        assert edited.status_code == 200 and value['source_id'] == 'exact-article'
+    _, listing = call(commands, '/api/ideas')
+    assert next(item for item in listing if item['id'] == idea['id'])['source_id'] == 'exact-article'
+    with commands.store.connect() as c:
+        history = [json.loads(row[0]) for row in c.execute('SELECT document FROM easel_topic_history WHERE id=? ORDER BY revision', (idea['id'],))]
+    assert len(history) == 3 and all(item['source_id'] == 'exact-article' for item in history)
+
+
+@pytest.mark.parametrize('source_id', ['missing-article', '', 'Original source'])
+def test_native_idea_rejects_unresolved_source_without_title_guessing(commands, source_id):
+    with commands.store.connect() as c:
+        c.execute('INSERT INTO articles(id,source_job,title,body,url,run_at,run) VALUES(?,?,?,?,?,?,?)',
+                  ('exact-article', 'source', 'Original source', 'Body', 'https://example.test/source',
+                   '2026-11-01T00:00:00+08:00', 'source-run'))
+    response, _ = call(commands, '/api/ideas', 'POST', {'title': 'Original source', 'source_id': source_id}, 'bad-bound')
+    assert response.status_code == 400
+    _, manual = call(commands, '/api/ideas', 'POST', {'title': 'Manual'}, 'manual-for-edit')
+    response, _ = call(commands, '/api/ideas/' + manual['id'], 'PUT',
+                       {'title': 'Changed', 'source_id': source_id}, 'bad-bound-edit')
+    assert response.status_code == 400
+    with commands.store.connect() as c:
+        saved = json.loads(c.execute('SELECT document FROM easel_topics WHERE id=?', (manual['id'],)).fetchone()[0])
+        assert saved['title'] == 'Manual' and 'source_id' not in saved
+        before = c.execute('SELECT document FROM easel_topics WHERE id=?', (manual['id'],)).fetchone()[0]
+    _, listing = call(commands, '/api/ideas')
+    assert len(listing) == 1 and 'source_id' not in listing[0]
+    with commands.store.connect() as c:
+        assert c.execute('SELECT document FROM easel_topics WHERE id=?', (manual['id'],)).fetchone()[0] == before
+
+
 def test_native_calendar_is_versioned_and_delete_is_a_tombstone(commands):
     response, value = call(commands, '/api/schedule', 'POST',
                            {'title': '人工排期', 'date': '2026-11-02', 'time': '09:30'}, 'native-plan-once')
@@ -196,6 +237,32 @@ def test_native_trends_only_reads_existing_results(commands, monkeypatch):
     api._collection_service.status = lambda: {'sources': [{'id': 'native-source', 'last_task': {'status': 'queued'}}]}
     _, pending = call(commands, '/api/trends')
     assert pending['trends'][0]['error']['code'] == 'busy'
+
+
+@pytest.mark.parametrize('status', ['partial', 'blocked', 'failed', 'cancelled'])
+@pytest.mark.parametrize('has_results', [False, True])
+def test_native_trends_report_incomplete_collection_truthfully(commands, monkeypatch, status, has_results):
+    from types import SimpleNamespace
+    api = NativeApi(commands); commands._native_api = api
+    api._collection_service = SimpleNamespace(
+        definitions=lambda: {'source': {'enabled': True, 'label': 'News source'}},
+        status=lambda: {'sources': [{'id': 'source', 'last_task': {
+            'status': status, 'warnings': ['Missing source: HTTP 500'],
+            'finished_at': '2026-11-01T00:04:00+08:00'}}]},
+        enqueue=lambda *_: pytest.fail('Observing a partial result must not collect'))
+    rows = [{'id': 'exact-article', 'title': 'Saved result', 'run_at': '2026-11-01T00:03:00+08:00'}] if has_results else []
+    monkeypatch.setattr(commands.store, 'article_day', lambda **_: {'items': rows})
+    response, value = call(commands, '/api/trends')
+    assert response.status_code == 200
+    group = value['trends'][0]
+    assert group['items'] == [{**{k: row[k] for k in ('id', 'title')}, 'hot': '', 'url': '', 'published_at': None,
+                               'heat': {'value': None, 'text': '', 'unit': ''}} for row in rows]
+    assert not group['ok'] and group['stale'] is has_results
+    assert group['status'] == ('stale' if has_results else 'error')
+    assert group['error']['code'] == 'collection_' + status
+    assert group['collection_status'] == status and group['finished_at'] == '2026-11-01T00:04:00+08:00'
+    assert group['warnings'] == ['Missing source: HTTP 500']
+    assert value['warnings'] == ['News source：Missing source: HTTP 500']
 
 
 def test_native_manual_export_uses_original_builder_and_never_marks_published(commands):

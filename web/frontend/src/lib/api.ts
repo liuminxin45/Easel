@@ -699,6 +699,8 @@ export interface StreamChatOptions {
   headers?: Record<string, string>;
   basePath?:string;
   onAccepted?: (value: {sessionId:string;turnId?:string}) => void;
+  // Transport recovery is separate from the one-time turn acceptance.
+  onConnectionRestored?: () => void;
 }
 export function streamChat(
   message: string,
@@ -723,7 +725,9 @@ export function streamChat(
   const base=options?.basePath??BASE;
   let lastEventId = 0;
   let accepted=false;
+  let interrupted=false;
   const acknowledge=()=>{if(!accepted){accepted=true;options?.onAccepted?.({sessionId,turnId});}};
+  const connectionRestored=()=>{if(interrupted){interrupted=false;options?.onConnectionRestored?.();}};
 
   const consume = async (res: Response): Promise<boolean> => {
       if (!res.ok) {
@@ -749,7 +753,7 @@ export function streamChat(
         if (!currentEvent || dataLines.length === 0) return false;
         if (currentId > lastEventId) lastEventId = currentId;
         const data = dataLines.join('\n');
-        if (currentEvent === 'accepted') { acknowledge();
+        if (currentEvent === 'accepted') { acknowledge(); connectionRestored();
         } else if (currentEvent === 'token') {
           try { onToken(JSON.parse(data) as string); } catch { onToken(data); }
         } else if (currentEvent === 'thinking' && onThinking) {
@@ -796,7 +800,8 @@ export function streamChat(
           if (line === '') {
             if (dispatch()) return true;
             currentEvent = ''; currentId = 0; dataLines = [];
-          } else if (line.startsWith('id:')) currentId = Number(line.slice(3).trim()) || 0;
+          } else if (line.startsWith(':')) connectionRestored();
+          else if (line.startsWith('id:')) currentId = Number(line.slice(3).trim()) || 0;
           else if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
           else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
         }
@@ -804,7 +809,8 @@ export function streamChat(
       buffer += decoder.decode();
       if (buffer) {
         for (const line of buffer.split(/\r?\n/)) {
-          if (line.startsWith('id:')) currentId = Number(line.slice(3).trim()) || 0;
+          if (line.startsWith(':')) connectionRestored();
+          else if (line.startsWith('id:')) currentId = Number(line.slice(3).trim()) || 0;
           else if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
           else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
         }
@@ -851,6 +857,7 @@ export function streamChat(
         onError(new Error('连接中断，自动重连超时'));
         return;
       }
+      interrupted=true;
       onInterrupted?.();
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }

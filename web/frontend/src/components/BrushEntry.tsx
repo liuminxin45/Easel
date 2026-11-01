@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { CAPABILITY_MENU } from '../lib/capabilityMenu';
 import type { CapabilityItem } from '../lib/capabilityMenu';
 
@@ -6,6 +6,18 @@ const DOT: Record<string, string> = { done: 's-done', ready: 's-ready', need: 's
 
 /** 笔入口：点开「能做的都在这」→ 选一项自动填进输入框。纯前端，选中即预填，不自动发送。 */
 export interface BrushChoice {id:string;label:string;description?:string;disabled?:boolean;group?:string;tab?:string;tabLabel?:string;status?:string}
+
+/** Both entry points use the original capability row and its truncation styles. */
+export function BrushItem({item,pipeline=false,active=false,labelPrefix='',className='',style,...props}:Omit<ButtonHTMLAttributes<HTMLButtonElement>,'children'|'type'>&{item:Pick<BrushChoice,'label'|'description'|'status'>;pipeline?:boolean;active?:boolean;labelPrefix?:string}){
+ return <button {...props} type="button" className={'brush-item'+(pipeline?' brush-item-pipe':'')+(className?' '+className:'')} style={active?{...style,background:'var(--surface-2)'}:style}>
+  <span className={`brush-dot ${DOT[item.status || 'ready'] || 's-ready'}`} />
+  <span className="brush-il" style={labelPrefix?{flexShrink:1}:undefined}>{labelPrefix}{item.label}</span>
+  {pipeline&&<span className="brush-chip-pipe">管线</span>}
+  <span className="brush-idesc">{item.description}</span>
+  <span className="brush-iadd">＋</span>
+ </button>;
+}
+
 export default function BrushEntry({ onPick, items, onSelect, registerLayer, disabled=false }: { onPick: (text: string) => void;
   items?:BrushChoice[];onSelect?:(id:string)=>void;registerLayer?:(close:()=>void)=>(()=>void)|undefined;disabled?:boolean }) {
   const [open, setOpen] = useState(false);
@@ -88,13 +100,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
             {pipeline && hit(pipeline) && (
               <div className="brush-grp">
                 <div className="brush-grp-name">整片级 · 走独立管线</div>
-                <button type="button" className="brush-item brush-item-pipe" disabled={disabled||!!items&&(!pipeline.id||!items.some(item=>item.id===pipeline.id&&!item.disabled))} title={items?'上游标记为接入中，尚无可执行技能入口':undefined} onClick={() => pick(pipeline, true)}>
-                  <span className={`brush-dot ${DOT[pipeline.status || 'ready'] || 's-ready'}`} />
-                  <span className="brush-il">{pipeline.label}</span>
-                  <span className="brush-chip-pipe">管线</span>
-                  <span className="brush-idesc">{pipeline.desc}</span>
-                  <span className="brush-iadd">＋</span>
-                </button>
+                <BrushItem item={{label:pipeline.label,description:pipeline.desc,status:pipeline.status}} pipeline disabled={disabled||!!items&&(!pipeline.id||!items.some(item=>item.id===pipeline.id&&!item.disabled))} title={items?'上游标记为接入中，尚无可执行技能入口':undefined} onClick={() => pick(pipeline, true)}/>
               </div>
             )}
             {(menu.tabs[tab]||menu.tabs[0])?.groups.map((g) => {
@@ -104,12 +110,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
                 <div key={g.label} className="brush-grp">
                   <div className="brush-grp-name">{g.label} · {groupItems.length}</div>
                   {groupItems.map((it) => (
-                    <button type="button" key={it.skill || it.label} className="brush-item" disabled={disabled||!!items?.find(item=>item.id===it.id)?.disabled} onClick={() => pick(it)}>
-                      <span className={`brush-dot ${DOT[it.status || 'ready'] || 's-ready'}`} />
-                      <span className="brush-il">{it.label}</span>
-                      <span className="brush-idesc">{it.desc}</span>
-                      <span className="brush-iadd">＋</span>
-                    </button>
+                    <BrushItem key={it.skill || it.label} item={{label:it.label,description:it.desc,status:it.status}} disabled={disabled||!!items?.find(item=>item.id===it.id)?.disabled} onClick={() => pick(it)}/>
                   ))}
                 </div>
               );

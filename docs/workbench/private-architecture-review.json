@@ -1,0 +1,1264 @@
+{
+  "schema": 1,
+  "review_date": "2026-11-01",
+  "baseline": "88a7cc9185976065fe6b2b9af2652ccf9eafc31d",
+  "scope": "The original 42 per-slice-review plus 7 split-by-symbol entries; source review, no deletion or move authorization.",
+  "focus_paths": [
+    "easel_workbench/__init__.py",
+    "easel_workbench/runtime/__init__.py",
+    "easel_workbench/runtime/article_delivery.py",
+    "easel_workbench/runtime/article_drafts.py",
+    "easel_workbench/runtime/browser_cleanup.py",
+    "easel_workbench/runtime/capability_contracts.py",
+    "easel_workbench/runtime/content_studio.py",
+    "easel_workbench/runtime/creator_runtime.py",
+    "easel_workbench/runtime/delivery_receipts.py",
+    "easel_workbench/runtime/desk.py",
+    "easel_workbench/runtime/direct_handoff.py",
+    "easel_workbench/runtime/distribution_runtime.py",
+    "easel_workbench/runtime/easel_account_worker.py",
+    "easel_workbench/runtime/easel_connection_support.py",
+    "easel_workbench/runtime/easel_frontend.py",
+    "easel_workbench/runtime/easel_integration.py",
+    "easel_workbench/runtime/easel_media_worker.py",
+    "easel_workbench/runtime/easel_migration.py",
+    "easel_workbench/runtime/easel_publish_worker.py",
+    "easel_workbench/runtime/easel_readback.py",
+    "easel_workbench/runtime/feedback_context.py",
+    "easel_workbench/runtime/http_content.py",
+    "easel_workbench/runtime/learning_service.py",
+    "easel_workbench/runtime/local_operations.py",
+    "easel_workbench/runtime/local_worker.py",
+    "easel_workbench/runtime/media_uploads.py",
+    "easel_workbench/runtime/native_continuation.py",
+    "easel_workbench/runtime/native_package_worker.py",
+    "easel_workbench/runtime/notifications.py",
+    "easel_workbench/runtime/operation_receipts.py",
+    "easel_workbench/runtime/production_delivery.py",
+    "easel_workbench/runtime/production_outcome.py",
+    "easel_workbench/runtime/production_retry.py",
+    "easel_workbench/runtime/production_style.py",
+    "easel_workbench/runtime/production_title.py",
+    "easel_workbench/runtime/publish_content.py",
+    "easel_workbench/runtime/pwa_assets.py",
+    "easel_workbench/runtime/read_cache.py",
+    "easel_workbench/runtime/revision_scope.py",
+    "easel_workbench/runtime/semantic_style.py",
+    "easel_workbench/runtime/server.py",
+    "easel_workbench/runtime/studio_research.py",
+    "easel_workbench/runtime/studio_service.py",
+    "easel_workbench/runtime/task_runtime.py",
+    "easel_workbench/runtime/toolbox_store.py",
+    "easel_workbench/runtime/ui_document.py",
+    "easel_workbench/runtime/usage_service.py",
+    "easel_workbench/runtime/web_assets.py",
+    "easel_workbench/runtime/work_discussions.py"
+  ],
+  "modules": [
+    {
+      "path": "easel_workbench/__init__.py",
+      "reviewed_sha256": "661610611d92d41328f89c81dcfcc748797fe10f5dbe8eaf86a28ba27bb9e17a",
+      "area": "package",
+      "responsibility": "私有工作流包声明，无启动或存储副作用",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "无状态",
+      "next_slice": "P0"
+    },
+    {
+      "path": "easel_workbench/runtime/__init__.py",
+      "reviewed_sha256": "3ba52ec07d68fec3834e2473a3215bba8cdffbecbba52802963a387b5e3d55ed",
+      "area": "compat",
+      "responsibility": "迁移期间兼容服务命名空间，不代表其中全部实现已退役",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "无状态",
+      "next_slice": "P0"
+    },
+    {
+      "path": "easel_workbench/runtime/article_delivery.py",
+      "reviewed_sha256": "138f6db0c2c3458f9279601454a188bb750e52b84afc46f28160e27dee8de736",
+      "area": "features/works",
+      "responsibility": "从准确版本已捕获产物核对文章清单、来源与实测附件",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "只读 artifacts 与受限文件；不扫描任意来源目录",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/article_drafts.py",
+      "reviewed_sha256": "339ce91b693f16fbb0d5a8b0d7159df9a449bf92f347f5bbadef8184b11097d8",
+      "area": "features/works",
+      "responsibility": "服务器草稿修订、操作幂等与固定线程成稿受理",
+      "lifecycle": [
+        "current",
+        "legacy-execution"
+      ],
+      "state_contract": "toolbox_article_drafts/draft_ops/inputs；跨 works/jobs 写入共用 BEGIN IMMEDIATE，不拆独立提交",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/browser_cleanup.py",
+      "reviewed_sha256": "60ac919b1b8ad8de62a68481f90290cbbf7d0e5edb7543369575a1ea253bcc03",
+      "area": "features/works",
+      "responsibility": "采纳/拒绝后的浏览器清理要求与回执核对",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "toolbox_browser_cleanup；清理回执不能重放作品决定",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/capability_contracts.py",
+      "reviewed_sha256": "23c7cea94ec7010ca1eb58e21fa9c26117846eac67ba78d64d0c55fed7774e98",
+      "area": "features/skills",
+      "responsibility": "读取本轮冻结技能中的准确资源合同",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读 snapshot.skills.resources；原 UTF-8 内容不冒称原始文件 SHA",
+      "next_slice": "P3"
+    },
+    {
+      "path": "easel_workbench/runtime/content_studio.py",
+      "reviewed_sha256": "bceb7e0d9b06e78000e9c359cacdf7f1b617f4462fdb8e19295220251ce84da1",
+      "area": "features/works",
+      "responsibility": "人工正文版本、冻结创作选项和样式预设修订",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "text_versions/style_presets/revisions/ops 与 artifacts；保存正文和作品登记保留原事务",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/creator_runtime.py",
+      "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667",
+      "area": "composition/creator",
+      "responsibility": "画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "packed",
+            "digest",
+            "key",
+            "text",
+            "validate_package"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "CreatorConflict",
+            "CreatorRuntime"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "CreatorRuntime.__init__",
+            "CreatorRuntime._seed"
+          ]
+        },
+        {
+          "area": "features/profiles",
+          "members": [
+            "CreatorRuntime._safe",
+            "CreatorRuntime._profile",
+            "CreatorRuntime._put_profile",
+            "CreatorRuntime.bind_work",
+            "CreatorRuntime.accounts",
+            "CreatorRuntime._validate_defaults",
+            "CreatorRuntime._profile_assets",
+            "CreatorRuntime._save_profile",
+            "CreatorRuntime._bind",
+            "CreatorRuntime.profile_resource"
+          ]
+        },
+        {
+          "area": "features/skills",
+          "members": [
+            "CreatorRuntime._resource",
+            "CreatorRuntime._release_hash",
+            "CreatorRuntime._published",
+            "CreatorRuntime._skill",
+            "CreatorRuntime._uses",
+            "CreatorRuntime._publish",
+            "CreatorRuntime.propose",
+            "CreatorRuntime._event",
+            "CreatorRuntime.resource"
+          ]
+        },
+        {
+          "area": "application/creator",
+          "members": [
+            "CreatorRuntime.bootstrap",
+            "CreatorRuntime.detail",
+            "CreatorRuntime.command",
+            "CreatorRuntime.resolve"
+          ]
+        },
+        {
+          "area": "infrastructure/files",
+          "members": [
+            "CreatorRuntime._uploaded_asset",
+            "CreatorRuntime.export",
+            "CreatorRuntime.materialize"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "initialize",
+            "service"
+          ]
+        },
+        {
+          "area": "features/profiles",
+          "members": [
+            "read_owner"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/delivery_receipts.py",
+      "reviewed_sha256": "2336beb8a5e3507cc77a8dbed457ec3af8aa9df2495685442a6c6a196bd851c3",
+      "area": "features/works",
+      "responsibility": "保守解析助手最终答复中的显式交付回执",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "无存储；不从任意正文路径推断交付",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/desk.py",
+      "reviewed_sha256": "809cb409481e588418d1278b79b0ba599fdc743d2477dd97803e4011512dea18",
+      "area": "composition/store",
+      "responsibility": "单一 SQLite 连接、采集新闻查询及旧 CLI 组合",
+      "lifecycle": [
+        "current",
+        "historical-read",
+        "legacy-execution"
+      ],
+      "state_contract": "desk.sqlite；collection runs/articles/provenance，旧 tasks 仅保留；action 只读标记或选题反馈",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "stamp",
+            "digest",
+            "article_identity",
+            "url_ok"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "Connection",
+            "Store"
+          ]
+        },
+        {
+          "area": "infrastructure/sqlite",
+          "members": [
+            "Connection.__exit__"
+          ]
+        },
+        {
+          "area": "infrastructure/sqlite",
+          "members": [
+            "Store.__init__",
+            "Store.connect"
+          ]
+        },
+        {
+          "area": "features/collection",
+          "members": [
+            "Store.ingest",
+            "Store.sources",
+            "Store.articles",
+            "Store.selected_articles",
+            "Store.article_day",
+            "Store.detail",
+            "Store.action"
+          ]
+        },
+        {
+          "area": "compat/cli",
+          "members": [
+            "main",
+            "serve"
+          ]
+        },
+        {
+          "area": "application/collection",
+          "members": [
+            "save_digest"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/direct_handoff.py",
+      "reviewed_sha256": "4a10656d42f3cdc817d606a77dca06ae76e7c35a2ccfd269980950a5650534c0",
+      "area": "compat/desktop-cli",
+      "responsibility": "桌面回合显式绑定、原意见记录与固定线程核对入口",
+      "lifecycle": [
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "委托 DirectTurns/Toolbox；不伪装普通静态 import 调用者",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/distribution_runtime.py",
+      "reviewed_sha256": "9a65c27c6d724db01f6a815f4693dea10bd3a95ff09e6444bd4fe3f4a7d1dd8b",
+      "area": "compat/distribution",
+      "responsibility": "当前复用的凭据/进程能力与旧 bridge 驱动组合",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "DPAPI 私有文件；旧 bridge 指针/准确批准任务，不能整文件退役",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "_json",
+            "_identifier"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "VaultError",
+            "BridgeError",
+            "BridgeTimeout",
+            "DPAPIVault",
+            "DistributionRuntime"
+          ]
+        },
+        {
+          "area": "infrastructure/security",
+          "members": [
+            "DPAPIVault.__init__",
+            "DPAPIVault._ensure",
+            "DPAPIVault._path",
+            "DPAPIVault._write",
+            "DPAPIVault._read",
+            "DPAPIVault.put",
+            "DPAPIVault.put_reserved",
+            "DPAPIVault.get",
+            "DPAPIVault.validate",
+            "DPAPIVault.read_proof",
+            "DPAPIVault.write_proof"
+          ]
+        },
+        {
+          "area": "compat/bridge",
+          "members": [
+            "DistributionRuntime.__init__",
+            "DistributionRuntime._receipt",
+            "DistributionRuntime._bridge_pointer",
+            "DistributionRuntime._write_bridge_pointer",
+            "DistributionRuntime._global_settings",
+            "DistributionRuntime.bridge_status",
+            "DistributionRuntime.configure_bridge",
+            "DistributionRuntime.discover_accounts",
+            "DistributionRuntime._installation_evidence",
+            "DistributionRuntime.summary",
+            "DistributionRuntime._binding",
+            "DistributionRuntime._validate_settings",
+            "DistributionRuntime._settings",
+            "DistributionRuntime._invoke",
+            "DistributionRuntime.probe",
+            "DistributionRuntime.capability",
+            "DistributionRuntime._remote",
+            "DistributionRuntime.verify",
+            "DistributionRuntime.send"
+          ]
+        },
+        {
+          "area": "infrastructure/security",
+          "members": [
+            "DistributionRuntime.configure_secret",
+            "DistributionRuntime.validate_secret_ref",
+            "DistributionRuntime.credentials_for_connection"
+          ]
+        },
+        {
+          "area": "infrastructure/processes",
+          "members": [
+            "process_identity",
+            "_bridge_mutex"
+          ]
+        },
+        {
+          "area": "infrastructure/security",
+          "members": [
+            "_Blob",
+            "_blob",
+            "_dpapi",
+            "_private_acl"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/easel_account_worker.py",
+      "reviewed_sha256": "51a538edd1e09356446a18b0bb518151d390cf97a83445bdfbb75020854eee44",
+      "area": "integrations/easel",
+      "responsibility": "保留的隔离账号脚本入口，当前由发布子进程用于发送前身份核对",
+      "lifecycle": [
+        "current",
+        "legacy-execution"
+      ],
+      "state_contract": "只允许 login/probe；原生账号默认走 Easel 页面适配，旧 runner 已关闭，不把此脚本当默认登录引擎",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_connection_support.py",
+      "reviewed_sha256": "34b41887573d433de92f97f692754ad652f612ab2255241a2bb33abc95aca80e",
+      "area": "infrastructure/processes",
+      "responsibility": "连接适配的错误类型、摘要和受限子进程环境构造",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "不拥有业务台账；不得扩展为发布调度",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_frontend.py",
+      "reviewed_sha256": "097f46a09729cec7108349206190b03b22138421fc2eebd4dfd795fac2c124bd",
+      "area": "features/collection",
+      "responsibility": "服务器人工选题与计划记录，不拥有制作或发布授权",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "easel_topics/plans/history/ui_operations；计划不成为调度任务",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_integration.py",
+      "reviewed_sha256": "af90cd83bca269ea7d1ed78ab6a27f9bf5571fba4c32cc4a05a40b0a7238141a",
+      "area": "application/media",
+      "responsibility": "显式媒体方案/受理、冻结配置与旧任务核对组合",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "media_* 与 works/jobs/review_inputs/runs；新任务受 accept_new_tasks/stages 限制，受理同事务",
+      "next_slice": "P4",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "digest",
+            "load_catalog",
+            "initialize",
+            "service"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "IntegrationConflict",
+            "EaselIntegration"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "EaselIntegration.__init__"
+          ]
+        },
+        {
+          "area": "features/settings",
+          "members": [
+            "EaselIntegration.config",
+            "EaselIntegration._save_config"
+          ]
+        },
+        {
+          "area": "features/works",
+          "members": [
+            "EaselIntegration.transcript",
+            "EaselIntegration._records",
+            "EaselIntegration._job",
+            "EaselIntegration._public_job",
+            "EaselIntegration.bootstrap",
+            "EaselIntegration.job",
+            "EaselIntegration.work"
+          ]
+        },
+        {
+          "area": "application/media",
+          "members": [
+            "EaselIntegration.accepts_new",
+            "EaselIntegration.preview",
+            "EaselIntegration._create_job",
+            "EaselIntegration._put_job",
+            "EaselIntegration.command",
+            "EaselIntegration._decision"
+          ]
+        },
+        {
+          "area": "integrations/easel",
+          "members": [
+            "EaselIntegration._directory",
+            "EaselIntegration._worker_alive",
+            "EaselIntegration.start",
+            "EaselIntegration._payload",
+            "EaselIntegration._invoke_worker",
+            "EaselIntegration.run_job",
+            "EaselIntegration.run_reconcile",
+            "EaselIntegration._recover_outputs"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/easel_media_worker.py",
+      "reviewed_sha256": "7cdd44ef1ed18d10a3db94b06d10a665a56244bd419778b296a1629f7e6f5331",
+      "area": "integrations/easel",
+      "responsibility": "准确冻结媒体阶段的隔离子进程及原任务只读核对",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "输出目录及已记录 task/receipt；未知 POST 不重发，vendor 仅在该子进程加载",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_migration.py",
+      "reviewed_sha256": "6b0514d074e470954098bdfbd07240c345e81eb888549fd551c46286f3cf7366",
+      "area": "compat/migration",
+      "responsibility": "显式选择性迁入工具；当前默认装配未引用，不据此删除",
+      "lifecycle": [
+        "manual-tool",
+        "historical-read"
+      ],
+      "state_contract": "media_imports/operations、works/jobs/artifacts；原件不移动，不自动恢复旧业务库",
+      "next_slice": "P5"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_publish_worker.py",
+      "reviewed_sha256": "e029e5bd211f1f03945ad0b109b0df87211e72257f4b8b2a14a8c9449b379615",
+      "area": "integrations/easel",
+      "responsibility": "准确批准版本的平台子进程与独立只读回读",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "调用方交付台账拥有授权/身份；readonly 分支不发送；真实发布不用于本轮验证",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_readback.py",
+      "reviewed_sha256": "ec98768eeee2487af43735ceafa75655847682bf35184aa86e98f71460f8b999",
+      "area": "compat/readback",
+      "responsibility": "将独立观测的平台结果保守转换为回执投影",
+      "lifecycle": [
+        "historical-read",
+        "reconcile"
+      ],
+      "state_contract": "无当前默认装配调用；只读转换不等于可删或允许重发",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/feedback_context.py",
+      "reviewed_sha256": "feea7a2f8255edb1ce196017e3e92a5ff5aba11501524818c375c05fb64db494",
+      "area": "features/works",
+      "responsibility": "按准确作品版本收集即时原始意见",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读 jobs/反馈；不推断长期偏好、不触发制作",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/http_content.py",
+      "reviewed_sha256": "656dbcb202a5b16f1762abacadfffd126bd9e541dd2a689a07d9d48a4be9e0e1",
+      "area": "http",
+      "responsibility": "有界文本压缩及私有响应缓存约束",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "无业务状态；不得缓存私人 HTML/API 结果",
+      "next_slice": "P6"
+    },
+    {
+      "path": "easel_workbench/runtime/learning_service.py",
+      "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360",
+      "area": "composition/evidence",
+      "responsibility": "证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": [
+        "current",
+        "historical-read",
+        "reconcile"
+      ],
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "packed",
+            "sha",
+            "stamp",
+            "identity",
+            "bounded",
+            "atomic_bytes",
+            "original_mime"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "LearningConflict",
+            "LearningService"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "LearningService.__init__"
+          ]
+        },
+        {
+          "area": "features/evidence",
+          "members": [
+            "LearningService._safe_path",
+            "LearningService._all",
+            "LearningService._get",
+            "LearningService._put",
+            "LearningService._search_text",
+            "LearningService._table_exists",
+            "LearningService._metadata_file",
+            "LearningService._upsert_evidence",
+            "LearningService._file_candidates",
+            "LearningService._source_rows",
+            "LearningService._index",
+            "LearningService._coverage",
+            "LearningService._processing_state",
+            "LearningService._save_processing",
+            "LearningService.processing_status",
+            "LearningService._finish_history_budget",
+            "LearningService.index_database",
+            "LearningService.watch_fingerprint",
+            "LearningService.queue_index_refresh",
+            "LearningService.list_evidence",
+            "LearningService._evidence_summary",
+            "LearningService._run_summary",
+            "LearningService.bootstrap",
+            "LearningService._read_locator",
+            "LearningService.evidence_content",
+            "LearningService.original_file",
+            "LearningService.detail",
+            "LearningService._enqueue",
+            "LearningService.enqueue_review",
+            "LearningService.read_run",
+            "LearningService.clone_run",
+            "LearningService.update_run",
+            "LearningService._proposal",
+            "LearningService._disjoint",
+            "LearningService.relationship",
+            "LearningService._preview",
+            "LearningService._apply",
+            "LearningService.command",
+            "LearningService.claim_task",
+            "LearningService.finish_task"
+          ]
+        },
+        {
+          "area": "features/skills",
+          "members": [
+            "LearningService.policy",
+            "LearningService._conditions",
+            "LearningService._validate_entry",
+            "LearningService._validate_policy",
+            "LearningService._match",
+            "LearningService._required_ref",
+            "LearningService.resolve",
+            "LearningService.freeze"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/local_operations.py",
+      "reviewed_sha256": "fe93ff24941f48d4c00acc258a63dcdc0ea8cb99776d191977dbcb92d64455c0",
+      "area": "application/local-operations",
+      "responsibility": "作品决定后的确定性项目文件/Git 交付队列与恢复",
+      "lifecycle": [
+        "current",
+        "reconcile",
+        "legacy-execution"
+      ],
+      "state_contract": "execution/production_origins/local_tasks/local_operations 与项目记录；不启动模型或平台发布",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/local_worker.py",
+      "reviewed_sha256": "ef774ed9e76860c6f22b25a374b08d1aadafc63da8fcbbe43ea93cda7374c0b0",
+      "area": "infrastructure/processes",
+      "responsibility": "原 local 角色的持久确定性 I/O 循环与心跳",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "同一 local_tasks 队列，沿用 OS/进程锁和业务准入，不创建第二个写入者",
+      "next_slice": "P5"
+    },
+    {
+      "path": "easel_workbench/runtime/media_uploads.py",
+      "reviewed_sha256": "b69343afc7d36d880bc3ab01ce6d960dd2bcf5e8b0fadf2fc951c88c8c310cf4",
+      "area": "features/assets",
+      "responsibility": "大媒体有界分块、摘要幂等与文件合并登记",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "media_uploads/chunks、data/media-uploads 与 toolbox_files；不拥有制作任务",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/native_continuation.py",
+      "reviewed_sha256": "a17b89075414edf78a5b8a20a56a2cac81585d464dd567c92ca65e8d0f8436c2",
+      "area": "features/conversations",
+      "responsibility": "基于原回合、冻结输入和部分产物投影可继续条件",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "只读准确 job/call/产物；不因页面重连产生新执行",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/native_package_worker.py",
+      "reviewed_sha256": "5b0c2439615f42e6dd2a48a4605ad28fb78853bb4d40abe354a620af9d5a3eab",
+      "area": "infrastructure/files",
+      "responsibility": "受控输出根下单个准确版本的交付包构造子进程",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "stdin 指定的准确版本和输出根；通过 native_api 显式调用，不拥有模型或发布权限",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/notifications.py",
+      "reviewed_sha256": "47d24b7daaa6e3f817c9989f00dc01b31266a9d836297f33e84b40a704a9804c",
+      "area": "compat/retired-notifications",
+      "responsibility": "保留历史通知查询和旧写入兼容围栏，设备注册/轮询退役",
+      "lifecycle": [
+        "historical-read",
+        "retired-write-fence"
+      ],
+      "state_contract": "notification_* 历史表；retire 删除旧触发器并以 RAISE(IGNORE) 阻止新增；不恢复通知页",
+      "next_slice": "P5"
+    },
+    {
+      "path": "easel_workbench/runtime/operation_receipts.py",
+      "reviewed_sha256": "90c8455169136dfbf88e070e23f03c2c54a727a7c132ffde9f47a8749eb77522",
+      "area": "http/queries",
+      "responsibility": "HTTP 原操作回执查询投影，缺失不等于未发送",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "只读现有操作台账；动态表/键来自代码白名单，不新建回执账本",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/production_delivery.py",
+      "reviewed_sha256": "cab62c107b8886ba46ba647f1cb605ec5bd9ddf5a202f1058fc5da213b4ad7e3",
+      "area": "application/delivery",
+      "responsibility": "原生 Easel 与旧任务共同使用的准确交付登记",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "job/works/outcomes/artifacts/local_queue；模型完成与成品接收分开，原回执不能覆盖",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/production_outcome.py",
+      "reviewed_sha256": "2312b570426ecfaffd78e83625f1a8f5b4d578e6846bf2e879fcc6b6f9e09ca8",
+      "area": "features/works",
+      "responsibility": "根据本版本实际产物判断交付状态和下一步",
+      "lifecycle": [
+        "current",
+        "reconcile"
+      ],
+      "state_contract": "toolbox_production_outcomes；只记录/读取，不调度模型",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/production_retry.py",
+      "reviewed_sha256": "dad81f1ef3a28c93cfa5b7043ce3f22139ac7cd04e17e61a14385ff50f982eb7",
+      "area": "features/conversations",
+      "responsibility": "仅明证未发送任务的持久有界重试与恢复投影",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "dispatch_retries/operations 与原 job.dispatch_started；unknown 不转换为可重发",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/production_style.py",
+      "reviewed_sha256": "45e7efcbe502f0e3bc6f20d4885264a3218ec8c2823104a8f6398474a2dc1e80",
+      "area": "features/evidence",
+      "responsibility": "读取历史风格声明与证据绑定的 v2 解释",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读本版本产物与冻结执行记录，不改写历史等级",
+      "next_slice": "P3"
+    },
+    {
+      "path": "easel_workbench/runtime/production_title.py",
+      "reviewed_sha256": "035f162dec9cef6537773268f284088ce12de060b18bd5828f5f1fd978cc24a7",
+      "area": "features/works",
+      "responsibility": "从准确版本交付文件读取标题",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读 artifacts 指定路径与有限首行，不把正文当标题",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/publish_content.py",
+      "reviewed_sha256": "264062f58e79c3070bffbe53afd0bb47bce5bb3a6b9755c2a64f7ecf98fbb308",
+      "area": "features/publishing",
+      "responsibility": "只从已捕获产物读取发布文案，不执行平台发送",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读 artifacts；采纳/发布授权继续由独立服务验证",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/pwa_assets.py",
+      "reviewed_sha256": "9d67098a6d1557acfd848722ba70159e89a726d6d5d4e4fb576dc75ce0874a6d",
+      "area": "http/assets",
+      "responsibility": "公开无内容的 PWA 静态资源与现有迁移入口",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "assets 资源与活动前端清单；业务数据仍须鉴权",
+      "next_slice": "P6"
+    },
+    {
+      "path": "easel_workbench/runtime/read_cache.py",
+      "reviewed_sha256": "8945a084e81a07b64b6bdf094c1b1d3aca07a098ce74effa5a8f12eeadae7ad5",
+      "area": "http/queries",
+      "responsibility": "已认证读视图的内存缓存及数据库修订失效标记",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "read_cache_revisions/受限触发器；缓存不持久保存业务 JSON",
+      "next_slice": "P6"
+    },
+    {
+      "path": "easel_workbench/runtime/revision_scope.py",
+      "reviewed_sha256": "0cc63c4f1487b13129fb5f516f353292634040404b76e3428175a59ec5f78e80",
+      "area": "features/works",
+      "responsibility": "本轮冻结正文边界与明确意见冲突判断",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "只读本轮 creation、outcome 和 artifacts；不推断编辑许可",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/semantic_style.py",
+      "reviewed_sha256": "ed0d27ccbafe17ef06d122bc93cd44e89986ef5adc37e20cd05930a7022387c4",
+      "area": "features/works",
+      "responsibility": "v2 创作语义与按字段继承，兼容解读旧数字",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "纯投影；旧阈值不转写为新精确语义",
+      "next_slice": "P3"
+    },
+    {
+      "path": "easel_workbench/runtime/server.py",
+      "reviewed_sha256": "3fba4fd5ef53a8ef386b8e62e39b96195f11b2aaa57fd46a51f890bc7fae643b",
+      "area": "compat/cli",
+      "responsibility": "旧 server CLI 薄委托至唯一工作台 HTTP 应用",
+      "lifecycle": [
+        "legacy-execution"
+      ],
+      "state_contract": "无第二套 HTTP/数据库；保留 desk serve 入口",
+      "next_slice": "P5"
+    },
+    {
+      "path": "easel_workbench/runtime/studio_research.py",
+      "reviewed_sha256": "e2feac577ed0673149f3750b509fec44847ee7a5df0b09e090ab3fd3345bbc2e",
+      "area": "compat/topic-use-case",
+      "responsibility": "旧选题入口委托同一草稿保存和固定线程只读讨论",
+      "lifecycle": [
+        "legacy-execution"
+      ],
+      "state_contract": "沿用原操作 ID/草稿与讨论回执；只采集讨论，不自动制作",
+      "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/studio_service.py",
+      "reviewed_sha256": "c9fc06206825b6b69e98aecbb6a75960888ed23ced458d7aede95a4da3a966eb",
+      "area": "application/studio",
+      "responsibility": "当前项目规范命令、技能/画像候选与按需经验协调",
+      "lifecycle": [
+        "current",
+        "historical-read",
+        "reconcile"
+      ],
+      "state_contract": "studio_records/operations 保存提案历史；有效规则仍由允许的项目文件拥有，不新增自动学习",
+      "next_slice": "P3"
+    },
+    {
+      "path": "easel_workbench/runtime/task_runtime.py",
+      "reviewed_sha256": "d6068877d5f363171ff8e7a77e5f6341a60965eae8bf64ff3efab57a284ab1db",
+      "area": "composition/task-contracts",
+      "responsibility": "冻结快照、原生目标适配、调用台账及显式经验任务组合",
+      "lifecycle": [
+        "current",
+        "legacy-execution",
+        "reconcile"
+      ],
+      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
+      "next_slice": "P2",
+      "symbol_groups": [
+        {
+          "area": "module-local/contracts-and-errors",
+          "members": [
+            "packed",
+            "digest"
+          ]
+        },
+        {
+          "area": "composition/container",
+          "members": [
+            "PreparedTarget"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "runtime_box",
+            "registry",
+            "initialize"
+          ]
+        },
+        {
+          "area": "features/skills",
+          "members": [
+            "validated_snapshot",
+            "freeze",
+            "clone_correction",
+            "production_prompt",
+            "clean_explicit_contract",
+            "attach_profile_contract",
+            "attach_review_basis",
+            "named_prompt",
+            "contract_prompt",
+            "request_snapshot",
+            "freeze_image"
+          ]
+        },
+        {
+          "area": "features/conversations",
+          "members": [
+            "context_id",
+            "thread_id_for",
+            "target_for_thread",
+            "_unused_context",
+            "_native_context_absent",
+            "_start_target",
+            "prepare_target",
+            "reconcile_preparation_failure"
+          ]
+        },
+        {
+          "area": "features/evidence",
+          "members": [
+            "enqueue_experience",
+            "complete_experience",
+            "experience_detail",
+            "enqueue_reference"
+          ]
+        },
+        {
+          "area": "features/works",
+          "members": [
+            "read_run",
+            "_put_run",
+            "workflow_template",
+            "step",
+            "projection",
+            "production_call",
+            "preparation_state",
+            "production_started",
+            "production_transport_failure",
+            "production_finish",
+            "begin_call",
+            "finish_call",
+            "observed_call"
+          ]
+        },
+        {
+          "area": "infrastructure/processes",
+          "members": [
+            "PreparedTarget.__init__",
+            "PreparedTarget.__enter__",
+            "PreparedTarget.__exit__",
+            "PreparedTarget.close"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/toolbox_store.py",
+      "reviewed_sha256": "4045dbc262d47b9ce5ded3033c2425d92ee09764c468d970c3ef9ebf5f1626c8",
+      "area": "composition/toolbox",
+      "responsibility": "表初始化、作品决定、读聚合与文件登记的现有组合",
+      "lifecycle": [
+        "current",
+        "historical-read",
+        "legacy-execution"
+      ],
+      "state_contract": "单一 store.connect；多域初始化顺序和事务保留，不复制纯校验实现",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "composition/container",
+          "members": [
+            "Toolbox"
+          ]
+        },
+        {
+          "area": "bootstrap",
+          "members": [
+            "Toolbox.__init__"
+          ]
+        },
+        {
+          "area": "compat/historical-read",
+          "members": [
+            "Toolbox._import_history"
+          ]
+        },
+        {
+          "area": "features/works",
+          "members": [
+            "Toolbox.create",
+            "Toolbox.action",
+            "Toolbox.job",
+            "Toolbox.retry",
+            "Toolbox.options",
+            "Toolbox.news_production",
+            "Toolbox.works",
+            "Toolbox.work"
+          ]
+        },
+        {
+          "area": "features/assets",
+          "members": [
+            "Toolbox.archive",
+            "Toolbox._files",
+            "Toolbox.upload",
+            "Toolbox.register_file",
+            "Toolbox._store_file",
+            "Toolbox.file"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/runtime/ui_document.py",
+      "reviewed_sha256": "6abdbf9d937ae3dd952e05bf809bb61e13b85776c017eaef2f67288808347239",
+      "area": "compat/web-preview",
+      "responsibility": "旧双击预览及在线 HTML 的单一只读转换器",
+      "lifecycle": [
+        "historical-read"
+      ],
+      "state_contract": "原 web/index.html 与 CSP；不作为另写原 App 的依据",
+      "next_slice": "P6"
+    },
+    {
+      "path": "easel_workbench/runtime/usage_service.py",
+      "reviewed_sha256": "35b9a02240db8c706985caeccc1f4218fb26b7b7c75181a829d8e299d15e7319",
+      "area": "features/settings",
+      "responsibility": "用户明确开启的第一方交互统计，独立于创作存储",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "独立 usage 数据库、允许列表和汇总；不收集正文/凭据",
+      "next_slice": "P4"
+    },
+    {
+      "path": "easel_workbench/runtime/web_assets.py",
+      "reviewed_sha256": "dfb7474530b7fe032d49023b874d15d9a7798cb880966b459519270cd164e194",
+      "area": "http/assets",
+      "responsibility": "基于准确冻结前端定位 HTML、JS/CSS 与 CSP nonce",
+      "lifecycle": [
+        "current",
+        "historical-read"
+      ],
+      "state_contract": "前端清单与资源字节；不能靠当前编辑目录偶然文件放行",
+      "next_slice": "P6"
+    },
+    {
+      "path": "easel_workbench/runtime/work_discussions.py",
+      "reviewed_sha256": "533afd8eb1a68d634df33efb7b7ac18ab54b12b1b76d36fc93d6afd93dc38eb9",
+      "area": "compat/work-discussion",
+      "responsibility": "准确作品/版本上的固定线程讨论受理",
+      "lifecycle": [
+        "legacy-execution",
+        "current"
+      ],
+      "state_contract": "同事务写 jobs/article_inputs/works；只读讨论不扩权为制作或发布",
+      "next_slice": "P2"
+    }
+  ],
+  "limits": [
+    "Static imports do not prove all runtime reachability; script/role/manual entry evidence is recorded separately.",
+    "P2-P6 moves are not performed; historical records, frozen inputs and exact operation identities stay unchanged."
+  ],
+  "dynamic_import_contracts": [
+    {
+      "path": "easel_workbench/entry.py",
+      "symbol": "main",
+      "choices": [
+        "server",
+        "worker",
+        "collector",
+        "publisher",
+        "learning",
+        "local",
+        "feedback"
+      ],
+      "resolution": "argparse choices + 固定 role/module/function 字典；server 单独构造 application.create_app，不接受任意模块参数"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_account_worker.py",
+      "symbol": "main",
+      "choices": [
+        "weixin_mp_stats",
+        "xhs_publish",
+        "douyin_publish",
+        "bili_login",
+        "web_publisher"
+      ],
+      "resolution": "由已校验会话 platform 选择，源为 skills/shared/scripts；action 仅 login/probe"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_publish_worker.py",
+      "symbol": "readonly",
+      "choices": [
+        "douyin_publish",
+        "web_publisher"
+      ],
+      "resolution": "readonly 分支只在 douyin/kuaishou 条件中选择，并使用原账号 profile 读回，不执行 main 发布"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_publish_worker.py",
+      "symbol": "main",
+      "choices": [
+        "weixin_mp_stats",
+        "xhs_publish",
+        "douyin_publish",
+        "web_publisher"
+      ],
+      "resolution": "由调用方已批准平台/版本选定；B站和公众号另走固定 builtin 脚本，先核对身份，不重试未知提交"
+    }
+  ],
+  "non_import_entries": [
+    {
+      "path": "easel_workbench/runtime/direct_handoff.py",
+      "kind": "external-cli",
+      "entry": "main",
+      "origin": "neo-content/工具/内容工作流/toolbox_handoff.py：验证 active manifest 与 cutover/owner 后调用准确 release；不直接回落旧库"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_account_worker.py",
+      "kind": "child-process",
+      "entry": "main",
+      "origin": "easel_publish_worker.main 发送前探测；旧账号 runner 默认已禁用"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_media_worker.py",
+      "kind": "child-process",
+      "entry": "main",
+      "origin": "EaselIntegration._invoke_worker；新任务仍受 accept_new_tasks/stages 策略限制"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_publish_worker.py",
+      "kind": "child-process",
+      "entry": "main",
+      "origin": "EaselDistributionRuntime._invoke；必须已有准确交付授权"
+    },
+    {
+      "path": "easel_workbench/runtime/native_package_worker.py",
+      "kind": "child-process",
+      "entry": "main",
+      "origin": "native_api 的准确版本交付包入口；stdin 与允许输出根"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_migration.py",
+      "kind": "manual-tool",
+      "entry": "EaselMigration",
+      "origin": "当前默认 application/toolbox 装配无调用；保留显式迁移工具，不能依据无调用者删除"
+    },
+    {
+      "path": "easel_workbench/runtime/easel_readback.py",
+      "kind": "retained-read-adapter",
+      "entry": "receipt",
+      "origin": "当前默认装配无调用；仅保留独立观测转换能力，不是发送授权"
+    }
+  ],
+  "required_release_members": [
+    "easel_workbench/runtime/vendor/easel/SOURCE.json",
+    "easel_workbench/runtime/vendor/easel/scripts/ai_image.py",
+    "easel_workbench/runtime/scripts/distribution_bridge.mjs",
+    "easel_workbench/runtime/scripts/close_production_browser.mjs",
+    "easel_workbench/runtime/usage_registry.json",
+    "easel_workbench/assets/legacy-handoff.html",
+    "skills/shared/scripts/web_publisher.py",
+    "skills/shared/scripts/xhs_publish.py",
+    "skills/shared/scripts/douyin_publish.py",
+    "skills/shared/scripts/bili_login.py",
+    "skills/shared/scripts/weixin_mp_stats.py",
+    "skills/shared/scripts/platform_readback.py",
+    "skills/builtin/skill-bilibili-upload/scripts/bili_upload.py",
+    "skills/builtin/skill-wechat-publisher/scripts/api.py",
+    "skills/builtin/skill-wechat-publisher/scripts/html_converter.py"
+  ]
+}

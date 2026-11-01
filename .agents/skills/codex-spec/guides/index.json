@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "guides": [
+    {"id":"product","path":"guides/product.md","summary":"Turn intent into observable product outcomes and explicit assumptions.","when":"The goal, user journey or acceptance is unclear."},
+    {"id":"ui","path":"guides/ui.md","summary":"Inherit design language and verify meaningful interactions.","when":"Changing UI, UX, copy, layout or visual style."},
+    {"id":"system","path":"guides/system.md","summary":"Model relevant state, async transitions and module contracts.","when":"Changing state ownership, asynchronous behavior or multiple modules."},
+    {"id":"slices","path":"guides/slices.md","summary":"Deliver runnable vertical slices and compare migration behavior.","when":"A feature, refactor or migration spans substantial work."},
+    {"id":"diagnosis","path":"guides/diagnosis.md","summary":"Use falsifiable hypotheses and cross-check runtime evidence.","when":"The cause is unknown or a repair did not change the symptom."},
+    {"id":"verification","path":"guides/verification.md","summary":"Choose proportionate checks and inspect test effectiveness.","when":"Planning validation, assessing evidence or preparing delivery."},
+    {"id":"knowledge","path":"guides/knowledge.md","summary":"Keep task continuity and reusable knowledge small and source-backed.","when":"Resuming long work or maintaining project knowledge."}
+  ]
+}

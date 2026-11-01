@@ -40,16 +40,20 @@
 两份外部CLI适配器位于 neo-content 的 `工具/内容工作流/`，它们验证活动manifest后
 使用私有命名空间；修改时不得顺带改技能、规范、历史冻结输入或原话。
 
-<!-- SPECKIT CODEX START -->
-For AI Coding in this project, use the native $speckit entry Skill.
-Discover the relevant project resources with `specify context --json`; load only selected resources.
-Keep clarification provenance, workflow checks and source-bound evidence.
-Human feedback remains pending until the user actually supplies it.
-<!-- SPECKIT CODEX END -->
+## 本项目 Codex Spec 命令
 
-## 本项目 Spec Kit 命令
+- 开发工作流入口为 `$codex-spec`，与 `skills/builtin/` 中的产品内容生产技能独立。
+- 本项目文档及技能里的 `codex-spec ...` 一律通过 `pwsh -NoProfile -File ./scripts/codex-spec.ps1 ...` 调用；CLI 隔离在 `.runtime/codex-spec/`，不依赖全局安装。
+- 复装使用 `pwsh -NoProfile -File ./scripts/install_codex_spec.ps1`；发行包 SHA256 已固定，安装、升级与旧记录归档位置见 `docs/workbench/CODEX-SPEC-20261101.md`。
+- Codex Spec 沿用上述项目约定、准确版本和交付授权；不恢复旧 Spec Kit 阶段引擎，也不替代工作台的服务器事务、安装队列、业务技能注册或部署验收。人工反馈只记录真实用户反馈。
 
-- 开发工作流入口为 `$speckit`，与 `skills/builtin/` 中的产品内容生产技能独立。
-- 本项目文档及技能里的 `specify ...` 一律通过 `pwsh -NoProfile -File ./scripts/specify.ps1 ...` 调用；CLI 隔离在 `.runtime/spec-kit/`，不得调用 PATH 上其他项目的同名全局版本。
-- 复装使用 `pwsh -NoProfile -File ./scripts/install_spec_kit.ps1`；版本、发布包 SHA256 和依赖已固定，详见 `docs/workbench/SPEC-KIT-20261031.md`。
-- Spec Kit 工作流沿用上述项目约定、准确版本和交付授权，不替代私有工作台的服务器事务、安装队列、业务技能注册或部署验收。
+<!-- codex-spec:begin -->
+## Codex Spec
+
+Use `$codex-spec` for software changes, diagnosis and verification.
+Read `.agents/skills/codex-spec/SKILL.md` when applying it.
+Project knowledge is indexed by `.codex-spec/config.json`; load relevant sources.
+Feature records live in `specs/<id>/spec.md`; use the relevant record explicitly.
+Work in the current checkout. Multiple specs and conversations may run concurrently.
+Commits reference `Spec:` and `Spec-Docs:` in the existing project message style.
+<!-- codex-spec:end -->

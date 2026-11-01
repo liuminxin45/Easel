@@ -38,7 +38,9 @@
 .ew-task-status-actions>.btn{min-block-size:44px}
 .ew-composer-context{margin-block:8px}
 .ew-dialog[open]{display:flex;flex-direction:column;overflow:visible}
-.ew-dialog>.drawer-header{flex:0 0 auto;position:relative}
+.ew-dialog>.drawer-header{flex:0 0 auto;position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.ew-dialog>.drawer-header>h2{min-inline-size:0;overflow-wrap:anywhere}
+.ew-dialog>.drawer-header>button{flex-shrink:0}
 .ew-dialog>.drawer-body{flex:1 1 auto;min-block-size:0;max-block-size:none;overflow-y:auto}
 .ew-dialog-sheet .drawer-body>.ew-json{max-block-size:none;overflow:visible}
 .ew-dialog .drawer-header>button{min-inline-size:44px;min-block-size:44px}

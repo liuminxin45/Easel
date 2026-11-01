@@ -23,6 +23,8 @@ function load(file, imports = {}, suffix = '') {
       if(id==='./common')return {ActionButton:'button',...(imports[id]||{})};
       if (id in imports) return imports[id];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
+      if (id === './lib/workChatPath') return load('ui/lib/workChatPath.ts', {'@workbench/core': imports['@workbench/core']});
+      if (id === './ExtensionDetails') return {ExtensionDetails: () => {}};
       if (id === './ProductionParameters') return {ProductionParameters: () => {}};
       if (id === './PlatformAccounts') return {Accounts: () => {}};
       if (id === './nativeProfiles') return {NativeProfiles: () => {}};

@@ -339,7 +339,7 @@ def main():
                     page.evaluate('a=>localStorage.setItem("toolbox:draft:"+a.key,JSON.stringify(a.value))',{'key':oldkey,'value':oldinput})
                     target='/posters/new?'+urlencode({'article':aid,'draft':oldkey,'skill':'content-production','skill_version':candidate['version'],'trial':'1'})
                     before_news=len(f['adapter'].requests);page.goto(f['origin']+'/native/?'+urlencode({'path':target}));page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.startsWith('/chat/')")
-                    news_sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1];textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_have_value(' 原始旧题目 \n\n 第一行原字\n第二行原字 \n\n 原始制作要求 ');expect(page.get_by_text('本轮带入所选新闻的原始来源',exact=True)).to_be_visible();assert len(f['adapter'].requests)==before_news
+                    news_sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1];textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_have_value(' 原始旧题目 \n\n 第一行原字\n第二行原字 \n\n 原始制作要求 ');expect(page.get_by_text('已选新闻素材',exact=True)).to_be_visible();assert len(f['adapter'].requests)==before_news
                     assert page.evaluate('key=>JSON.parse(localStorage.getItem("toolbox:draft:"+key)).material',oldkey)==oldinput['material']
                     page.get_by_role('button',name='发送',exact=True).click();expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
                     news_history=wait_history(page,f['origin'],news_sid,files=True);news_turn=news_history['session']['messages'][-1]

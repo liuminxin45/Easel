@@ -31,6 +31,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
   if(specifier==='../platform/native-routes')return routeModule;
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
+  if(specifier==='./ExtensionDetails')return {ExtensionDetails:function ExtensionDetails(){}};
   if(specifier==='./management')return {SkillTask:function SkillTask(){}};
   const component=specifier.split('/').at(-1);
   if(native[component])return native[component];

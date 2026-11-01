@@ -286,7 +286,7 @@ def main():
                           and bool(discussion_source['provenance']))
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending", arg=sid)
                     composer = page.get_by_role('textbox', name='对话输入', exact=True)
-                    expect(page.get_by_text('本轮带入所选新闻的原始来源', exact=True)).to_be_visible()
+                    expect(page.get_by_text('已选新闻素材', exact=True)).to_be_visible()
                     original = 'TEMP 明确制作：沿用所选热点准确来源，保留适用边界。'
                     composer.fill('/生成贴图 ' + original)
                     expect(page.get_by_role('menuitem', name='/生成贴图', exact=False)).to_be_visible()
@@ -324,7 +324,8 @@ def main():
                     page.keyboard.press('Escape')
                     check(profile, 'merely having actual image and copy files cannot bypass the independent adoption gate', len(adapter.requests) == before_guard)
                     before_reject = len(adapter.requests)
-                    page.get_by_role('button', name='不采纳', exact=True).click()
+                    page.goto(origin + '/native/?' + urlencode({'path': '/chat/' + sid}), wait_until='domcontentloaded')
+                    helper.turn_view(page, v1_history).get_by_role('button', name='不采纳', exact=True).click()
                     reject = page.get_by_role('dialog').filter(has=page.get_by_role('button', name='确认不采纳', exact=True))
                     rejection = 'TEMP 不采纳 V1 原话：主体需要更突出；暂不采用本版。'
                     reject.get_by_label('决定说明 · 可不填', exact=True).fill(rejection)
@@ -342,7 +343,7 @@ def main():
                           and reject_job['status'] == 'completed' and work['decision']['id'] == reject_id
                           and len(adapter.requests) == before_reject and all(sha(path) == digest for path, digest in scenario['productions'][0]['files'].items()))
 
-                    page.get_by_role('button', name='修改这版', exact=True).click()
+                    helper.turn_view(page, v1_history).get_by_role('button', name='修改这版', exact=True).click()
                     page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
                     destination = parse_qs(urlsplit(page.url).query)['path'][0]
                     binding = parse_qs(urlsplit(destination).query)
@@ -423,7 +424,8 @@ def main():
                                             'path': str(download_path), 'sha256': sha(download_path),
                                             'suggested_filename': download.suggested_filename,
                                             'scope': 'Actual Edge download event and bytes; physical WebToApp download manager not tested.'}
-                    page.get_by_role('button', name='采纳并完成', exact=True).click()
+                    page.goto(origin + '/native/?' + urlencode({'path': '/chat/' + sid}), wait_until='domcontentloaded')
+                    helper.turn_view(page, v2_history).get_by_role('button', name='采纳此版', exact=True).click()
                     adopt = page.get_by_role('dialog').filter(has=page.get_by_role('button', name='确认采纳并完成', exact=True))
                     expect(adopt.get_by_role('combobox', name='采纳后', exact=True)).to_have_value('archive')
                     adoption_note = 'TEMP 明确采纳 V2 的图片与配文，仅归档，不授权平台发布。'
@@ -467,7 +469,7 @@ def main():
                     before_refresh = {'calls': len(adapter.requests), 'stream_posts': len(posts('/api/chat/stream')),
                                       'action_posts': len(posts('/api/works/' + wid + '/actions')), 'completion_count': len(app.state.completion.get(wid)['items'])}
                     page.reload(wait_until='domcontentloaded')
-                    expect(page.get_by_role('button', name='采纳并完成', exact=True)).to_be_visible()
+                    expect(helper.turn_view(page, v2_history).get_by_text('此版本已采纳', exact=True)).to_be_visible()
                     page.wait_for_timeout(600)
                     work = get('/api/works/' + wid)
                     check(profile, 'refresh preserves final adoption, earlier rejection and both versions without duplicate execution or decision',

@@ -64,7 +64,7 @@ test('the shared bubble can render private replies without parsing upstream outp
  assert.equal(parsed,0);assert.ok(nodes(tree).some(n=>n.props?.dangerouslySetInnerHTML?.__html===text));
 });
 test('work projection keeps real partial replies and exact task failure identities',()=>{
- const {projectWorkChat}=load('workbench/ui/ChatAdapter.tsx',{'../../components/ChatPage':()=>{},'./components/icons':{},
+ const {projectWorkChat}=load('workbench/ui/ChatAdapter.tsx',{'../../components/ChatPage':()=>{},'./components/icons':{},'./ExtensionDetails':{ExtensionDetails:()=>{}},
   '@workbench/core':{statusLabel:value=>value,string:value=>typeof value==='string'?value:'',record:value=>value||{},array:value=>Array.isArray(value)?value:[]}});
  const event={id:'exact-job',kind:'create',status:'running',text:'',input:{material:'原字材料'},reply:'真实已收到的部分回复'};
  const projected=projectWorkChat({id:'w',title:'主题',history:[event,{id:'adopt',kind:'accept',text:'',reply:'',status:'completed'}]});

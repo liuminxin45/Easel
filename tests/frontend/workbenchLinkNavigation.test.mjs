@@ -13,7 +13,7 @@ function fixture(compact=true){
   setAttribute(name,value){if(name==='href')this.raw=value}
   hasAttribute(name){return name==='download'&&this.isDownload}
   querySelector(){return this.image}
-  closest(selector){return selector==='#root a[href]'?this:selector==='.artifact-gallery'&&this.galleryImage?{querySelector:()=>this.galleryImage}:null}
+  closest(selector){return selector==='#root a[href]'?this:selector==='.artifact-gallery'&&this.galleryImage?{querySelector:query=>query==='.artifact-image-link img'?this.galleryImage:null}:null}
  }
  let mutation;
  const load=moduleLoader({globals:{location,Element,matchMedia:()=>({matches:compact}),

@@ -27,6 +27,7 @@ from starlette.responses import FileResponse, JSONResponse, Response
 
 from easel.web_services.outputs import create_outputs_context
 from easel.web_services.planning import create_planning_context
+from easel.web_services.concurrency import run_sync as _offload
 from easel_workbench.runtime.desk import stamp
 from easel_workbench.runtime.toolbox_store import ident, pack
 
@@ -164,24 +165,13 @@ class NativeApi:
         signature = hashlib.sha256(pack({'method': request.method, 'path': request.url.path,
                                          'body': fields}).encode()).hexdigest()
         async with self._write_lock:
-            with self.store.connect() as c:
-                c.execute('BEGIN IMMEDIATE')
-                previous = c.execute('SELECT signature,result FROM easel_ui_operations WHERE id=?', (operation,)).fetchone()
-                if previous:
-                    if previous['signature'] != signature:
-                        raise HTTPException(409, '同一操作不能改变内容')
-                    saved = json.loads(previous['result'])
-                    if not saved.get('native_protocol'):
-                        raise HTTPException(409, '操作标识已用于其他流程')
-                    if saved['state'] != 'completed':
-                        raise HTTPException(409, '原操作结果尚未核对；不会自动重新执行')
-                    return saved['result']
-                self._require_admission()
-                pending = {'id': operation, 'native_protocol': True, 'state': 'unavailable', 'result': None}
-                c.execute('INSERT INTO easel_ui_operations VALUES(?,?,?)', (operation, signature, pack(pending)))
+            pending = {'id': operation, 'native_protocol': True, 'state': 'unavailable', 'result': None}
+            exists, previous = await _offload(self._reserve_operation, operation, signature, pending)
+            if exists:
+                return previous
             self._operation = operation
             try:
-                result = action(fields)
+                result = await _offload(action, fields)
                 if inspect.isawaitable(result):
                     result = await result
                 if isinstance(result, Response):
@@ -190,14 +180,33 @@ class NativeApi:
             except (HTTPException, ValueError) as error:
                 saved = {**pending, 'state': 'rejected',
                          'result': {'detail': str(error.detail if isinstance(error, HTTPException) else error)}}
-                with self.store.connect() as c:
-                    c.execute('UPDATE easel_ui_operations SET result=? WHERE id=?', (pack(saved), operation))
+                await _offload(self._save_operation, operation, saved)
                 raise
             finally:
                 self._operation = ''
-            with self.store.connect() as c:
-                c.execute('UPDATE easel_ui_operations SET result=? WHERE id=?', (pack(saved), operation))
+            await _offload(self._save_operation, operation, saved)
             return result
+
+    def _reserve_operation(self, operation, signature, pending):
+        with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            previous = c.execute('SELECT signature,result FROM easel_ui_operations WHERE id=?', (operation,)).fetchone()
+            if previous:
+                if previous['signature'] != signature:
+                    raise HTTPException(409, '同一操作不能改变内容')
+                saved = json.loads(previous['result'])
+                if not saved.get('native_protocol'):
+                    raise HTTPException(409, '操作标识已用于其他流程')
+                if saved['state'] != 'completed':
+                    raise HTTPException(409, '原操作结果尚未核对；不会自动重新执行')
+                return True, saved['result']
+            self._require_admission()
+            c.execute('INSERT INTO easel_ui_operations VALUES(?,?,?)', (operation, signature, pack(pending)))
+        return False, None
+
+    def _save_operation(self, operation, saved):
+        with self.store.connect() as c:
+            c.execute('UPDATE easel_ui_operations SET result=? WHERE id=?', (pack(saved), operation))
 
     def _require_admission(self):
         state = self.root / '.local/workbench-deployment'
@@ -478,6 +487,19 @@ class NativeApi:
                                'work_id': work['id'], 'version_id': latest['meta']['version_id'], 'cover': cover}})
         return result
 
+    def _outputs_tree(self, native):
+        registered = self._native_tree()
+        sessions = {item['meta']['session_id'] for item in registered}
+        native = [item for item in native if item['path'] not in sessions]
+        return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
+
+    def _output_context(self, wanted):
+        for item in self._work_tree():
+            for candidate in (item, *item['children']):
+                if candidate['path'] == wanted:
+                    return {key: candidate['meta'][key] for key in ('work_id', 'version_id')}
+        return {}
+
     def _native_tree(self):
         """Project the existing registered native library into original nodes."""
         with self.store.connect() as c:
@@ -525,7 +547,7 @@ class NativeApi:
         return value, path
 
     async def _file(self, relative, media=False, *, preview=False):
-        registered = self._registered_file(relative)
+        registered = await _offload(self._registered_file, relative)
         if registered:
             value, path = registered
             if media:
@@ -533,7 +555,7 @@ class NativeApi:
                 return _protect_html_preview(response, preview=preview)
             kind = self.outputs._file_kind(value['name'])
             return {'path': relative, 'kind': kind, 'isBinary': kind != 'text',
-                    'content': path.read_text(encoding='utf-8') if kind == 'text' else ''}
+                    'content': await _offload(lambda: path.read_text(encoding='utf-8')) if kind == 'text' else ''}
         parts = Path(relative.replace('\\', '/')).parts
         if not parts or any(part in {'.', '..'} for part in parts):
             raise HTTPException(403, '非法路径')
@@ -542,7 +564,7 @@ class NativeApi:
             if not (media and parts[0] == '_login' and len(parts) == 2 and
                     re.fullmatch(r'(?:xiaohongshu|douyin|kuaishou|weixin-channels|zhihu|bilibili|wechat-oa-mp)\.png', parts[1])):
                 raise HTTPException(403, '系统资料不在内容库展示范围')
-        resolved = self.outputs._safe_output_path(relative)
+        resolved = await _offload(self.outputs._safe_output_path, relative)
         actual_parts = resolved.relative_to((self.root / 'outputs').resolve()).parts
         if actual_parts[0].startswith(('_', '.')) and actual_parts != parts:
             raise HTTPException(403, '系统资料不能经目录别名展示')
@@ -617,27 +639,20 @@ class NativeApi:
             return await self._upload(request)
         receipt = re.fullmatch(r'/api/native/operations/([A-Za-z0-9_-]+)', path)
         if receipt and method == 'GET':
-            return self.receipt(receipt[1])
+            return await _offload(self.receipt, receipt[1])
         if path == '/api/outputs' and method == 'GET':
             native = await asyncio.to_thread(self.outputs.api_outputs)
-            registered = self._native_tree()
-            sessions = {item['meta']['session_id'] for item in registered}
-            native = [item for item in native if item['path'] not in sessions]
-            return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
+            return await _offload(self._outputs_tree, native)
         if path == '/api/artifacts/archive' and method == 'GET':
             relative = request.query_params.get('path', '')
-            if self._registered_file(relative):
+            if await _offload(self._registered_file, relative):
                 return {'paths': []}
             if not relative or Path(relative.replace('\\', '/')).parts[0].startswith(('_', '.')):
                 raise HTTPException(403, '系统资料不在内容库展示范围')
             return await asyncio.to_thread(self.outputs.api_artifact_archive, relative)
         if path == '/api/output-context' and method == 'GET':
             wanted = request.query_params.get('path', '')
-            for item in self._work_tree():
-                for candidate in (item, *item['children']):
-                    if candidate['path'] == wanted:
-                        return {key: candidate['meta'][key] for key in ('work_id', 'version_id')}
-            return {}
+            return await _offload(self._output_context, wanted)
         file_match = re.fullmatch(r'/api/(output|media)/(.+)', path)
         if file_match and method in {'GET', 'HEAD'}:
             return await self._file(unquote(file_match[2]), file_match[1] == 'media',
@@ -645,14 +660,17 @@ class NativeApi:
         if file_match and method == 'DELETE':
             raise HTTPException(403, '原件与历史版本保留，请在准确作品版本中归档')
         if path == '/api/personas' and method == 'GET':
+            profiles = await _offload(self._profiles)
             return [{'name': item['id'], 'display_name': item['name'], 'description': item['identity']}
-                    for item in self._profiles() if item.get('active', True)]
+                    for item in profiles if item.get('active', True)]
         persona = re.fullmatch(r'/api/persona/([^/]+)(?:/(files|file))?', path)
         if persona:
             name = unquote(persona[1])
             if method == 'GET':
-                return self._profile_files(name) if persona[2] == 'files' else {
-                    'name': self._profile(name)['id'], 'content': '\n\n'.join(item['content'] for item in self._profile_files(name)['files'])}
+                def read_profile():
+                    return self._profile_files(name) if persona[2] == 'files' else {
+                        'name': self._profile(name)['id'], 'content': '\n\n'.join(item['content'] for item in self._profile_files(name)['files'])}
+                return await _offload(read_profile)
             if method == 'PUT' and persona[2] == 'file':
                 return await self._mutate(request, body, lambda fields: self._save_profile_file(name, fields))
             if method == 'DELETE':
@@ -694,11 +712,11 @@ class NativeApi:
             if method in {'POST', 'PUT', 'DELETE'}:
                 return await self._mutate(request, body, schedule)
         if path == '/api/trends' and method == 'GET':
-            return self._trends(request)
+            return await _offload(self._trends, request)
         if path in ('/api/trends/sources', '/api/trends/manage'):
-            collection = self._collection()
+            collection = await _offload(self._collection)
             if method == 'GET':
-                document = collection.registry.public()
+                document = await _offload(collection.registry.public)
                 if path.endswith('/sources'):
                     document['sources'] = [item for item in document['sources'] if item.get('enabled')]
                 return document
@@ -778,7 +796,11 @@ async def handle(box, path, request, value=None):
     if not supports(path, request.method):
         return None
     if not getattr(box, '_native_api', None):
-        box._native_api = NativeApi(box)
+        if not getattr(box, '_native_api_init_lock', None):
+            box._native_api_init_lock = asyncio.Lock()
+        async with box._native_api_init_lock:
+            if not getattr(box, '_native_api', None):
+                box._native_api = await _offload(NativeApi, box)
     try:
         result = await box._native_api.dispatch(path, request, value or {})
         if result is None or isinstance(result, Response):

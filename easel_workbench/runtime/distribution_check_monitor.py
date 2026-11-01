@@ -18,7 +18,7 @@ import uuid
 from easel_workbench.runtime.distribution_checks import CheckService, PLATFORMS, _plain_text
 from easel_workbench.runtime.distribution_catalog import IMPORTABLE_PROVIDERS, identity_metadata
 from easel_workbench.runtime.distribution_service import DistributionConflict
-from easel_workbench.runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 
 
 SUCCESS_INTERVAL = 300

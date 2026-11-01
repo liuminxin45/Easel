@@ -6,6 +6,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, unquote
 from .auth_totp import token_hash
+from easel_workbench.contracts.media_paths import is_host_media_protocol
 
 TTL = 300
 
@@ -15,7 +16,6 @@ def target(value):
     if url.scheme or url.netloc or url.fragment or url.query not in ('','download=1'):raise ValueError('Invalid download target')
     path=unquote(url.path)
     if re.search(r'[\\\x00-\x1f]',path) or any(part in ('.','..','') for part in path[1:].split('/')):raise ValueError('Invalid download path')
-    from .native_api import is_host_media_protocol
     allowed=(re.fullmatch(r'/api/files/[A-Za-z0-9_-]+',path)
              or re.fullmatch(r'/api/chat/products/[A-Za-z0-9_-]+/files/[a-f0-9]{64}',path)
              or re.fullmatch(r'/api/works/[A-Za-z0-9_-]+/versions/[A-Za-z0-9_-]+/download',path)

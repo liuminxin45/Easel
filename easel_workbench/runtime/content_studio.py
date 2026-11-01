@@ -66,7 +66,7 @@ def options(value=None):
         creator=value['creator']
         if not isinstance(creator,dict) or set(creator)-{'profile_id','profile_revision','skills','trial'}:
             raise ValueError('创作画像与技能选择无效')
-        from easel_workbench.runtime.toolbox_store import ident
+        from easel_workbench.contracts.values import ident
         parsed={'profile_id':ident(creator.get('profile_id','oil-pig'))}
         if 'profile_revision' in creator:
             revision=creator['profile_revision']
@@ -172,7 +172,7 @@ def catalog(box,format):
             'axes':AXES,'defaults':DEFAULT,'presets':presets}
 
 def save_preset(box,value):
-    from easel_workbench.runtime.toolbox_store import ident,text
+    from easel_workbench.contracts.values import ident, text
     operation=ident(value.get('id'));signature=packed(value);format=value.get('format')
     if format not in ('poster','article'):raise ValueError('制作类型无效')
     name=text(value.get('name',''),48,True).strip();schema=value.get('schema_version',2 if 'intent' in value else 1)
@@ -353,7 +353,7 @@ def apply_locked_text(store,jid,root):
         c.execute('INSERT OR IGNORE INTO toolbox_text_versions VALUES(?,?)',(jid,packed({'origin':'locked_input','text':raw,'provided_fields':list(choice['text'])})))
 
 def save_text(box,wid,value,new=False):
-    from easel_workbench.runtime.toolbox_store import ident,text
+    from easel_workbench.contracts.values import ident, text
     jid=ident(value.get('id'));ident(wid);signature=packed(value);raw=options({'text':{'title':value.get('title'),'body':value.get('body')}})['text'];now=stamp()
     with box.store.connect() as c:
         c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()

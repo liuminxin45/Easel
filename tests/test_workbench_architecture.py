@@ -315,6 +315,12 @@ def test_actual_skill_policy_remains_independent_of_runtime_and_external_io():
     assert not policy_edges(policy.read_text(encoding='utf-8'))
 
 
+def test_migrated_private_contract_and_download_boundaries():
+    audit=runpy.run_path(str(ROOT/'scripts/audit_workbench_private_architecture.py'))
+    report=audit['inventory'](ROOT)
+    assert not report['violations'],report['violations']
+
+
 def test_nine_source_identity_registries_have_not_drifted():
     canonical=json.loads((ROOT/'sources.json').read_text(encoding='utf-8'))
     compatibility=json.loads((ROOT/'easel_workbench/runtime/sources.json').read_text(encoding='utf-8'))

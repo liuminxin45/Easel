@@ -1,7 +1,8 @@
 """Work/version scoped brainstorming using the existing fixed-thread queue."""
 import hashlib,json
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident,text,pack,ACTIVE
+from easel_workbench.contracts.values import ident, text, pack
+from easel_workbench.contracts.legacy_jobs import ACTIVE
 from easel_workbench.runtime.article_drafts import read,DraftConflict
 
 EMPTY_TOKEN=hashlib.sha256(b'[]').hexdigest()

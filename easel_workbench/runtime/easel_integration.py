@@ -21,7 +21,7 @@ import threading
 import uuid
 
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident, pack, text
+from easel_workbench.contracts.values import ident, pack, text
 
 SOURCE = pathlib.Path(__file__).resolve().parent / 'vendor/easel'
 CHANNELS = {'transcribe': '语音转写', 'speech': '配音', 'image': '生图', 'video': '视频', 'music': '音乐'}

@@ -1,7 +1,8 @@
 """Server-owned creative inputs. Saving never schedules AI; production freezes a revision."""
 import json
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident, text, pack, ACTIVE
+from easel_workbench.contracts.values import ident, text, pack
+from easel_workbench.contracts.legacy_jobs import ACTIVE
 
 
 class DraftConflict(ValueError):

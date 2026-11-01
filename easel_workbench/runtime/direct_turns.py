@@ -75,7 +75,7 @@ class DirectTurns:
         self.validate_file=validate_file
 
     def bind(self,value,path,turn=None):
-        from easel_workbench.runtime.toolbox_store import ident
+        from easel_workbench.contracts.values import ident
         thread=value.get('thread') or THREAD
         if thread!=THREAD:
             from easel_workbench.runtime.task_runtime import target_for_thread

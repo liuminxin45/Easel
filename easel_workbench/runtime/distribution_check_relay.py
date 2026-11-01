@@ -15,7 +15,7 @@ import secrets
 import uuid
 
 from easel_workbench.runtime.distribution_runtime import DPAPIVault
-from easel_workbench.runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 
 LEASE_SECONDS = 180
 TASK_SECONDS = 180

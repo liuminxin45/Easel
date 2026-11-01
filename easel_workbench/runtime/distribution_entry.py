@@ -40,7 +40,7 @@ def native_target(query):
     if any(key not in allowed for key in query) or any(len(query.getlist(key))!=1 for key in query):raise ValueError('分发入口参数无效')
     if query.get('pane','pending') not in ('pending','connections','history'):raise ValueError('分发页面无效')
     values={key:query[key] for key in query}
-    from easel_workbench.runtime.toolbox_store import ident
+    from easel_workbench.contracts.values import ident
     for key in ('work','version','item'):
         if key in values:ident(values[key])
     route='/toolbox?'+urllib.parse.urlencode(values)

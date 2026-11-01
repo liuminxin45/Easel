@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio, hashlib, hmac, html, json, re, secrets, urllib.parse
 from fastapi.responses import JSONResponse, Response
 from easel_workbench.runtime.auth_totp import equal
-from easel_workbench.runtime.toolbox_store import ident
+from easel_workbench.contracts.values import ident
 
 def mount_service(box):
     from easel_workbench.runtime.distribution_service import DistributionService

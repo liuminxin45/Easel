@@ -6,7 +6,7 @@ import os
 import pathlib
 import uuid
 
-from easel_workbench.runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 
 CHUNK = 5 * 1024 * 1024
 LIMIT = 512 * 1024 * 1024

@@ -21,7 +21,7 @@ from easel_workbench.runtime.content_studio import source as version_source
 from easel_workbench.runtime.distribution_catalog import PLATFORMS
 from easel_workbench.runtime.desk import stamp
 from easel_workbench.runtime.studio_service import StudioService, StudioConflict
-from easel_workbench.runtime.toolbox_store import ident, pack, text
+from easel_workbench.contracts.values import ident, pack, text
 
 
 RemoteState = Literal['draft', 'pending_review', 'published', 'unknown', 'failed']

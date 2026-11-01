@@ -2,7 +2,7 @@
 from __future__ import annotations
 import copy, hashlib, json
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident, pack, text
+from easel_workbench.contracts.values import ident, pack, text
 
 
 class PreferencesConflict(ValueError):

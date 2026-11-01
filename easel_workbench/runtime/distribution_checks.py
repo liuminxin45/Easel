@@ -22,7 +22,7 @@ from urllib.parse import quote
 from easel_workbench.runtime.distribution_runtime import DPAPIVault
 from easel_workbench.runtime.distribution_service import DistributionConflict
 from easel_workbench.runtime.distribution_catalog import PROVIDER_NAMES as PLATFORMS, IMPORTABLE_PROVIDERS, identity_metadata, plain_text as _plain_text
-from easel_workbench.runtime.toolbox_store import ident, pack, text
+from easel_workbench.contracts.values import ident, pack, text
 
 
 TTL_SECONDS = 180

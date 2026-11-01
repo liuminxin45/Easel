@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from fastapi.responses import JSONResponse,Response
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import pack
+from easel_workbench.contracts.values import pack
 
 ACCOUNTS_PATH='/toolbox?section=distribution&pane=connections'
 ACCOUNTS_URL='/native/?path=%2Ftoolbox%3Fsection%3Ddistribution%26pane%3Dconnections'

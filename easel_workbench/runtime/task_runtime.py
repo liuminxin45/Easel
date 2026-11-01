@@ -819,7 +819,7 @@ def enqueue_experience(box, value, c):
     profile_id=creator['profile']['id']
     from easel_workbench.runtime.creator_runtime import key
     target=key(value.get('skill_id','content-writing'))
-    from easel_workbench.runtime.toolbox_store import text as bounded_text
+    from easel_workbench.contracts.values import text as bounded_text
     goal=bounded_text(value.get('goal',''),10000)
     runtime=registry(box,c)
     # The target is source material to improve, never a learning executor.
@@ -968,7 +968,7 @@ def enqueue_reference(box, value, c):
         return previous['result']
     snapshot=request_snapshot(box,value,'reference',c)
     profile_id=snapshot['profile']['id']
-    from easel_workbench.runtime.toolbox_store import text as bounded_text
+    from easel_workbench.contracts.values import text as bounded_text
     goal=bounded_text(value.get('goal',''),10000)
     learning = getattr(box, 'learning', None)
     if learning is None:

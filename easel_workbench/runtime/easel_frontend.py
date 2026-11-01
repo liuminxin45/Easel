@@ -8,7 +8,7 @@ import datetime as dt
 import hashlib
 import json
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident,pack,text
+from easel_workbench.contracts.values import ident, pack, text
 
 
 class FrontendConflict(ValueError):pass

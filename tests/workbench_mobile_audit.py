@@ -1036,6 +1036,7 @@ def main():
                                     before=lambda: page.get_by_role('button', name='编辑方法，另存候选', exact=True).click())
                                 def skill_publish_navigation():
                                     trigger = page.get_by_role('button', name='确认适用范围并发布', exact=True)
+                                    expect(trigger).to_be_visible()
                                     detail = page.locator('dialog.ew-dialog[open]')
                                     expect(detail).to_have_count(1)
                                     title = detail.get_attribute('aria-label')

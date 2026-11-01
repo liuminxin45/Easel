@@ -1,3 +1,4 @@
+import {ExtensionDetails} from './ExtensionDetails';
 import {useMemo,useState} from 'react';
 import ProfilePage,{type ProfilePageDraft} from '../../components/ProfilePage';
 import {useWorkbench,useResource,useDraft,useAsyncAction,creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
@@ -49,18 +50,18 @@ function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:Crea
    asset_refs:[...draft.asset_refs,...uploaded.map(file=>({file_id:file.id,label:file.name,role:'reference',required:true}))],default_skills:draft.default_skills}});
   const saved=record(resultDocument(result).profile);patch({files:[],base_revision:number(saved.revision),asset_refs:creatorAssetInputs(saved.asset_refs)});void reload();
  });
- return <details className="workbench-extension" open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>工作台扩展 · 素材、执行技能与账号绑定</summary>
+ return <ExtensionDetails className="workbench-extension" title="素材、技能与账号" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
   <Panel title="角色与品牌参考">{draft.asset_refs.map((asset,index)=><div className="ew-row" key={index}><span>{string(asset.label)||string(asset.path)}</span><button className="btn btn-ghost" onClick={()=>patch({asset_refs:draft.asset_refs.filter((_,position)=>position!==index)})}>移除绑定</button></div>)}
    {draft.files.map(file=><p key={file.id}>{file.name}</p>)}<label className="btn ew-file-pick">添加参考图<input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={event=>{if(event.target.files)void action.run(async()=>patch({files:await vm.service.attach(event.target.files!,draft.files)}))}}/></label>
   </Panel>
-  <Panel title="默认执行技能">{[['poster','贴图'],['article','文章'],['research','选题研究']].map(([task,label])=><details key={task}><summary>{label}</summary>
+  <Panel title="默认执行技能">{[['poster','贴图'],['article','文章'],['research','选题研究']].map(([task,label])=><ExtensionDetails key={task} title={<>{label}</>}>
    {data.skills.filter(skill=>skill.published_version&&array<string>(skill.tasks).includes(task!)).map(skill=><label className="ew-check" key={skill.id}><input type="checkbox" checked={(draft.default_skills[task!]||[]).includes(skill.id)} onChange={event=>patch({default_skills:{...draft.default_skills,[task!]:event.target.checked?[...(draft.default_skills[task!]||[]),skill.id]:(draft.default_skills[task!]||[]).filter(id=>id!==skill.id)}})}/>{skill.name} · {skill.published_version}</label>)}
-  </details>)}</Panel>
+  </ExtensionDetails>)}</Panel>
   <ActionButton action={action} className="btn btn-primary" disabled={action.busy||changedRevision} onClick={save}>保存绑定与默认技能</ActionButton>
   {changedRevision&&<p role="status">画像已有新修订。<button className="btn" onClick={()=>patch({base_revision:profile.revision})}>已核对当前画像，保留这些绑定修改</button></p>}
   <Panel title="关联平台账号">{data.accounts.map(account=><div className="ew-row" key={account.id}><span>{account.label||account.account||account.platform}</span><ActionButton action={action} className="btn" disabled={action.busy} onClick={()=>void action.run(async()=>{
    const result=await vm.service.creatorCommand(profile.account_ids.includes(account.id)?'unbind-account':'bind-account',{profile_id:profile.id,connection_id:account.id,base_revision:profile.revision});patch({base_revision:number(record(resultDocument(result).profile).revision)});void reload();
   })}>{profile.account_ids.includes(account.id)?'解绑':'绑定'}</ActionButton></div>)}</Panel>
   <Notice sources={[action]}/><Pending scope={'creator:profile-save:'+profile.id}/>
- </details>;
+ </ExtensionDetails>;
 }

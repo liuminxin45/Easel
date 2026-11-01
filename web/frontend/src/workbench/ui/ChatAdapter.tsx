@@ -1,4 +1,5 @@
 import React from 'react';
+import {ExtensionDetails} from './ExtensionDetails';
 import ChatPage,{type ChatCommand} from '../../components/ChatPage';
 import type {ChatSession,ChatMessage} from '../../lib/store';
 import {IconSkills} from './components/icons';
@@ -50,7 +51,7 @@ export function ChatAdapter({id,title='新对话',work,text,files,onText,onFiles
    const issue=record(work?.production_issue),error=(issue.job_id===event.id?string(issue.message):'')||string(event.error),pending=['queued','running','dispatching'].includes(event.status),technical=/Traceback|Exception|RuntimeError|FileNotFound|ModuleNotFound|rollout|thread\/|RPC/i.test(error);
    const version=work?.versions.find(v=>v.id===event.id),hasFiles=!!version?.artifacts.length;
    return <div className="chat-task-status" role={error?'alert':'status'}><small>{statusLabel(event.kind)} · {statusLabel(event.status)}{event.candidate_id?' · '+(work?.versions.find(v=>v.id===event.candidate_id)?.label||'原版本'):''}</small>
-    {pending&&<p>正在执行，回复会随实际回执更新。</p>}{error&&(technical?<><p>这轮没有完成，任务记录与原输入已保留。请核对原因后恢复原任务。</p><details><summary>查看失败原因</summary><p>{error}</p></details></>:<p>这轮未完成：{error}</p>)}
+    {pending&&<p>正在执行，回复会随实际回执更新。</p>}{error&&(technical?<><p>这轮没有完成，任务记录与原输入已保留。请核对原因后恢复原任务。</p><ExtensionDetails title="查看失败原因"><p>{error}</p></ExtensionDetails></>:<p>这轮未完成：{error}</p>)}
     {event.status==='needs_desktop'&&<p>这轮需要在原制作会话中处理，当前任务不会自动重发。</p>}
     {hasFiles&&<button className="btn btn-sm" onClick={()=>onOpenVersion?.(event.id)}>查看本版成品</button>}
    </div>;

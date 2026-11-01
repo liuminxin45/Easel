@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 MARK = 'MOBILE_AUDIT'
 LONG = MARK + ' 窄屏已有数据：保留准确版本、原始反馈和未发送输入。' * 5
+RECORD_GUIDANCE = (LONG + '\n') * 12
 
 
 def sha(path):
@@ -88,7 +89,10 @@ def seed(fixture, image, video):
         wav.writeframes(b'\x00\x00' * 1600)
     (folder / '合成音频.wav').write_bytes(sound.getvalue())
     work = 'mobile-audit-work'
-    box.create({'id': work, 'title': LONG, 'material': LONG, 'format': 'poster', 'files': []})
+    # Persist a genuine long creation input through normal TEMP freezing.
+    # The record sheet must exercise long original data rather than padded DOM.
+    box.create({'id': work, 'title': LONG, 'material': LONG, 'format': 'poster', 'files': [],
+                'creative': {'workspace': {'style_guidance': RECORD_GUIDANCE}}})
     artifact = root / 'data/artifacts/mobile-audit-image.png'
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_bytes(image)
@@ -658,6 +662,35 @@ def main():
                                     page.get_by_role('button', name='版本与记录', exact=True).click()
                                     page.locator('.ew-work-records details summary').first.click()
                                 run('work.records', work_path, '.ew-work-records', 'history_expanded', marker=MARK, before=records)
+                                def record_sheet():
+                                    page.get_by_role('button', name='版本与记录', exact=True).click()
+                                    trigger = page.get_by_role('button', name='本版制作设置', exact=True)
+                                    sheet = page.locator('dialog.ew-dialog-sheet[aria-label="本版制作设置"]')
+                                    observations = []
+                                    for close_kind in ('escape', 'close_button'):
+                                        trigger.scroll_into_view_if_needed()
+                                        trigger.focus()
+                                        trigger.click()
+                                        expect(sheet).to_be_visible()
+                                        pre = sheet.locator('pre')
+                                        expect(pre).to_be_visible()
+                                        metrics = pre.evaluate("el=>({characters:(el.textContent||'').length,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,whiteSpace:getComputedStyle(el).whiteSpace,bodyWidth:el.closest('.drawer-body').clientWidth})")
+                                        assert metrics['characters'] >= 512, ('Expected the actual long frozen version record', metrics)
+                                        assert json.loads(pre.inner_text()).get('workspace', {}).get('style_guidance') == RECORD_GUIDANCE, 'Record sheet lost the original frozen guidance bytes'
+                                        assert metrics['scrollWidth'] <= metrics['clientWidth'] + 1, ('Long record overflowed horizontally', metrics)
+                                        assert metrics['clientWidth'] <= metrics['bodyWidth'] + 1, ('Long record escaped its sheet', metrics)
+                                        assert metrics['whiteSpace'] in ('pre-wrap', 'break-spaces'), ('Long record no longer wraps readably', metrics)
+                                        if close_kind == 'escape':
+                                            page.keyboard.press('Escape')
+                                        else:
+                                            sheet.get_by_role('button', name='关闭', exact=True).click()
+                                        expect(sheet).to_have_count(0)
+                                        expect(trigger).to_be_focused()
+                                        observations.append({'close': close_kind, 'record': metrics, 'closed': True, 'focus_restored_to_trigger': True})
+                                    report.setdefault('record_sheet_interactions', []).append({'case': label, 'surface_id': 'work.records', 'state': 'long_record_sheet', 'cycles': observations, 'application_source_injected': False})
+                                    trigger.click()
+                                    expect(sheet).to_be_visible()
+                                run('work.records', work_path, 'dialog.ew-dialog-sheet', 'long_record_sheet', before=record_sheet)
                                 def annotate():
                                     expect(page.locator('.ew-work-copy')).to_be_visible()
                                     page.locator('.ew-work-copy').evaluate("el=>{const range=document.createRange();range.selectNodeContents(el);const selection=getSelection();selection.removeAllRanges();selection.addRange(range)}")
@@ -680,7 +713,7 @@ def main():
                                     expect(page.get_by_text('确认此字段', exact=True)).to_be_visible()
                                 run('skills.profile-proposal', '/toolbox?section=skills&pane=experience', 'dialog.ew-dialog', 'candidate_before_after', marker=MARK, before=proposal)
                                 def bindings():
-                                    page.get_by_text('工作台扩展 · 素材、执行技能与账号绑定', exact=True).click()
+                                    page.get_by_text('素材、技能与账号', exact=True).click()
                                 run('profiles.bindings', '/toolbox?section=profiles&item=oil-pig', 'details.workbench-extension', 'default_tasks_expanded', before=bindings)
                                 def unsaved():
                                     page.get_by_role('button', name='✏️ 编辑资料', exact=True).click()
@@ -697,7 +730,7 @@ def main():
                                     report.setdefault('browser_dialogs', []).append({'case': label, 'surface_id': 'profiles.unsaved-confirm', 'message': seen[0], 'dismissed': True})
                                 run('profiles.unsaved-confirm', '/toolbox?section=profiles&item=oil-pig', '.profile-page', 'cancel_retains_exact_text', before=unsaved)
                                 def delivery():
-                                    page.get_by_text('工作台扩展 · 准确版本交付与回执', exact=True).click()
+                                    page.get_by_text('交付记录', exact=True).click()
                                     page.get_by_role('combobox', name='交付账号', exact=True).select_option('mobile-audit-account')
                                 publish_path = '/toolbox?section=publications&work=' + ids['work'] + '&version=' + ids['version']
                                 run('publishing.delivery', publish_path, 'details.workbench-extension', 'queued_failed_unknown_receipts', marker=MARK, before=delivery)

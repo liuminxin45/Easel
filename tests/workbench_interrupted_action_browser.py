@@ -209,17 +209,35 @@ def main():
                         # resource is hydrated; enter a later draft only once
                         # that exact server-authorized session has rendered.
                         composer.fill(later)
-                    expect(top).to_contain_text('本轮已中断，原文件已保留。')
+                    expect(top).to_contain_text('制作未完成')
                     button = top.get_by_role('button', name='继续制作', exact=True)
                     expect(button).to_be_visible()
                     expect(page.get_by_role('button', name='继续制作', exact=True)).to_have_count(1)
                     expect(page.get_by_role('alert').filter(has_text='原生接口已核对本回合中断')).to_have_count(0)
                     expect(composer).to_have_value(later)
-                    check(str(width) + '-' + theme + ' notice and its single action fit without horizontal overflow',
+                    check(str(width) + '-' + theme + ' historical status stays inside its message with no top banner',
+                          top.evaluate("element=>!!element.closest('.chat-messages')")
+                          and page.locator('.chat-page > [aria-label=\"制作中断\"]').count() == 0)
+                    check(str(width) + '-' + theme + ' message status and its single action fit without horizontal overflow',
                           top.evaluate('element=>element.scrollWidth<=element.clientWidth+1')
                           and page.evaluate('()=>document.documentElement.scrollWidth<=innerWidth+1')
                           and page.evaluate('()=>document.documentElement.dataset.theme') == theme)
                     screenshot(page, str(width) + '-' + theme + '-interrupted-action.png')
+                    details = top.locator('.ew-disclosure')
+                    trigger = details.locator('summary')
+                    expect(details).not_to_have_attribute('open', '')
+                    check(str(width) + '-' + theme + ' details entry has a 44px target and no browser marker',
+                          trigger.evaluate("element=>element.getBoundingClientRect().height>=44 && getComputedStyle(element).listStyleType==='none'")
+                          and trigger.locator('svg[aria-hidden=true]').count() == 1)
+                    trigger.focus()
+                    trigger.press('Space')
+                    expect(details).to_have_attribute('open', '')
+                    expect(details.locator('.ew-disclosure-body')).to_contain_text(last['business_error'])
+                    screenshot(page, str(width) + '-' + theme + '-interrupted-record-expanded.png')
+                    trigger.press('Enter')
+                    expect(details).not_to_have_attribute('open', '')
+                    check(str(width) + '-' + theme + ' keyboard disclosure preserves the exact historical reason and never submits production',
+                          len(adapter.requests) == 1 and stream_requests() == streams_before_restore)
                     before_posts, before_calls = len(production_posts()), len(adapter.requests)
                     button.click()
                     page.wait_for_function("()=>new URLSearchParams(new URLSearchParams(location.search).get('path').split('?')[1]).get('continue')==='1'")
@@ -232,7 +250,7 @@ def main():
                           and query.get('skill') == [identity['skill_id']]
                           and query.get('skill_version') == [str(identity['skill_version'])]
                           and query.get('action') == ['change'])
-                    expect(page.get_by_role('status', name='制作中断', exact=True)).to_have_count(0)
+                    expect(page.get_by_role('status', name='制作中断', exact=True)).to_be_visible()
                     expect(page.get_by_role('button', name='继续制作', exact=True)).to_have_count(0)
                     expect(composer).to_have_value(later)
                     page.wait_for_function("({sid,skill,version})=>{const command=JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))?.command;return command?.skill_id===skill&&command?.version===version&&command?.action_id==='change'}",
@@ -262,7 +280,7 @@ def main():
                       reentry.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))?.text", sid) == reentry_draft)
                 reentry.go_back(wait_until='domcontentloaded')
                 expect(reentry_top).to_be_visible()
-                expect(reentry_top).to_contain_text('本轮已中断，原文件已保留。')
+                expect(reentry_top).to_contain_text('制作未完成')
                 expect(reentry.get_by_role('button', name='继续制作', exact=True)).to_have_count(1)
                 expect(reentry.get_by_role('alert')).to_have_count(0)
                 expect(reentry.get_by_role('status').filter(has_text='正在恢复原任务状态')).to_have_count(0)

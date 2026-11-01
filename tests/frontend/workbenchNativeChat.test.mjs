@@ -23,16 +23,18 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const hookSource=readFileSync(new URL('workbench/core/react.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,useContext:()=>({client:vm.client}),Context:{},useEffect:react.useEffect,interactionFeedback,Error,RequestError});
  const core={...productionRecovery,useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:path?.startsWith('/api/chat/products/')?resources.product||null:path?.startsWith('/api/works/')?resources.work||null:path?resources:null,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
- const components={ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{},ArtifactGallery:()=>{},CopyableText:()=>{},Completion:()=>{}};
- const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./common':{Notice:()=>{}}});
+ const presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
+ const components={...presentation,ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{},ArtifactGallery:()=>{},CopyableText:()=>{},Completion:()=>{}};
+ const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Modal:()=>{},Field:()=>{},ActionButton:'button'}});
  const timers=new Map();
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const continuationButtons=value=>nodes(value).filter(node=>node.type==='button'&&node.props.children==='继续制作');
+const renderedProducts=(ui,message)=>{const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);return wrapper.type(wrapper.props)};
 function interruptedMessage(){return {role:'assistant',content:'已保留原文件',status:'stopped',turnId:'interrupted-version',work:{work_id:'exact-work',version_id:'interrupted-version'},business_recovery:{job_id:'interrupted-version',failure_kind:'production',send_state:'submitted',action:'edit_materials',error_code:'native_interrupted',can_continue:true,continuation:{session_id:'session-one',work_id:'exact-work',version_id:'interrupted-version',profile_id:'oil-pig',skill_id:'content-production',skill_version:2}}};}
 const historicalInterruption='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';
 const retainedDraft=()=>({text:'  后写的新要求\n逐字保留  ',files:[{id:'later-file',name:'后来添加.png'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}});
@@ -59,7 +61,8 @@ test('server-confirmed history restores either a fresh saved turn or an existing
   const originalStreams=f.calls.stream.length;f.render();for(const effect of [...f.effects])effect();await tick();
   const state=runtime.state.getState();assert.equal(state.error,'',mode);assert.equal(state.feedback,undefined,mode);assert.equal(state.running,false,mode);assert.equal(state.stream,undefined,mode);
   assert.deepEqual(plain(f.draft),later,mode);assert.equal(f.calls.stream.length,originalStreams,mode+' must not subscribe before restoring server history');assert.equal(f.calls.post.length,0);
-  assert.equal(continuationButtons(f.render().chat.notice).length,1,mode+' exposes continuation after local stale state is reconciled');
+  const restored=f.render();assert.equal(continuationButtons(restored.chat.notice).length,0,mode+' keeps historical interruption out of the top notice');
+  assert.equal(continuationButtons(renderedProducts(restored,f.resources.session.messages.at(-1))).length,1,mode+' exposes continuation on the exact original message after reconciliation');
   if(originalStreams){f.calls.stream[0][3]('迟到旧回调');assert.equal(runtime.state.getState().stream,undefined);}
  }
 });
@@ -103,13 +106,16 @@ test('a confirmed stopped receipt clears transient and raw interruption notices 
  assert.equal(state.error,'');assert.equal(state.feedback,undefined);assert.equal(state.running,false);assert.equal(f.draft.pending,undefined);
  assert.equal(f.draft.text,later.text);assert.deepEqual(plain(f.draft.files),later.files);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
 });
-test('the latest confirmed interrupted production shows one top continuation action for the original session and frozen version',()=>{
+test('the latest confirmed interrupted production keeps its unique continuation on the exact message and out of the top notice',()=>{
  const f=fixture(),message=interruptedMessage();f.resources.session.messages=[{role:'user',content:'原始贴图请求'},message];
  f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[{id:'preserved-file',name:'原文件.png',mime:'image/png'}],incomplete:true};
- const ui=f.render(),buttons=continuationButtons(ui.chat.notice);assert.equal(buttons.length,1);
- assert.ok(nodes(ui.chat.notice).some(node=>node.props.children==='本轮已中断，原文件已保留。'));
- const extra=ui.chat.renderMessageExtra(ui.chat.session.messages.at(-1)),wrapper=extra.type(extra.props),products=wrapper.type(wrapper.props);
- assert.equal(continuationButtons(products).length,0,'the message must not repeat its top continuation action');
+ const ui=f.render();assert.equal(continuationButtons(ui.chat.notice).length,0);
+ assert.ok(!nodes(ui.chat.notice).some(node=>node.props['aria-label']==='制作中断'));
+ assert.ok(!nodes(ui.chat.notice).some(node=>node.props.children==='本轮已中断，原文件已保留。'));
+ const products=renderedProducts(ui,ui.chat.session.messages.at(-1)),buttons=continuationButtons(products);
+ assert.equal(buttons.length,1,'the exact message owns its unique continuation action');
+ const status=nodes(products).find(node=>node.type===f.components.TaskStatus);assert.ok(status);const displayed=status.type(status.props);
+ assert.equal(displayed.props.role,'status');assert.equal(displayed.props['aria-label'],'制作中断');assert.equal(status.props.title,'制作未完成');
  buttons[0].props.onClick();const destination=new URL(f.calls.navigate[0],'https://example.test');
  assert.equal(destination.pathname,'/chat/session-one');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'interrupted-version',skill:'content-production',skill_version:'2',action:'change',continue:'1'});
  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'  原字材料\n保留  ');
@@ -118,6 +124,7 @@ test('the latest confirmed interrupted production shows one top continuation act
 });
 test('continuation requires server authorization and exact stopped turn session profile work and version identities',()=>{
  const f=fixture(),message=interruptedMessage(),path=f.lib.confirmedContinuation(message,'session-one','oil-pig');
+ f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[],incomplete:true};
  assert.ok(path);assert.equal(path,productionRecovery.nativeContinuationPath(message.business_recovery,'exact-work','interrupted-version'));
  const invalid=[
   {...message,status:'unknown'},
@@ -130,9 +137,9 @@ test('continuation requires server authorization and exact stopped turn session 
   {...message,business_recovery:{...message.business_recovery,job_id:'another-version'}},
   ...[{session_id:'another-session'},{profile_id:'another-profile'},{skill_version:0}].map(patch=>({...message,business_recovery:{...message.business_recovery,continuation:{...message.business_recovery.continuation,...patch}}}))
  ];
- for(const candidate of invalid){assert.equal(f.lib.confirmedContinuation(candidate,'session-one','oil-pig'),null);f.resources.session.messages=[candidate];assert.equal(continuationButtons(f.render().chat.notice).length,0);}
+ for(const candidate of invalid){assert.equal(f.lib.confirmedContinuation(candidate,'session-one','oil-pig'),null);f.resources.session.messages=[candidate];const ui=f.render();assert.equal(continuationButtons(ui.chat.notice).length,0);assert.equal(continuationButtons(renderedProducts(ui,candidate)).length,0,'an invalid identity cannot authorize a message action');}
 });
-test('an unresolved or active turn prevents every continuation action and a newer response supersedes an older interruption',()=>{
+test('an unresolved or active turn prevents every continuation action and no historical interruption becomes a top notice',()=>{
  for(const state of ['connecting','accepted','unknown','server-pending','running']){
   const f=fixture(),message=interruptedMessage();f.resources.session.messages=[message];f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[]};
   if(state==='server-pending')f.resources.session.pendingTurnId='another-turn';
@@ -277,10 +284,77 @@ test('historical turn products use registered file IDs and open the exact busine
  const wrapper=f.lib.NativeTurnOutputs({message}),tree=wrapper.type(wrapper.props);
  assert.equal(f.lib.nativeArtifacts(message)[0].url,'/api/files/registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters),undefined);nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
 });
+function productActionsFixture(work,{navigation={},readWork}={}){
+ let cursor=0;const state=[],drafts=new Map(),calls={reads:[],actions:[],navigate:[],errors:[],reloads:0,invalidate:[]};
+ const react={useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]}};
+ const product={work_id:'exact-work',version_id:'completed-v1',can_adopt:true,files:[],text_blocks:[]};
+ const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args)}};
+ const core={...productionRecovery,array,record,string,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
+  useWorkbench:()=>vm,useResource:path=>({data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}),
+  useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]},
+  useAsyncAction:()=>({busy:false,run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}})};
+ const common={Notice:()=>{},Modal:'dialog',Field:'label',ActionButton:'button'},presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
+ const lib=module('workbench/ui/ChatTurnProducts.tsx',{react,'@workbench/core':core,'../../components/ArtifactGallery':()=>{},'../../components/CopyableText':()=>{},'./common':common,'./WorkCompletion':{Completion:()=>{}},'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core})});
+ const render=()=>{cursor=0;return lib.ChatTurnProducts({message:{turnId:'completed-v1',status:'completed'}})};
+ const button=(tree,label)=>nodes(tree).find(node=>node.type==='button'&&node.props.children===label);
+ const rejection=()=>{const adoption=nodes(render()).find(node=>node.type?.name==='ChatAdoption');assert.ok(adoption);const child=nodes(adoption.type(adoption.props)).find(node=>node.type?.name==='ChatRejection');assert.ok(child);return child.type(child.props)};
+ return {calls,product,render,button,rejection,drafts};
+}
+const completedActionWork=()=>({id:'exact-work',latest_version:'newer-v2',native_chat:{session_id:'original-session',version_id:'newer-v2'},versions:[
+ {id:'completed-v1',status:'completed',creative:{creator:{skills:[{id:'content-production',version:2}]}}},
+ {id:'newer-v2',status:'completed',creative:{creator:{skills:[{id:'content-production',version:9}]}}}
+]});
+
+test('editing a chat product rereads its exact completed version and navigates with its frozen skill without starting production',async()=>{
+ const f=productActionsFixture(completedActionWork());f.button(f.render(),'修改这版').props.onClick();await tick();await tick();
+ assert.deepEqual(plain(f.calls.reads),[['/api/works/exact-work',true]]);
+ const [path,options]=f.calls.navigate[0],destination=new URL(path,'https://example.test');
+ assert.equal(destination.pathname,'/chat/original-session');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'completed-v1',action:'change',skill:'content-production',skill_version:'2'});assert.equal(options.intent,'flow');
+ assert.equal(f.calls.navigate.length,1);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
+ for(const kind of ['missing-version','unfinished-version','missing-session','missing-frozen-skill']){
+  const work=completedActionWork();if(kind==='missing-version')work.versions.shift();if(kind==='unfinished-version')work.versions[0].status='stopped';if(kind==='missing-session')delete work.native_chat;if(kind==='missing-frozen-skill')work.versions[0].creative.creator.skills=[];
+  const blocked=productActionsFixture(work);blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();
+  assert.equal(blocked.calls.navigate.length,0,kind);assert.equal(blocked.calls.actions.length,0,kind);assert.match(blocked.calls.errors[0],/此版本的制作记录尚未核对/,kind);
+ }
+});
+
+test('a delayed product edit uses its pre-read navigation ticket and cannot take over after leaving the page',async()=>{
+ for(const leave of [false,true]){
+  let active=1,resolveRead;const completed=completedActionWork(),hold=new Promise(resolve=>{resolveRead=resolve}),flows=[];
+  const navigation={ticket:()=>({key:active}),finishFlow:(path,ticket)=>{flows.push({path,ticket,accepted:ticket.key===active});return ticket.key===active}};
+  const f=productActionsFixture(completed,{navigation,readWork:()=>hold});
+  f.button(f.render(),'修改这版').props.onClick();assert.equal(f.calls.reads.length,1);assert.equal(flows.length,0);
+  if(leave)active=2;resolveRead(completed);await tick();await tick();
+  assert.equal(flows.length,1);assert.equal(flows[0].ticket.key,1,'ticket belongs to the page where the action was invoked');assert.equal(flows[0].accepted,!leave);
+  assert.equal(new URL(flows[0].path,'https://example.test').searchParams.get('version'),'completed-v1');
+  assert.equal(f.calls.navigate.length,0,'a rejected finishFlow must not fall back to unconditional navigation');assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
+ }
+});
+
+test('user messages have no product extension or polling owner while assistant messages retain their registered products',()=>{
+ const f=fixture(),user={role:'user',id:'user-input-id',turnId:'user-turn-id',content:'原始输入'};
+ const assistant={role:'assistant',id:'assistant-output-id',turnId:'assistant-turn-id',content:'制作结果'};f.resources.session.messages=[user,assistant];
+ const ui=f.render();assert.equal(ui.chat.renderMessageExtra(user),null);const extra=ui.chat.renderMessageExtra(assistant);assert.ok(extra);assert.equal(extra.props.message.role,'assistant');assert.equal(extra.props.message.turnId,'assistant-turn-id');
+ assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);
+});
+
+test('chat rejection opens a version-bound confirmation, preserves its raw reason, and writes only after explicit confirmation',async()=>{
+ const f=productActionsFixture(completedActionWork());f.button(f.render(),'不采纳').props.onClick();let dialog=f.rejection();
+ assert.equal(dialog.type,'dialog');assert.equal(dialog.props.title,'不采纳此版');assert.equal(f.calls.actions.length,0);assert.equal(f.calls.navigate.length,0);
+ const reason='  这版色彩不符\n保留我的原话  ';
+ nodes(dialog).find(node=>node.type==='textarea').props.onChange({target:{value:reason}});
+ dialog.props.onClose();assert.equal(nodes(f.render()).filter(node=>node.type?.name==='ChatAdoption').length,0);assert.equal(f.calls.actions.length,0);
+ f.button(f.render(),'不采纳').props.onClick();dialog=f.rejection();assert.equal(nodes(dialog).find(node=>node.type==='textarea').props.value,reason);
+ f.button(dialog,'确认不采纳').props.onClick();await tick();await tick();
+ assert.deepEqual(plain(f.calls.actions),[['exact-work',{kind:'reject',candidate_id:'completed-v1',text:reason,files:[]}]]);
+ assert.equal(f.calls.navigate.length,0);assert.equal(f.calls.errors.length,0);assert.equal(f.calls.reloads,1);assert.deepEqual(plain(f.calls.invalidate),[['works','chat']]);
+ assert.equal(nodes(f.render()).filter(node=>node.type?.name==='ChatAdoption').length,0);
+});
+
 test('production parameters load only when opened and show the exact version profile skills and frozen bytes',()=>{
  let opened=false;const paths=[],parameters={execution_prompt:{body:'  本轮冻结原字\n保留全部内容  ',sha256:'a'.repeat(64),creator_snapshot:{profile:{id:'history-profile',name:'历史作者',revision:9},skills:[{id:'content-production',name:'内容生产',version:2}],trial:true}}};
- const TextRecord=()=>{},lib=module('workbench/ui/ProductionParameters.tsx',{react:{useState:()=>[opened,next=>{opened=next}]},'@workbench/core':{useResource:path=>{paths.push(path);return {data:path?parameters:null,error:'',reload:async()=>parameters}},array,record,string},'./common':{Notice:()=>{},TextRecord}});
- const initial=lib.ProductionParameters({versionId:'exact-version'});assert.equal(paths[0],null);assert.equal(nodes(initial).find(n=>n.type==='summary').props.children,'制作参数');initial.props.onToggle({currentTarget:{open:true}});
+ const TextRecord=()=>{},ExtensionDetails=()=>{},lib=module('workbench/ui/ProductionParameters.tsx',{react:{useState:()=>[opened,next=>{opened=next}]},'@workbench/core':{useResource:path=>{paths.push(path);return {data:path?parameters:null,error:'',reload:async()=>parameters}},array,record,string},'./ExtensionDetails':{ExtensionDetails},'./common':{Notice:()=>{},TextRecord}});
+ const initial=lib.ProductionParameters({versionId:'exact-version'});assert.equal(paths[0],null);assert.equal(initial.type,ExtensionDetails);assert.equal(initial.props.title,'制作参数');initial.props.onToggle({currentTarget:{open:true}});
  const shown=lib.ProductionParameters({versionId:'exact-version'}),text=nodes(shown).flatMap(n=>array(n.props?.children).filter(v=>typeof v==='string')).join(' '),records=nodes(shown).filter(n=>n.type===TextRecord);
  assert.equal(paths.at(-1),'/api/creative/prompts/exact-version');assert.match(text,/历史作者/);assert.match(text,/v9/);assert.match(text,/内容生产 · v2/);assert.match(text,/本次试用/);assert.ok(records.some(n=>n.props.value===parameters.execution_prompt.body));assert.ok(records.some(n=>n.props.value===parameters.execution_prompt.sha256));
 });

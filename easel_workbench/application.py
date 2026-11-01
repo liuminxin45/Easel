@@ -24,4 +24,6 @@ def create_app(*, root=None, **services):
                 if not ready or (state/'paused').exists():
                     return JSONResponse({'error':'正在完成服务切换，输入草稿已保留，请稍后使用原操作重试。'},status_code=503,headers={'Cache-Control':'no-store','Retry-After':'5'})
             return await call_next(request)
+    from .health_endpoint import install_health
+    install_health(app, root)
     return app

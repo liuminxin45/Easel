@@ -3,3 +3,6 @@ scripts/git-hooks/* text eol=lf
 # Spec Kit locks hash exact bytes; preserve released assets on every checkout.
 /.agents/skills/speckit/** -text
 /.specify/** -text
+
+# Content-addressed prompt archives must retain their recorded LF SHA256 bytes.
+"/skills/shared/workbench/规范/创作方案/策略文本/**" text eol=lf

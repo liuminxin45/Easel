@@ -315,8 +315,9 @@ def main():
                             sizes.append((844, 390))
                     for width, height in sizes:
                         for theme in args.themes.split(','):
+                            compact = width <= 900 or width <= 1100 and height <= 500
                             context = browser.new_context(ignore_https_errors=True, viewport={'width': width, 'height': height},
-                                                          is_mobile=True, has_touch=True, color_scheme=theme)
+                                                          is_mobile=compact, has_touch=compact, color_scheme=theme)
                             context.add_cookies([{'name': '__Host-desk_session', 'value': 'fixture-owner', 'url': fixture['origin'], 'secure': True, 'httpOnly': True, 'sameSite': 'Strict'}])
                             publish = {'title': LONG, 'body': LONG + '\n\n' + LONG, 'platforms': ['xiaohongshu', 'wechat-oa'], 'overrides': {}, 'tags': 'TEMP,移动验收'}
                             context.add_init_script('if(window===window.top){localStorage.setItem("native:theme",' + json.dumps(theme) + ');localStorage.setItem("easel_theme",' + json.dumps(theme) + ');localStorage.setItem("easel_publish_draft",' + json.dumps(json.dumps(publish, ensure_ascii=False)) + ');}')
@@ -349,6 +350,16 @@ def main():
                                     route.fulfill(status=200, json=reads[path]); return
                                 route.continue_()
                             page.route('**/*', guard)
+                            def static_response(response):
+                                path=urlsplit(response.url).path
+                                if path.startswith('/native-assets/') and (response.status>=400 or '/ui-' in path):
+                                    report.setdefault('static_responses',[]).append({'case':label,'path':path,'status':response.status,'content_type':response.headers.get('content-type',''),'timing':response.request.timing})
+                            def static_failure(request):
+                                path=urlsplit(request.url).path
+                                if path.startswith('/native-assets/'):
+                                    report.setdefault('static_failures',[]).append({'case':label,'path':path,'error':request.failure,'timing':request.timing})
+                            page.on('response',static_response)
+                            page.on('requestfailed',static_failure)
                             preflight = context.request.get(fixture['origin'] + '/api/works/' + ids['work'])
                             assert preflight.ok, ('TEMP work API failed', preflight.status, preflight.text())
                             picture = next(file for version in preflight.json()['versions'] for file in version['artifacts'] if file['mime'].startswith('image/'))
@@ -577,6 +588,7 @@ def main():
                             run('topics.kanban', '/toolbox?section=research&pane=topics', '.ideas-page', marker=MARK)
                             run('topics.form', '/toolbox?section=research&pane=topics', '.overlay .modal', 'new_topic', before=lambda: page.get_by_role('button', name='+ 新建选题', exact=True).click())
                             def edit_topic():
+                                if not compact:page.locator('.idea-card').first.hover()
                                 page.locator('.idea-card').first.get_by_title('编辑', exact=True).click()
                                 expect(page.locator('.modal .field').first).to_have_value(LONG + '0')
                             run('topics.form', '/toolbox?section=research&pane=topics', '.overlay .modal', 'edit_existing_topic', before=edit_topic)
@@ -875,7 +887,8 @@ def main():
         report['evidence'][str(Path(__file__))] = sha(__file__)
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({'passed': report['passed'], 'checks': len(report['checks']), 'covered_surfaces': len(report['covered_surfaces']), 'report': str(out / 'report.json')}, ensure_ascii=False))
+    return 0 if report['passed'] else 1
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

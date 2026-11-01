@@ -45,7 +45,7 @@ test('expanded image preview keeps the gallery download capability and legacy fa
  const {default:ImagePreview}=load('ui/ImagePreview.tsx');
  for(const downloadUrl of [signed+'&download=1',undefined]){
   const tree=ImagePreview({image:{url:file.url,name:file.name,downloadUrl},close:()=>{}});
-  const link=descendants(tree).find(node=>node.type==='a');
+  const link=descendants(tree).find(node=>node.props?.download===file.name);
   assert.equal(link.props.href,downloadUrl||file.url);
   assert.equal(link.props.download,file.name);
  }

@@ -1,3 +1,4 @@
+import {downloads} from '../lib/download';
 import type {PublishingAgentActions} from './PublishingPage';
 import { useEffect, useRef, useState } from 'react';
 import { createSchedule, executeSkill, exportManualPackage, fetchOutputs, mediaUrl, runAgent, streamChat } from '../lib/api';
@@ -131,9 +132,7 @@ export default function ManualPublishPage({ persona, agentActions }: { persona: 
     setExporting(key);
     try {
       const result = await exportManualPackage(key, { title, body: effective(key), tags, media: [...selectedMedia], reviewed: true });
-      const a = document.createElement('a');
-      a.href = mediaUrl(result.path); a.download = result.filename;
-      document.body.appendChild(a); a.click(); a.remove();
+      await downloads.download(mediaUrl(result.path), result.filename);
       showToast('已生成稿件包并发起下载；尚未上传或发布');
     } catch (error) { showToast(error instanceof Error ? error.message : '导出失败'); }
     finally { setExporting(''); }

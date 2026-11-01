@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib,json
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident,pack,text
+from easel_workbench.contracts.values import ident, pack, text
 from easel_workbench.runtime.distribution_service import DistributionConflict
 from easel_workbench.runtime.distribution_catalog import PROVIDER_NAMES as PLATFORMS, PLATFORM_IDS as IMPORT_PLATFORMS, IMPORTABLE_PROVIDERS, identity_metadata, plain_text
 from easel_workbench.runtime.feedback_ledger import locked

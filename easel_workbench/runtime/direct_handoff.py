@@ -17,7 +17,7 @@ def record_current(box,value,path,turn=None):
     if '[AI_NEWS_DESK_REQUEST:' in turn['request']:raise ValueError('工作台请求由原操作接收，不重复记录')
     kind=value.get('kind')
     if kind not in ('feedback','accept','reject'):raise ValueError('只记录明确反馈或决定')
-    from easel_workbench.runtime.toolbox_store import ident
+    from easel_workbench.contracts.values import ident
     wid=ident(value.get('work_id'));candidate=ident(value.get('candidate_id'))
     thread=value.get('thread') or THREAD
     operation=value.get('id') or str(uuid.uuid5(uuid.NAMESPACE_URL,'toolbox-local-direct:'+thread+':'+turn['turn_id']+':'+wid+':'+candidate+':'+kind))

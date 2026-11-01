@@ -1,16 +1,9 @@
 """Toolbox works, version-bound decisions and durable fixed-thread jobs."""
 import contextlib,hashlib,json,mimetypes,pathlib,re,uuid
 from easel_workbench.runtime.desk import ROOT,THREAD,stamp
+from easel_workbench.contracts.values import ident, pack, text
+from easel_workbench.contracts.legacy_jobs import ACTIVE, KINDS
 
-KINDS={'create','change','feedback','accept','reject'}
-ACTIVE={'queued','dispatching','running','uncertain','needs_desktop','parked'}
-def pack(value):return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'))
-def ident(value):
-    if not isinstance(value,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',value):raise ValueError('记录标识无效')
-    return value
-def text(value,limit,required=False):
-    if not isinstance(value,str) or len(value)>limit or required and not value.strip():raise ValueError('内容为空或超过长度限制')
-    return value
 
 class Toolbox:
     def __init__(self,store,root=ROOT):

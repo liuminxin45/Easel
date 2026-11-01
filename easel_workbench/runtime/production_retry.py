@@ -12,7 +12,7 @@ import json
 import uuid
 
 from easel_workbench.runtime.studio_service import StudioConflict
-from easel_workbench.runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 
 
 DELAYS = (30, 60, 120)

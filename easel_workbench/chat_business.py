@@ -19,7 +19,7 @@ from .skill_catalog import ProjectSkillCatalog,parse_skill
 from .paths import owned_output_path
 from .runtime.creator_runtime import packed, key, digest
 from .runtime.desk import stamp
-from .runtime.toolbox_store import text
+from easel_workbench.contracts.values import text
 
 
 class PlanConflict(ValueError):

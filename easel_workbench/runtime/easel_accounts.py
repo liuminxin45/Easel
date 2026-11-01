@@ -14,7 +14,7 @@ import sys
 import threading
 
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident, pack, text
+from easel_workbench.contracts.values import ident, pack, text
 from easel_workbench.runtime.easel_connection_support import ConnectionConflict as IntegrationConflict, digest
 
 PLATFORMS = {

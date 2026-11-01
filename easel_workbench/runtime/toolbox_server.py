@@ -12,30 +12,19 @@ from fastapi.responses import JSONResponse,Response,StreamingResponse
 from easel_workbench.runtime.auth_forms import Forms,SESSION,cookies,cookie
 from easel_workbench.runtime.auth_totp import AuthState,CONFIG,equal
 from easel_workbench.runtime.http_context import Context
-from easel_workbench.runtime.toolbox_store import Toolbox,ident,text,pack
+from easel_workbench.runtime.toolbox_store import Toolbox
+from easel_workbench.contracts.values import ident, text, pack
 from easel_workbench.runtime.desk import ROOT,Store,SOURCES,THREAD,stamp
 from easel_workbench.runtime.api_security import csrf_token
 from easel_workbench.runtime import server_logging as journal
 from easel_workbench.runtime import image_delivery as image_delivery
 from easel_workbench.runtime import distribution_entry as distribution_entry
+from easel_workbench.http import downloads
+from easel_workbench.http.downloads import download_request
+from easel_workbench.http.response_lifecycle import close_read_response
 
 TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
-def download_request(request,target,*,head=False):
-    """Delegate only a prevalidated local read to the existing file handler."""
-    wanted=urllib.parse.urlsplit(target);path=urllib.parse.unquote(wanted.path)
-    scope={**request.scope,'path':path,'raw_path':urllib.parse.quote(path,safe='/').encode('ascii'),'query_string':wanted.query.encode('ascii')}
-    if head:
-        scope['method']='HEAD'
-        scope['headers']=[(key,value) for key,value in scope['headers'] if key.lower() not in (b'content-length',b'transfer-encoding')]
-    return Request(scope)
 
-async def close_read_response(response):
-    """HEAD/probe reads have no ASGI body consumer to release lazy resources."""
-    iterator=getattr(response,'body_iterator',None)
-    if getattr(iterator,'aclose',None):await iterator.aclose()
-    elif getattr(iterator,'close',None):await asyncio.to_thread(iterator.close)
-    if response.background is not None:
-        await response.background();response.background=None
 
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
     root=pathlib.Path(root);store=store or Store();auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
@@ -176,23 +165,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             except ValueError:return error(403,'图片链接无效或已过期，请刷新作品页面')
             if match[2]!=value['name'] or not image_delivery.authorize(value,auth,request.query_params):return error(403,'图片链接无效或已过期，请刷新作品页面')
             return file_response(value,file,headers,request.query_params.get('download')=='1')
-        from easel_workbench.runtime import download_delivery
+        async def read_download_target(delegated, granted):
+            return await dispatch(delegated.url.path.lstrip('/'),delegated,trace,download_session=granted)
         if path=='/media/downloads':
-            if method not in ('GET','HEAD'):return error(405,'method rejected')
-            granted=download_delivery.authorize(auth,request.query_params)
-            if not granted:return error(403,'下载链接无效或已过期，请重新点击下载')
-            delegated=download_request(request,request.query_params['target'])
-            result=await dispatch(delegated.url.path.lstrip('/'),delegated,trace,download_session=granted)
-            if result.status_code>=400:return result
-            from easel_workbench.runtime.artifact_delivery import disposition
-            from starlette.responses import FileResponse
-            if isinstance(result,FileResponse) and result.stat_result is None:
-                result.stat_result=result.path.stat() if hasattr(result.path,'stat') else pathlib.Path(result.path).stat()
-                result.set_stat_headers(result.stat_result)
-            result.headers['Content-Disposition']=disposition(request.query_params['name'],'attachment')
-            result.headers['Cache-Control']='no-store'
-            result.headers['Content-Security-Policy']="default-src 'none'; sandbox allow-downloads"
-            return result
+            return await downloads.serve_download(request,auth=auth,read_target=read_download_target,error=error)
         session=download_session or await asyncio.to_thread(forms.session,ctx)
         if path in ('/native','/native/') or path.startswith(('/native/','/native-assets/')):
             from easel_workbench.runtime import native_preview as native_preview
@@ -204,19 +180,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 forms.send(ctx,303,location='/native/login?next='+urllib.parse.quote(native_target,safe=''));return ctx.response()
             return error(401,'authentication_required')
         if path=='/api/downloads':
-            if method!='POST':return error(405,'method rejected')
-            if not same or len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
-            try:
-                fields=json.loads(raw)
-                if not isinstance(fields,dict):raise ValueError('下载请求需要 JSON 对象')
-                wanted=download_delivery.target(fields.get('target',''))
-                probe=download_request(request,wanted,head=True)
-                checked=await dispatch(probe.url.path.lstrip('/'),probe,trace,download_session=session)
-                if checked.status_code not in (200,206):return checked
-                await close_read_response(checked)
-                link=download_delivery.issue(session,cookies(ctx.headers).get(SESSION),wanted,fields.get('name',''))
-                return reply({'url':link})
-            except ValueError as exc:return error(400,str(exc))
+            return await downloads.issue_download(request,raw,session=session,
+                token=cookies(ctx.headers).get(SESSION),same_origin=same,csrf=csrf,
+                read_target=read_download_target,error=error,reply=reply)
         if native_api.supports(path,method):
             native_value=None
             if method in ('POST','PUT','PATCH','DELETE'):

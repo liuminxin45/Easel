@@ -137,7 +137,7 @@ def _human_quality(box,c,job,record,doc=None,snap=None):
 
 def enqueue_manual_review(box,wid,vid,operation_id):
  """Explicit review only. Exact operation retries return the original task."""
- from easel_workbench.runtime.toolbox_store import ident
+ from easel_workbench.contracts.values import ident
  for value in (wid,vid,operation_id):ident(value)
  service=attach(box)
  task_id='manual-review-'+sha(operation_id.encode())[:40]

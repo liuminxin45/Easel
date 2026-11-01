@@ -1,7 +1,7 @@
 """Topic collection through the existing read-only fixed-thread discussion queue."""
 import hashlib
 from easel_workbench.runtime.article_drafts import save
-from easel_workbench.runtime.toolbox_store import ident, text
+from easel_workbench.contracts.values import ident, text
 from easel_workbench.runtime.work_discussions import enqueue
 
 

@@ -18,7 +18,7 @@ from easel.direct_api import api_config, read_settings, DirectAPIError
 from easel.harnesses import store as harness_store
 from easel.harnesses.base import RunRequest, HarnessError
 from easel.runtime_env import proxy_environment, web_environment
-from .runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 
 
 class SettingsConflict(ValueError):

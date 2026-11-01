@@ -6,7 +6,7 @@ import pathlib
 import shutil
 
 from easel_workbench.runtime.desk import stamp
-from easel_workbench.runtime.toolbox_store import ident, pack
+from easel_workbench.contracts.values import ident, pack
 from easel_workbench.runtime.easel_integration import IntegrationConflict, digest, service as media_service
 
 

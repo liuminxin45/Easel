@@ -9,7 +9,7 @@ import json
 import re
 import hashlib
 
-from easel_workbench.runtime.toolbox_store import ident
+from easel_workbench.contracts.values import ident
 
 
 LEDGERS = {

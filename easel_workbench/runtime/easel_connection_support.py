@@ -2,7 +2,7 @@
 import hashlib
 import os
 
-from easel_workbench.runtime.toolbox_store import pack
+from easel_workbench.contracts.values import pack
 
 
 class ConnectionConflict(ValueError):

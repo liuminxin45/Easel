@@ -5,7 +5,7 @@ allowlisted project files. No platform publication or synthetic AI execution.
 """
 import contextlib,copy,datetime as dt,difflib,hashlib,json,os,pathlib,re,shutil,uuid
 from easel_workbench.runtime.desk import ROOT,PROJECT,THREAD,stamp
-from easel_workbench.runtime.toolbox_store import ident,pack,text
+from easel_workbench.contracts.values import ident, pack, text
 from easel_workbench.runtime.content_studio import AXES,DEFAULT,BUILTINS,catalog as preset_catalog,source as version_source,options as creative_options
 from easel_workbench.runtime.feedback_ledger import locked
 from easel_workbench.runtime.semantic_style import intent as semantic_intent,resolve as resolve_intent,applicability as style_applicability

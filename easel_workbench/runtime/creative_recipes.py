@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
   remain untouched; the accepted command must match the frozen guard.
   """
   kind=value.get('kind');request=copy.deepcopy(value.get('input',{}));wid=value.get('work_id')
-  from easel_workbench.runtime.toolbox_store import ident
+  from easel_workbench.contracts.values import ident
   jid=ident(request.get('id'))
   creative=request.get('creative',{})
   if not isinstance(creative.get('recipe'),dict):raise ValueError('请先选择创作方案')
@@ -344,7 +344,7 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
  def command(self,value):
   if not isinstance(value,dict):raise ValueError('创作操作无效')
   oid=value.get('operation_id') or value.get('id');self.learning._conditions(value.get('conditions',{}))
-  from easel_workbench.runtime.toolbox_store import ident
+  from easel_workbench.contracts.values import ident
   ident(oid);signature=packed(value);action=value.get('action')
   # Existing discussion queue is the only AI preparation route; never generate
   # images merely because a prompt is saved or a recipe is inspected.

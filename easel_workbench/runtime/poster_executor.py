@@ -11,7 +11,8 @@ if __name__ == "__main__" and not __package__:
 import json,pathlib,threading,time
 from easel_workbench.runtime import server_logging as journal
 from easel_workbench.runtime.desk import ROOT,THREAD,PROJECT,stamp
-from easel_workbench.runtime.toolbox_store import Toolbox,ACTIVE
+from easel_workbench.runtime.toolbox_store import Toolbox
+from easel_workbench.contracts.legacy_jobs import ACTIVE
 from easel_workbench.runtime.poster_rpc import RPC,RPCError,RPCNotSentError
 from easel_workbench.runtime import production_retry as retry
 from easel_workbench.runtime.bridge import target,events,correlate,capture_artifacts

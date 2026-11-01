@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS toolbox_review_candidate ON toolbox_review_notes(work
 ''')
 
 def candidate(box,c,wid,vid):
-    from easel_workbench.runtime.toolbox_store import ident
+    from easel_workbench.contracts.values import ident
     row=c.execute("SELECT * FROM toolbox_jobs WHERE id=? AND work_id=? AND kind IN ('create','change') AND status='completed'",(ident(vid),ident(wid))).fetchone()
     if not row:raise ValueError('批注须绑定本作品已完成的明确版本')
     return dict(row)
@@ -75,7 +75,7 @@ def read(box,wid,vid):
 class ReviewConflict(ValueError):pass
 
 def mutate(box,wid,vid,value):
-    from easel_workbench.runtime.toolbox_store import ident,text
+    from easel_workbench.contracts.values import ident, text
     operation=ident(value.get('id'));kind=value.get('kind');aid=ident(value.get('annotation_id',operation));signature=packed({'work':wid,'version':vid,'request':value})
     if kind not in ('create','update','delete'):raise ValueError('批注操作无效')
     with box.store.connect() as c:

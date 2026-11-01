@@ -22,6 +22,7 @@
 | 原页面的可选 props | `IdeasPage`、`ProfilePage` 的草稿存储，`DashboardPage` 的缓存/读取策略，预览与发布页的回调均保留默认行为 | `nativePages.tsx`、`nativeProfiles.tsx`、`nativePublishing.ts` 只转换数据、批准输入和业务回调；仍渲染完整原组件 |
 | `easel/web_services/{accounts,settings,planning,outputs,environment,analytics}.py` | 从 `web/app.py` 移出的单一函数实现；原路由继续绑定同一代码 | 工厂接收目录、环境、执行器、存储和检查回调；不得导入 `easel_workbench` |
 | `easel/web_services/binding.py` | 用同一函数代码建立独立上下文；原 `web/app.py` 绑定自身命名空间，保留原测试入口 | 仅工厂组装上下文，不复制源码、不修改进程环境，不把此桥接扩展成通用依赖注入框架 |
+| `easel/web_services/concurrency.py` | 原共享 planning 与私有服务共用同一阻塞 I/O 线程边界 | 通用 helper 不含私有依赖；取消时等待线程真实结束，不提前释放调用者持有的写锁或操作身份。共通规划函数仍只有一份，通用响应性修复可单独维护 |
 | `easel_workbench/runtime/native_api.py` | 保持原页面的 HTTP 协议，调用共享处理函数 | 连接现有作品、画像、选题与排期存储；`_mutate` 包住准入、请求身份、事务与回执；未知结果不重发 |
 | `easel_workbench/settings.py`、`runtime/easel_accounts.py` | 分别调用共享配置、安装、登录和身份查询实现 | 保管配置修订、加密凭据、原账号关联及交付证据；连接成功不授予发布权 |
 | `workbench/host.tsx`、`ui/styles/workbench.css` | 原页面使用原样式入口 | 仅处理宿主生命周期和私有扩展布局；不得借页面外层覆盖原侧栏、账号、控件或主题 |

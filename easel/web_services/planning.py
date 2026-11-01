@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from .concurrency import run_sync
 
 SCHEDULE_STATUSES = {'idea', 'draft', 'scheduled', 'published'}
 SCHEDULE_KINDS = {'content', 'event'}
@@ -83,44 +84,52 @@ class ScheduleItem(BaseModel):
     end_date: str = ''
 
 async def api_schedule_list():
-    return _read_schedule()
+    def operation():
+        return _read_schedule()
+    return await run_sync(operation)
 
 async def api_schedule_create(req: ScheduleItem):
-    with _schedule_lock():
-        items = _read_schedule()
-        kind = req.kind if req.kind in SCHEDULE_KINDS else 'content'
-        st = req.status if req.status in SCHEDULE_STATUSES else 'idea'
-        item = {'id': uuid.uuid4().hex[:12], 'title': req.title.strip() or ('未命名活动' if kind == 'event' else '未命名'), 'date': req.date, 'platform': req.platform, 'time': req.time, 'status': st, 'note': req.note, 'kind': kind, 'url': req.url, 'source': req.source if req.source in {'manual', 'publish-page', 'chat', 'scheduler'} else 'manual', 'event_type': req.event_type, 'end_date': req.end_date}
-        items.append(item)
-        _write_schedule(items)
-    return item
+    def operation():
+        with _schedule_lock():
+            items = _read_schedule()
+            kind = req.kind if req.kind in SCHEDULE_KINDS else 'content'
+            st = req.status if req.status in SCHEDULE_STATUSES else 'idea'
+            item = {'id': uuid.uuid4().hex[:12], 'title': req.title.strip() or ('未命名活动' if kind == 'event' else '未命名'), 'date': req.date, 'platform': req.platform, 'time': req.time, 'status': st, 'note': req.note, 'kind': kind, 'url': req.url, 'source': req.source if req.source in {'manual', 'publish-page', 'chat', 'scheduler'} else 'manual', 'event_type': req.event_type, 'end_date': req.end_date}
+            items.append(item)
+            _write_schedule(items)
+        return item
+    return await run_sync(operation)
 
 async def api_schedule_update(sid: str, req: ScheduleItem):
-    with _schedule_lock():
-        items = _read_schedule()
-        for it in items:
-            if it.get('id') == sid:
-                kind = req.kind if req.kind in SCHEDULE_KINDS else it.get('kind', 'content')
-                it.update({'title': req.title.strip() or it.get('title', '未命名'), 'date': req.date, 'platform': req.platform, 'time': req.time, 'status': req.status if req.status in SCHEDULE_STATUSES else it.get('status', 'idea'), 'note': req.note, 'kind': kind, 'url': req.url, 'event_type': req.event_type, 'end_date': req.end_date})
-                _write_schedule(items)
-                return it
-    raise HTTPException(404, '排期不存在')
+    def operation():
+        with _schedule_lock():
+            items = _read_schedule()
+            for it in items:
+                if it.get('id') == sid:
+                    kind = req.kind if req.kind in SCHEDULE_KINDS else it.get('kind', 'content')
+                    it.update({'title': req.title.strip() or it.get('title', '未命名'), 'date': req.date, 'platform': req.platform, 'time': req.time, 'status': req.status if req.status in SCHEDULE_STATUSES else it.get('status', 'idea'), 'note': req.note, 'kind': kind, 'url': req.url, 'event_type': req.event_type, 'end_date': req.end_date})
+                    _write_schedule(items)
+                    return it
+        raise HTTPException(404, '排期不存在')
+    return await run_sync(operation)
 
 async def api_schedule_delete(sid: str):
-    with _schedule_lock():
-        items = _read_schedule()
-        new = [it for it in items if it.get('id') != sid]
-        if len(new) == len(items):
-            raise HTTPException(404, '排期不存在')
-        _write_schedule(new)
-    return {'ok': True, 'deleted': sid}
+    def operation():
+        with _schedule_lock():
+            items = _read_schedule()
+            new = [it for it in items if it.get('id') != sid]
+            if len(new) == len(items):
+                raise HTTPException(404, '排期不存在')
+            _write_schedule(new)
+        return {'ok': True, 'deleted': sid}
+    return await run_sync(operation)
 
 async def api_schedule_context(days: int=14):
     """规划摘要（发布节奏/断更缺口 + 待发排期 + 临近节点 + 建议）——薄封装 calendar_ops，
     前端页头「近期节点/建议」与 Agent 读回共用同一逻辑。失败返回空摘要不抛错。"""
     cmd = [sys.executable, str(SHARED_SCRIPTS / 'calendar_ops.py'), '--data', str(SCHEDULE_FILE), 'context', '--days', str(max(1, min(days, 90)))]
     try:
-        proc = await asyncio.to_thread(subprocess.run, cmd, cwd=str(PROJECT_ROOT), env=_proxy_env(), capture_output=True, text=True, timeout=20)
+        proc = await run_sync(subprocess.run, cmd, cwd=str(PROJECT_ROOT), env=_proxy_env(), capture_output=True, text=True, timeout=20)
         return json.loads(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else {}
     except Exception:
         return {}
@@ -148,34 +157,45 @@ class IdeaItem(BaseModel):
     source_id: str | None = None
 
 async def api_ideas_list():
-    return _read_ideas()
+    def operation():
+        return _read_ideas()
+    return await run_sync(operation)
 
 async def api_ideas_create(req: IdeaItem):
-    items = _read_ideas()
-    st = req.status if req.status in IDEA_STATUSES else 'pending'
-    item = {'id': uuid.uuid4().hex[:12], 'title': req.title.strip() or '未命名选题', 'note': req.note, 'source': req.source, 'status': st, 'created': int(time.time())}
-    if req.source_id is not None:
-        item['source_id'] = req.source_id
-    items.insert(0, item)
-    _write_ideas(items)
-    return item
+    def operation():
+        with _schedule_lock():
+            items = _read_ideas()
+            st = req.status if req.status in IDEA_STATUSES else 'pending'
+            item = {'id': uuid.uuid4().hex[:12], 'title': req.title.strip() or '未命名选题', 'note': req.note, 'source': req.source, 'status': st, 'created': int(time.time())}
+            if req.source_id is not None:
+                item['source_id'] = req.source_id
+            items.insert(0, item)
+            _write_ideas(items)
+            return item
+    return await run_sync(operation)
 
 async def api_ideas_update(iid: str, req: IdeaItem):
-    items = _read_ideas()
-    for it in items:
-        if it.get('id') == iid:
-            it.update({'title': req.title.strip() or it.get('title', '未命名选题'), 'note': req.note, 'source': req.source, 'status': req.status if req.status in IDEA_STATUSES else it.get('status', 'pending')})
-            # Older clients omit this optional binding when editing an idea.
-            if req.source_id is not None:
-                it['source_id'] = req.source_id
-            _write_ideas(items)
-            return it
-    raise HTTPException(404, '选题不存在')
+    def operation():
+        with _schedule_lock():
+            items = _read_ideas()
+            for it in items:
+                if it.get('id') == iid:
+                    it.update({'title': req.title.strip() or it.get('title', '未命名选题'), 'note': req.note, 'source': req.source, 'status': req.status if req.status in IDEA_STATUSES else it.get('status', 'pending')})
+                    # Older clients omit this optional binding when editing an idea.
+                    if req.source_id is not None:
+                        it['source_id'] = req.source_id
+                    _write_ideas(items)
+                    return it
+            raise HTTPException(404, '选题不存在')
+    return await run_sync(operation)
 
 async def api_ideas_delete(iid: str):
-    items = _read_ideas()
-    new = [it for it in items if it.get('id') != iid]
-    if len(new) == len(items):
-        raise HTTPException(404, '选题不存在')
-    _write_ideas(new)
-    return {'ok': True, 'deleted': iid}
+    def operation():
+        with _schedule_lock():
+            items = _read_ideas()
+            new = [it for it in items if it.get('id') != iid]
+            if len(new) == len(items):
+                raise HTTPException(404, '选题不存在')
+            _write_ideas(new)
+            return {'ok': True, 'deleted': iid}
+    return await run_sync(operation)

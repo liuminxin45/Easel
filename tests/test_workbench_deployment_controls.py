@@ -127,6 +127,7 @@ def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,m
     git_run('config','--local','user.email','temp-validation@example.invalid')
     git_run('config','--local','commit.gpgsign','false')
     git_run('config','--local','core.hooksPath',str(tmp_path/'.git/no-hooks'))
+    (tmp_path/'.gitignore').write_text('workbench-releases/\nnative-releases/\n.local/\n',encoding='utf-8')
     git_run('add','--all')
     git_run('commit','--quiet','-m','Freeze TEMP validation inputs')
     source_commit=git_run('rev-parse','HEAD')
@@ -205,7 +206,12 @@ def test_reviewed_builtin_plan_and_upgrade_order_only_activate_after_stop(tmp_pa
         assert json.loads((data/'active-workbench.json').read_text())==previous
         order.append('skills_applied');return {'applied':True,'jobs_requeued':0}
     monkeypatch.setattr(upgrade,'activate_builtin_after_stop',activate)
-    monkeypatch.setattr(upgrade.subprocess,'Popen',lambda *args,**kwargs:SimpleNamespace(pid=9999))
+    def start_scheduled(choice):
+        assert order[-1]=='skills_applied'
+        assert not (state/'paused').exists()
+        assert json.loads((data/'active-workbench.json').read_text())['release']==choice['release']
+        return 9999
+    monkeypatch.setattr(upgrade,'start_scheduled_manager',start_scheduled)
     monkeypatch.setattr(upgrade.subprocess,'CREATE_NO_WINDOW',getattr(upgrade.subprocess,'CREATE_NO_WINDOW',0),raising=False)
     monkeypatch.setattr(upgrade,'smoke',lambda *_:{'ready':True})
     monkeypatch.setattr(sys,'argv',['upgrade','--acceptance',str(acceptance),'--builtin-plan',str(plan_path),'--builtin-plan-sha256',expected])

@@ -21,7 +21,7 @@ export function bindNavigationLinks(navigation:NavigationService,openImage?:(ima
   const image=anchor.querySelector<HTMLImageElement>('img')||anchor.closest('.artifact-gallery')?.querySelector<HTMLImageElement>('.artifact-image-link img');
   if(openImage&&image&&image.src===anchor.href&&new URL(anchor.href).origin===location.origin){
    const download=anchor.closest('.artifact-gallery')?.querySelector<HTMLAnchorElement>('a[download]');
-   const downloadUrl=download&&new URL(download.href).origin===location.origin?download.href:undefined;
+   const downloadUrl=download?.href&&new URL(download.href).origin===location.origin?download.href:undefined;
    event.preventDefault();event.stopPropagation();openImage({url:anchor.href,name:image.alt||'图片',downloadUrl});return;
   }
   const path=anchor.dataset.nativePath;

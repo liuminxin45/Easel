@@ -1,3 +1,4 @@
+import {bindDownloadResolver} from '../../lib/download';
 import {bindEaselApiTransport, type EaselApiTransport} from '../../lib/api';
 import {bindWhoamiStorage} from '../../lib/whoami';
 import type {WorkbenchClient} from '../core/client';
@@ -28,8 +29,13 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
   },
   mediaUrl:path=>'/api/media/'+path.split('/').map(encodeURIComponent).join('/'),
  };
+ const releaseDownloads=bindDownloadResolver(async(href,name)=>{
+  const target=new URL(href,location.origin);
+  const result=await client.api.query<{url:string}>('/api/downloads',{target:target.pathname+target.search,name},String(client.session.getState().config?.csrf||''));
+  if(!result?.url)throw Error('下载凭证未取得，请重试');return result.url;
+ });
  const values=new Map<string,string>();
  const releaseCache=bindWhoamiStorage({getItem:key=>values.get(key)??null,setItem:(key,value)=>{values.set(key,value)},removeItem:key=>{values.delete(key)}},{automaticVerification:false});
  const releaseApi=bindEaselApiTransport(transport);
- return ()=>{releaseApi();releaseCache();values.clear()};
+ return ()=>{releaseDownloads();releaseApi();releaseCache();values.clear()};
 }

@@ -50,7 +50,7 @@ export function bindNativeModalFocus():()=>void {
   frame=0;if(stopped)return;
   try{
    const otherOwner=[...document.querySelectorAll<HTMLElement>('.native-host .settings-panel[aria-modal="true"],.native-host .sidebar-panel[aria-modal="true"]')].some(visible);
-   const candidates=media.matches&&!otherOwner?[...document.querySelectorAll<HTMLElement>(OVERLAYS)].filter(element=>!element.closest('dialog[open]')&&element.querySelector(':scope > .modal, :scope > .drawer')&&visible(element)):[];
+   const candidates=!otherOwner?[...document.querySelectorAll<HTMLElement>(OVERLAYS)].filter(element=>!element.closest('dialog[open]')&&element.querySelector(':scope > .modal, :scope > .drawer')&&visible(element)):[];
    candidates.sort((a,b)=>(Number(getComputedStyle(a).zIndex)||0)-(Number(getComputedStyle(b).zIndex)||0));
    const overlay=candidates.at(-1)||null;
    if(overlay!==current?.overlay){

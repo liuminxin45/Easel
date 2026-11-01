@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import re
+from .role_backoff import RoleBackoff
 
 
 def main(root=None):
@@ -17,6 +18,7 @@ def main(root=None):
         try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
         except OSError:return
         children={};logs={};running_release=None
+        backoff=RoleBackoff(state/'role-backoff.json')
         def flag(name,key):
             try:return json.loads((root/'data'/name).read_text(encoding='utf-8'))[key] is True
             except (OSError,ValueError,KeyError):return False
@@ -42,12 +44,29 @@ def main(root=None):
                 if flag('learning-enabled.json','enabled'):roles.append('learning')
                 if flag('automation-enabled.json','local_io'):roles.append('local')
             for role in roles:
-                if role in children and children[role].poll() is None:continue
-                if role in children and hasattr(children[role],'close'):children[role].close()
+                stamp=time.time()
+                if role in children:
+                    child=children[role]
+                    if child.poll() is None:
+                        backoff.alive(choice['release'],role,child.pid,stamp);continue
+                    backoff.exited(choice['release'],role,child.pid,stamp)
+                    if hasattr(child,'close'):child.close()
+                    del children[role]
                 from .processes import existing
                 previous=existing(root,release,role)
                 if previous is not None:
+                    # Adoption is an observation of a live exact identity,
+                    # not a new launch or a failed retry.
+                    observed=time.time()
+                    identity=getattr(previous,'identity',None)
+                    # Older role handles expose only pid/poll/close. Without
+                    # creation evidence, begin a fresh observation window;
+                    # never assume that an adopted process was already stable.
+                    created=(identity.creation_ticks/10_000_000)-11_644_473_600 if identity is not None else observed
+                    backoff.adopted(choice['release'],role,previous.pid,created,observed)
                     children[role]=previous;continue
+                backoff.missing(choice['release'],role,stamp)
+                if not backoff.ready(choice['release'],role,stamp):continue
                 if role in logs:logs[role].close()
                 logs[role]=(state/(role+'.log')).open('ab')
                 env=dict(os.environ);env.pop('PYTHONPATH',None)
@@ -55,10 +74,15 @@ def main(root=None):
                 env['PATH']=node+os.pathsep+env.get('PATH','')
                 env.update(PYTHONUTF8='1',PYTHONIOENCODING='utf-8')
                 command=[sys.executable,str(release/'launch.py'),role,'--root',str(root),'--port','9123']
-                children[role]=subprocess.Popen(command,cwd=release,env=env,stdin=subprocess.DEVNULL,
-                    stdout=logs[role],stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
+                try:
+                    child=subprocess.Popen(command,cwd=release,env=env,stdin=subprocess.DEVNULL,
+                        stdout=logs[role],stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
+                except OSError as error:
+                    backoff.spawn_failed(choice['release'],role,time.time(),type(error).__name__);continue
+                backoff.started(choice['release'],role,child.pid,time.time());children[role]=child
             status={'manager':os.getpid(),'release':choice['release'],'paused':paused,
-                'roles':{k:v.pid for k,v in children.items() if v.poll() is None},'heartbeat':time.time()}
+                'roles':{k:v.pid for k,v in children.items() if v.poll() is None},'heartbeat':time.time(),
+                'backoff':backoff.snapshot(choice['release'])}
             temporary=state/'pids.new';temporary.write_text(json.dumps(status),encoding='utf-8');os.replace(temporary,state/'pids.json')
             time.sleep(3)
 

@@ -15,6 +15,8 @@ import json
 import re
 import time
 import uuid
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 from easel import harnesses
@@ -72,6 +74,9 @@ class ChatService:
         self.on_accept = on_accept
         self.timeout = timeout
         self._tasks = {}
+        self._ownership_lock = threading.Lock()
+        self._owned_turns = set()
+        self._ownership_generation = 0
         self._questions = {}
         self._stop_requested = set()
         self._closing = False
@@ -200,16 +205,58 @@ class ChatService:
         return {'sessions': items}
 
     def get_turn(self, turn_id, *, private=False):
-        with self.store.connect() as c:
-            turn = self._turn(c, turn_id)
-        if turn['status'] not in TERMINAL and turn_id not in self._tasks:
-            turn.update(status='unknown', delivery_state='unknown', recovery='核对原生会话；不会自动重发。')
+        while True:
+            owned_before, generation = self._ownership_snapshot(turn_id)
+            with self.store.connect() as c:
+                turn = self._turn(c, turn_id)
+            owned_after, current_generation = self._ownership_snapshot(turn_id)
+            if turn['status'] not in TERMINAL and not owned_before and not owned_after:
+                # An acceptance/completion may have crossed this database read.
+                # Retry the row after that change rather than projecting an old
+                # accepted snapshot as an orphan. Never hold a lock over I/O.
+                if generation != current_generation:
+                    continue
+                turn.update(status='unknown', delivery_state='unknown', recovery='核对原生会话；不会自动重发。')
+            break
         if not private:
             turn['skill_refs'] = [{'id': skill['id'], 'version': skill['version']}
                                   for skill in turn.get('snapshot', {}).get('skills', [])]
             for field in ('actual_prompt', 'frozen_instructions', 'snapshot', 'request_signature'):
                 turn.pop(field, None)
         return turn
+
+    def _ownership_snapshot(self, turn_id):
+        with self._ownership_lock:
+            return turn_id in self._owned_turns or turn_id in self._tasks, self._ownership_generation
+
+    def _register_owned(self, turn_id):
+        with self._ownership_lock:
+            self._owned_turns.add(turn_id)
+            self._ownership_generation += 1
+
+    def _release_owned(self, turn_id, *, task=None):
+        with self._ownership_lock:
+            if task is not None:
+                if self._tasks.get(turn_id) is not task:
+                    return
+                self._tasks.pop(turn_id)
+            self._owned_turns.discard(turn_id)
+            self._ownership_generation += 1
+
+    @contextmanager
+    def _accepting_connection(self, turn_id):
+        registered = False
+        def register():
+            nonlocal registered
+            self._register_owned(turn_id)
+            registered = True
+        try:
+            with self.store.connect() as connection:
+                yield connection, register
+        except BaseException:
+            if registered:
+                self._release_owned(turn_id)
+            raise
 
     def history(self, session_id):
         with self.store.connect() as c:
@@ -296,7 +343,7 @@ class ChatService:
             if field in context:
                 identity(context[field])
         signature = sha({'value': value, 'snapshot': frozen, 'actual_prompt': actual_prompt, 'work': work, 'frozen_instructions': frozen_instructions})
-        with self.store.connect() as c:
+        with self._accepting_connection(turn_id) as (c, register_owned):
             c.execute('BEGIN IMMEDIATE')
             old = c.execute('SELECT signature,document FROM easel_chat_turns WHERE operation_id=? OR id=?', (operation, turn_id)).fetchone()
             if old:
@@ -338,10 +385,19 @@ class ChatService:
             c.execute('INSERT INTO easel_chat_turns VALUES(?,?,?,?,?)', (turn_id, session_id, operation, signature, packed(turn)))
             session.update(pendingTurnId=turn_id, updated=now(), revision=session['revision'] + 1)
             self._put_session(c, session)
-        started = asyncio.Event()
-        task = asyncio.create_task(self._run(turn_id, environment, started))
+            register_owned()
+        runner = None
+        try:
+            started = asyncio.Event()
+            runner = self._run(turn_id, environment, started)
+            task = asyncio.create_task(runner)
+        except BaseException:
+            if runner is not None:
+                runner.close()
+            self._release_owned(turn_id)
+            raise
         self._tasks[turn_id] = task
-        task.add_done_callback(lambda completed: self._tasks.pop(turn_id, None))
+        task.add_done_callback(lambda completed: self._release_owned(turn_id, task=completed))
         self._save_metadata(session_id)
         await started.wait()
         return self.get_turn(turn_id)

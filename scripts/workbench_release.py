@@ -62,7 +62,17 @@ def verify(directory,expected=None):
     return value
 
 
+def committed_source(root=None):
+    """A release must identify committed source, never another chat's edits."""
+    root=Path(root or ROOT)
+    status=subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=root,text=True)
+    if status.strip():
+        raise ValueError('Commit or isolate pending work before freezing a runtime; working tree is not clean')
+    return subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+
+
 def freeze(native):
+    revision=committed_source()
     native=ROOT/'native-releases'/native
     n=json.loads((native/'native-manifest.json').read_text(encoding='utf-8'))
     for name,digest in n['files'].items():
@@ -100,8 +110,10 @@ main()
         'capabilities_type':'easel_project_builtin','capabilities_sha256':capabilities,
         'workspace_sha256':workspace,
         'upstream_commit':'5a597e5f3ef5b01098b53f36caf719dd9a32b7bf',
-        'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+        'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
+    if committed_source()!=revision:
+        raise ValueError('Source commit changed while freezing; candidate was not selected')
     atomic(target/'workbench-release.json',value)
     selection={'release':name,'manifest_sha256':sha(target/'workbench-release.json'),'native':value['native']}
     atomic(ROOT/'.local/workbench-deployment/candidate.json',selection)

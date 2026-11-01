@@ -252,3 +252,18 @@ P0 的完整静态符号/依赖/SQL/资源/角色清单已可从准确版本重�
 本轮首个完整检查 194 项中 193 通过，唯一失败为并行 UI 的 `useBrushPopover.ts` 尚未登记上游修改面。总调度核查共通叶子接缝及浏览器证据后仅登记准确文件，最终原架构与私有审计 71 项通过；另平台账号、TEMP 外部 CLI、旧归档、部署围栏、源码冻结和迁移审计 119 项通过。不跳过或放宽目录边界，也不把重叠轮次相加当作独立测试数。详见 `docs/workbench/PRIVATE-ARCHITECTURE-CLOSEOUT-20261101.md`，原始证据在 `.local/workbench-validation/private-architecture-closeout-20261101/`。P0 结论为源码职责证据补齐，不能替代全部运行时路径实测。
 
 P1 候选须从准确已提交源码冻结，使用总调度确认的前端绑定，完成成员 SHA、关键资源、角色/导入与 TEMP 下载验证；生产切换仍核对空闲、原生队列、unknown、原技能源码与进程身份。当前没有实体 vivo/WebToApp 运行条件；设备保存项按用户本轮决定保留待验，不由桌面/模拟手机结果替代。
+
+
+## 十二、P1 准入与正式交付（2026-11-02）
+
+P0职责证据已补齐，P1已从准确源码83c0274独立冻结并实际上线。
+后端 `workbench-20261101-161847` / `cd0dc72ce755f3a01692663494a19e6dc6ca9749029c321881d98f6607c4937b`，
+前端 `native-mobile-unified-r6-20261102001420` / `8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5`。
+76原始证据SHA、1116包成员、角色/资源/source原始字节均核对；实际包71测试与3surface/24代表配对通过。
+总调度在UI-only验收后另批核对base、空闲、队列、unknown和完整进程身份，使用独立candidate围栏升级。
+上线后七角色健康、同一SQLite文件保留，unknown投影未变、不重放；正式18只读视图无业务POST/脚本错误。
+没有复制/恢复库、没有builtin迁移，共享candidate未改。
+UI全页2209项仍对应旧后端的UI阶段，不冒称新后端全页重跑。
+P2–P6仍未实施；实体设备保存按用户决定待验，人工体验反馈尚未收到。
+完整记录：`docs/workbench/PRIVATE-ARCHITECTURE-CLOSEOUT-20261101.md`；
+证据：`.local/workbench-validation/private-architecture-closeout-20261101/production-r6/`。

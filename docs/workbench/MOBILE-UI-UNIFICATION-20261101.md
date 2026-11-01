@@ -64,9 +64,9 @@ Spec：`mobile-ui-unification`。官方基线：`5a597e5f3ef5b01098b53f36caf719d
 - 功能源码：`83c0274307ff2ef152e5e7d415b098e0db684630`，仅推送 `liuminxin45/Easel` 的 `codex/easel-base-alignment`。
 - 新前端：`native-mobile-unified-r6-20261102001420`。
 - 前端 manifest SHA256：`8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5`。
-- 活动后端保持 `workbench-20261101-093226`，SHA256 `4cb26b42bc8d2ba89a48d86df49630a26cf6da9d69aa657f712b1e9f37585983`。
+- UI-only切换时后端保持 `workbench-20261101-093226`，SHA256 `4cb26b42bc8d2ba89a48d86df49630a26cf6da9d69aa657f712b1e9f37585983`。
 - 使用现有独立前端激活器完成实际切换；经理及七角色 PID/完整创建身份前后一致。
-- 不重启角色，不改业务库、准入、owner/cutover；历史未知回执与采集未知保留，不重放。
+- 该静态切换不重启角色，不改业务库、准入、owner/cutover；历史未知回执与采集未知保留，不重放。
 
 最终 R6 独立矩阵 15/15 组、2209 检查全绿，59/59 必需入口无遗漏。
 七种尺寸为 320、390、430、768、1024 触控、844×390 横屏及 1280 桌面，覆盖明暗主题；
@@ -93,3 +93,12 @@ TEMP 合成推理不代表真实模型质量或真实平台发布。人工反馈
 主要记录：`matrix-results.json`、`coverage-summary.json`、`remote-checkout.json`、
 `acceptance.json`、`deployment.json`、`entry-live.json`、`live-browser.json`。
 R6 图像复核：同级 `visual-review/r6-delta/visual-review.json`。
+
+
+### 后续独立后端批次（2026-11-02）
+
+以上UI-only上线时后端为093226且未重启。随后按另一个Spec的授权，
+总调度独立升级到 `workbench-20261101-161847`（`cd0dc72ce755f3a01692663494a19e6dc6ca9749029c321881d98f6607c4937b`），
+前端仍为同一R6，源码字节未变。新后端实际包71测试、代表配对24检查及上线后18正式只读视图通过，
+七角色健康，同一数据库及unknown投影保持。UI的2209全页矩阵仍保留原始后端绑定，不改写证据。
+详见 `docs/workbench/PRIVATE-ARCHITECTURE-CLOSEOUT-20261101.md`。

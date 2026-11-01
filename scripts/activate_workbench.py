@@ -191,34 +191,56 @@ def queue_idle():
 
 
 def stop_new_profile(manager=None):
-    from easel_workbench.processes import rows
-    (STATE/'paused').write_text('failure recovery: do not respawn roles',encoding='utf-8')
-    inventory=rows();selected={manager} if manager else set()
-    pointer=STATE/'pids.json'
-    if pointer.exists():
-        p=read(pointer);selected.add(p['manager']);selected.update(p.get('roles',{}).values())
-    while True:
-        more={pid for pid,row in inventory.items() if row['parent'] in selected}-selected
-        if not more:break
-        selected|=more
-    held=[]
+    from easel_workbench.processes import rows,argv,descendant_pids
+    from easel_workbench.runtime.feedback_ledger import atomic_create
+    import uuid
+    marker={'schema':1,'owner':'runtime-stop','operation_id':uuid.uuid4().hex}
+    pause=STATE/'paused'
+    if not atomic_create(pause,marker):raise ValueError('Another owner has paused the runtime')
+    held=[];termination_started=False
     try:
-        for pid in selected:
-            row=inventory.get(pid)
-            if row is None:continue
-            line=(row.get('command') or '').replace('\\','/').lower()
-            if str(ROOT).replace('\\','/').lower() not in line:raise ValueError('Unexpected new-profile child')
-            if 'workbench-releases/' not in line and '/launcher.pyw' not in line:raise ValueError('Unowned new-profile process')
-            held.append((checked_identity(row),line))
-        for handle,line in sorted(held,key=lambda item:0 if '/launcher.pyw' in item[1] else 1):handle.terminate(expected_creation_ticks=handle.creation_ticks)
+        release=read(ROOT/'data/active-workbench.json')['release']
+        if not re.fullmatch(r'workbench-[A-Za-z0-9_-]+',str(release)):raise ValueError('Invalid runtime selection')
+        script=ROOT/'workbench-releases'/release/'launch.py'
+        roles={'server','worker','publisher','feedback','collector','learning','local'}
+        def role_kind(row):
+            if row.get('name','').lower() not in ('python.exe','pythonw.exe') or not row.get('command'):
+                raise ValueError('Unexpected new-profile process kind')
+            arguments=argv(row['command'])
+            if len(arguments)==2 and Path(arguments[1]).resolve()==ROOT/'launcher.pyw':return 'manager'
+            if (len(arguments)==7 and Path(arguments[1]).resolve()==script and arguments[2] in roles
+                    and arguments[3]=='--root' and Path(arguments[4]).resolve()==ROOT and arguments[5:]==['--port','9123']):
+                return arguments[2]
+            raise ValueError('Unowned new-profile process')
+        inventory=rows();roots={manager} if manager else set()
+        pointer=STATE/'pids.json'
+        if pointer.exists():
+            p=read(pointer)
+            if p.get('release')!=release:raise ValueError('Role snapshot changed runtime')
+            roots.add(p['manager']);roots.update(p.get('roles',{}).values())
+        if not roots:raise ValueError('No owned process snapshot is available')
+        selected=descendant_pids(inventory,roots)
+        for pid in sorted(selected):
+            row=inventory[pid];kind=role_kind(row)
+            held.append((checked_identity(row),kind))
+        for handle,kind in sorted(held,key=lambda item:0 if item[1]=='manager' else 1):
+            termination_started=True
+            handle.terminate(expected_creation_ticks=handle.creation_ticks)
         # No guardian can now spawn another server. Reconcile the tiny window
         # between its last tick and our first process inventory.
-        release=read(ROOT/'data/active-workbench.json')['release']
-        marker=str(ROOT/'workbench-releases'/release/'launch.py').replace('\\','/').lower()
         for row in rows().values():
-            line=(row.get('command') or '').replace('\\','/').lower()
-            if marker not in line:continue
-            with checked_identity(row) as handle:handle.terminate(expected_creation_ticks=handle.creation_ticks)
+            try:kind=role_kind(row)
+            except ValueError:continue
+            if kind=='manager':continue
+            with checked_identity(row) as handle:
+                termination_started=True
+                handle.terminate(expected_creation_ticks=handle.creation_ticks)
+    except BaseException:
+        if not termination_started and pause.exists():
+            try:owned=read(pause)==marker
+            except (OSError,ValueError):owned=False
+            if owned:pause.unlink()
+        raise
     finally:
         for handle,_ in held:handle.close()
 

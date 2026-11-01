@@ -39,6 +39,37 @@ def checked_identity(row):
     return handle
 
 
+def descendant_pids(inventory,roots):
+    """Return roots and descendants with creation-proven parent relationships.
+
+    Windows retains a parent's numeric PID after it exits. An older child of a
+    reused PID therefore belongs to the old process, not its current owner.
+    Unknown creation evidence must never turn that ambiguity into permission
+    to stop a process.
+    """
+    if not isinstance(inventory,dict):raise ValueError('Invalid process inventory')
+    selected=set(roots)
+    def created(pid):
+        row=inventory.get(pid)
+        if type(pid) is not int or pid<=0 or not isinstance(row,dict):raise ValueError('Selected process is missing')
+        value=row.get('creation_ticks')
+        if isinstance(value,str) and value.isascii() and value.isdecimal():value=int(value)
+        if type(value) is not int or not 0<value<2**64:raise ValueError('Process creation evidence is unavailable')
+        if row.get('pid',pid)!=pid:raise ValueError('Process inventory identity changed')
+        return value
+    for pid in selected:created(pid)
+    while True:
+        more=set()
+        for pid,row in inventory.items():
+            if not isinstance(row,dict):raise ValueError('Invalid process inventory row')
+            parent=row.get('parent')
+            if parent not in selected or pid in selected:continue
+            if created(pid)<created(parent):continue
+            more.add(pid)
+        if not more:return selected
+        selected|=more
+
+
 def existing(root,release,role):
     inventory=rows();members={}
     script=(Path(release)/'launch.py').resolve()

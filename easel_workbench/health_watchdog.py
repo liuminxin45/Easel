@@ -98,15 +98,11 @@ def request_health(url, token, release, *, timeout=3):
 def process_members(inventory, pid):
     if pid not in inventory:
         raise GuardError('missing_process_root')
-    selected = {pid}
-    while True:
-        more = {p for p, row in inventory.items() if row['parent'] in selected} - selected
-        for child in more:
-            if int(inventory[child]['creation_ticks']) < int(inventory[inventory[child]['parent']]['creation_ticks']):
-                raise GuardError('reused_parent_identity')
-        if not more:
-            return selected
-        selected |= more
+    from .processes import descendant_pids
+    try:
+        return descendant_pids(inventory, {pid})
+    except (KeyError, TypeError, ValueError):
+        raise GuardError('unverified_process_ancestry') from None
 
 
 def role_row(inventory, pid, root, runtime, *, manager=False):

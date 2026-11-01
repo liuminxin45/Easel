@@ -33,6 +33,14 @@ def test_contract_guard_detects_io_and_dynamic_reverse_dependencies(source):
     "from . import toolbox_store as store\nstore.pack({})",
     "getattr(import_module('easel_workbench.runtime.toolbox_store'), 'pack')",
     "__import__('easel_workbench.runtime.toolbox_store', fromlist=['ident']).ident('id')",
+    "import easel_workbench.runtime.toolbox_store\neasel_workbench.runtime.toolbox_store.ident('id')",
+    "def local():\n import easel_workbench.runtime.toolbox_store\n return easel_workbench.runtime.toolbox_store.text('x', 1)",
+    "from importlib import import_module\nstore=import_module('easel_workbench.runtime.toolbox_store')\nstore.pack({})",
+    "from importlib import import_module as load\nstore=load('easel_workbench.runtime.toolbox_store')\nstore.ident('id')",
+    "import easel_workbench.runtime.toolbox_store as store\nother=store\nother.pack({})",
+    "__import__('easel_workbench.runtime.toolbox_store').runtime.toolbox_store.ident('id')",
+    "__import__('easel_workbench.runtime.toolbox_store', fromlist=[]).runtime.toolbox_store.ident('id')",
+    "__import__('easel_workbench.runtime.toolbox_store', fromlist=None).runtime.toolbox_store.ident('id')",
 ])
 def test_guard_rejects_validation_imported_from_storage(source):
     assert check(source, 'easel_workbench/runtime/task_runtime.py')
@@ -53,6 +61,15 @@ def test_guards_allow_actual_leaf_dependencies_and_storage_class_consumers():
     assert not check('from .toolbox_store import Toolbox', 'easel_workbench/runtime/poster_executor.py')
     assert not check('from easel_workbench.contracts.media_paths import is_host_media_protocol',
                      'easel_workbench/runtime/download_delivery.py')
+
+
+@pytest.mark.parametrize('source', [
+    'import easel_workbench.runtime.toolbox_store as store\ndef use(store):\n return store.pack({})',
+    'def first():\n from . import toolbox_store as store\n return store.Toolbox\ndef second(store):\n return store.text()',
+    'from . import toolbox_store as store\nstore=other_service\nstore.pack({})',
+])
+def test_guard_respects_function_parameters_local_aliases_and_rebinding(source):
+    assert not check(source, 'easel_workbench/runtime/example.py')
 
 
 def test_current_checkout_obeys_migrated_private_boundaries():

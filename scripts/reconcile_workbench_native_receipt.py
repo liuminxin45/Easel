@@ -48,9 +48,12 @@ def apply(connection,turn_id,proof,expected_hash):
         raise ValueError('Native thread/turn interruption does not match the frozen task')
     if native.get('status',{}).get('type') not in ('notLoaded','idle') or Path(native.get('cwd','')).resolve()!=ROOT.resolve():
         raise ValueError('Native owner/project is not idle and verified')
-    if turn['status']!='unknown' or turn.get('hook_status')!='completed' or original['job']['status']!='uncertain':
+    confirmed_stop=(turn['status']=='stopped' and turn.get('interrupt_confirmed') is True
+                    and turn.get('delivery_state')=='interrupted')
+    if (turn['status']!='unknown' and not confirmed_stop) or turn.get('hook_status')!='completed' or original['job']['status']!='uncertain':
         raise ValueError('Only the exact finalized unknown receipt may be reconciled')
-    if session.get('pendingTurnId')!=turn_id:raise ValueError('Session ownership changed')
+    if session.get('pendingTurnId')!=turn_id and not (confirmed_stop and session.get('pendingTurnId') is None):
+        raise ValueError('Session ownership changed')
     at=datetime.datetime.now(datetime.timezone.utc).isoformat()
     reference={'kind':'native_thread_read','native_status':'interrupted','sha256':sha(packed(proof)),'observed_at':at}
     message='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。'

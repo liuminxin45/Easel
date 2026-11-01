@@ -516,6 +516,17 @@ def main():
                                 text = target.inner_text().strip()
                                 assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
                                 metrics = target.evaluate(MEASURE)
+                                if touch_input and width <= 1100:
+                                    touch_failures = []
+                                    for control in metrics.get('touchCandidates', []):
+                                        if control['tag'] != 'BUTTON' or control['disabled'] or control['pointerEvents'] == 'none':
+                                            continue
+                                        box = control['box']
+                                        large_target = any(name in control['selector'] for name in ('.dash-quick-btn', '.dash-trend-title', '.subnav-tab', '.trend-save', '.proto-trigger', '.brush-item', '.pv-copy'))
+                                        required_height = 43.5 if large_target else 23.5
+                                        if box['width'] < 23.5 or box['height'] < required_height:
+                                            touch_failures.append({'selector': control['selector'], 'label': control['label'], 'width': box['width'], 'height': box['height'], 'required_height': required_height})
+                                    metrics['touchFailures'] = touch_failures
                                 if surface == 'chat.composer':
                                     metrics['scroll_geometry'] = target.evaluate("el=>[el,...el.querySelectorAll('*')].filter(x=>x.scrollLeft||x.scrollWidth>x.clientWidth+1).map(x=>({tag:x.tagName,class:x.className,scrollLeft:x.scrollLeft,scrollTop:x.scrollTop,clientWidth:x.clientWidth,scrollWidth:x.scrollWidth,left:x.getBoundingClientRect().left,overflowX:getComputedStyle(x).overflowX}))")
                                 file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '.png')
@@ -525,7 +536,7 @@ def main():
                                         'loaded_resources': resources,
                                         'details_opened_by_ui': expanded,
                                         'screenshot': str(file), 'screenshot_sha256': sha(file),
-                                        'passed': not metrics['rootOverflow'] and not metrics['fieldOverflow'] and not any(not x['reflow_handled'] for x in metrics['overflow'])}
+                                        'passed': not metrics['rootOverflow'] and not metrics['fieldOverflow'] and not metrics.get('touchFailures') and not any(not x['reflow_handled'] for x in metrics['overflow'])}
                                 if news_reading is not None:
                                     item['news_reading'] = news_reading
                                 if surface == 'calendar.form' and state == 'edit_event':

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 
 from easel import __version__
@@ -19,6 +20,9 @@ class CodexAdapter:
     async def run(self, request: RunRequest, emit, ask, bind):
         if request.sandbox not in ("read-only", "workspace-write"):
             raise HarnessError("Codex 只允许只读或工作区写入权限")
+        approval_policy = "never" if request.codex_auto_approve else "on-request"
+        if request.codex_auto_approve:
+            request = replace(request, sandbox="danger-full-access")
         if request.reasoning_effort is not None and (not isinstance(request.reasoning_effort,str) or not request.reasoning_effort.strip()):
             raise HarnessError('推理强度必须为明确的原生字符串')
         if request.output_schema is not None and not isinstance(request.output_schema,dict):
@@ -89,13 +93,14 @@ class CodexAdapter:
                 raise HarnessError("不属于当前会话的请求")
             if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
                 if can_auto_approve(method, params, request):
-                    emit("activity", "Codex：已自动通过普通操作授权")
+                    emit("activity", "Codex Full access：已自动通过执行授权")
                     return {"decision": "accept"}
+                if request.codex_auto_approve:
+                    raise HarnessError("Codex Full access 无法接受此原生授权决定，请检查原生权限策略")
                 detail = params.get("command") or params.get("reason") or params.get("itemId", "")
                 answers = await ask([{
                     "questionId": "permission", "header": "执行授权",
-                    "question": f"Codex 请求额外权限（仅本次）：{str(detail)[:3000]}" + (
-                        "\n此操作不属于可自动批准的普通操作，请确认风险。" if request.codex_auto_approve else ""),
+                    "question": f"Codex 请求额外权限（仅本次）：{str(detail)[:3000]}",
                     "options": [{"label": "允许本次"}, {"label": "拒绝"}],
                 }])
                 return {"decision": "accept" if answers.get("permission") == ["允许本次"] else "decline"}
@@ -115,7 +120,7 @@ class CodexAdapter:
                     "clientInfo": {"name": "easel", "version": __version__},
                     "capabilities": {"experimentalApi": True}})
                 await rpc.send({"method": "initialized"})
-            options = {"cwd": str(request.cwd), "approvalPolicy": "on-request",
+            options = {"cwd": str(request.cwd), "approvalPolicy": approval_policy,
                        "sandbox": request.sandbox,
                        "developerInstructions": harness_instructions(request)}
             if request.model:
@@ -136,11 +141,15 @@ class CodexAdapter:
                 raise HarnessError("Codex 未返回原生会话 ID")
             bind(thread_id)
             rpc.native_id = thread_id
-            policy = {"type": "readOnly"} if request.sandbox == "read-only" else {
-                "type": "workspaceWrite", "writableRoots": [str(request.cwd)],
-                "networkAccess": False}
+            if request.codex_auto_approve:
+                policy = {"type": "dangerFullAccess"}
+            elif request.sandbox == "read-only":
+                policy = {"type": "readOnly"}
+            else:
+                policy = {"type": "workspaceWrite", "writableRoots": [str(request.cwd)],
+                          "networkAccess": False}
             params = {"threadId": thread_id, "input": [{"type": "text", "text": request.prompt}],
-                      "approvalPolicy": "on-request", "sandboxPolicy": policy}
+                      "approvalPolicy": approval_policy, "sandboxPolicy": policy}
             if request.model:
                 params["model"] = request.model
             if request.input_images is not None:

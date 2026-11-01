@@ -36,21 +36,21 @@ def test_ordinary_commands_auto_approve_only_when_enabled(tmp_path, command):
     "cat 'unterminated", "", "unknown-tool argument",
     "rg --hostname-bin=sudo .", "git fetch ext::sudo", "git fetch --upload-pack sudo",
 ])
-def test_dangerous_and_unknown_commands_require_confirmation(tmp_path, command):
+def test_full_access_also_approves_scripts_and_commands_outside_the_old_allowlist(tmp_path, command):
     request = RunRequest("", tmp_path, {}, codex_auto_approve=True)
-    assert not can_auto_approve(COMMAND, {"command": command}, request)
+    assert can_auto_approve(COMMAND, {"command": command}, request)
 
 
 @pytest.mark.parametrize("extra", [
     {"cwd": "/etc"}, {"additionalPermissions": {"fileSystem": {"write": ["/etc"]}}},
-    {"kind": "stdin"}, {"availableDecisions": ["decline"]}, {"command": None},
+    {"kind": "stdin"}, {"command": None},
 ])
-def test_ambiguous_or_outside_workspace_command_approval_is_not_automatic(tmp_path, extra):
+def test_full_access_does_not_reapply_workspace_restrictions(tmp_path, extra):
     request = RunRequest("", tmp_path, {}, codex_auto_approve=True)
-    assert not can_auto_approve(COMMAND, {"command": "ls", **extra}, request)
+    assert can_auto_approve(COMMAND, {"command": "ls", **extra}, request)
 
 
-def test_file_permissions_respect_workspace_sandbox_and_resolved_paths(tmp_path):
+def test_file_permissions_follow_full_access_switch_including_outside_workspace(tmp_path):
     workspace = tmp_path / "project"
     workspace.mkdir()
     outside = tmp_path / "outside"
@@ -59,11 +59,17 @@ def test_file_permissions_respect_workspace_sandbox_and_resolved_paths(tmp_path)
     request = RunRequest("", workspace, {}, codex_auto_approve=True)
     assert can_auto_approve(FILE_CHANGE, {"grantRoot": str(workspace / "outputs")}, request)
     for root in (str(outside), "../outside", "escape", "", None):
-        assert not can_auto_approve(FILE_CHANGE, {"grantRoot": root}, request)
-    assert not can_auto_approve(FILE_CHANGE, {"grantRoot": str(workspace)},
-                                replace(request, sandbox="read-only"))
+        assert can_auto_approve(FILE_CHANGE, {"grantRoot": root}, request)
+    assert can_auto_approve(FILE_CHANGE, {"grantRoot": str(workspace)},
+                            replace(request, sandbox="read-only"))
     assert not can_auto_approve(FILE_CHANGE, {"grantRoot": str(workspace)},
                                 replace(request, codex_auto_approve=False))
+
+
+def test_full_access_only_accepts_supported_execution_decisions(tmp_path):
+    request = RunRequest('', tmp_path, {}, codex_auto_approve=True)
+    assert not can_auto_approve(COMMAND, {'availableDecisions': ['decline']}, request)
+    assert not can_auto_approve('item/tool/requestUserInput', {}, request)
 
 
 def test_saved_approval_switch_defaults_off_and_rejects_non_boolean(tmp_path):

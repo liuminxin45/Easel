@@ -325,12 +325,13 @@ class ChatService:
         runtime = config['runtime']
         if runtime == 'api' and (work or (value.get('context') or {}).get('skill_id')):
             raise ChatConflict('API 仅聊天模式没有本机技能和制作工具，请新建 Agent 对话')
-        if work and runtime == 'codex' and config['sandbox'] == 'read-only':
+        if work and runtime == 'codex' and config['sandbox'] == 'read-only' and not config['codex_auto_approve']:
             raise ChatConflict('此会话使用只读沙箱，不能制作文件；请新建工作区写入对话')
         environment = self.settings.execution_environment(config)
         model = config['models'].get(runtime, '')
         if frozen_instructions is None:
-            frozen_instructions = harness_instructions(RunRequest(actual_prompt, self.root, environment, model=model))
+            frozen_instructions = harness_instructions(RunRequest(actual_prompt, self.root, environment, model=model,
+                sandbox=config['sandbox'], codex_auto_approve=config['codex_auto_approve']))
         frozen_instructions = text(frozen_instructions, 1024 * 1024, True)
         context = value.get('context', {})
         if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode', 'skill_revision'}:

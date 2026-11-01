@@ -117,6 +117,40 @@ def test_legacy_codex_conversation_survives_switch_before_first_new_session(sett
     asyncio.run(scenario())
 
 
+def test_codex_full_access_is_frozen_per_session_and_overrides_readonly_production(settings, monkeypatch):
+    calls = []
+    class Adapter:
+        async def run(self, request, emit, ask, bind):
+            calls.append(request)
+            bind('native-' + request.session_key)
+            request.on_native_turn('native-' + request.session_key, 'temp-turn')
+            emit('token', 'TEMP output')
+    monkeypatch.setattr(harnesses, 'adapter', lambda runtime: Adapter())
+    chat = ChatService(settings.box)
+    async def scenario():
+        await save(settings, sandbox='read-only', codex_auto_approve=True)
+        chat.create_session({'id': 'create-full', 'session_id': 'full'})
+        from easel_workbench.chat_business import ChatBusiness
+        business = ChatBusiness(settings.box)
+        business.chat = chat
+        assert '权限范围：danger-full-access' in business._workspace(chat.history('full')['session'])
+        await save(settings, sandbox='read-only', codex_auto_approve=False)
+        chat.create_session({'id': 'create-limited', 'session_id': 'limited'})
+        snapshot = settings.box.creator.resolve(task='discuss')
+        turn = await chat.submit({'id': 'full-turn', 'sessionId': 'full', 'message': 'TEMP'},
+            snapshot=snapshot, actual_prompt='TEMP frozen', work={'work_id': 'temp-work'})
+        await chat._tasks[turn['id']]
+        assert calls[-1].codex_auto_approve is True
+        assert '权限范围：danger-full-access' in calls[-1].frozen_instructions
+        with pytest.raises(ChatConflict, match='只读'):
+            await chat.submit({'id': 'limited-turn', 'sessionId': 'limited', 'message': 'TEMP'},
+                snapshot=snapshot, actual_prompt='TEMP frozen', work={'work_id': 'temp-work'})
+        assert len(calls) == 1
+        assert chat.execution_settings(chat.history('full')['session'])['codex_auto_approve'] is True
+        await chat.close()
+    asyncio.run(scenario())
+
+
 def test_api_mode_runs_original_stream_but_rejects_tools_before_acceptance(settings,monkeypatch):
     from easel_workbench import settings_execution
     calls=[]

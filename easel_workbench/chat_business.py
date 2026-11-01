@@ -312,7 +312,7 @@ class ChatBusiness:
         from easel.harnesses.base import RunRequest
         from easel.harnesses.workspace import harness_instructions
         config=self.chat.execution_settings(session) if session else {'runtime':'codex','models':{},'sandbox':'workspace-write'}
-        value=harness_instructions(RunRequest('',self.root,{'EASEL_AGENT_RUNTIME':config['runtime']},model=config['models'].get(config['runtime'],''),sandbox=config['sandbox']))
+        value=harness_instructions(RunRequest('',self.root,{'EASEL_AGENT_RUNTIME':config['runtime']},model=config['models'].get(config['runtime'],''),sandbox=config['sandbox'],codex_auto_approve=config.get('codex_auto_approve',False)))
         project=self.root/'AGENTS.md'
         if project.is_file():value+='\n\n## 本轮项目约定冻结\n'+project.read_text(encoding='utf-8-sig')
         return value

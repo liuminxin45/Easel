@@ -352,12 +352,14 @@ def test_permissions_are_explicit_and_once_only(tmp_path, runtime, adapter, allo
         assert response["result"]["outcome"]["optionId"] == ("once" if allow else "deny")
 
 
-@pytest.mark.parametrize(("command", "expected"), [("ls -la", "accept"), ("sudo reboot", "decline")])
-def test_codex_auto_approval_still_asks_for_high_risk_commands(tmp_path, command, expected):
+@pytest.mark.parametrize("command", ["ls -la", "python skills/shared/scripts/ai_image.py check", "pwsh -File render.ps1", "sudo reboot"])
+@pytest.mark.parametrize("sandbox", ["read-only", "workspace-write"])
+@pytest.mark.parametrize("native_id", ["", "native-thread"])
+def test_codex_full_access_never_asks_for_execution_approval(tmp_path, command, sandbox, native_id):
     from dataclasses import replace
 
-    request = request_for(tmp_path, "codex", "permission")
-    request = replace(request, codex_auto_approve=True,
+    request = request_for(tmp_path, "codex", "permission", native_id=native_id)
+    request = replace(request, codex_auto_approve=True, sandbox=sandbox,
                       env={**request.env, "FAKE_HARNESS_COMMAND": command})
     asked = []
 
@@ -367,11 +369,46 @@ def test_codex_auto_approval_still_asks_for_high_risk_commands(tmp_path, command
 
     asyncio.run(CodexAdapter().run(request, lambda *args: None, reject, lambda identifier: None))
     response = next(message for message in audit(tmp_path) if message.get("id") == "permission-request")
-    assert response["result"]["decision"] == expected
-    assert bool(asked) == (expected == "decline")
+    assert response["result"]["decision"] == "accept"
+    assert not asked
+    assert request.sandbox == sandbox
     for message in audit(tmp_path):
-        if message.get("method") in ("thread/start", "turn/start"):
-            assert message["params"]["approvalPolicy"] == "on-request"
+        if message.get("method") in ("thread/start", "thread/resume", "turn/start"):
+            assert message["params"]["approvalPolicy"] == "never"
+            if message["method"] == "turn/start":
+                assert message["params"]["sandboxPolicy"] == {"type": "dangerFullAccess"}
+            else:
+                assert message["params"]["sandbox"] == "danger-full-access"
+
+
+def test_codex_full_access_file_changes_outside_workspace_do_not_ask(tmp_path):
+    from dataclasses import replace
+
+    request = request_for(tmp_path, "codex", "permission")
+    request = replace(request, codex_auto_approve=True, env={**request.env,
+        "FAKE_HARNESS_PERMISSION_METHOD": "item/fileChange/requestApproval",
+        "FAKE_HARNESS_PERMISSION_PARAMS": json.dumps({"grantRoot": str(tmp_path.parent)})})
+
+    async def reject(questions):
+        raise AssertionError("Full access must not ask for execution approval")
+
+    asyncio.run(CodexAdapter().run(request, lambda *args: None, reject, lambda identifier: None))
+    response = next(message for message in audit(tmp_path) if message.get("id") == "permission-request")
+    assert response["result"]["decision"] == "accept"
+
+
+def test_codex_full_access_cannot_fall_back_to_manual_approval(tmp_path):
+    from dataclasses import replace
+
+    request = request_for(tmp_path, "codex", "permission")
+    request = replace(request, codex_auto_approve=True, env={**request.env,
+        "FAKE_HARNESS_PERMISSION_PARAMS": json.dumps({"availableDecisions": ["decline"]})})
+
+    async def reject(questions):
+        raise AssertionError("Full access must not fall back to manual approval")
+
+    with pytest.raises(HarnessError):
+        asyncio.run(CodexAdapter().run(request, lambda *args: None, reject, lambda identifier: None))
 
 
 @pytest.mark.parametrize("runtime,adapter", [("codex", CodexAdapter), ("acp", ACPAdapter)])

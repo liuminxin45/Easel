@@ -30,6 +30,8 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/package-lock.json','web/frontend/tsconfig.app.json',
     # Optional generic turn receipt/frozen instruction ports; defaults remain upstream-owned.
     'easel/harnesses/base.py','easel/harnesses/codex.py','easel/harnesses/workspace.py',
+    # Generic Full access compatibility approvals; no private service dependency.
+    'easel/harnesses/permissions.py',
     # Generic optional view ports; these files may not import private services.
     'web/frontend/src/components/ChatPage.tsx','web/frontend/src/components/MessageBubble.tsx',
     'web/frontend/src/components/Sidebar.tsx','web/frontend/src/components/SkillPage.tsx',

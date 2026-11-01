@@ -60,3 +60,37 @@ Spec：`private-workbench-architecture`。本轮授权：用户要求逐项处�
 P1 产品源码未改；本轮只修改维护审计、职责清单、测试和说明。原 P1 源码对照及下载证据仍对应准确源文件。冻结候选必须使用已提交源码与总调度确认的前端，继续核对所有成员 SHA、关键资源、导入/角色合同及 TEMP 下载路径，再交总调度按准入、空闲、原生队列、未知回执与进程身份部署。
 
 实体 vivo/WebToApp：用户本轮明确暂时没有设备，实机保存验收保留待办，不再作为当前可完成项，不冒称模拟视口已覆盖实体保存。
+
+
+## 2026-11-02：P1 独立准入及实际上线
+
+在移动 UI-only 已上线并完成正式验证后，总调度按独立批次完成 P1 后端升级，未把旧候选当作最终版本。
+当前实际配对：
+
+- 后端：`workbench-20261101-161847`，manifest SHA256 `cd0dc72ce755f3a01692663494a19e6dc6ca9749029c321881d98f6607c4937b`。
+- 前端：`native-mobile-unified-r6-20261102001420`，manifest SHA256 `8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5`。
+- 功能源码：`83c0274307ff2ef152e5e7d415b098e0db684630`；后续仅增加交付文档。
+- 仅推送自有 fork 的 `codex/easel-base-alignment`，不推官方仓库。
+
+冻结包 1116 成员、227 Python 文件编译、49 审查模块 SHA、15 关键资源、7 角色和5子进程入口均核对。
+实际包内合同/HTTP/媒体测试71通过，源码职责/边界71和兼容回归119保留各自报告，不将重叠轮次相加。
+严格保留原始字节、workspace 与 capabilities SHA；无归一化签名或放宽边界。
+R5候选保留原样；R6候选单独构造并绑定最终前端。
+
+R6后端/前端代表配对3 surface、24检查通过，无page_errors/findings；这不是全页矩阵。
+UI全页2209检查对应前一活动后端093226，不能改写成新后端的完整重跑。
+新后端上线后，正式 Windows Edge 桌面/模拟手机18只读视图通过，无业务POST或脚本错误，
+观察期间新经理及七角色身份稳定。三个匿名入口200、最多一次跳转，均返回R6登录壳。
+
+总调度逐一验76份原始交接证据，最终78份绑定记录加入准入与交接摘要；
+核对准确base、空闲、原生队列、unknown和完整进程创建身份后执行既有围栏升级。
+独立 `--candidate` 不改共享candidate；同一SQLite文件身份保持，无复制或恢复数据库，
+无builtin迁移；retained历史及采集unknown投影与准入前相同，不重放。
+当前cutover live、owner匹配、workers准入true，经理与全部七角色健康。
+
+证据：`.local/workbench-validation/private-architecture-closeout-20261101/` 中
+`p1-validation-handoff-r6.json`、`p1-final-acceptance-r6.json`、`coordinator-admission-r6.json`、
+`coordinator-deployment-r6.json`、`production-r6/health.json`、`production-r6/live-browser.json`。
+
+本次完成P0职责证据和P1独立冻结/发布；P2–P6仍未实施，不将后续搬迁冒称完成。
+实体vivo/WebToApp和真实设备保存仍按用户决定待验；没有真实模型或平台发布验证。

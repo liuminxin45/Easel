@@ -27,7 +27,7 @@ Spec: mobile-ui-unification
 
 2026-11-02 已完成并上线。功能源码 `83c0274307ff2ef152e5e7d415b098e0db684630` 已推送自有 fork。
 前端 `native-mobile-unified-r6-20261102001420`，manifest `8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5`。
-后端保持 `workbench-20261101-093226`；本次仅原子切前端，经理及七角色不重启，库与准入不改。
+UI-only批次后端为 `workbench-20261101-093226`；该批次仅原子切前端，经理及七角色不重启，库与准入不改。
 
 R6 15/15 组、2209 浏览器检查、59/59 必需页面及弹窗入口全部通过；
 覆盖七种尺寸明暗、媒体、技能返回、长文/记录触控到底、日期、原生活动/思考、准确版本、
@@ -43,3 +43,12 @@ R6 52 张差异图实际复核，无新增问题。实体 vivo/WebToApp 与真�
 
 详情：`docs/workbench/MOBILE-UI-UNIFICATION-20261101.md`。
 原始证据：`.local/workbench-validation/mobile-ui-unification-20261101/review6/`。
+
+
+### 后续独立后端批次（2026-11-02）
+
+以上UI-only上线时后端为093226且未重启。随后按另一个Spec的授权，
+总调度独立升级到 `workbench-20261101-161847`（`cd0dc72ce755f3a01692663494a19e6dc6ca9749029c321881d98f6607c4937b`），
+前端仍为同一R6，源码字节未变。新后端实际包71测试、代表配对24检查及上线后18正式只读视图通过，
+七角色健康，同一数据库及unknown投影保持。UI的2209全页矩阵仍保留原始后端绑定，不改写证据。
+详见 `docs/workbench/PRIVATE-ARCHITECTURE-CLOSEOUT-20261101.md`。

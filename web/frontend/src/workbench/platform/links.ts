@@ -7,7 +7,7 @@ export function authenticationUrl(navigation:Pick<NavigationService,'publicUrl'>
 export function mobileDocumentLink(href:string,origin:string):boolean {
  try{const url=new URL(href,origin);return /^https?:$/.test(url.protocol)&&(url.origin!==origin||/^\/(?:api\/(?:files|media|outputs|chat\/products)(?:\/|$)|media\/)/.test(url.pathname))}catch{return false}
 }
-export interface ImageLink {url:string;name:string}
+export interface ImageLink {url:string;name:string;downloadUrl?:string}
 export function bindNavigationLinks(navigation:NavigationService,openImage?:(image:ImageLink)=>void):()=>void {
  const adapt=()=>{for(const anchor of document.querySelectorAll<HTMLAnchorElement>('#root a[href]')){
   const raw=anchor.getAttribute('href');delete anchor.dataset.nativePath;if(!raw||anchor.hasAttribute('download'))continue;
@@ -20,7 +20,9 @@ export function bindNavigationLinks(navigation:NavigationService,openImage?:(ima
   const compact=matchMedia('(max-width: 900px), (max-width: 1100px) and (max-height: 500px)').matches;
   const image=anchor.querySelector<HTMLImageElement>('img')||anchor.closest('.artifact-gallery')?.querySelector<HTMLImageElement>('.artifact-image-link img');
   if(openImage&&image&&image.src===anchor.href&&new URL(anchor.href).origin===location.origin){
-   event.preventDefault();event.stopPropagation();openImage({url:anchor.href,name:image.alt||'图片'});return;
+   const download=anchor.closest('.artifact-gallery')?.querySelector<HTMLAnchorElement>('a[download]');
+   const downloadUrl=download&&new URL(download.href).origin===location.origin?download.href:undefined;
+   event.preventDefault();event.stopPropagation();openImage({url:anchor.href,name:image.alt||'图片',downloadUrl});return;
   }
   const path=anchor.dataset.nativePath;
   if(path&&(!anchor.target||anchor.target==='_self'||compact)){event.preventDefault();event.stopPropagation();navigation.navigate(path);return}

@@ -1,6 +1,7 @@
 """TEMP liveness credentials cannot become business or session authority."""
 import os
 import re
+import json
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
@@ -196,3 +197,83 @@ def test_health_token_cannot_bypass_auth_for_similar_or_business_urls(protected_
     assert 'x-workbench-health' not in response.headers
     assert 'set-cookie' not in response.headers
     assert token not in response.text
+
+
+def test_atomic_create_never_overwrites_an_existing_owner(tmp_path):
+    from easel_workbench.runtime.feedback_ledger import atomic_create
+    target = tmp_path / 'paused'
+    original = b'{"owner":"existing-maintenance","operation_id":"original"}\n'
+    target.write_bytes(original)
+    assert atomic_create(target, {'owner': 'new-watchdog'}) is False
+    assert target.read_bytes() == original
+    assert set(tmp_path.iterdir()) == {target}
+
+
+def test_atomic_create_concurrent_publication_has_one_complete_winner(tmp_path):
+    from easel_workbench.runtime.feedback_ledger import atomic_create
+    target = tmp_path / 'paused'
+    barrier = threading.Barrier(8)
+    payloads = [{'owner': index, 'operation_id': str(index), 'complete': ['x' * 4096, index]}
+                for index in range(8)]
+
+    def publish(index):
+        barrier.wait(timeout=5)
+        return atomic_create(target, payloads[index])
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(publish, range(8)))
+    assert results.count(True) == 1
+    assert results.count(False) == 7
+    assert json.loads(target.read_text(encoding='utf-8')) == payloads[results.index(True)]
+    assert set(tmp_path.iterdir()) == {target}
+
+
+@pytest.mark.parametrize('already_exists', [False, True])
+def test_atomic_create_partial_write_failure_does_not_publish_or_damage_owner(tmp_path, monkeypatch, already_exists):
+    from easel_workbench.runtime import feedback_ledger
+    target = tmp_path / 'paused'
+    original = b'{"owner":"existing-owner"}\n'
+    if already_exists:
+        target.write_bytes(original)
+
+    def fail_after_partial_write(temporary, value):
+        temporary.write_bytes(b'{"owner":"partially-written')
+        raise OSError('TEMP injected incomplete atomic write')
+
+    monkeypatch.setattr(feedback_ledger, 'atomic', fail_after_partial_write)
+    with pytest.raises(OSError, match='incomplete atomic write'):
+        feedback_ledger.atomic_create(target, {'owner': 'new-watchdog'})
+    assert target.exists() is already_exists
+    if already_exists:
+        assert target.read_bytes() == original
+    assert set(tmp_path.iterdir()) == ({target} if already_exists else set())
+
+
+@pytest.mark.parametrize('damaged', [b'invalid-token', b'\xff' * 64])
+def test_damaged_monitor_token_does_not_prevent_existing_business_auth(tmp_path, damaged):
+    target = tmp_path / '.local/workbench-deployment/health-token'
+    target.parent.mkdir(parents=True)
+    target.write_bytes(damaged)
+    app = FastAPI()
+
+    @app.get('/api/business')
+    async def authenticated_business(request: Request):
+        if request.headers.get('authorization') != 'Bearer TEMP-owner':
+            return JSONResponse({'error': 'authentication_required'}, status_code=401)
+        return {'business': 'ready'}
+
+    # Installation itself must succeed; monitoring credentials have no right
+    # to disable or authenticate the application's existing owner routes.
+    install_health(app, tmp_path)
+    with TestClient(app) as client:
+        health = client.get(HEALTH_PATH, headers=headers('0' * 64))
+        assert health.status_code == 404
+        assert health.json() == {'error': 'not_found'}
+        assert 'x-workbench-health' not in health.headers
+        assert 'set-cookie' not in health.headers
+        assert client.get('/api/business').status_code == 401
+        assert client.get('/api/business', headers=headers('0' * 64)).status_code == 401
+        business = client.get('/api/business', headers={'authorization': 'Bearer TEMP-owner'})
+        assert business.status_code == 200
+        assert business.json() == {'business': 'ready'}
+    assert target.read_bytes() == damaged

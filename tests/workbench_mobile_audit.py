@@ -533,11 +533,38 @@ def main():
                                     focus_target.scroll_into_view_if_needed()
                                     # Measure clipping by all scroll ancestors; viewport bounds alone
                                     # would count content hidden behind the fixed composer.
-                                    focused_target = focus_target.evaluate('''el=>{const r=el.getBoundingClientRect();let l=Math.max(0,r.left),t=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);for(let p=el.parentElement;p;p=p.parentElement){const s=getComputedStyle(p),b=p.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(s.overflowY)){t=Math.max(t,b.top);bottom=Math.min(bottom,b.bottom)}if(/auto|scroll|hidden|clip/.test(s.overflowX)){l=Math.max(l,b.left);right=Math.min(right,b.right)}}const w=Math.max(0,right-l),h=Math.max(0,bottom-t),hit=w&&h?document.elementFromPoint(l+w/2,t+h/2):null;return {tag:el.tagName,class:el.className,box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},visible:{left:l,right,top:t,bottom,width:w,height:h},hit:!!hit&&(hit===el||el.contains(hit)),hitTag:hit?.tagName,hitClass:hit?.className}}''')
-                                    assert focused_target['visible']['width'] >= 40 and focused_target['visible']['height'] >= min(60, focused_target['box']['height']) - 1 and focused_target['hit'], ('Named chat target was not actually exposed in its scroll region', surface, focused_target)
+                                    visible_measure = '''el=>{const r=el.getBoundingClientRect();let l=Math.max(0,r.left),t=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);for(let p=el.parentElement;p;p=p.parentElement){const s=getComputedStyle(p),b=p.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(s.overflowY)){t=Math.max(t,b.top);bottom=Math.min(bottom,b.bottom)}if(/auto|scroll|hidden|clip/.test(s.overflowX)){l=Math.max(l,b.left);right=Math.min(right,b.right)}}const w=Math.max(0,right-l),h=Math.max(0,bottom-t),hit=w&&h?document.elementFromPoint(l+w/2,t+h/2):null;return {tag:el.tagName,class:el.className,box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},visible:{left:l,right,top:t,bottom,width:w,height:h},hit:!!hit&&(hit===el||el.contains(hit)),hitTag:hit?.tagName,hitClass:hit?.className}}'''
+                                    def viewport_proof(locator, suffix):
+                                        locator.scroll_into_view_if_needed()
+                                        observed = locator.evaluate(visible_measure)
+                                        assert observed['visible']['width'] >= 40 and observed['visible']['height'] >= min(60, observed['box']['height']) - 1 and observed['hit'], ('Named chat target was not actually exposed in its scroll region', surface, observed)
+                                        viewport_file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '-' + suffix + '-viewport.png')
+                                        page.screenshot(path=str(viewport_file))
+                                        clip = observed['visible']
+                                        clip_file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '-' + suffix + '-visible-region.png')
+                                        page.screenshot(path=str(clip_file), clip={'x': clip['left'], 'y': clip['top'], 'width': clip['width'], 'height': clip['height']})
+                                        full_target = clip['width'] >= observed['box']['width'] - 1 and clip['height'] >= observed['box']['height'] - 1
+                                        observed.update(screenshot=str(viewport_file), screenshot_sha256=sha(viewport_file), screenshot_type='actual-viewport',
+                                                        visible_region_screenshot=str(clip_file), visible_region_sha256=sha(clip_file), visible_region_screenshot_type='viewport-bounded-clip',
+                                                        full_target_visible=full_target, visible_area_fraction=min(1, clip['width'] * clip['height'] / max(1, observed['box']['width'] * observed['box']['height'])),
+                                                        proof_scope='Only the measured visible intersection is observed; this is not evidence of the whole long card.')
+                                        return observed
+                                    focused_target = viewport_proof(focus_target, 'target')
+                                    # Retain the former element capture for diagnosis. Chromium
+                                    # can scroll/clip a tall element while making this image, so
+                                    # it must not stand in for the visible viewport proof above.
                                     target_file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '-target.png')
                                     focus_target.screenshot(path=str(target_file))
-                                    focused_target.update(screenshot=str(target_file), screenshot_sha256=sha(target_file))
+                                    focused_target.update(diagnostic_element_screenshot=str(target_file), diagnostic_element_sha256=sha(target_file),
+                                                          diagnostic_element_screenshot_type='element-capture-diagnostic-only')
+                                    if surface == 'chat.questions' and not focused_target['full_target_visible']:
+                                        first = target.locator('.question-card__chip,.question-card__title').first
+                                        last = target.locator('button,input,select,textarea,a[href]').last
+                                        expect(first).to_be_visible()
+                                        expect(last).to_be_visible()
+                                        focused_target['long_card_endpoints'] = {'first_content': viewport_proof(first, 'first-content'),
+                                                                                 'last_control': viewport_proof(last, 'last-control'),
+                                                                                 'controls_clicked': False, 'full_card_in_one_viewport': False}
                                 news_reading = verify_news_scroll(target) if surface == 'news.reading' else None
                                 text = target.inner_text().strip()
                                 assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
@@ -846,8 +873,21 @@ def main():
                                     assert rows.count() == body.locator('button.brush-item').count(), 'Slash choices bypass the shared brush buttons'
                                     bounds = menu.evaluate("el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,position:s.position}}")
                                     assert bounds['position'] in ('absolute', 'fixed') and bounds['left'] >= -1 and bounds['right'] <= width + 1 and bounds['top'] >= -1 and bounds['bottom'] <= height + 1, ('Slash popup is not positioned within the viewport', bounds)
-                                    scroll = body.evaluate("el=>({overflow:getComputedStyle(el).overflowY,height:el.clientHeight,scrollHeight:el.scrollHeight})")
-                                    assert scroll['overflow'] in ('auto', 'scroll') and scroll['height'] > 0, ('Slash menu has no actual scroll body', scroll)
+                                    scroll = menu.evaluate('''el=>{const body=el.querySelector('.brush-body'),p=getComputedStyle(el),b=getComputedStyle(body),box=el.getBoundingClientRect(),viewport=visualViewport?.height||innerHeight,nativeHeight=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--native-height'))||viewport,chromeHeight=Array.from(el.children).filter(c=>c!==body).reduce((sum,c)=>sum+Math.max(c.getBoundingClientRect().height,c.scrollHeight),2),normalLimit=Math.min(420,Math.max(0,nativeHeight-16));return {panel:{overflow:p.overflowY,height:el.clientHeight,scrollHeight:el.scrollHeight},body:{overflow:b.overflowY,height:body.clientHeight,scrollHeight:body.scrollHeight},chromeHeight,normalBodyBudget:Math.min(box.height,normalLimit)-chromeHeight,authoredLimit:normalLimit,viewportHeight:viewport,actualScrollOwners:[el,body].filter(n=>['auto','scroll'].includes(getComputedStyle(n).overflowY)&&n.scrollHeight>n.clientHeight+1).map(n=>n===el?'panel':'body')}}''')
+                                    fallback = scroll['body']['overflow'] == 'visible' and scroll['panel']['overflow'] in ('auto', 'scroll')
+                                    if fallback:
+                                        # The current authored normal budget is min(420px,
+                                        # native-height - 16px). Only the source-defined case
+                                        # with insufficient room for chrome plus a 44px row
+                                        # may switch the existing panel to one scroll owner.
+                                        assert scroll['normalBodyBudget'] < 45, ('Whole-panel scrolling was enabled without constrained header/body space', scroll)
+                                        assert scroll['actualScrollOwners'] == ['panel'], ('Short-height fallback introduced nested scrolling', scroll)
+                                        scroll_owner = menu
+                                    else:
+                                        assert scroll['body']['overflow'] in ('auto', 'scroll') and scroll['body']['height'] > 0, ('Slash menu has no normal bounded scroll body', scroll)
+                                        assert scroll['actualScrollOwners'] == ['body'], ('Normal slash menu must have one body scroll owner', scroll)
+                                        scroll_owner = body
+                                    scroll['owner'] = 'panel' if fallback else 'body'
                                     choices = body.locator('button.brush-item:not(:disabled)').filter(has=page.locator('.brush-il'))
                                     skill = next((choices.nth(i) for i in range(choices.count()) if choices.nth(i).get_attribute('aria-label') != '上传素材'), None)
                                     assert skill is not None, 'Slash menu has no enabled skill'
@@ -858,7 +898,7 @@ def main():
                                     gestures = []
                                     def reach(row, label_text):
                                         for _ in range(40):
-                                            b, r = body.bounding_box(), row.bounding_box()
+                                            b, r = scroll_owner.bounding_box(), row.bounding_box()
                                             assert b and r
                                             top, bottom = max(0, b['y']), min(height, b['y'] + b['height'])
                                             if r['y'] >= top - 1 and r['y'] + r['height'] <= bottom + 1:
@@ -870,14 +910,14 @@ def main():
                                             direction = 1 if r['y'] < top else -1
                                             distance = min(360, span - 60)
                                             x, y = b['x'] + b['width'] / 2, top + 30 if direction > 0 else bottom - 30
-                                            before = body.evaluate('el=>el.scrollTop')
+                                            before = scroll_owner.evaluate('el=>el.scrollTop')
                                             if session:
                                                 touch_helper.touch_swipe(page, session, x, y, direction * distance)
                                             else:
                                                 page.mouse.move(x, y)
                                                 page.mouse.wheel(0, -direction * distance)
                                                 page.wait_for_timeout(180)
-                                            after = body.evaluate('el=>el.scrollTop')
+                                            after = scroll_owner.evaluate('el=>el.scrollTop')
                                             gestures.append({'target': label_text, 'before': before, 'after': after})
                                             assert abs(after - before) > 1, ('Slash menu did not respond to its real scroll gesture', label_text, before, after)
                                         raise AssertionError('Slash row could not be reached after bounded real gestures: ' + label_text)

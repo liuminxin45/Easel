@@ -11,7 +11,7 @@ function nodes(value){return Array.isArray(value)?value.flatMap(nodes):value&&ty
 function load(file,react,imports,globals={}){
  const source=readFileSync(new URL('../../web/frontend/src/components/'+file,import.meta.url),'utf8'),exports={};
  const {outputText}=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}});
- runInNewContext(outputText,{exports,requestAnimationFrame:fn=>fn(),document:{addEventListener(){},removeEventListener(){}},...globals,require:id=>id==='react'?react:id==='react/jsx-runtime'?jsx:id in imports?imports[id]:assert.fail('Unexpected import '+id)});
+ runInNewContext(outputText,{exports,requestAnimationFrame:fn=>fn(),document:{addEventListener(){},removeEventListener(){}},...globals,require:id=>id==='react'?react:id==='react/jsx-runtime'?jsx:id==='./useBrushPopover'?{useBrushPopover:()=>{}}:id in imports?imports[id]:assert.fail('Unexpected import '+id)});
  return exports;
 }
 function hooks(){

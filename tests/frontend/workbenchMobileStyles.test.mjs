@@ -27,6 +27,12 @@ test('negative controls reject unscoped portals, desktop restyling, hidden overf
   '@media (max-width: 760px){html[data-native-platform] .btn{display:none}}'])assert.ok(inspect(bad).length,bad);
 });
 
+test('hover-only actions can be revealed for bounded coarse-pointer layouts without changing desktop styling',()=>{
+ assert.deepEqual(inspect('@media (max-width: 1100px) and (pointer: coarse){html[data-native-platform] .idea-card-actions{display:flex}}'),[]);
+ assert.ok(inspect('@media (pointer: coarse){html[data-native-platform] .idea-card-actions{display:flex}}').length);
+ assert.ok(inspect('@media (max-width: 1100px) and (pointer: coarse){html[data-native-platform] .idea-card-actions{color:red}}').length);
+});
+
 test('only paired private work panes may use the existing narrow tab visibility policy',()=>{
  const idle='html[data-native-platform] .ew-work-chat:not(.ew-selected)',active='html[data-native-platform] .ew-work-chat.ew-selected';
  assert.deepEqual(inspect(`@media (max-width: 900px){${idle}{display:none}${active}{display:block}}`),[]);

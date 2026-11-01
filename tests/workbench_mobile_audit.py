@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 MARK = 'MOBILE_AUDIT'
 LONG = MARK + ' 窄屏已有数据：保留准确版本、原始反馈和未发送输入。' * 5
-RECORD_GUIDANCE = (LONG + '\n') * 12
+RECORD_GUIDANCE = (LONG + '\n') * 48
 NEWS_END = MARK + '_NEWS_END'
 NEWS_BODY = '\n\n'.join('第 ' + str(index) + ' 段\n' + LONG + LONG for index in range(1, 13)) + '\n\n' + NEWS_END
 
@@ -93,7 +93,7 @@ def seed(fixture, image, video):
     work = 'mobile-audit-work'
     # Persist a genuine long creation input through normal TEMP freezing.
     # The record sheet must exercise long original data rather than padded DOM.
-    box.create({'id': work, 'title': LONG, 'material': LONG, 'format': 'poster', 'files': [],
+    box.create({'id': work, 'title': LONG, 'material': LONG, 'guidance': RECORD_GUIDANCE, 'format': 'poster', 'files': [],
                 'creative': {'workspace': {'style_guidance': RECORD_GUIDANCE}}})
     artifact = root / 'data/artifacts/mobile-audit-image.png'
     artifact.parent.mkdir(parents=True, exist_ok=True)
@@ -387,6 +387,10 @@ def main():
                             report.setdefault('media_authorization_preflight', []).append({'case': label, 'status': signed.status,
                                 'source_id': picture['id'], 'mime': signed.headers['content-type'], 'sha256': hashlib.sha256(signed.body()).hexdigest(),
                                 'signed_route_used': True, 'authorization_bypassed': False})
+                            def business_request_count():
+                                # Usage telemetry is separately retained in requests/blocked.
+                                # Every other attempted non-read request still counts.
+                                return sum(request.get('path') != '/api/usage/events' for request in report['requests'])
                             def go(path):
                                 page.goto(fixture['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
                             def verify_news_scroll(target):
@@ -525,11 +529,14 @@ def main():
                                         resources.append({'kind': 'iframe', 'src': iframe.get_attribute('src'), 'actual_document_marker': MARK})
                                 target.evaluate("el=>{for(let p=el;p;p=p.parentElement){p.scrollTop=0;p.scrollLeft=0}for(const child of el.querySelectorAll('.drawer-body,.settings-main,.page-scroll')){child.scrollTop=0}window.scrollTo(0,0)}")
                                 focused_target = None
-                                if surface in ('chat.artifacts', 'chat.questions', 'chat.execution-details'):
+                                if surface in ('chat.artifacts', 'chat.questions', 'chat.execution-details', 'insights.main'):
                                     focus_target = target
                                     if surface == 'chat.artifacts':
                                         media = target.locator('img,video,audio,iframe')
                                         focus_target = next((media.nth(i) for i in range(media.count()) if media.nth(i).is_visible()), target)
+                                    if surface == 'insights.main':
+                                        focus_target = target.get_by_label('观察时间 · 留空使用现在', exact=True)
+                                        expect(focus_target).to_have_attribute('type', 'datetime-local')
                                     focus_target.scroll_into_view_if_needed()
                                     # Measure clipping by all scroll ancestors; viewport bounds alone
                                     # would count content hidden behind the fixed composer.
@@ -550,6 +557,10 @@ def main():
                                                         proof_scope='Only the measured visible intersection is observed; this is not evidence of the whole long card.')
                                         return observed
                                     focused_target = viewport_proof(focus_target, 'target')
+                                    if surface == 'insights.main':
+                                        focused_target['timestamp_field'] = {'label': '观察时间 · 留空使用现在', 'input_type': focus_target.get_attribute('type'),
+                                                                             'value': focus_target.input_value(), 'submitted': False}
+                                        report.setdefault('timestamp_observations', []).append({'case': label, 'surface_id': surface, 'observation': focused_target})
                                     # Retain the former element capture for diagnosis. Chromium
                                     # can scroll/clip a tall element while making this image, so
                                     # it must not stand in for the visible viewport proof above.
@@ -930,13 +941,13 @@ def main():
                                         if session:
                                             session.detach()
                                     chosen = skill.locator('.brush-il').inner_text().strip().lstrip('/')
-                                    before_requests, before_calls = len(report['requests']), len(fixture['adapter'].requests)
+                                    before_requests, before_calls = business_request_count(), len(fixture['adapter'].requests)
                                     (skill.tap if touch_input else skill.click)()
                                     expect(menu).to_have_count(0)
                                     expect(page.locator('[data-chat-command]')).to_contain_text(chosen)
                                     expect(composer).to_have_value(original)
                                     page.wait_for_timeout(200)
-                                    assert len(report['requests']) == before_requests and len(fixture['adapter'].requests) == before_calls, 'Slash choice automatically sent a task or changed the server'
+                                    assert business_request_count() == before_requests and len(fixture['adapter'].requests) == before_calls, 'Slash choice automatically sent a task or changed the server'
                                     report.setdefault('slash_interactions', []).append({'case': label, 'popup': bounds, 'scroll_body': scroll, 'reference_style': brush_style, 'row_style': style, 'gestures': gestures, 'first_hit': first_hit, 'last_hit': last_hit, 'selected_skill': chosen, 'raw_material_retained': True, 'automatic_task_requests': 0, 'last_row_screenshot': str(end_file), 'last_row_screenshot_sha256': sha(end_file)})
                                     composer.fill('/ ' + original)
                                     expect(menu).to_be_visible()
@@ -958,14 +969,14 @@ def main():
                                     hit = item.evaluate('''el=>{const r=el.getBoundingClientRect(),p=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,hit:!!p&&(p===el||el.contains(p))}}''')
                                     assert hit['left'] >= -1 and hit['right'] <= width + 1 and hit['top'] >= -1 and hit['bottom'] <= height + 1 and hit['hit'], ('First brush choice is not reachable', hit)
                                     choice = item.locator('.brush-il').inner_text().strip()
-                                    before_requests = len(report['requests'])
+                                    before_requests = business_request_count()
                                     before_calls = len(fixture['adapter'].requests)
                                     (item.tap if touch_input else item.click)()
                                     expect(panel).to_have_count(0)
                                     expect(page.locator('[data-chat-command]')).to_contain_text(choice)
                                     expect(composer).to_have_value(LONG)
                                     page.wait_for_timeout(200)
-                                    assert len(report['requests']) == before_requests and len(fixture['adapter'].requests) == before_calls, 'Selecting a brush choice sent a task or changed the server'
+                                    assert business_request_count() == before_requests and len(fixture['adapter'].requests) == before_calls, 'Selecting a brush choice sent a task or changed the server'
                                     report.setdefault('brush_interactions', []).append({'case': label, 'heading': geometry, 'first_choice': {'label': choice, 'hitbox': hit}, 'selected': True, 'automatic_task_requests': 0, 'draft_preserved': True})
                                     opener.click()
                                     expect(panel).to_be_visible()
@@ -980,7 +991,21 @@ def main():
                                     expect(gallery.locator(tag)).to_be_visible()
                                 run('chat.artifacts', chat_path, '.artifact-gallery', 'video', before=lambda: artifact_media(2, 'video'))
                                 run('chat.artifacts', chat_path, '.artifact-gallery', 'audio', before=lambda: artifact_media(3, 'audio'))
-                                run('chat.execution-details', chat_path, '.chat-turn-outputs', 'seeded_product_receipt', marker=MARK)
+                                def native_execution_details():
+                                    records = page.locator('.message-bubble.assistant .live-panel .thinking-block')
+                                    expect(records).to_have_count(2)
+                                    for index in range(records.count()):
+                                        detail = records.nth(index)
+                                        if detail.get_attribute('open') is None:
+                                            detail.locator('summary').click()
+                                        expect(detail.locator('.thinking-text')).to_have_text(LONG)
+                                    report.setdefault('native_execution_records', []).append({'case': label, 'surface_id': 'chat.execution-details',
+                                        'source_component': 'MessageBubble', 'source_fields': ['message.activity', 'message.thinking'],
+                                        'records_expanded': 2, 'record_text_verified': True, 'model_execution_is_synthetic': True})
+                                run('chat.execution-details', chat_path, '.message-bubble.assistant .live-panel',
+                                    'native_activity_and_thinking_expanded', marker=MARK, before=native_execution_details)
+                                run('chat.artifacts', chat_path, '.chat-turn-outputs', 'version_actions_and_saved_products', marker=MARK)
+
                                 # Former title-only detail alias is replaced by the actual news.reading route above.
                                 run('calendar.day', '/toolbox?section=calendar', '.overlay .modal', 'day_list_many_items', marker=MARK,
                                     before=lambda: page.locator('.cal-more').first.click())
@@ -993,6 +1018,7 @@ def main():
                                 run('work.records', work_path, '.ew-work-records', 'history_expanded', marker=MARK, before=records)
                                 def record_sheet():
                                     page.get_by_role('button', name='版本与记录', exact=True).click()
+                                    page.locator('.ew-work-records details summary').first.click()
                                     trigger = page.get_by_role('button', name='本版制作设置', exact=True)
                                     sheet = page.locator('dialog.ew-dialog-sheet[aria-label="本版制作设置"]')
                                     observations = []
@@ -1009,6 +1035,47 @@ def main():
                                         assert metrics['scrollWidth'] <= metrics['clientWidth'] + 1, ('Long record overflowed horizontally', metrics)
                                         assert metrics['clientWidth'] <= metrics['bodyWidth'] + 1, ('Long record escaped its sheet', metrics)
                                         assert metrics['whiteSpace'] in ('pre-wrap', 'break-spaces'), ('Long record no longer wraps readably', metrics)
+                                        if close_kind == 'escape':
+                                            body = sheet.locator('.drawer-body')
+                                            initial = body.evaluate('el=>({top:el.scrollTop,height:el.clientHeight,scrollHeight:el.scrollHeight})')
+                                            assert initial['scrollHeight'] > initial['height'] + 1, ('Long frozen record did not create a real scroll range', initial)
+                                            background = """()=>{const dialog=document.querySelector('dialog.ew-dialog-sheet[open]');return Array.from(document.querySelectorAll('.native-host,.native-host *')).filter(el=>el!==dialog&&!dialog?.contains(el)&&el.scrollHeight>el.clientHeight+1&&el.clientHeight>0).map(el=>({tag:el.tagName,class:el.className,top:el.scrollTop,left:el.scrollLeft,range:el.scrollHeight-el.clientHeight}));}"""
+                                            background_before = page.evaluate(background)
+                                            session = context.new_cdp_session(page) if touch_input else None
+                                            steps = []
+                                            def gesture(direction):
+                                                b = body.bounding_box()
+                                                assert b and b['height'] > 100, ('Record sheet has no usable gesture region', b)
+                                                distance = min(460, b['height'] - 80)
+                                                x, y = b['x'] + b['width'] / 2, b['y'] + 40 if direction > 0 else b['y'] + b['height'] - 40
+                                                if session:
+                                                    touch_helper.touch_swipe(page, session, x, y, direction * distance)
+                                                else:
+                                                    page.mouse.move(x, y)
+                                                    page.mouse.wheel(0, -direction * distance)
+                                                    page.wait_for_timeout(180)
+                                            try:
+                                                gesture(1)
+                                                assert page.evaluate(background) == background_before, 'Record sheet top boundary scrolled its background'
+                                                for _ in range(40):
+                                                    before = body.evaluate('el=>({top:el.scrollTop,max:el.scrollHeight-el.clientHeight})')
+                                                    if before['top'] >= before['max'] - 1:
+                                                        break
+                                                    gesture(-1)
+                                                    after = body.evaluate('el=>el.scrollTop')
+                                                    steps.append({'before': before['top'], 'after': after})
+                                                    assert after > before['top'] + 1, ('First/effective record gesture did not advance the scroll body', before, after)
+                                                    assert page.evaluate(background) == background_before, 'Record sheet gesture scrolled its background'
+                                                tail = pre.evaluate("""el=>{const node=el.lastChild,body=el.closest('.drawer-body'),b=body.getBoundingClientRect();let r=null;if(node?.nodeType===Node.TEXT_NODE&&node.length){const range=document.createRange();range.setStart(node,Math.max(0,node.length-1));range.setEnd(node,node.length);r=range.getBoundingClientRect();}return {top:body.scrollTop,max:body.scrollHeight-body.clientHeight,tail:r?{top:r.top,bottom:r.bottom}:null,body:{top:b.top,bottom:b.bottom}};}""")
+                                                assert steps and tail['top'] >= tail['max'] - 1 and tail['tail'] and tail['tail']['top'] >= tail['body']['top'] - 1 and tail['tail']['bottom'] <= tail['body']['bottom'] + 1, ('Record end text is not actually visible', tail)
+                                                gesture(-1)
+                                                assert page.evaluate(background) == background_before, 'Record sheet bottom boundary scrolled its background'
+                                                end_file = out / (label + '-work-records-long-sheet-end-viewport.png')
+                                                page.screenshot(path=str(end_file))
+                                                observations.append({'scroll_probe': {'input': 'trusted-touch' if touch_input else 'mouse-wheel', 'initial': initial, 'steps': steps, 'tail': tail, 'background_before': background_before, 'background_unchanged': True, 'screenshot': str(end_file), 'screenshot_sha256': sha(end_file), 'screenshot_type': 'actual-viewport', 'controls_clicked': False}})
+                                            finally:
+                                                if session:
+                                                    session.detach()
                                         if close_kind == 'escape':
                                             page.keyboard.press('Escape')
                                         else:
@@ -1040,7 +1107,7 @@ def main():
                                     detail = page.locator('dialog.ew-dialog[open]')
                                     expect(detail).to_have_count(1)
                                     title = detail.get_attribute('aria-label')
-                                    before_requests = len(report['requests'])
+                                    before_requests = business_request_count()
                                     cycles = []
                                     for close_kind in ('close_button', 'browser_back', 'return_button'):
                                         trigger.scroll_into_view_if_needed()
@@ -1067,7 +1134,7 @@ def main():
                                     expect(page.locator('dialog.ew-dialog[open]')).to_have_count(0)
                                     expect(page.locator('.skills-page')).to_be_visible()
                                     page.wait_for_timeout(100)
-                                    assert len(report['requests']) == before_requests, 'Skill publish navigation unexpectedly wrote or submitted data'
+                                    assert business_request_count() == before_requests, 'Skill publish navigation unexpectedly wrote or submitted data'
                                     report.setdefault('skill_publish_navigation', []).append({'case': label, 'cycles': cycles, 'second_back_exits_detail': True, 'server_writes': 0})
                                     go(skill_path)
                                     page.get_by_role('button', name='确认适用范围并发布', exact=True).click()

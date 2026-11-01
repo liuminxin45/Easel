@@ -110,7 +110,7 @@ export function inspectMobileCss(source,file='mobile.css'){
   'position','grid-template-columns','grid-column','inline-size','block-size','min-inline-size','min-block-size','max-inline-size','max-block-size',
   'padding','padding-inline','padding-block-end','padding-inline-end','margin-inline-start','margin-block-end','border-inline-end-width',
   'overflow','overflow-x','overflow-y','overscroll-behavior-y','overflow-wrap','white-space','opacity']);
- const viewport=/^\(max-width: (?:480|760|900|1100)px\)(?:, \(max-width: 1100px\) and \(max-height: 500px\))?$|^\(max-width: 1100px\) and \(max-height: 500px\)$/;
+ const viewport=/^\(max-width: (?:480|760|900|1100)px\)(?:, \(max-width: 1100px\) and \(max-height: 500px\))?$|^\(max-width: 1100px\) and \(max-height: 500px\)$|^\(max-width: 1100px\) and \(pointer: coarse\)$/;
  const report=(node,rule,extra={})=>violations.push({file,line:node.source.start.line,rule,...extra});
  sheet.walkAtRules(node=>{if(node.name!=='media')report(node,'mobile-adapter-must-use-viewport-media');});
  sheet.walkRules(node=>{

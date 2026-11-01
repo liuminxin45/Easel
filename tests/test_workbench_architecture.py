@@ -43,7 +43,10 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/src/lib/interaction.ts',
     'web/frontend/src/components/InteractionNotice.tsx',
     # Generic capability catalog and authorized artifact presentation ports.
-    'web/frontend/src/components/BrushEntry.tsx','web/frontend/src/components/ArtifactGallery.tsx'}
+    'web/frontend/src/components/BrushEntry.tsx','web/frontend/src/components/ArtifactGallery.tsx',
+    # Reviewed viewport-only hook shared by the original brush/slash menus;
+    # real 844x390 clipping required it. No private services or execution I/O.
+    'web/frontend/src/components/useBrushPopover.ts'}
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
     'web/frontend/src/components/TrendsView.tsx','web/frontend/src/components/TrendSourcesDialog.tsx',
     'web/frontend/src/components/DashboardPage.tsx','web/frontend/src/styles/index.css'})
@@ -61,7 +64,7 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'easel/web_services/environment.py',
     'easel/web_services/analytics.py',
     'web/frontend/src/components/ThemeToggle.tsx',
-    # Same responsive native navigation wrapper is contributed upstream.
+    # Shared responsive native navigation wrapper, retained in our own fork.
     'web/frontend/src/components/ResponsiveSidebar.tsx',
     'web/frontend/src/components/OutputsPage.tsx',
     'web/frontend/src/components/ProfilePage.tsx',
@@ -243,6 +246,8 @@ def test_project_skill_patch_allowlist_rejects_neighboring_upstream_and_global_s
     assert allowed_upstream_patch('web/frontend/src/App.tsx')
     assert not allowed_upstream_patch('web/frontend/src/PrivateApp.tsx')
     assert not allowed_upstream_patch('web/frontend/src/components/PrivateAccountsPage.tsx')
+    assert allowed_upstream_patch('web/frontend/src/components/useBrushPopover.ts')
+    assert not allowed_upstream_patch('web/frontend/src/components/usePrivatePopover.ts')
     assert not allowed_upstream_patch('easel/web_services/private_transport.py')
     assert not allowed_upstream_patch('easel/harnesses/new_private_runtime.py')
 

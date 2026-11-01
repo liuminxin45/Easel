@@ -99,7 +99,6 @@
   html[data-native-platform] .copyable-text pre,
   html[data-native-platform] .copyable-text pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
   html[data-native-platform] .composer-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
-  html[data-native-platform] .brush-panel { inline-size: min(540px, calc(100vw - 32px)); max-inline-size: calc(100vw - 32px); max-block-size: min(420px, calc(var(--native-height, 100dvh) - 160px)); }
   html[data-native-platform] .brush-panel-head { flex-wrap: wrap; }
   html[data-native-platform] .brush-panel-headline { flex-basis: 100%; }
   html[data-native-platform] .brush-search { flex: 1 1 0%; min-inline-size: 0; }
@@ -202,6 +201,10 @@
 }
 
 @media (max-width: 1100px) {
+  /* Size floating skills to their composer, including a persistent tablet sidebar. */
+  html[data-native-platform] .composer { position: relative; }
+  html[data-native-platform] .composer .brush-entry { position: static; }
+  html[data-native-platform] .brush-panel { inline-size: min(540px, 100%); max-inline-size: 100%; max-block-size: min(420px, calc(var(--native-height, 100dvh) - 160px)); }
   html[data-native-platform] .btn,
   html[data-native-platform] .chip,
   html[data-native-platform] .idea-act,

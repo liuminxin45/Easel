@@ -50,6 +50,16 @@ def test_missing_shared_agents_document_is_not_silently_ignored(tmp_path):
         workspace_documents(tmp_path)
 
 
+@pytest.mark.parametrize('runtime', ['codex', 'opencode', 'acp'])
+def test_full_access_instructions_are_exclusive_to_enabled_codex(tmp_path, runtime):
+    workspace_at(tmp_path)
+    request = RunRequest('', tmp_path, {'EASEL_AGENT_RUNTIME': runtime},
+                         sandbox='read-only', codex_auto_approve=True)
+    instructions = harness_instructions(request)
+    assert ('权限范围：danger-full-access' in instructions) == (runtime == 'codex')
+    assert ('额外工具权限必须由用户确认' in instructions) == (runtime != 'codex')
+
+
 def test_external_request_root_uses_installed_shared_workspace(tmp_path):
     documents = workspace_documents(tmp_path)
     assert all(document.is_file() for document in documents)
@@ -98,6 +108,33 @@ def test_shared_identity_does_not_assume_openclaw_gateway_or_env_authentication(
     assert "运行在 OpenClaw gateway" not in identity
     assert "当前执行引擎的配置管理" in identity
     assert not (root / "openclaw" / "workspace" / "AGENTS.md").exists()
+
+
+def test_codex_pool_reconnects_with_exact_permission_mode_and_original_native_id(tmp_path):
+    audit_file = tmp_path / 'audit.jsonl'
+    request = RunRequest('', tmp_path, {**os.environ, 'FAKE_HARNESS_MODE': 'stable-resume',
+        'FAKE_HARNESS_AUDIT': str(audit_file)}, sandbox='read-only', session_key='permission-pool',
+        frozen_instructions='Exact frozen instructions',
+        command=(sys.executable, str(Path(__file__).parent / 'fixtures/harness_rpc.py'), 'codex'))
+    async def reject(questions):
+        raise AssertionError('No permission request expected')
+    async def scenario():
+        identifiers = []
+        current = request
+        try:
+            for enabled in (False, True, False):
+                await CodexAdapter().run(replace(current, codex_auto_approve=enabled),
+                    lambda *args: None, reject, identifiers.append)
+                current = replace(current, native_id=identifiers[-1])
+        finally:
+            await close_sessions('permission-pool')
+        assert len(set(identifiers)) == 1
+    asyncio.run(scenario())
+    messages = [json.loads(line) for line in audit_file.read_text().splitlines()]
+    turns = [message['params'] for message in messages if message.get('method') == 'turn/start']
+    assert [turn['approvalPolicy'] for turn in turns] == ['on-request', 'never', 'on-request']
+    assert [turn['sandboxPolicy']['type'] for turn in turns] == ['readOnly', 'dangerFullAccess', 'readOnly']
+    assert sum(message.get('method') == 'thread/resume' for message in messages) == 2
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Bash workspace sync is Unix-only")

@@ -105,6 +105,25 @@ def main():
         upgrade(options)
 
 
+def start_scheduled_manager(choice):
+    """The OS owns the resident manager, not this deployment command's job."""
+    subprocess.run(['pwsh','-NoProfile','-NonInteractive','-File',
+        str(ROOT/'scripts/ensure_workbench_autostart.ps1'),'-Start'],
+        cwd=ROOT,check=True,capture_output=True,text=True,timeout=45,
+        creationflags=subprocess.CREATE_NO_WINDOW)
+    deadline=time.monotonic()+60
+    while time.monotonic()<deadline:
+        try:
+            status=read(STATE/'pids.json')
+            if (status.get('release')==choice['release'] and not status.get('paused')
+                    and time.time()-status.get('heartbeat',0)<15 and 'server' in status.get('roles',{})):
+                return status['manager']
+        except (OSError,ValueError):
+            pass
+        time.sleep(.5)
+    raise RuntimeError('Scheduled manager did not report the selected release; writes remain fenced')
+
+
 def upgrade(options):
     choice,package=validate_candidate(ROOT,STATE,options.acceptance,options.candidate)
     builtin=reviewed_builtin_plan(ROOT,package,options.acceptance,options.builtin_plan,options.builtin_plan_sha256)
@@ -140,8 +159,7 @@ def upgrade(options):
         atomic(ROOT/'data/active-native.json',choice['native'])
         atomic(ROOT/'data/migration-owner.json',{**owner,'release':choice['release'],'manifest_sha256':choice['manifest_sha256']})
         (STATE/'paused').unlink(missing_ok=True)
-        with (STATE/'manager.log').open('ab') as log:
-            manager=subprocess.Popen([str(PYTHON),str(ROOT/'launcher.pyw')],cwd=ROOT,stdin=subprocess.DEVNULL,stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW)
+        manager_pid=start_scheduled_manager(choice)
         deadline=time.monotonic()+60
         while True:
             try:ready=smoke(client,choice['native']);break
@@ -151,7 +169,7 @@ def upgrade(options):
         atomic(STATE/'admission.json',{'workers':True})
         atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':choice})
         result={'status':'live','candidate':choice,'previous_runtime':previous,'previous_native':previous_native,'data_root':str(ROOT/'data'),
-            'database_copied':False,'database_restored':False,'manager':manager.pid,'smoke':ready,'idle':state,
+            'database_copied':False,'database_restored':False,'manager':manager_pid,'manager_started_by':'windows-task-scheduler','smoke':ready,'idle':state,
             'builtin_activation':builtin_activation}
         atomic(STATE/'runtime-upgrade.json',result)
         atomic(STATE/'upgrades'/(choice['release']+'.json'),result)

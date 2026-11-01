@@ -1,7 +1,7 @@
 # The desktop credential owner must remain logged in. Keep the existing task
 # identity and action; the launcher already holds the single-manager OS lock.
 [CmdletBinding(SupportsShouldProcess)]
-param()
+param([switch]$Start)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
@@ -35,5 +35,27 @@ if ($PSCmdlet.ShouldProcess($taskName, 'Enable continuous one-minute recovery fo
         -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
     $settings.IdleSettings.StopOnIdleEnd = $false
     Set-ScheduledTask -TaskName $taskName -Trigger @($logonTriggers + @($recovery)) -Settings $settings | Out-Null
+    if ($Start) {
+        # A deployment has stopped the previous exact manager. Give its venv
+        # wrapper time to exit before requesting the independent OS-owned task.
+        $deadline = (Get-Date).AddSeconds(20)
+        $alreadyStarted = $false
+        while ((Get-ScheduledTask -TaskName $taskName).State -eq 'Running') {
+            # A periodic trigger may already have won the start race. Accept
+            # only a fresh heartbeat for the newly selected, unpaused runtime.
+            try {
+                $selection = Get-Content -LiteralPath (Join-Path $projectRoot 'data/active-workbench.json') -Raw | ConvertFrom-Json
+                $status = Get-Content -LiteralPath (Join-Path $projectRoot '.local/workbench-deployment/pids.json') -Raw | ConvertFrom-Json
+                $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $status.heartbeat
+                if ($status.release -eq $selection.release -and !$status.paused -and $age -ge 0 -and $age -lt 15 -and $status.roles.server) {
+                    $alreadyStarted = $true
+                    break
+                }
+            } catch { }
+            if ((Get-Date) -ge $deadline) { throw 'Previous scheduled task is still running; no second manager was launched.' }
+            Start-Sleep -Milliseconds 250
+        }
+        if (!$alreadyStarted) { Start-ScheduledTask -TaskName $taskName }
+    }
     [pscustomobject]@{ status = 'configured'; task = $taskName; backup = $backupPath; recoveryInterval = 'PT1M'; identityChanged = $false; runningProcessesStopped = $false } | ConvertTo-Json -Compress
 }

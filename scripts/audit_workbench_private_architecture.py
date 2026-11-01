@@ -31,6 +31,34 @@ def literal(node):
     return None
 
 
+def sql_template(node):
+    """Keep constant SQL fragments; placeholders never claim a resolved target."""
+    value = literal(node)
+    if value is not None:
+        return value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return sql_template(node.left) + sql_template(node.right)
+    if isinstance(node, ast.JoinedStr):
+        return ''.join(value.value if isinstance(value, ast.Constant) and isinstance(value.value, str)
+                       else '{dynamic}' for value in node.values)
+    return '{dynamic}'
+
+
+def sql_targets(sql):
+    # Quoted values and comments can contain SQL words without being commands.
+    structure = re.sub(r"'(?:''|[^'])*'|--[^\n]*|/\*[\s\S]*?\*/", ' ', sql)
+    identifier = r'(?:"([A-Za-z_]\w*)"|`([A-Za-z_]\w*)`|\[([A-Za-z_]\w*)\]|([A-Za-z_]\w*))'
+    commands = r'(INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?\s+(?!SET\b|OF\b|ON\b)|DELETE\s+FROM|CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|ALTER\s+TABLE|DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?)'
+    result = []
+    for match in re.finditer(r'\b' + commands + r'\s*' + identifier, structure, re.I):
+        operation = match.group(1).split()[0].upper()
+        table = next(value for value in match.groups()[1:] if value)
+        if operation == 'UPDATE' and match.group(5) and table.upper() in {'SET', 'OF', 'ON'}:
+            continue
+        result.append({'operation': operation, 'table': table})
+    return result
+
+
 def inspect_source(path, raw):
     source = raw.decode('utf-8-sig')
     tree = ast.parse(source)
@@ -100,19 +128,24 @@ def inspect_source(path, raw):
                 if module and symbol:
                     result['references'].append({'module': module, 'symbol': symbol,
                         'kind': 'attribute', 'line': node.lineno, 'scope': scope})
-            if call in ('__import__', 'import_module') and node.args:
+            if (call in ('__import__', 'import_module') or module_value(node.func) == 'importlib.import_module') and node.args:
                 module = literal(node.args[0])
                 result['references'].append({'module': module, 'symbol': None,
                     'kind': 'dynamic' if module is not None else 'dynamic-unresolved',
                     'line': node.lineno, 'scope': scope})
             if call in ('execute', 'executemany', 'executescript') and node.args:
                 sql = literal(node.args[0])
+                template = sql_template(node.args[0])
+                targets = sql_targets(template)
                 verbs = sorted(set(re.findall(r'\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP)\b', sql or '', re.I)))
                 if sql is None or verbs:
                     tables = sorted(set(re.findall(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w]+)', sql or '', re.I)))
                     result['sql_effects'].append({'symbol': scope, 'line': node.lineno,
                         'verbs': [v.upper() for v in verbs], 'created_tables': tables,
-                        'dynamic_sql': sql is None})
+                        'dynamic_sql': sql is None, 'template': template,
+                        'targets': targets,
+                        'write_tables': sorted({target['table'] for target in targets
+                                                if target['operation'] in {'INSERT', 'UPDATE', 'DELETE', 'REPLACE'}})})
             if call == 'add_argument' and node.args and literal(node.args[0]) == 'role':
                 for keyword in node.keywords:
                     if keyword.arg == 'choices':
@@ -199,21 +232,71 @@ def inventory(root=ROOT, revision=None):
             'module_count': len(records), 'violations': violations, 'modules': records}
 
 
+def review_coverage(report, review):
+    """Attach reviewed responsibilities to source facts without a runtime registry."""
+    modules = {module['path']: module for module in report['modules']}
+    errors, results = [], []
+    seen = set()
+    for entry in review['modules']:
+        path = entry['path']
+        if path in seen:
+            errors.append({'path': path, 'error': 'duplicate review'})
+        seen.add(path)
+        module = modules.get(path)
+        if module is None:
+            errors.append({'path': path, 'error': 'reviewed source is missing'})
+            continue
+        groups = entry.get('symbol_groups', [])
+        assigned = {}
+        if groups:
+            kinds = {symbol['name']: symbol['kind'] for symbol in module['symbols']}
+            for symbol in module['symbols']:
+                matches = [(len(member), group['area']) for group in groups for member in group['members']
+                           if symbol['name'] == member or (kinds.get(member) != 'ClassDef'
+                               and symbol['name'].startswith(member + '.'))]
+                if not matches:
+                    errors.append({'path': path, 'symbol': symbol['name'], 'error': 'symbol has no reviewed owner'})
+                else:
+                    longest = max(length for length, _ in matches)
+                    owners = {area for length, area in matches if length == longest}
+                    if len(owners) != 1:
+                        errors.append({'path': path, 'symbol': symbol['name'], 'error': 'conflicting symbol owners'})
+                    assigned[symbol['name']] = sorted(owners)
+            names = {symbol['name'] for symbol in module['symbols']}
+            for group in groups:
+                for member in group['members']:
+                    if member not in names:
+                        errors.append({'path': path, 'symbol': member, 'error': 'reviewed symbol is missing'})
+        results.append({**entry, 'source_sha256': module['sha256'],
+                        'source_changed_since_review': entry['reviewed_sha256'] != module['sha256'],
+                        'symbol_owners': assigned, 'static_callers': module['static_callers'],
+                        'sql_effects': module['sql_effects'], 'path_sensitive': module['path_sensitive']})
+    expected = set(review['focus_paths'])
+    for path in sorted(expected - seen):
+        errors.append({'path': path, 'error': 'focus module has no review'})
+    return {'scope': 'source-supported responsibilities; not proof of all runtime reachability',
+            'module_count': len(results), 'errors': errors, 'modules': results}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision', help='Exact committed baseline; omit to inspect the current checkout')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--check', action='store_true', help='Require the migrated P1 boundaries')
+    parser.add_argument('--review', type=Path, help='Attach a source responsibility review; does not execute application code')
     args = parser.parse_args()
     report = inventory(revision=args.revision)
+    if args.review:
+        report['review'] = review_coverage(report, json.loads(args.review.read_text(encoding='utf-8')))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'module_count': report['module_count'], 'source_revision': report['source_revision'],
                       'violation_count': len(report['violations']),
                       'violations': report['violations'] if args.check else [],
+                      'review_errors': report.get('review', {}).get('errors', []),
                       'output': str(args.output) if args.output else None}))
-    return 1 if args.check and report['violations'] else 0
+    return 1 if args.check and (report['violations'] or report.get('review', {}).get('errors')) else 0
 
 
 if __name__ == '__main__':

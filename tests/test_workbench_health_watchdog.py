@@ -350,8 +350,7 @@ def test_missing_process_root_cannot_create_an_empty_owned_branch():
 
 def test_child_older_than_parent_is_a_reused_parent_pid_not_an_owned_descendant(running):
     running.inventory[13]['creation_ticks'] = str(int(running.inventory[12]['creation_ticks']) - 1000)
-    with pytest.raises(watchdog.GuardError, match='reused_parent_identity'):
-        watchdog.process_members(running.inventory, 11)
+    assert watchdog.process_members(running.inventory, 11) == {11, 12}
 
 
 @pytest.mark.parametrize('change', ['extra_argument', 'duplicate_root', 'reordered'])

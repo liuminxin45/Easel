@@ -80,6 +80,25 @@ def idle(database=None):
                         active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
                     if active:
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
+        if base.exists_table(c,'easel_ui_operations'):
+            # A native operation reserves its durable receipt before running
+            # the real action in a thread. An unavailable/unknown receipt is
+            # not proof that its writer has stopped, even if HTTP is silent.
+            for ident,raw in c.execute('SELECT id,result FROM easel_ui_operations'):
+                try:
+                    value=json.loads(raw)
+                    if not isinstance(value,dict):raise ValueError('Invalid receipt')
+                    native=value.get('native_protocol',False)
+                    if not isinstance(native,bool):raise ValueError('Invalid protocol marker')
+                except (TypeError,ValueError):
+                    state='invalid_receipt'
+                else:
+                    if not native:continue
+                    state=value.get('state')
+                    if state in ('completed','rejected'):continue
+                    if state not in ('unavailable','unknown','pending','requested','running'):
+                        state='unverified_receipt'
+                status['busy']=True;status.setdefault('additional',[]).append({'table':'easel_ui_operations','id':ident,'state':state})
         if base.exists_table(c,'easel_native_corrections'):
             for (ident,) in c.execute("SELECT job_id FROM easel_native_corrections WHERE status='queued'"):
                 status['busy']=True;status.setdefault('additional',[]).append({'table':'easel_native_corrections','id':ident})

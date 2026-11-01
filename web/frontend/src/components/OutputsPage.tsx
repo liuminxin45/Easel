@@ -1,3 +1,4 @@
+import DownloadLink from './DownloadLink';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { fetchOutputs, fetchOutputContent, mediaUrl, deleteOutput } from '../lib/api';
@@ -202,9 +203,9 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   const preview = () => {
     if (!selected) return null;
     const url = mediaUrl(selected.path);
-    if (selected.kind === 'image') return <img src={url} alt={selected.name} style={{ maxWidth: '100%', borderRadius: 'var(--radius)' }} />;
-    if (selected.kind === 'video') return <video src={url} controls style={{ maxWidth: '100%', borderRadius: 'var(--radius)' }} />;
-    if (selected.kind === 'audio') return <audio src={url} controls style={{ width: '100%' }} />;
+    if (selected.kind === 'image') return <><img src={url} alt={selected.name} style={{ maxWidth: '100%', borderRadius: 'var(--radius)' }} /><DownloadLink href={url} download={selected.name}>下载原图</DownloadLink></>;
+    if (selected.kind === 'video') return <><video src={url} controls style={{ maxWidth: '100%', borderRadius: 'var(--radius)' }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
+    if (selected.kind === 'audio') return <><audio src={url} controls style={{ width: '100%' }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
     if (selected.kind === 'text' && isHtml(selected.name)) return (
       <>
         {/* allow-scripts：让预览页自带的「复制到公众号」按钮(execCommand('copy'))能运行；
@@ -212,14 +213,14 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
             opaque origin，脚本跑得起来但访问不到本站，安全。(修复：内嵌预览里复制按钮点了没反应) */}
         <iframe src={`${url}?v=${selected.mtime ?? 0}`} title={selected.name} sandbox="allow-scripts" allow="clipboard-write"
           style={{ width: '100%', height: '68vh', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff' }} />
-        <div style={{ marginTop: 8 }}><a href={url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-start)', fontSize: 13 }}>在新标签打开 ↗</a></div>
+        <DownloadLink href={url} download={selected.name}>下载原件</DownloadLink><div style={{ marginTop: 8 }}><a href={url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-start)', fontSize: 13 }}>在新标签打开 ↗</a></div>
       </>
     );
     if (selected.kind === 'text') {
       if (loading) return <div className="loading"><div className="spinner" />加载中…</div>;
-      return <div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />;
+      return <><div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
     }
-    return <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>无法预览。<a href={url} download style={{ color: 'var(--accent-start)' }}>下载 {selected.name}</a></div>;
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>无法预览。<DownloadLink href={url} download={selected.name} style={{ color: 'var(--accent-start)' }}>下载 {selected.name}</DownloadLink></div>;
   };
 
   /** 项目/文件夹卡片：顶层项目用展示头（标题/平台/状态/封面），嵌套子文件夹回退朴素样式。 */

@@ -455,6 +455,18 @@ def main():
                                     page.wait_for_timeout(30)
                                 if marker:
                                     expect(target).to_contain_text(marker)
+                                if surface == 'skills.catalog':
+                                    expected_state = {'populated': 'ready', 'loading': 'loading', 'empty': 'empty', 'error': 'error'}[state]
+                                    expect(target).to_have_attribute('data-catalog-state', expected_state)
+                                    if state == 'populated':
+                                        expect(target.locator('.skill-card').first).to_be_visible()
+                                        assert target.locator('.skill-card').count() > 0, 'Populated catalog has no actual skill cards'
+                                    else:
+                                        expect(target.locator('.skill-card')).to_have_count(0)
+                                    if state == 'loading':
+                                        expect(target).to_have_attribute('aria-busy', 'true')
+                                    if state == 'error':
+                                        expect(target).to_contain_text('MOBILE_AUDIT 技能目录读取失败')
                                 if surface == 'dashboard.main':
                                     expect(target.locator('.dash-idea-title').first).to_contain_text(MARK)
                                     expect(target.locator('.dash-sched-title').first).to_contain_text(MARK)
@@ -512,6 +524,20 @@ def main():
                                         expect(frame.locator('body')).to_contain_text(MARK)
                                         resources.append({'kind': 'iframe', 'src': iframe.get_attribute('src'), 'actual_document_marker': MARK})
                                 target.evaluate("el=>{for(let p=el;p;p=p.parentElement){p.scrollTop=0;p.scrollLeft=0}for(const child of el.querySelectorAll('.drawer-body,.settings-main,.page-scroll')){child.scrollTop=0}window.scrollTo(0,0)}")
+                                focused_target = None
+                                if surface in ('chat.artifacts', 'chat.questions', 'chat.execution-details'):
+                                    focus_target = target
+                                    if surface == 'chat.artifacts':
+                                        media = target.locator('img,video,audio,iframe')
+                                        focus_target = next((media.nth(i) for i in range(media.count()) if media.nth(i).is_visible()), target)
+                                    focus_target.scroll_into_view_if_needed()
+                                    # Measure clipping by all scroll ancestors; viewport bounds alone
+                                    # would count content hidden behind the fixed composer.
+                                    focused_target = focus_target.evaluate('''el=>{const r=el.getBoundingClientRect();let l=Math.max(0,r.left),t=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);for(let p=el.parentElement;p;p=p.parentElement){const s=getComputedStyle(p),b=p.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(s.overflowY)){t=Math.max(t,b.top);bottom=Math.min(bottom,b.bottom)}if(/auto|scroll|hidden|clip/.test(s.overflowX)){l=Math.max(l,b.left);right=Math.min(right,b.right)}}const w=Math.max(0,right-l),h=Math.max(0,bottom-t),hit=w&&h?document.elementFromPoint(l+w/2,t+h/2):null;return {tag:el.tagName,class:el.className,box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},visible:{left:l,right,top:t,bottom,width:w,height:h},hit:!!hit&&(hit===el||el.contains(hit)),hitTag:hit?.tagName,hitClass:hit?.className}}''')
+                                    assert focused_target['visible']['width'] >= 40 and focused_target['visible']['height'] >= min(60, focused_target['box']['height']) - 1 and focused_target['hit'], ('Named chat target was not actually exposed in its scroll region', surface, focused_target)
+                                    target_file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '-target.png')
+                                    focus_target.screenshot(path=str(target_file))
+                                    focused_target.update(screenshot=str(target_file), screenshot_sha256=sha(target_file))
                                 news_reading = verify_news_scroll(target) if surface == 'news.reading' else None
                                 text = target.inner_text().strip()
                                 assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
@@ -537,8 +563,44 @@ def main():
                                         'details_opened_by_ui': expanded,
                                         'screenshot': str(file), 'screenshot_sha256': sha(file),
                                         'passed': not metrics['rootOverflow'] and not metrics['fieldOverflow'] and not metrics.get('touchFailures') and not any(not x['reflow_handled'] for x in metrics['overflow'])}
+                                if focused_target is not None:
+                                    item['focused_target'] = focused_target
                                 if news_reading is not None:
                                     item['news_reading'] = news_reading
+                                primary_candidates = target.locator('button.btn-primary:not(:disabled)')
+                                primary = None
+                                for primary_index in range(primary_candidates.count()):
+                                    candidate = primary_candidates.nth(primary_index)
+                                    if not candidate.is_visible() or candidate.evaluate("el=>!!el.closest('.settings-overlay')"):
+                                        continue
+                                    # Gradient controls have separate appearance contracts. Never
+                                    # invent a solid background to calculate their contrast.
+                                    if candidate.evaluate("el=>getComputedStyle(el).backgroundImage") != 'none':
+                                        continue
+                                    primary = candidate
+                                    break
+                                if primary is not None:
+                                    primary.scroll_into_view_if_needed()
+                                    primary.hover()
+                                    page.wait_for_timeout(250)
+                                    observation = primary.evaluate(r"""el=>{
+                                      const s=getComputedStyle(el),r=el.getBoundingClientRect();
+                                      const parse=value=>{const m=value.match(/^rgba?\(([^)]+)\)$/);if(!m)return null;const p=m[1].trim().split(/[,\s/]+/);if(p.length<3)return null;const rgb=p.slice(0,3).map(v=>v.endsWith('%')?parseFloat(v)*2.55:parseFloat(v)),a=p[3]===undefined?1:p[3].endsWith('%')?parseFloat(p[3])/100:parseFloat(p[3]);return [...rgb,a].every(Number.isFinite)?{rgb,alpha:a}:null;};
+                                      const foreground=parse(s.color),background=parse(s.backgroundColor),solid=!!foreground&&!!background&&foreground.alpha>=.999&&background.alpha>=.999&&s.backgroundImage==='none';
+                                      const luminance=rgb=>rgb.map(v=>{const c=v/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)}).reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
+                                      let contrast=null;if(solid){const f=luminance(foreground.rgb),b=luminance(background.rgb);contrast=(Math.max(f,b)+.05)/(Math.min(f,b)+.05);}
+                                      return {label:(el.getAttribute('aria-label')||el.innerText||'').slice(0,100),color:s.color,backgroundColor:s.backgroundColor,backgroundImage:s.backgroundImage,foreground,background,solid,contrast,
+                                       hovered:el.matches(':hover'),box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};
+                                    }""")
+                                    hover_file = out / (label + '-' + surface.replace('.', '-') + '-' + state + '-primary-hover.png')
+                                    page.screenshot(path=str(hover_file))
+                                    observation.update(case=label, surface_id=surface, state=state, screenshot=str(hover_file), screenshot_sha256=sha(hover_file), authorization_clicked=False)
+                                    report.setdefault('primary_hover_observations', []).append(observation)
+                                    item['primary_hover'] = observation
+                                    page.mouse.move(0, 0)
+                                    assert observation['hovered'], ('Primary hover was not actually active', observation)
+                                    assert observation['solid'], ('Expected a plain solid primary; transparent or unsupported color cannot produce a reliable contrast result', observation)
+                                    assert observation['contrast'] >= 4.5, ('Primary button hover loses readable foreground/background contrast', observation)
                                 if surface == 'calendar.form' and state == 'edit_event':
                                     dates = target.locator('input[type=date]')
                                     expect(dates).to_have_count(2)
@@ -722,6 +784,29 @@ def main():
                             run('work.completion', work_path, 'dialog.ew-dialog', 'delivery_targets', before=lambda: completion_mode('distribute'))
                             run('work.completion', work_path, 'dialog.ew-dialog', 'manual_publication', before=lambda: completion_mode('manual_published'))
                             run('skills.catalog', '/toolbox?section=skills', '.skills-page')
+                            def catalog_diagnostic(state):
+                                held = []
+                                def respond(route):
+                                    if state == 'loading':
+                                        held.append(route)
+                                    elif state == 'empty':
+                                        route.fulfill(status=200, json=[])
+                                    else:
+                                        route.fulfill(status=503, json={'error': 'MOBILE_AUDIT 技能目录读取失败'})
+                                page.route('**/api/skills', respond)
+                                try:
+                                    run('skills.catalog', '/toolbox?section=skills', '.skills-page', state)
+                                finally:
+                                    page.unroute('**/api/skills', respond)
+                                    for route in held:
+                                        try:
+                                            route.continue_()
+                                        except Exception:
+                                            pass  # The diagnostic page may have closed its pending read.
+                            if args.phase == 'full':
+                                for catalog_state in ('loading', 'empty', 'error'):
+                                    if selected('skills.catalog'):
+                                        catalog_diagnostic(catalog_state)
                             run('profiles.main', '/toolbox?section=profiles', '.profile-page')
                             run('profiles.create', '/toolbox?section=profiles&item=new', '.profile-page')
                             run('accounts.main', '/toolbox?section=distribution&pane=connections', '.accounts-page', marker='微信公众号')
@@ -740,11 +825,81 @@ def main():
                                 chat_path = '/chat/' + ids['session']
                                 run('chat.composer', chat_path, '.chat-page', 'raw_multiline_draft', marker=MARK)
                                 def commands():
-                                    expect(page.get_by_role('textbox', name='对话输入', exact=True)).to_have_value(LONG)
+                                    composer = page.get_by_role('textbox', name='对话输入', exact=True)
+                                    composer.fill(LONG)
                                     page.get_by_role('button', name='看看能做什么', exact=True).click()
-                                    expect(page.locator('.brush-item').first).to_be_visible()
-                                    page.locator('.brush-close').click()
-                                    page.get_by_role('textbox', name='对话输入', exact=True).fill('/')
+                                    brush = page.get_by_role('dialog', name='能做的都在这', exact=True)
+                                    reference = brush.locator('.brush-body button.brush-item:not(:disabled)').first
+                                    expect(reference).to_be_visible()
+                                    style_read = "el=>{const s=getComputedStyle(el);return {display:s.display,fontFamily:s.fontFamily,appearance:s.appearance,background:s.backgroundColor,border:s.borderStyle,borderWidth:s.borderTopWidth}}"
+                                    brush_style = reference.evaluate(style_read)
+                                    brush.get_by_role('button', name='关闭', exact=True).click()
+                                    original = '  ' + LONG + '\n原始材料最后一行  '
+                                    composer.fill('/ ' + original)
+                                    menu = page.get_by_role('menu', name='选择技能', exact=True)
+                                    expect(menu).to_be_visible()
+                                    # Close is an independent header action. Only selectable
+                                    # upload/skill rows must reuse the shared BrushItem.
+                                    body = menu.locator('.brush-body')
+                                    rows = body.get_by_role('menuitem')
+                                    assert rows.count() >= 2, 'Slash menu has no real selectable rows'
+                                    assert rows.count() == body.locator('button.brush-item').count(), 'Slash choices bypass the shared brush buttons'
+                                    bounds = menu.evaluate("el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,position:s.position}}")
+                                    assert bounds['position'] in ('absolute', 'fixed') and bounds['left'] >= -1 and bounds['right'] <= width + 1 and bounds['top'] >= -1 and bounds['bottom'] <= height + 1, ('Slash popup is not positioned within the viewport', bounds)
+                                    scroll = body.evaluate("el=>({overflow:getComputedStyle(el).overflowY,height:el.clientHeight,scrollHeight:el.scrollHeight})")
+                                    assert scroll['overflow'] in ('auto', 'scroll') and scroll['height'] > 0, ('Slash menu has no actual scroll body', scroll)
+                                    choices = body.locator('button.brush-item:not(:disabled)').filter(has=page.locator('.brush-il'))
+                                    skill = next((choices.nth(i) for i in range(choices.count()) if choices.nth(i).get_attribute('aria-label') != '上传素材'), None)
+                                    assert skill is not None, 'Slash menu has no enabled skill'
+                                    style = skill.evaluate(style_read)
+                                    assert style['display'] == 'flex' and style['borderWidth'] == '0px' and style['fontFamily'] == brush_style['fontFamily'] and style['appearance'] == brush_style['appearance'], ('Slash item reverted to browser default presentation', brush_style, style)
+                                    last = choices.last
+                                    session = context.new_cdp_session(page) if touch_input else None
+                                    gestures = []
+                                    def reach(row, label_text):
+                                        for _ in range(40):
+                                            b, r = body.bounding_box(), row.bounding_box()
+                                            assert b and r
+                                            top, bottom = max(0, b['y']), min(height, b['y'] + b['height'])
+                                            if r['y'] >= top - 1 and r['y'] + r['height'] <= bottom + 1:
+                                                hit = row.evaluate("el=>{const r=el.getBoundingClientRect(),p=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,hit:!!p&&(p===el||el.contains(p))}}")
+                                                assert hit['hit'], ('Slash choice is obscured', label_text, hit)
+                                                return hit
+                                            span = bottom - top
+                                            assert span > 70, ('Slash scroll body is too short for a usable gesture', b)
+                                            direction = 1 if r['y'] < top else -1
+                                            distance = min(360, span - 60)
+                                            x, y = b['x'] + b['width'] / 2, top + 30 if direction > 0 else bottom - 30
+                                            before = body.evaluate('el=>el.scrollTop')
+                                            if session:
+                                                touch_helper.touch_swipe(page, session, x, y, direction * distance)
+                                            else:
+                                                page.mouse.move(x, y)
+                                                page.mouse.wheel(0, -direction * distance)
+                                                page.wait_for_timeout(180)
+                                            after = body.evaluate('el=>el.scrollTop')
+                                            gestures.append({'target': label_text, 'before': before, 'after': after})
+                                            assert abs(after - before) > 1, ('Slash menu did not respond to its real scroll gesture', label_text, before, after)
+                                        raise AssertionError('Slash row could not be reached after bounded real gestures: ' + label_text)
+                                    try:
+                                        last_hit = reach(last, 'last')
+                                        end_file = out / (label + '-chat-command-menu-last-row.png')
+                                        page.screenshot(path=str(end_file))
+                                        first_hit = reach(skill, 'first-skill')
+                                    finally:
+                                        if session:
+                                            session.detach()
+                                    chosen = skill.locator('.brush-il').inner_text().strip().lstrip('/')
+                                    before_requests, before_calls = len(report['requests']), len(fixture['adapter'].requests)
+                                    (skill.tap if touch_input else skill.click)()
+                                    expect(menu).to_have_count(0)
+                                    expect(page.locator('[data-chat-command]')).to_contain_text(chosen)
+                                    expect(composer).to_have_value(original)
+                                    page.wait_for_timeout(200)
+                                    assert len(report['requests']) == before_requests and len(fixture['adapter'].requests) == before_calls, 'Slash choice automatically sent a task or changed the server'
+                                    report.setdefault('slash_interactions', []).append({'case': label, 'popup': bounds, 'scroll_body': scroll, 'reference_style': brush_style, 'row_style': style, 'gestures': gestures, 'first_hit': first_hit, 'last_hit': last_hit, 'selected_skill': chosen, 'raw_material_retained': True, 'automatic_task_requests': 0, 'last_row_screenshot': str(end_file), 'last_row_screenshot_sha256': sha(end_file)})
+                                    composer.fill('/ ' + original)
+                                    expect(menu).to_be_visible()
                                 run('chat.command-menu', chat_path, '[role=menu][aria-label="选择技能"]', 'slash_search', before=commands)
                                 def brush_choice():
                                     composer = page.get_by_role('textbox', name='对话输入', exact=True)

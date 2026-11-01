@@ -6,7 +6,7 @@ import {useWorkbench,useResource,type JsonRecord} from '@workbench/core';
 import {nativeSkillChoices,nativeSkillDestination,nativeSkillInputTarget,type NativeSkill,type NativeSelection} from './ChatSessionView';
 export function NativeSkills({profileId,onUse}:{profileId:string;onUse:(selection:NativeSelection,input:string)=>Promise<void>}){
  const vm=useWorkbench(),resource=useResource<NativeSkill[]>('/api/skills');
- return <SkillPage persona={profileId} catalog={{items:resource.data||[],error:resource.error,reload:()=>void resource.reload()}}
+ return <SkillPage persona={profileId} catalog={{items:resource.data||[],error:resource.error,loading:!resource.data&&!resource.error,reload:()=>void resource.reload()}}
   headerActions={<button className="btn" onClick={()=>vm.navigate('/toolbox?section=skills&pane=experience&profile='+encodeURIComponent(profileId))}>整理经验</button>}
   subtitle="选择技能，带入对话后开始创作。"
   renderDrawer={(name,close)=><NativeDetail name={name} skills={resource.data||[]} profileId={profileId} close={close} reload={()=>void resource.reload()} onUse={onUse}/>}/>;

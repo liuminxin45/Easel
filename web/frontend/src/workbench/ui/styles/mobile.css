@@ -187,6 +187,21 @@
   html[data-native-platform] .model-dd .dd-item { min-block-size: 44px; white-space: normal; overflow-wrap: anywhere; }
   html[data-native-platform] .model-dd .dd-item > * { min-inline-size: 0; }
 
+
+  html[data-native-platform] .idea-card-actions { display: flex; position: static; flex-wrap: wrap; margin-block-end: 8px; }
+  html[data-native-platform] .session-actions { display: flex; }
+  html[data-native-platform] .msg-actions { opacity: 1; flex-wrap: wrap; }
+  html[data-native-platform] .idea-title { padding-inline-end: 0; }
+  html[data-native-platform] .trend-save,
+  html[data-native-platform] .trend-use { opacity: 1; min-block-size: 44px; }
+  html[data-native-platform] .trend-item { flex-wrap: wrap; }
+  html[data-native-platform] .trend-main { flex-basis: calc(100% - 40px); }
+  html[data-native-platform] .gcard-del { display: inline-flex; min-inline-size: 44px; min-block-size: 44px; }
+  html[data-native-platform] .ew-auth { min-block-size: 0; block-size: 100%; overflow-y: auto; padding: 16px; align-content: safe center; }
+  html[data-native-platform] .ew-auth-card { min-inline-size: 0; max-inline-size: 100%; padding: 24px; }
+}
+
+@media (max-width: 1100px) {
   html[data-native-platform] .btn,
   html[data-native-platform] .chip,
   html[data-native-platform] .idea-act,
@@ -203,22 +218,9 @@
   html[data-native-platform] .new-chat-btn,
   html[data-native-platform] .settings-gear,
   html[data-native-platform] .send-btn { min-block-size: 44px; min-inline-size: 44px; max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
-  html[data-native-platform] .idea-card-actions { display: flex; position: static; flex-wrap: wrap; margin-block-end: 8px; }
-  html[data-native-platform] .session-actions { display: flex; }
-  html[data-native-platform] .msg-actions { opacity: 1; flex-wrap: wrap; }
-  html[data-native-platform] .idea-title { padding-inline-end: 0; }
-  html[data-native-platform] .trend-save,
-  html[data-native-platform] .trend-use { opacity: 1; min-block-size: 44px; }
-  html[data-native-platform] .trend-item { flex-wrap: wrap; }
-  html[data-native-platform] .trend-main { flex-basis: calc(100% - 40px); }
-  html[data-native-platform] .gcard-del { display: inline-flex; min-inline-size: 44px; min-block-size: 44px; }
-  html[data-native-platform] .ew-auth { min-block-size: 0; block-size: 100%; overflow-y: auto; padding: 16px; align-content: safe center; }
-  html[data-native-platform] .ew-auth-card { min-inline-size: 0; max-inline-size: 100%; padding: 24px; }
-}
-
-@media (max-width: 1100px) {
   /* Keep upstream controls and appearance; enlarge only their touch geometry. */
   html[data-native-platform] .dash-quick-btn,
+  html[data-native-platform] .dash-trend-title,
   html[data-native-platform] .dash-more,
   html[data-native-platform] .subnav-tab,
   html[data-native-platform] .subnav-back,

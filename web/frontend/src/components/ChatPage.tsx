@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 're
 import MessageBubble from './MessageBubble';
 import QuestionCards from './QuestionCards';
 import type {QuestionServices} from './QuestionCards';
-import BrushEntry from './BrushEntry';
+import BrushEntry,{BrushItem} from './BrushEntry';
 import type {Artifact} from '../lib/artifacts';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
@@ -86,6 +86,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const composerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const commandListRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
 
   const isStreaming = !!stream;
@@ -96,6 +97,8 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const commands = (composer?.commands || []).filter(command => !commandQuery ||
     `${command.label} ${command.description || ''} ${command.id}`.toLowerCase().includes(commandQuery));
   const showCommands = !!composer?.commands && (commandMenu || slash);
+  const enabledCommandIndices=commands.flatMap((command,index)=>command.disabled?[]:[index]);
+  const activeCommandIndex=enabledCommandIndices.includes(commandIndex)?commandIndex:enabledCommandIndices[0]??-1;
   const pickCommand = (id: string | null) => {
     if (busy || composer?.disabled || composer?.commands?.find(command=>command.id===id)?.disabled) return;
     const match = slash ? /^\/[^\s]*(?:[ \t]|\r?\n)?([\s\S]*)$/.exec(input) : null;
@@ -111,6 +114,10 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     const release = composer?.registerLayer?.(close);
     return () => { document.removeEventListener('pointerdown', outside); release?.(); };
   }, [showCommands, composer?.registerLayer]);
+
+  useLayoutEffect(()=>{
+    if(showCommands&&activeCommandIndex>=0)commandListRef.current?.querySelector<HTMLElement>(`[data-command-index="${activeCommandIndex}"]`)?.scrollIntoView({block:'nearest'});
+  },[showCommands,activeCommandIndex,commandQuery]);
 
   useEffect(() => {
     if (composer) return;
@@ -193,9 +200,9 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     if (showCommands) {
       if (e.key === 'Escape') { e.preventDefault(); setCommandMenu(false); setSlashDismissed(true); return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault(); setCommandIndex(index => Math.max(0, Math.min(commands.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)))); return;
+        e.preventDefault();const current=enabledCommandIndices.indexOf(activeCommandIndex),next=Math.max(0,Math.min(enabledCommandIndices.length-1,current+(e.key==='ArrowDown'?1:-1)));setCommandIndex(enabledCommandIndices[next]??0);return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && commands.length) { e.preventDefault(); pickCommand(commands[Math.min(commandIndex, commands.length - 1)]!.id); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault();if(activeCommandIndex>=0)pickCommand(commands[activeCommandIndex]!.id);return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -259,12 +266,15 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       </div>
       {composer?.status && <div className="composer-hint" role="status">{composer.status}</div>}
       {uploadError && <p className="notice-error" role="alert">{uploadError}</p>}
-      {showCommands && <div className="chat-command-menu" role="menu" aria-label="选择技能">
-        <button type="button" role="menuitem" onClick={() => { setCommandMenu(false); fileInputRef.current?.click(); }}>上传素材</button>
-        {commands.map((command, index) => <button type="button" role="menuitem" key={command.id}
-          className={index === commandIndex ? 'active' : ''} disabled={command.disabled} onClick={() => pickCommand(command.id)}>
-          <strong>/{command.label}</strong>{command.description && <span>{command.description}</span>}
-        </button>)}{!commands.length && <p>没有匹配的可用技能</p>}
+      {showCommands && <div className="chat-command-menu brush-panel" role="menu" aria-label="选择技能">
+        <div className="brush-panel-head"><div className="brush-panel-title" style={{flex:1}}>选择技能</div><button type="button" className="brush-close" role="menuitem" aria-label="关闭技能菜单" onClick={()=>{setCommandMenu(false);setSlashDismissed(true);textareaRef.current?.focus()}}>×</button></div>
+        <div ref={commandListRef} className="brush-body">
+          <BrushItem item={{label:'上传素材',description:'图片或文档'}} role="menuitem" aria-label="上传素材" disabled={busy||uploading||composer?.disabled} onClick={() => {setCommandMenu(false);setSlashDismissed(true);fileInputRef.current?.click()}}/>
+          <div className="brush-grp"><div className="brush-grp-name">技能 · {commands.length}</div>
+            {commands.map((command,index)=><BrushItem key={command.id} item={command} labelPrefix="/" role="menuitem" aria-label={'/'+command.label} title={command.description} data-command-index={index} active={index===activeCommandIndex} aria-current={index===activeCommandIndex?true:undefined} disabled={busy||composer?.disabled||command.disabled} onClick={()=>pickCommand(command.id)}/>)}
+            {!commands.length&&<p className="brush-panel-sub">没有匹配的可用技能</p>}
+          </div>
+        </div>
       </div>}
     </div>
   );

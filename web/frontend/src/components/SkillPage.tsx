@@ -11,7 +11,7 @@ import {
 
 interface SkillPageProps {
   persona: string;
-  catalog?:{items:SkillItem[];error?:string;reload?:()=>void};
+  catalog?:{items:SkillItem[];error?:string;loading?:boolean;reload?:()=>void};
   renderDrawer?:(name:string,onClose:()=>void)=>ReactNode;
   headerActions?:ReactNode;subtitle?:ReactNode;
 }
@@ -59,13 +59,17 @@ const LAYER_DESC: Record<string, string> = {
 export default function SkillPage({ persona,catalog,renderDrawer,headerActions,subtitle }: SkillPageProps) {
   const [localSkills, setSkills] = useState<SkillItem[]>([]);
   const [localError, setError] = useState('');
-  const skills=catalog?.items||localSkills,error=catalog?.error||localError;
+  const [localLoading, setLoading] = useState(true);
+  const skills=catalog?catalog.items:localSkills,error=catalog?catalog.error||'':localError;
+  const loading=catalog?catalog.loading===true:localLoading;
+  const waiting=loading&&skills.length===0&&!error;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
   const load = () => {
     if(catalog){catalog.reload?.();return}
-    fetchSkills().then(setSkills).catch(() => setError('加载 SKILL 列表失败'));
+    setLoading(true);
+    fetchSkills().then(value=>{setSkills(value);setError('')}).catch(() => setError('加载 SKILL 列表失败')).finally(()=>setLoading(false));
   };
   useEffect(()=>{if(!catalog)load()}, [!!catalog]);
 
@@ -89,13 +93,13 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions,s
   const needApiCount = skills.filter((s) => s.needsApi && !s.apiConfigured).length;
 
   return (
-    <div className="skills-page">
+    <div className="skills-page" data-catalog-state={error?'error':waiting?'loading':filtered.length?'ready':'empty'} aria-busy={waiting||undefined}>
       <div className="skills-page-head">
         <h1 className="page-title">技能库</h1>{headerActions}
         <p className="page-subtitle">
-          {subtitle||<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
+          {subtitle||(waiting?'按流水线层分区浏览技能。':<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
           标 <span className="badge badge-warn" style={{ padding: '1px 7px' }}>需 API</span> 的需先配置密钥
-          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。</>}
+          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。</>)}
         </p>
         <div className="skill-search">
           <span className="skill-search-ic"><IconSearch size={16} /></span>
@@ -109,13 +113,14 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions,s
         </div>
       </div>
 
-      {error && <div style={{ color: 'var(--red)', maxWidth: 1100, margin: '16px auto' }}>{error}</div>}
+      {error && <div role="alert" style={{ color: 'var(--red)', maxWidth: 1100, margin: '16px auto' }}>{error}</div>}
 
       <div className="skills-body">
-        {orderedLayers.length === 0 && !error && (
+        {waiting&&<div className="empty-state" style={{height:240}} role="status"><p>正在读取技能…</p></div>}
+        {orderedLayers.length === 0 && !error && !waiting && (
           <div className="empty-state" style={{ height: 240 }}>
             <div className="empty-icon"><IconSearch size={40} /></div>
-            <p>没有匹配「{query}」的技能</p>
+            <p>{query.trim()?<>没有匹配「{query.trim()}」的技能</>:'暂无可用技能'}</p>
           </div>
         )}
 

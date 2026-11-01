@@ -51,6 +51,7 @@ UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
 UPSTREAM_PATCH_ALLOWLIST.update({
     'web/app.py', 'web/frontend/src/App.tsx',
     'easel/web_services/__init__.py', 'easel/web_services/binding.py',
+    'easel/web_services/concurrency.py',
     'easel/web_services/accounts.py', 'easel/web_services/settings.py',
     'easel/web_services/planning.py', 'easel/web_services/outputs.py',
     'easel/web_services/environment.py',

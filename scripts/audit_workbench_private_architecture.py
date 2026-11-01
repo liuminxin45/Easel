@@ -44,19 +44,44 @@ def inspect_source(path, raw):
     def module_value(node):
         if isinstance(node, ast.Name):
             return aliases.get(node.id)
-        if isinstance(node, ast.Call) and (getattr(node.func, 'id', None) or getattr(node.func, 'attr', None)) in ('__import__', 'import_module') and node.args:
-            return literal(node.args[0])
+        if isinstance(node, ast.Attribute):
+            parent = module_value(node.value)
+            return parent + '.' + node.attr if parent else None
+        if isinstance(node, ast.Call) and node.args:
+            call = getattr(node.func, 'id', None) or getattr(node.func, 'attr', None)
+            resolved = module_value(node.func)
+            if call == '__import__':
+                target = literal(node.args[0])
+                fromlist = node.args[3] if len(node.args) > 3 else next(
+                    (keyword.value for keyword in node.keywords if keyword.arg == 'fromlist'), None)
+                try:
+                    full_module = fromlist is not None and bool(ast.literal_eval(fromlist))
+                except (TypeError, ValueError):
+                    return None
+                return target if full_module else target.split('.')[0] if target else None
+            if call == 'import_module' or resolved == 'importlib.import_module':
+                return literal(node.args[0])
         return None
 
     def visit(node, scope=''):
+        nonlocal aliases
+        outer_aliases = None
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             scope = scope + '.' + node.name if scope else node.name
+            aliases.pop(node.name, None)
+            outer_aliases = aliases
+            aliases = aliases.copy()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs,
+                             node.args.vararg, node.args.kwarg]
+                for argument in arguments:
+                    if argument is not None:
+                        aliases.pop(argument.arg, None)
             result['symbols'].append({'name': scope, 'line': node.lineno, 'end': node.end_lineno,
                                       'kind': type(node).__name__})
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.asname:
-                    aliases[alias.asname] = alias.name
+                aliases[alias.asname or alias.name.split('.')[0]] = alias.name if alias.asname else alias.name.split('.')[0]
             result['references'].extend({'module': a.name, 'symbol': None, 'kind': 'import',
                                          'line': node.lineno, 'scope': scope} for a in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -97,6 +122,14 @@ def inspect_source(path, raw):
             if module:
                 result['references'].append({'module': module, 'symbol': node.attr,
                     'kind': 'attribute', 'line': node.lineno, 'scope': scope})
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            value = module_value(node.value)
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(target, ast.Name):
+                    if value:
+                        aliases[target.id] = value
+                    else:
+                        aliases.pop(target.id, None)
         # Keep exact historical role targets, including the dynamic import prefix.
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Dict):
             try:
@@ -109,6 +142,8 @@ def inspect_source(path, raw):
                         result['role_targets'].append({'role': role, 'module': PREFIX + '.runtime.' + target[0], 'function': target[1]})
         for child in ast.iter_child_nodes(node):
             visit(child, scope)
+        if outer_aliases is not None:
+            aliases = outer_aliases
 
     visit(tree)
     for number, line in enumerate(source.splitlines(), 1):

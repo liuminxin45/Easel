@@ -1,0 +1,3 @@
+# Codex Spec v0.1.0, release commit cee4fdd00a4cba7ef43fa842327714e1cc84332b.
+# Release wheel checked against SHA256SUMS.txt; no runtime dependencies.
+codex-spec @ https://github.com/liuminxin45/codex-spec/releases/download/v0.1.0/codex_spec-0.1.0-py3-none-any.whl#sha256=de46d2df56ca97de72b26b95a5d7da24d087244739a6aace928429f838f427aa

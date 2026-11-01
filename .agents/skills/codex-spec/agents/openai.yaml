@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Spec"
+  short_description: "Engineering guidance for complex software changes"
+  default_prompt: "Use $codex-spec to implement this change, preserve relevant behavior, and verify the actual outcome."

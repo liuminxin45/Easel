@@ -14,3 +14,33 @@
 .ew-action-spinner.is-idle{visibility:hidden;animation:none}
 @keyframes ew-action-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.ew-action-spinner{animation:none}}
+
+/* Business extensions share Easel's tokens, without changing native controls. */
+.ew-disclosure{margin:12px 0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);min-inline-size:0}
+.ew-panel .ew-disclosure,.ew-controls .ew-disclosure,.ew-dialog .ew-disclosure{margin:12px 0;padding:0;border:1px solid var(--border)}
+.ew-disclosure-trigger,.ew-record-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;min-block-size:44px;padding:10px 12px;color:var(--text-secondary);font:inherit;font-size:13px;line-height:1.5;cursor:pointer;text-align:start;overflow-wrap:anywhere}
+.ew-disclosure-trigger{list-style:none;border-radius:inherit}
+.ew-disclosure-trigger::-webkit-details-marker{display:none}
+.ew-disclosure-trigger>span,.ew-record-trigger>span{min-inline-size:0;flex:1}
+.ew-detail-chevron{flex:none;transition:transform var(--transition-fast,140ms)}
+.ew-disclosure[open]>.ew-disclosure-trigger{color:var(--text)}
+.ew-disclosure[open]>.ew-disclosure-trigger>.ew-detail-chevron{transform:rotate(90deg)}
+.ew-disclosure-trigger:hover,.ew-record-trigger:hover{background:var(--surface-hover)}
+.ew-disclosure-trigger:focus-visible,.ew-record-trigger:focus-visible{outline:2px solid var(--accent-start);outline-offset:2px}
+.ew-disclosure-body{padding:0 12px 12px;min-inline-size:0;overflow-wrap:anywhere;line-height:1.65}
+.ew-disclosure-body>p{margin-block:8px}
+.ew-record-trigger{inline-size:100%;border:0;border-block-end:1px solid var(--border);background:none}
+.ew-task-status{margin-block:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);font-size:13px;line-height:1.6;min-inline-size:0;overflow-wrap:anywhere}
+.ew-task-status-copy>strong{display:block;font-weight:600;color:var(--text)}
+.ew-task-status-copy>p{margin:4px 0 0;color:var(--text-secondary)}
+.ew-task-status-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 12px;margin-block-start:12px}
+.ew-task-status-actions>.ew-disclosure{flex:1 1 180px;margin:0;background:none}
+.ew-task-status-actions>.btn{min-block-size:44px}
+.ew-composer-context{margin-block:8px}
+.ew-dialog[open]{display:flex;flex-direction:column;overflow:visible}
+.ew-dialog>.drawer-header{flex:0 0 auto;position:relative}
+.ew-dialog>.drawer-body{flex:1 1 auto;min-block-size:0;max-block-size:none;overflow-y:auto}
+.ew-dialog-sheet .drawer-body>.ew-json{max-block-size:none;overflow:visible}
+.ew-dialog .drawer-header>button{min-inline-size:44px;min-block-size:44px}
+@media(max-width:800px){.ew-dialog-sheet{margin-block-end:8px}.ew-task-status{padding:12px}.ew-task-status-actions>.ew-disclosure{flex-basis:100%}}
+@media(prefers-reduced-motion:reduce){.ew-detail-chevron{transition:none}}

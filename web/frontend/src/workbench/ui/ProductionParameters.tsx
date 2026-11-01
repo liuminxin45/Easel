@@ -1,3 +1,4 @@
+import {ExtensionDetails} from './ExtensionDetails';
 import {ActionButton} from './common';
 import React,{useState} from 'react';
 import {useResource,array,record,string,type JsonRecord} from '@workbench/core';
@@ -7,8 +8,7 @@ import {Notice,TextRecord} from './common';
 export function ProductionParameters({versionId}:{versionId:string}){
  const [opened,setOpened]=useState(false),resource=useResource<JsonRecord>(opened?'/api/creative/prompts/'+encodeURIComponent(versionId):null);
  const execution=record(resource.data?.execution_prompt),snapshot=record(execution.creator_snapshot),profile=record(snapshot.profile),skills=array<JsonRecord>(snapshot.skills);
- return <details className="chat-production-details" onToggle={event=>{if(event.currentTarget.open)setOpened(true)}}>
-  <summary>制作参数</summary>
+ return <ExtensionDetails className="chat-production-details" title="制作参数" onToggle={event=>{if(event.currentTarget.open)setOpened(true)}}>
   <Notice sources={[resource]}/>
   {resource.error&&<ActionButton action={{busy:!!resource.refreshing}} className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取制作参数</ActionButton>}
   {!resource.data&&!resource.error&&<p role="status">正在读取本版制作记录…</p>}
@@ -20,5 +20,5 @@ export function ProductionParameters({versionId}:{versionId:string}){
    {execution.sha256&&<TextRecord title="制作指令 SHA-256" value={execution.sha256}/>}
    {array<JsonRecord>(resource.data.image_prompts).length>0&&<TextRecord title="逐图制作记录与核验状态" value={resource.data.image_prompts}/>}
   </>}
- </details>;
+ </ExtensionDetails>;
 }

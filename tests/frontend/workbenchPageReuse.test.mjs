@@ -138,6 +138,7 @@ test('native gallery resolves declared virtual file paths independently of displ
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='../lib/api')return {fetchOutputs:async()=>roots,fetchOutputContent:async path=>{reads.push(path);return {content:'原字内容',isBinary:false}},mediaUrl:path=>path,deleteOutput:async()=>{throw Error('Deletion must not run')}};
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
+  if(specifier==='./DownloadLink')return {default:'DownloadLink'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});
   throw Error(specifier);
  }});

@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import ArtifactGallery from '../../components/ArtifactGallery';
 import CopyableText from '../../components/CopyableText';
 import type {Artifact as PreviewArtifact} from '../../lib/artifacts';
-import {nativeContinuationPath,useResource,useWorkbench,array,record,string,workPath,type JsonRecord,type Work} from '@workbench/core';
+import {nativeContinuationPath,useResource,useWorkbench,array,record,string,workPath,fileDownload,type JsonRecord,type Work} from '@workbench/core';
 import {Completion} from './WorkCompletion';
 import {Notice} from './common';
 
@@ -11,7 +11,8 @@ export function productArtifacts(files:unknown):PreviewArtifact[]{
   const mime=string(file.mime),url=string(file.url),id=string(file.id),name=string(file.name);
   const target=/^\/api\/(?:files\/[A-Za-z0-9_-]+|chat\/products\/[A-Za-z0-9_-]+\/files\/[a-f0-9]{64})$/.test(url)?url:'/api/files/'+encodeURIComponent(id);
   const kind:PreviewArtifact['kind']=mime.startsWith('image/')?'image':mime.startsWith('video/')?'video':mime.startsWith('audio/')?'audio':mime==='text/html'?'html':mime==='application/pdf'?'pdf':mime.startsWith('text/')||mime==='application/json'?'text':'file';
-  return {url:target,downloadUrl:target+'?download=1',name,kind};
+  const downloadUrl=target.startsWith('/api/files/')?fileDownload({id,name,mime,image_url:string(file.image_url)}):target+'?download=1';
+  return {url:target,downloadUrl,name,kind};
  }).sort((a,b)=>Number(b.kind==='image')-Number(a.kind==='image'));
 }
 

@@ -19,7 +19,7 @@ export function productArtifacts(files:unknown):PreviewArtifact[]{
  }).sort((a,b)=>Number(b.kind==='image')-Number(a.kind==='image'));
 }
 
-export function ChatTurnProducts({message,showNavigation=true,showContinuation=true,continuationPath:authorizedPath}:{message:unknown;showNavigation?:boolean;showContinuation?:boolean;continuationPath?:string|null}){
+export function ChatTurnProducts({message,showNavigation=true,showContinuation=true,showStatus=true,continuationPath:authorizedPath}:{message:unknown;showNavigation?:boolean;showContinuation?:boolean;showStatus?:boolean;continuationPath?:string|null}){
  const vm=useWorkbench(),value=record(message),tid=string(value.turnId||value.id),product=useResource<JsonRecord>(tid?'/api/chat/products/'+encodeURIComponent(tid):null,{interval:10000}),[opened,setOpened]=useState<'accept'|'reject'|null>(null),action=useAsyncAction();
  const data=product.data,wid=string(data?.work_id),vid=string(data?.version_id),decision=string(record(data?.decision).kind),blocks=array<JsonRecord>(data?.text_blocks),fallback=array<JsonRecord>(data?.files).filter(file=>file.partial),issue=string(value.business_error),continuationPath=authorizedPath===undefined?nativeContinuationPath(value.business_recovery,wid,vid):authorizedPath;
  if(!data&&!issue&&!continuationPath)return null;
@@ -27,13 +27,13 @@ export function ChatTurnProducts({message,showNavigation=true,showContinuation=t
  const incomplete=data?.incomplete===true||!!continuationPath,interrupted=string(value.status)==='stopped'||!!continuationPath;
  const change=()=>void action.run(async()=>{const ticket=vm.navigation.ticket?.(),work=await vm.client.read<Work>('/api/works/'+encodeURIComponent(wid),true),version=work?.versions.find(item=>item.id===vid),path=work&&version?.status==='completed'?nativeWorkChatPath(work,version,true):null;if(!path)throw Error('此版本的制作记录尚未核对，请在产物页查看。');if(ticket&&vm.navigation.finishFlow)vm.navigation.finishFlow(path,ticket);else vm.navigate(path,{intent:'flow'})});
  return <div className="chat-turn-outputs">
-  {(incomplete||issue)&&<TaskStatus title={incomplete?'制作未完成':'交付待核对'} label={interrupted?'制作中断':'制作状态'} description={incomplete?(hasProducts?'已保存的内容可以查看，制作完成后才能采纳。':'原有素材与任务记录已保留。'):'请查看制作记录中的核对结果。'}>
+  {showStatus&&(incomplete||issue)&&<TaskStatus title={incomplete?'制作未完成':'交付待核对'} label={interrupted?'制作中断':'制作状态'} description={incomplete?(hasProducts?'已保存的内容可以查看，制作完成后才能采纳。':'原有素材与任务记录已保留。'):'请查看制作记录中的核对结果。'}>
    {showContinuation&&continuationPath&&<button className="btn btn-sm btn-primary" onClick={()=>vm.navigate(continuationPath,{intent:'flow'})}>继续制作</button>}
    {issue&&<ExtensionDetails title="查看制作记录"><p className="ew-preserve">{issue}</p></ExtensionDetails>}
   </TaskStatus>}
   {fallback.length>0&&<ArtifactGallery artifacts={productArtifacts(fallback)}/>}
   {blocks.map(block=><CopyableText key={string(block.label)} label={string(block.label)} text={string(block.text)}/>)}
-  {(hasProducts||wid)&&<div className="ew-row chat-product-actions"><span role="status">{decision==='accept'?'此版本已采纳':decision==='reject'?'此版本未采纳':data?.can_adopt?'此版本待采纳':''}</span>
+  {(hasProducts||wid)&&(decision||data?.can_adopt||showNavigation)&&<div className="ew-row chat-product-actions"><span role="status">{decision==='accept'?'此版本已采纳':decision==='reject'?'此版本未采纳':data?.can_adopt?'此版本待采纳':''}</span>
    {data?.can_adopt===true&&wid&&vid&&<>
     {decision!=='accept'&&<button className="btn btn-sm btn-primary" onClick={()=>setOpened('accept')}>采纳此版</button>}
     <ActionButton action={action} className="btn btn-sm" onClick={change}>修改这版</ActionButton>

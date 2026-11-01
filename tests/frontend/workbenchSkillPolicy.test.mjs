@@ -25,6 +25,7 @@ function load(file, imports = {}, suffix = '') {
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
       if (id === './lib/workChatPath') return load('ui/lib/workChatPath.ts', {'@workbench/core': imports['@workbench/core']});
       if (id === './ExtensionDetails') return {ExtensionDetails: () => {}};
+      if (id === './TaskStatus') return {TaskStatus: () => {}};
       if (id === './ProductionParameters') return {ProductionParameters: () => {}};
       if (id === './PlatformAccounts') return {Accounts: () => {}};
       if (id === './nativeProfiles') return {NativeProfiles: () => {}};
@@ -140,7 +141,7 @@ test('actual skill detail consumes server actions for an unfamiliar skill ID', (
   const core = {...models, ...creator, useWorkbench: () => ({navigate: (...args) => moves.push(args)}),
     useResource: () => ({data: detail}), useDraft: () => [{prompt: 'kept'}, () => {}],
     useAsyncAction: () => ({busy: false})};
-  const react = {useState: value => [value, () => {}], useEffect: () => {}};
+  const react = {useState: value => [value, () => {}], useEffect: () => {}, useRef: value => ({current: value})};
   const {SkillDetail} = load('ui/management.tsx', {'react': react,
     'react/jsx-runtime': jsx, '@workbench/core': core, './components/icons': {}, './common': {}},
   '\nexport {SkillDetail};');

@@ -99,6 +99,12 @@
   html[data-native-platform] .copyable-text pre,
   html[data-native-platform] .copyable-text pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
   html[data-native-platform] .composer-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
+  html[data-native-platform] .brush-panel { inline-size: min(540px, calc(100vw - 32px)); max-inline-size: calc(100vw - 32px); max-block-size: min(420px, calc(var(--native-height, 100dvh) - 160px)); }
+  html[data-native-platform] .brush-panel-head { flex-wrap: wrap; }
+  html[data-native-platform] .brush-panel-headline { flex-basis: 100%; }
+  html[data-native-platform] .brush-search { flex: 1 1 0%; min-inline-size: 0; }
+  html[data-native-platform] .brush-tabs { flex-wrap: wrap; }
+  html[data-native-platform] .brush-body { min-block-size: 44px; }
   html[data-native-platform] .composer-hint { min-inline-size: 0; overflow-wrap: anywhere; }
   html[data-native-platform] .chat-product-actions,
   html[data-native-platform] .chat-task-status,
@@ -211,6 +217,22 @@
 }
 
 @media (max-width: 1100px) {
+  /* Keep upstream controls and appearance; enlarge only their touch geometry. */
+  html[data-native-platform] .dash-quick-btn,
+  html[data-native-platform] .dash-more,
+  html[data-native-platform] .subnav-tab,
+  html[data-native-platform] .subnav-back,
+  html[data-native-platform] .pv-copy,
+  html[data-native-platform] .proto-trigger,
+  html[data-native-platform] .brush-item,
+  html[data-native-platform] .chat-command-menu > button,
+  html[data-native-platform] .settings-overlay .snav,
+  html[data-native-platform] .settings-overlay .tab,
+  html[data-native-platform] .nav-item,
+  html[data-native-platform] .theme-toggle { min-block-size: 44px; }
+  html[data-native-platform] .trend-save,
+  html[data-native-platform] .theme-toggle { min-inline-size: 44px; }
+  html[data-native-platform] .cal-more { min-block-size: 44px; }
   html[data-native-platform] .dash-grid,
   html[data-native-platform] .trend-grid { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
   html[data-native-platform] .dash-card-wide { grid-column: 1 / -1; }

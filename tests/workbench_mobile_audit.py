@@ -34,6 +34,8 @@ sys.dont_write_bytecode = True
 MARK = 'MOBILE_AUDIT'
 LONG = MARK + ' 窄屏已有数据：保留准确版本、原始反馈和未发送输入。' * 5
 RECORD_GUIDANCE = (LONG + '\n') * 12
+NEWS_END = MARK + '_NEWS_END'
+NEWS_BODY = '\n\n'.join('第 ' + str(index) + ' 段\n' + LONG + LONG for index in range(1, 13)) + '\n\n' + NEWS_END
 
 
 def sha(path):
@@ -73,7 +75,7 @@ def seed(fixture, image, video):
     box.store.ingest({'schema_version': 1, 'source_job': source, 'feed_id': config['feed'],
                      'run_id': 'mobile-audit', 'run_at': dt.datetime.now(dt.timezone.utc).isoformat(),
                      'final_text': 'TEMP only', 'articles': [
-                         {'title': LONG + str(n), 'body': LONG, 'url': 'https://example.test/mobile/' + str(n), 'source_order': n}
+                         {'title': LONG + str(n), 'body': NEWS_BODY, 'url': 'https://example.test/mobile/' + str(n), 'source_order': n}
                          for n in range(1, 21)]})
     folder = root / 'outputs' / 'MOBILE_AUDIT 已有素材与长文件名'
     folder.mkdir(parents=True)
@@ -208,12 +210,14 @@ MEASURE = """element=>{
  for(const child of element.querySelectorAll('*')){if(!visible(child)||['STYLE','SCRIPT','OPTION'].includes(child.tagName))continue;const r=child.getBoundingClientRect(),s=getComputedStyle(child);
   if(r.right>innerWidth+2||r.left< -2){const scroll=child.closest('pre,textarea,[data-mobile-audit-horizontal]'),scrollHost=scroller(child);overflow.push({selector:name(child),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),text:(child.innerText||'').slice(0,90),intentional_code_scroll:!!scroll&&boundedScroller(scroll),horizontal_scroll_container:scrollHost,reflow_handled:!!scrollHost});}
  }
- const controls=[...element.querySelectorAll('button,input,select,textarea,a[href]')].filter(visible),fieldOverflow=[];
+ const controls=[...element.querySelectorAll('button,input,select,textarea,a[href],summary,[role=button]')].filter(visible),fieldOverflow=[];
+ const touchCandidates=controls.map(e=>{const r=e.getBoundingClientRect(),inViewport=r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1,hit=inViewport?document.elementFromPoint(r.left+r.width/2,r.top+r.height/2):null,label=e.matches('input')?e.closest('label'):null,l=label?.getBoundingClientRect();return {selector:name(e),tag:e.tagName,role:e.getAttribute('role'),label:(e.getAttribute('aria-label')||e.getAttribute('title')||e.innerText||'').slice(0,100),box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},disabled:e.matches(':disabled'),tabIndex:e.tabIndex,pointerEvents:getComputedStyle(e).pointerEvents,inViewport,centerHit:!!hit&&(hit===e||e.contains(hit)),hitTarget:hit?name(hit):null,enclosingLabel:l?{width:l.width,height:l.height}:null,shortCandidate:r.width<43.5||r.height<43.5};});
  for(const input of element.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]),select,textarea')){if(!visible(input))continue;const r=input.getBoundingClientRect(),p=input.parentElement.getBoundingClientRect(),modal=input.closest('.modal,.ew-dialog,.drawer,.settings-panel'),m=modal?.getBoundingClientRect();if(r.right>p.right+2||r.left<p.left-2||m&&(r.right>m.right+1||r.left<m.left-1))fieldOverflow.push({selector:name(input),type:input.type,left:r.left,right:r.right,width:r.width,parentLeft:p.left,parentRight:p.right,modalRight:m?.right,clientWidth:input.clientWidth,scrollWidth:input.scrollWidth})}
  return {viewport:{width:innerWidth,height:innerHeight},rootWidth:document.documentElement.scrollWidth,rootOverflow:document.documentElement.scrollWidth>innerWidth+1,
   surface:{left:box.left,right:box.right,top:box.top,bottom:box.bottom,width:box.width,height:box.height,clientWidth:element.clientWidth,scrollWidth:element.scrollWidth,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight,overflowX:style.overflowX,overflowY:style.overflowY},
   overflow:overflow.slice(0,25),overflowCount:overflow.length,fieldOverflow,controlCount:controls.length,
   shortTouchControls:controls.filter(e=>{const r=e.getBoundingClientRect();return e.tagName==='BUTTON'&&(r.height<43.5||r.width<43.5)}).map(e=>{const r=e.getBoundingClientRect();return {selector:name(e),width:r.width,height:r.height,text:(e.innerText||e.getAttribute('aria-label')||e.title||'').slice(0,80)}}),
+  touchCandidateCount:touchCandidates.length,touchCandidates:touchCandidates.slice(0,180),touchCandidatesTruncated:touchCandidates.length>180,
   activeElement:name(document.activeElement),text:(element.innerText||'').slice(0,500)};
 }"""
 
@@ -228,6 +232,8 @@ def main():
     parser.add_argument('--height', type=int, default=844)
     parser.add_argument('--themes', default='light,dark')
     parser.add_argument('--landscape', action='store_true')
+    parser.add_argument('--touch-input', choices=('auto', 'touch', 'mouse'), default='auto', help='Input capability is independent of compact CSS layout; touch also covers wide tablets.')
+    parser.add_argument('--deep-states', action='store_true', help='Run deep account, navigation and recovery cases at every selected size/theme; surface filters remain effective.')
     parser.add_argument('--skip-settings', action='store_true', help='Skip deep settings cases owned by the dedicated runner; retain panel/nested-dialog integration smoke in every viewport.')
     parser.add_argument('--preflight-only', action='store_true', help='Verify authentic media authorization/decode/iframe contracts before the full matrix.')
     parser.add_argument('--only-surfaces', default='', help='Comma-separated surface IDs for a diagnostic subset; never implies full coverage.')
@@ -246,9 +252,19 @@ def main():
     report['dashboard_design'] = 'mobile-dashboard-single-scroll-v2'
     report['preflight_only'] = args.preflight_only
     report['only_surfaces'] = [value for value in args.only_surfaces.split(',') if value]
+    report['touch_input'] = args.touch_input
+    report['deep_states'] = args.deep_states
+    report['coverage_scope'] = 'selected-surfaces-only' if report['only_surfaces'] else 'full-selected-viewport-matrix'
+    def selected(surface):
+        return not report['only_surfaces'] or surface in report['only_surfaces']
     report['source'] = {'head_at_start': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip(),
                         'build_inputs_sha256': sha(native / 'build-inputs.json'), 'build_inputs': read(native / 'build-inputs.json')}
     fixtures = load_fixture(backend)
+    touch_path = ROOT / 'tests/workbench_touch_scroll_browser.py'
+    touch_spec = importlib.util.spec_from_file_location('mobile_audit_touch_input', touch_path)
+    touch_helper = importlib.util.module_from_spec(touch_spec)
+    touch_spec.loader.exec_module(touch_helper)
+    report['touch_harness_sha256'] = sha(touch_path)
     from playwright.sync_api import sync_playwright, expect
     expect.set_options(timeout=12000)
     try:
@@ -316,8 +332,10 @@ def main():
                     for width, height in sizes:
                         for theme in args.themes.split(','):
                             compact = width <= 900 or width <= 1100 and height <= 500
+                            touch_input = compact if args.touch_input == 'auto' else args.touch_input == 'touch'
+                            report.setdefault('viewport_profiles', []).append({'width': width, 'height': height, 'theme': theme, 'compact_layout': compact, 'is_mobile': touch_input, 'has_touch': touch_input})
                             context = browser.new_context(ignore_https_errors=True, viewport={'width': width, 'height': height},
-                                                          is_mobile=compact, has_touch=compact, color_scheme=theme)
+                                                          is_mobile=touch_input, has_touch=touch_input, color_scheme=theme)
                             context.add_cookies([{'name': '__Host-desk_session', 'value': 'fixture-owner', 'url': fixture['origin'], 'secure': True, 'httpOnly': True, 'sameSite': 'Strict'}])
                             publish = {'title': LONG, 'body': LONG + '\n\n' + LONG, 'platforms': ['xiaohongshu', 'wechat-oa'], 'overrides': {}, 'tags': 'TEMP,移动验收'}
                             context.add_init_script('if(window===window.top){localStorage.setItem("native:theme",' + json.dumps(theme) + ');localStorage.setItem("easel_theme",' + json.dumps(theme) + ');localStorage.setItem("easel_publish_draft",' + json.dumps(json.dumps(publish, ensure_ascii=False)) + ');}')
@@ -371,7 +389,61 @@ def main():
                                 'signed_route_used': True, 'authorization_bypassed': False})
                             def go(path):
                                 page.goto(fixture['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
+                            def verify_news_scroll(target):
+                                pre = target.locator('.copyable-text pre code')
+                                expect(pre).to_be_visible()
+                                assert pre.text_content() == NEWS_BODY, 'News reading did not retain the collected long original text'
+                                expect(target.get_by_role('button', name='做内容', exact=True)).to_be_enabled()
+                                geometry = """(el, marker)=>{
+                                  const box=el.getBoundingClientRect(),node=el.querySelector('.copyable-text code')?.firstChild,text=node?.textContent||'',index=text.lastIndexOf(marker);
+                                  let tail=null;if(node?.nodeType===Node.TEXT_NODE&&index>=0){const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+marker.length);const r=range.getBoundingClientRect();tail={top:r.top,bottom:r.bottom};}
+                                  const button=[...el.querySelectorAll('button')].find(b=>b.textContent.trim()==='做内容'),b=button?.getBoundingClientRect(),hit=b&&document.elementFromPoint(b.left+b.width/2,b.top+b.height/2),top=Math.max(0,box.top),bottom=Math.min(innerHeight,box.bottom);
+                                  return {scrollTop:el.scrollTop,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,overflowY:getComputedStyle(el).overflowY,
+                                   box:{left:box.left,right:box.right,top:box.top,bottom:box.bottom},tail,tailVisible:!!tail&&tail.top>=top-1&&tail.bottom<=bottom+1,
+                                   action:b?{left:b.left,right:b.right,top:b.top,bottom:b.bottom}:null,
+                                   actionVisible:!!b&&b.top>=top-1&&b.bottom<=bottom+1&&b.left>=-1&&b.right<=innerWidth+1,
+                                   actionHit:!!button&&!!hit&&(hit===button||button.contains(hit))};
+                                }"""
+                                initial = target.evaluate(geometry, NEWS_END)
+                                steps = []
+                                session = context.new_cdp_session(page) if touch_input else None
+                                try:
+                                    for _ in range(32):
+                                        before = target.evaluate(geometry, NEWS_END)
+                                        if before['tailVisible'] and before['actionVisible'] and before['actionHit']:
+                                            break
+                                        box = before['box']
+                                        top, bottom = max(0, box['top']), min(height, box['bottom'])
+                                        span = bottom - top
+                                        assert span > 100, ('No usable news gesture region', before)
+                                        x, y = (max(0, box['left']) + min(width, box['right'])) / 2, bottom - 50
+                                        distance = min(520, span - 100)
+                                        if session:
+                                            touch_helper.touch_swipe(page, session, x, y, -distance)
+                                        else:
+                                            page.mouse.move(x, y)
+                                            page.mouse.wheel(0, distance)
+                                            page.wait_for_timeout(180)
+                                        after = target.evaluate(geometry, NEWS_END)
+                                        progress = after['scrollTop'] > before['scrollTop'] + 1 or bool(before['tail'] and after['tail'] and after['tail']['top'] < before['tail']['top'] - 1)
+                                        steps.append({'before': before['scrollTop'], 'after': after['scrollTop'], 'tailBefore': before['tail'], 'tailAfter': after['tail'], 'progress': progress})
+                                        report.setdefault('news_scroll_observations', []).append({'case': label, 'selector': '.ew-news-reading, .ew-page', 'input': 'trusted-touch' if touch_input else 'mouse-wheel', 'initial': initial, 'latest': after, 'steps': list(steps)})
+                                        assert progress or (after['tailVisible'] and after['actionVisible']), ('Actual news gesture did not advance the reading page', before, after)
+                                finally:
+                                    if session:
+                                        session.detach()
+                                final = target.evaluate(geometry, NEWS_END)
+                                assert steps and any(step['progress'] for step in steps), ('News end was not reached through actual scrolling', initial, final)
+                                assert final['tailVisible'] and final['actionVisible'] and final['actionHit'], ('News end or content action is clipped/unreachable', final)
+                                if target.evaluate("el=>el.matches('.ew-news-reading')"):
+                                    assert initial['scrollHeight'] > initial['clientHeight'] + 1 and initial['overflowY'] in ('auto', 'scroll'), ('New reading page has no owned scroll region', initial)
+                                file = out / (label + '-news-reading-end-and-action.png')
+                                page.screenshot(path=str(file))
+                                return {'text_characters': len(NEWS_BODY), 'end_marker': NEWS_END, 'input': 'trusted-touch' if touch_input else 'mouse-wheel', 'steps': steps,
+                                        'initial': initial, 'final': final, 'action_invoked': False, 'screenshot': str(file), 'screenshot_sha256': sha(file)}
                             def capture(surface, selector, state='populated', marker=None):
+                                if not selected(surface):
+                                    return
                                 candidates = page.locator(selector)
                                 target = next((candidates.nth(i) for i in range(candidates.count()) if candidates.nth(i).is_visible()), None)
                                 if target is None:
@@ -440,6 +512,7 @@ def main():
                                         expect(frame.locator('body')).to_contain_text(MARK)
                                         resources.append({'kind': 'iframe', 'src': iframe.get_attribute('src'), 'actual_document_marker': MARK})
                                 target.evaluate("el=>{for(let p=el;p;p=p.parentElement){p.scrollTop=0;p.scrollLeft=0}for(const child of el.querySelectorAll('.drawer-body,.settings-main,.page-scroll')){child.scrollTop=0}window.scrollTo(0,0)}")
+                                news_reading = verify_news_scroll(target) if surface == 'news.reading' else None
                                 text = target.inner_text().strip()
                                 assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
                                 metrics = target.evaluate(MEASURE)
@@ -453,6 +526,8 @@ def main():
                                         'details_opened_by_ui': expanded,
                                         'screenshot': str(file), 'screenshot_sha256': sha(file),
                                         'passed': not metrics['rootOverflow'] and not metrics['fieldOverflow'] and not any(not x['reflow_handled'] for x in metrics['overflow'])}
+                                if news_reading is not None:
+                                    item['news_reading'] = news_reading
                                 if surface == 'calendar.form' and state == 'edit_event':
                                     dates = target.locator('input[type=date]')
                                     expect(dates).to_have_count(2)
@@ -512,7 +587,16 @@ def main():
                                         if focus['required_modal'] and escape_supported:
                                             page.keyboard.press('Escape')
                                             try:
-                                                expect(target).not_to_be_visible(timeout=3000)
+                                                if surface == 'skills.publish':
+                                                    detail = page.locator('dialog.ew-dialog[open]')
+                                                    expect(detail).to_have_count(1)
+                                                    expect(detail).not_to_have_attribute('aria-label', '发布技能版本')
+                                                    trigger = detail.get_by_role('button', name='确认适用范围并发布', exact=True)
+                                                    expect(trigger).to_be_visible()
+                                                    expect(trigger).to_be_focused()
+                                                    item['keyboard_scroll']['escape_returned_to_single_skill_detail'] = True
+                                                else:
+                                                    expect(target).not_to_be_visible(timeout=3000)
                                                 item['keyboard_scroll']['escape_dismissed'] = True
                                             except Exception:
                                                 item['keyboard_scroll']['escape_dismissed'] = False
@@ -542,7 +626,7 @@ def main():
                                 print(('PASS ' if item['passed'] else 'REFLOW ') + label + ' ' + surface + ' ' + state, flush=True)
                                 return target
                             def run(surface, path, selector, state='populated', marker=None, before=None):
-                                if report['only_surfaces'] and surface not in report['only_surfaces']:
+                                if not selected(surface):
                                     return
                                 try:
                                     go(path)
@@ -566,7 +650,7 @@ def main():
                                 continue
                             run('dashboard.main', '/toolbox', '.dash-page', marker=MARK)
                             run('trends.main', '/news', '.trends-page', marker=MARK)
-                            run('news.reading', '/news/a/' + ids['news_article'], '.ew-page', marker=MARK)
+                            run('news.reading', '/news/a/' + ids['news_article'], '.ew-news-reading, .ew-page', 'long_article_scroll', marker=MARK)
                             def source_manager(kind='rss'):
                                 page.get_by_role('button', name='数据源', exact=True).click()
                                 expect(page.locator('.trend-manager-form')).to_be_visible()
@@ -588,7 +672,7 @@ def main():
                             run('topics.kanban', '/toolbox?section=research&pane=topics', '.ideas-page', marker=MARK)
                             run('topics.form', '/toolbox?section=research&pane=topics', '.overlay .modal', 'new_topic', before=lambda: page.get_by_role('button', name='+ 新建选题', exact=True).click())
                             def edit_topic():
-                                if not compact:page.locator('.idea-card').first.hover()
+                                if not touch_input:page.locator('.idea-card').first.hover()
                                 page.locator('.idea-card').first.get_by_title('编辑', exact=True).click()
                                 expect(page.locator('.modal .field').first).to_have_value(LONG + '0')
                             run('topics.form', '/toolbox?section=research&pane=topics', '.overlay .modal', 'edit_existing_topic', before=edit_topic)
@@ -651,8 +735,35 @@ def main():
                                     page.locator('.brush-close').click()
                                     page.get_by_role('textbox', name='对话输入', exact=True).fill('/')
                                 run('chat.command-menu', chat_path, '[role=menu][aria-label="选择技能"]', 'slash_search', before=commands)
-                                run('chat.brush', chat_path, '.brush-panel[role=dialog]',
-                                    before=lambda: page.get_by_role('button', name='看看能做什么', exact=True).click())
+                                def brush_choice():
+                                    composer = page.get_by_role('textbox', name='对话输入', exact=True)
+                                    composer.fill(LONG)
+                                    opener = page.get_by_role('button', name='看看能做什么', exact=True)
+                                    opener.click()
+                                    panel = page.locator('.brush-panel[role=dialog]')
+                                    expect(panel).to_be_visible()
+                                    geometry = panel.evaluate('''el=>{const p=el.getBoundingClientRect(),headline=el.querySelector('.brush-panel-headline'),title=el.querySelector('.brush-panel-title'),h=headline.getBoundingClientRect(),t=title.getBoundingClientRect(),s=getComputedStyle(title);return {panel:{left:p.left,right:p.right,top:p.top,bottom:p.bottom,width:p.width},headlineWidth:h.width,titleWidth:t.width,titleHeight:t.height,titleScrollHeight:title.scrollHeight,titleScrollWidth:title.scrollWidth,titleClientWidth:title.clientWidth,lineHeight:parseFloat(s.lineHeight)||parseFloat(s.fontSize)*1.5}}''')
+                                    assert geometry['headlineWidth'] >= geometry['panel']['width'] * .5 or geometry['titleScrollHeight'] <= geometry['lineHeight'] * 2 + 1, ('Brush heading was squeezed into many short lines', geometry)
+                                    assert geometry['titleScrollWidth'] <= geometry['titleClientWidth'] + 1, ('Brush title text escaped its heading', geometry)
+                                    assert geometry['panel']['left'] >= -1 and geometry['panel']['right'] <= width + 1 and geometry['panel']['top'] >= -1 and geometry['panel']['bottom'] <= height + 1, ('Brush popover escaped the viewport', geometry)
+                                    item = panel.locator('.brush-item:not(:disabled)').first
+                                    expect(item).to_be_visible()
+                                    item.scroll_into_view_if_needed()
+                                    hit = item.evaluate('''el=>{const r=el.getBoundingClientRect(),p=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,hit:!!p&&(p===el||el.contains(p))}}''')
+                                    assert hit['left'] >= -1 and hit['right'] <= width + 1 and hit['top'] >= -1 and hit['bottom'] <= height + 1 and hit['hit'], ('First brush choice is not reachable', hit)
+                                    choice = item.locator('.brush-il').inner_text().strip()
+                                    before_requests = len(report['requests'])
+                                    before_calls = len(fixture['adapter'].requests)
+                                    (item.tap if touch_input else item.click)()
+                                    expect(panel).to_have_count(0)
+                                    expect(page.locator('[data-chat-command]')).to_contain_text(choice)
+                                    expect(composer).to_have_value(LONG)
+                                    page.wait_for_timeout(200)
+                                    assert len(report['requests']) == before_requests and len(fixture['adapter'].requests) == before_calls, 'Selecting a brush choice sent a task or changed the server'
+                                    report.setdefault('brush_interactions', []).append({'case': label, 'heading': geometry, 'first_choice': {'label': choice, 'hitbox': hit}, 'selected': True, 'automatic_task_requests': 0, 'draft_preserved': True})
+                                    opener.click()
+                                    expect(panel).to_be_visible()
+                                run('chat.brush', chat_path, '.brush-panel[role=dialog]', 'heading_and_first_selection', before=brush_choice)
                                 run('chat.questions', chat_path, '.question-card', 'multiple_choice', marker=MARK)
                                 run('chat.artifacts', chat_path, '.artifact-gallery', 'image', marker='创作产物')
                                 def artifact_media(index, tag):
@@ -717,8 +828,44 @@ def main():
                                 run('skills.drawer', '/toolbox?section=skills', '.drawer-overlay .drawer', 'official_skill', before=open_skill)
                                 run('skills.version', skill_path, 'dialog.ew-dialog', 'candidate_edit', marker=MARK,
                                     before=lambda: page.get_by_role('button', name='编辑方法，另存候选', exact=True).click())
-                                run('skills.publish', skill_path, 'dialog[aria-label="发布技能版本"]', 'publish_scope',
-                                    before=lambda: page.get_by_role('button', name='确认适用范围并发布', exact=True).click())
+                                def skill_publish_navigation():
+                                    trigger = page.get_by_role('button', name='确认适用范围并发布', exact=True)
+                                    detail = page.locator('dialog.ew-dialog[open]')
+                                    expect(detail).to_have_count(1)
+                                    title = detail.get_attribute('aria-label')
+                                    before_requests = len(report['requests'])
+                                    cycles = []
+                                    for close_kind in ('close_button', 'browser_back', 'return_button'):
+                                        trigger.scroll_into_view_if_needed()
+                                        trigger.focus()
+                                        body = detail.locator('.drawer-body')
+                                        scroll_before = body.evaluate('el=>el.scrollTop')
+                                        trigger.click()
+                                        publish = page.get_by_role('dialog', name='发布技能版本', exact=True)
+                                        expect(publish).to_be_visible()
+                                        expect(page.locator('dialog.ew-dialog[open]')).to_have_count(1)
+                                        if close_kind == 'close_button':
+                                            publish.get_by_role('button', name='关闭', exact=True).click()
+                                        elif close_kind == 'browser_back':
+                                            page.go_back()
+                                        else:
+                                            publish.get_by_role('button', name='返回技能详情', exact=True).click()
+                                        expect(detail).to_have_attribute('aria-label', title)
+                                        expect(page.locator('dialog.ew-dialog[open]')).to_have_count(1)
+                                        expect(trigger).to_be_focused()
+                                        scroll_after = body.evaluate('el=>el.scrollTop')
+                                        assert abs(scroll_after - scroll_before) <= 2, ('Returning from skill publishing lost the detail reading position', scroll_before, scroll_after)
+                                        cycles.append({'close': close_kind, 'single_dialog': True, 'focus_restored': True, 'scroll_before': scroll_before, 'scroll_after': scroll_after})
+                                    page.go_back()
+                                    expect(page.locator('dialog.ew-dialog[open]')).to_have_count(0)
+                                    expect(page.locator('.skills-page')).to_be_visible()
+                                    page.wait_for_timeout(100)
+                                    assert len(report['requests']) == before_requests, 'Skill publish navigation unexpectedly wrote or submitted data'
+                                    report.setdefault('skill_publish_navigation', []).append({'case': label, 'cycles': cycles, 'second_back_exits_detail': True, 'server_writes': 0})
+                                    go(skill_path)
+                                    page.get_by_role('button', name='确认适用范围并发布', exact=True).click()
+                                    expect(page.get_by_role('dialog', name='发布技能版本', exact=True)).to_be_visible()
+                                run('skills.publish', skill_path, 'dialog[aria-label="发布技能版本"]', 'publish_scope', before=skill_publish_navigation)
                                 run('skills.experience', '/toolbox?section=skills&pane=experience', 'dialog.ew-dialog', 'completed_task', marker=MARK)
                                 def proposal():
                                     page.get_by_text('作者身份', exact=True).click()
@@ -756,7 +903,8 @@ def main():
                                 run('insights.publication-edit', insight_path, 'dialog.ew-dialog', 'existing_link_time',
                                     before=lambda: page.get_by_role('button', name='补充真实发布链接与时间', exact=True).click())
                                 # High-risk non-data surfaces use genuine fixture UI events.
-                                deep_case = not report['only_surfaces'] and ((width == 320 and theme == 'light') or (width == 390 and theme == 'dark') or height == 390)
+                                deep_surfaces = {'accounts.login', 'accounts.logout-confirm', 'host.route-errors', 'nav.sidebar', 'nav.selectors', 'host.boot', 'host.session-notices', 'host.offline-shell', 'host.login'}
+                                deep_case = (args.deep_states or (width == 320 and theme == 'light') or (width == 390 and theme == 'dark') or height == 390) and any(selected(surface) for surface in deep_surfaces)
                                 if deep_case:
                                     account_path = '/toolbox?section=distribution&pane=connections'
                                     def qr_login():
@@ -789,11 +937,15 @@ def main():
                                         card.get_by_role('button', name='退出登录', exact=True).click()
                                         assert seen and '退出' in seen[0]
                                         report.setdefault('browser_dialogs', []).append({'case': label, 'surface_id': 'accounts.logout-confirm', 'message': seen[0], 'dismissed': True})
-                                    try:
-                                        logout_cancel()
-                                        capture('accounts.logout-confirm', '.accounts-page', 'cancel_preserves_connection', '微信公众号')
-                                    except Exception as error:
-                                        report['checks'].append({'case': label, 'surface_id': 'accounts.logout-confirm', 'state': 'cancel_preserves_connection', 'passed': False, 'rendered': False, 'error': str(error)})
+                                    if selected('accounts.logout-confirm'):
+                                        try:
+                                            if not selected('accounts.login'):
+                                                go(account_path)
+                                                qr_login()
+                                            logout_cancel()
+                                            capture('accounts.logout-confirm', '.accounts-page', 'cancel_preserves_connection', '微信公众号')
+                                        except Exception as error:
+                                            report['checks'].append({'case': label, 'surface_id': 'accounts.logout-confirm', 'state': 'cancel_preserves_connection', 'passed': False, 'rendered': False, 'error': str(error)})
                                     run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.page-scroll', 'missing_work_retry', marker='读取作品')
                                     def open_nav():
                                         expect(page.locator('.sidebar .nav-item')).to_have_count(6)
@@ -822,41 +974,45 @@ def main():
                                         for route in held:
                                             route.continue_()
                                         page.unroute('**/api/config', handler)
-                                    try:
-                                        boot_loading()
-                                    except Exception as error:
-                                        report['checks'].append({'case': label, 'surface_id': 'host.boot', 'state': 'lazy_loading', 'passed': False, 'rendered': False, 'error': str(error)})
+                                    if selected('host.boot'):
+                                        try:
+                                            boot_loading()
+                                        except Exception as error:
+                                            report['checks'].append({'case': label, 'surface_id': 'host.boot', 'state': 'lazy_loading', 'passed': False, 'rendered': False, 'error': str(error)})
                                     def expired(route):
                                         route.fulfill(status=401, json={'error': 'MOBILE_AUDIT fixture session expired'})
-                                    try:
-                                        page.route('**/api/status', expired)
-                                        run('host.session-notices', '/toolbox', '.native-host-notice', 'session_expired', marker='登录已过期')
-                                    finally:
-                                        page.unroute('**/api/status', expired)
-                                    try:
-                                        go('/toolbox')
-                                        expect(page.locator('.dash-page')).to_be_visible()
-                                        deadline = time.monotonic() + 8
-                                        while not page.evaluate('!!navigator.serviceWorker?.controller') and time.monotonic() < deadline:
-                                            page.wait_for_timeout(100)
-                                        assert page.evaluate('!!navigator.serviceWorker?.controller'), 'TEMP worker did not acquire control within 8 seconds'
-                                        page.wait_for_timeout(400)
-                                        context.set_offline(True)
-                                        page.reload(wait_until='domcontentloaded')
-                                        assert page.locator('meta[name="native-release"]').get_attribute('content') == front['release']
-                                        expect(page.locator('.ew-loading')).to_be_visible()
-                                        expect(page.locator('.ew-loading')).to_contain_text('保留的本机输入')
-                                        capture('host.offline-shell', '.native-host', 'current_shell_available')
-                                    except Exception as error:
-                                        report['checks'].append({'case': label, 'surface_id': 'host.offline-shell', 'state': 'current_shell_available', 'passed': False, 'rendered': False, 'error': str(error)})
-                                    finally:
-                                        context.set_offline(False)
-                                    try:
-                                        context.clear_cookies()
-                                        page.goto(fixture['origin'] + '/native/login', wait_until='domcontentloaded')
-                                        capture('host.login', '.ew-auth', 'idle', '登录创作工作台')
-                                    except Exception as error:
-                                        report['checks'].append({'case': label, 'surface_id': 'host.login', 'state': 'idle', 'passed': False, 'rendered': False, 'error': str(error)})
+                                    if selected('host.session-notices'):
+                                        try:
+                                            page.route('**/api/status', expired)
+                                            run('host.session-notices', '/toolbox', '.native-host-notice', 'session_expired', marker='登录已过期')
+                                        finally:
+                                            page.unroute('**/api/status', expired)
+                                    if selected('host.offline-shell'):
+                                        try:
+                                            go('/toolbox')
+                                            expect(page.locator('.dash-page')).to_be_visible()
+                                            deadline = time.monotonic() + 8
+                                            while not page.evaluate('!!navigator.serviceWorker?.controller') and time.monotonic() < deadline:
+                                                page.wait_for_timeout(100)
+                                            assert page.evaluate('!!navigator.serviceWorker?.controller'), 'TEMP worker did not acquire control within 8 seconds'
+                                            page.wait_for_timeout(400)
+                                            context.set_offline(True)
+                                            page.reload(wait_until='domcontentloaded')
+                                            assert page.locator('meta[name="native-release"]').get_attribute('content') == front['release']
+                                            expect(page.locator('.ew-loading')).to_be_visible()
+                                            expect(page.locator('.ew-loading')).to_contain_text('保留的本机输入')
+                                            capture('host.offline-shell', '.native-host', 'current_shell_available')
+                                        except Exception as error:
+                                            report['checks'].append({'case': label, 'surface_id': 'host.offline-shell', 'state': 'current_shell_available', 'passed': False, 'rendered': False, 'error': str(error)})
+                                        finally:
+                                            context.set_offline(False)
+                                    if selected('host.login'):
+                                        try:
+                                            context.clear_cookies()
+                                            page.goto(fixture['origin'] + '/native/login', wait_until='domcontentloaded')
+                                            capture('host.login', '.ew-auth', 'idle', '登录创作工作台')
+                                        except Exception as error:
+                                            report['checks'].append({'case': label, 'surface_id': 'host.login', 'state': 'idle', 'passed': False, 'rendered': False, 'error': str(error)})
                             assert not fixture['adapter'].requests, 'UI audit submitted inference'
                             context.close()
                     browser.close()

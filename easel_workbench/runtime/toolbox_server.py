@@ -20,6 +20,23 @@ from easel_workbench.runtime import image_delivery as image_delivery
 from easel_workbench.runtime import distribution_entry as distribution_entry
 
 TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
+def download_request(request,target,*,head=False):
+    """Delegate only a prevalidated local read to the existing file handler."""
+    wanted=urllib.parse.urlsplit(target);path=urllib.parse.unquote(wanted.path)
+    scope={**request.scope,'path':path,'raw_path':urllib.parse.quote(path,safe='/').encode('ascii'),'query_string':wanted.query.encode('ascii')}
+    if head:
+        scope['method']='HEAD'
+        scope['headers']=[(key,value) for key,value in scope['headers'] if key.lower() not in (b'content-length',b'transfer-encoding')]
+    return Request(scope)
+
+async def close_read_response(response):
+    """HEAD/probe reads have no ASGI body consumer to release lazy resources."""
+    iterator=getattr(response,'body_iterator',None)
+    if getattr(iterator,'aclose',None):await iterator.aclose()
+    elif getattr(iterator,'close',None):await asyncio.to_thread(iterator.close)
+    if response.background is not None:
+        await response.background();response.background=None
+
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
     root=pathlib.Path(root);store=store or Store();auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
     forms=Forms(auth,inert=True);csrf=csrf_token(store);origin=auth.data['origin'];host=auth.data['host']
@@ -117,7 +134,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         mode='inline' if value['mime'].startswith(('image/','video/','audio/')) and not download else 'attachment'
         sandbox="default-src 'none'; sandbox"+(' allow-downloads' if value['mime'] in image_delivery.IMAGE_TYPES else '')
         return StreamingResponse(chunks(),status_code=code,media_type=value['mime'],headers={'Content-Length':str(length),'Cache-Control':cache_control,'X-Content-Type-Options':'nosniff','Content-Security-Policy':sandbox,'Content-Disposition':disposition(value['name'],mode),**({'Vary':'Accept-Encoding, Cookie'} if etag_override else {}),**extra})
-    async def dispatch(path,request,trace,bypass_read_cache=False):
+    async def dispatch(path,request,trace,bypass_read_cache=False,*,download_session=None):
         path='/'+path;method=request.method;headers=request.headers
         target=path+('?' + request.url.query if request.url.query else '')
         if len(headers.getlist('host'))!=1 or headers.get('host')!=host:return error(403,'Host rejected')
@@ -159,7 +176,24 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             except ValueError:return error(403,'图片链接无效或已过期，请刷新作品页面')
             if match[2]!=value['name'] or not image_delivery.authorize(value,auth,request.query_params):return error(403,'图片链接无效或已过期，请刷新作品页面')
             return file_response(value,file,headers,request.query_params.get('download')=='1')
-        session=await asyncio.to_thread(forms.session,ctx)
+        from easel_workbench.runtime import download_delivery
+        if path=='/media/downloads':
+            if method not in ('GET','HEAD'):return error(405,'method rejected')
+            granted=download_delivery.authorize(auth,request.query_params)
+            if not granted:return error(403,'下载链接无效或已过期，请重新点击下载')
+            delegated=download_request(request,request.query_params['target'])
+            result=await dispatch(delegated.url.path.lstrip('/'),delegated,trace,download_session=granted)
+            if result.status_code>=400:return result
+            from easel_workbench.runtime.artifact_delivery import disposition
+            from starlette.responses import FileResponse
+            if isinstance(result,FileResponse) and result.stat_result is None:
+                result.stat_result=result.path.stat() if hasattr(result.path,'stat') else pathlib.Path(result.path).stat()
+                result.set_stat_headers(result.stat_result)
+            result.headers['Content-Disposition']=disposition(request.query_params['name'],'attachment')
+            result.headers['Cache-Control']='no-store'
+            result.headers['Content-Security-Policy']="default-src 'none'; sandbox allow-downloads"
+            return result
+        session=download_session or await asyncio.to_thread(forms.session,ctx)
         if path in ('/native','/native/') or path.startswith(('/native/','/native-assets/')):
             from easel_workbench.runtime import native_preview as native_preview
             native_response=await native_preview.handle_native(request,root,bool(session))
@@ -169,6 +203,20 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 native_target='/native/?'+urllib.parse.urlencode({'path':target})
                 forms.send(ctx,303,location='/native/login?next='+urllib.parse.quote(native_target,safe=''));return ctx.response()
             return error(401,'authentication_required')
+        if path=='/api/downloads':
+            if method!='POST':return error(405,'method rejected')
+            if not same or len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
+            try:
+                fields=json.loads(raw)
+                if not isinstance(fields,dict):raise ValueError('下载请求需要 JSON 对象')
+                wanted=download_delivery.target(fields.get('target',''))
+                probe=download_request(request,wanted,head=True)
+                checked=await dispatch(probe.url.path.lstrip('/'),probe,trace,download_session=session)
+                if checked.status_code not in (200,206):return checked
+                await close_read_response(checked)
+                link=download_delivery.issue(session,cookies(ctx.headers).get(SESSION),wanted,fields.get('name',''))
+                return reply({'url':link})
+            except ValueError as exc:return error(400,str(exc))
         if native_api.supports(path,method):
             native_value=None
             if method in ('POST','PUT','PATCH','DELETE'):
@@ -583,16 +631,22 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         match=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/versions/([A-Za-z0-9_-]+)/download',path)
         if match:
             import tempfile,zipfile
-            def archive():
+            def image_files():
                 work=box.work(match[1]);version=next((v for v in work['versions'] if v['id']==match[2] and v['status']=='completed'),None)
                 if version is None:raise ValueError('作品版本不存在')
+                images=[a for a in version['artifacts'] if a['mime'].startswith('image/')]
+                if not images:raise ValueError('此版本还没有图片文件')
+                return [box.file(item['id'])[1] for item in images]
+            files=await asyncio.to_thread(image_files)
+            zip_headers={'Cache-Control':'no-store','Content-Disposition':'attachment; filename="poster-images.zip"'}
+            if method=='HEAD':
+                result=Response(media_type='application/zip',headers=zip_headers)
+                del result.headers['Content-Length'];return result
+            def archive():
                 stream=tempfile.SpooledTemporaryFile(max_size=8*1024*1024)
                 try:
-                    images=[a for a in version['artifacts'] if a['mime'].startswith('image/')]
-                    if not images:raise ValueError('此版本还没有图片文件')
                     with zipfile.ZipFile(stream,'w',compression=zipfile.ZIP_STORED) as bundle:
-                        for n,item in enumerate(images,1):
-                            _,file=box.file(item['id']);bundle.write(file,str(n).zfill(2)+'-'+file.name)
+                        for n,file in enumerate(files,1):bundle.write(file,str(n).zfill(2)+'-'+file.name)
                     stream.seek(0);return stream
                 except BaseException:stream.close();raise
             stream=await asyncio.to_thread(archive)
@@ -600,7 +654,8 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 try:
                     while part:=stream.read(65536):yield part
                 finally:stream.close()
-            return StreamingResponse(zip_chunks(),media_type='application/zip',headers={'Cache-Control':'no-store','Content-Disposition':'attachment; filename="poster-images.zip"'})
+            from starlette.background import BackgroundTask
+            return StreamingResponse(zip_chunks(),media_type='application/zip',headers=zip_headers,background=BackgroundTask(stream.close))
         if path.startswith('/api/works/'):
             result=await asyncio.to_thread(box.work,path.rsplit('/',1)[-1])
             with store.connect() as c:
@@ -641,7 +696,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         except (ValueError,TypeError,UnicodeError,KeyError) as exc:result=error(400,str(exc))
         except Exception as exc:
             journal.emit('request_error',trace_id=trace,route=request.url.path,error_type=type(exc).__name__);result=error(503,'服务器暂时不可用，请重试；未自动重复操作')
-        if result.status_code==200 and hasattr(result,'body') and not result.headers.get('content-encoding'):
+        if result.status_code==200 and hasattr(result,'body') and not result.headers.get('content-encoding') and not (request.method=='HEAD' and 'content-length' not in result.headers):
             from easel_workbench.runtime.http_content import encode
             payload,encoding=encode(result.body,request.headers,result.headers.get('content-type',''),public='immutable' in result.headers.get('cache-control',''))
             vary={item.strip() for item in result.headers.get('Vary','').split(',') if item.strip()}
@@ -652,7 +707,11 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         frame_policy='SAMEORIGIN' if request.method in ('GET','HEAD') and is_html_preview_response(result) else 'DENY'
         result.headers.update({'X-Desk-Trace':trace,'X-Desk-Architecture':'toolbox','X-Desk-Workspace':'integrated-v1','Strict-Transport-Security':'max-age=31536000','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':frame_policy})
         journal.emit('request_finished',trace_id=trace,route=request.url.path,method=request.method,status=result.status_code,duration_ms=round((time.monotonic()-start)*1000,3))
-        if request.method=='HEAD':return Response(status_code=result.status_code,headers=dict(result.headers))
+        if request.method=='HEAD':
+            await close_read_response(result)
+            head=Response(status_code=result.status_code,headers=dict(result.headers))
+            if 'content-length' not in result.headers:del head.headers['Content-Length']
+            return head
         return result
     return app
 def main():

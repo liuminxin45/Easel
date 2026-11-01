@@ -3,6 +3,7 @@ import MessageBubble from './MessageBubble';
 import QuestionCards from './QuestionCards';
 import type {QuestionServices} from './QuestionCards';
 import BrushEntry,{BrushItem} from './BrushEntry';
+import {useBrushPopover} from './useBrushPopover';
 import type {Artifact} from '../lib/artifacts';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
@@ -87,6 +88,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const commandListRef = useRef<HTMLDivElement>(null);
+  const commandPanelRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
 
   const isStreaming = !!stream;
@@ -97,6 +99,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const commands = (composer?.commands || []).filter(command => !commandQuery ||
     `${command.label} ${command.description || ''} ${command.id}`.toLowerCase().includes(commandQuery));
   const showCommands = !!composer?.commands && (commandMenu || slash);
+  useBrushPopover(showCommands,composerRef,commandPanelRef,`${commandQuery}:${commands.length}`);
   const enabledCommandIndices=commands.flatMap((command,index)=>command.disabled?[]:[index]);
   const activeCommandIndex=enabledCommandIndices.includes(commandIndex)?commandIndex:enabledCommandIndices[0]??-1;
   const pickCommand = (id: string | null) => {
@@ -266,7 +269,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       </div>
       {composer?.status && <div className="composer-hint" role="status">{composer.status}</div>}
       {uploadError && <p className="notice-error" role="alert">{uploadError}</p>}
-      {showCommands && <div className="chat-command-menu brush-panel" role="menu" aria-label="选择技能">
+      {showCommands && <div ref={commandPanelRef} className="chat-command-menu brush-panel" role="menu" aria-label="选择技能">
         <div className="brush-panel-head"><div className="brush-panel-title" style={{flex:1}}>选择技能</div><button type="button" className="brush-close" role="menuitem" aria-label="关闭技能菜单" onClick={()=>{setCommandMenu(false);setSlashDismissed(true);textareaRef.current?.focus()}}>×</button></div>
         <div ref={commandListRef} className="brush-body">
           <BrushItem item={{label:'上传素材',description:'图片或文档'}} role="menuitem" aria-label="上传素材" disabled={busy||uploading||composer?.disabled} onClick={() => {setCommandMenu(false);setSlashDismissed(true);fileInputRef.current?.click()}}/>

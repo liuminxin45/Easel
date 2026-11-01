@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { CAPABILITY_MENU } from '../lib/capabilityMenu';
 import type { CapabilityItem } from '../lib/capabilityMenu';
+import {useBrushPopover} from './useBrushPopover';
 
 const DOT: Record<string, string> = { done: 's-done', ready: 's-ready', need: 's-need', incoming: 's-incoming' };
 
@@ -25,6 +26,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
   const [q, setQ] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const menu = useMemo(()=>items ? {tabs:Array.from(new Set(items.map(item=>item.tab||'available'))).map(id=>({id,label:items.find(item=>(item.tab||'available')===id)?.tabLabel||'技能与能力',groups:Array.from(new Set(items.filter(item=>(item.tab||'available')===id).map(item=>item.group||'已接入能力'))).map(label=>({label,items:items.filter(item=>(item.tab||'available')===id&&(item.group||'已接入能力')===label).map(item=>({id:item.id,label:item.label,desc:item.description,skill:item.id,status:item.status||(item.disabled?'need':'ready')}))}))}))} : CAPABILITY_MENU,[items]);
 
   useEffect(()=>{if(!open)return;const close=()=>{setOpen(false);wrapRef.current?.querySelector<HTMLButtonElement>('.brush-btn')?.focus()};const release=registerLayer?.(close);const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();close()}};document.addEventListener('keydown',key);return()=>{release?.();document.removeEventListener('keydown',key)}},[open,registerLayer]);
@@ -45,6 +47,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
     [menu],
   );
   const pipeline = useMemo(() => all.find((x) => x.status === 'incoming') || (items?.some(item=>item.tab==='make') ? CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items)).find(item=>item.status==='incoming') : undefined), [all,items]);
+  useBrushPopover(open,wrapRef,panelRef,`${tab}:${q}:${all.length}`);
 
   const ql = q.trim().toLowerCase();
   const hit = (it: CapabilityItem) => !ql || `${it.label}${it.desc || ''}${it.skill || ''}`.toLowerCase().includes(ql);
@@ -80,7 +83,7 @@ export default function BrushEntry({ onPick, items, onSelect, registerLayer, dis
       </button>
 
       {open && (
-        <div className="brush-panel" role="dialog" aria-label="能做的都在这">
+        <div ref={panelRef} className="brush-panel" role="dialog" aria-label="能做的都在这">
           <div className="brush-panel-head">
             <div className="brush-panel-headline">
               <div className="brush-panel-title">能做的都在这</div>

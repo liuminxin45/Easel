@@ -20,7 +20,7 @@ import uuid
 
 from .health_endpoint import HEALTH_PATH, health_token
 from .health_policy import assess, attempted
-from .runtime.feedback_ledger import atomic, locked
+from .runtime.feedback_ledger import atomic, atomic_create, locked
 
 ALLOWED_CHILDREN = frozenset(('python.exe', 'pythonw.exe', 'node.exe', 'codex.exe'))
 STATE_DIR = '.local/workbench-deployment'
@@ -176,8 +176,8 @@ def event(root, kind, **value):
 def pause_owned(root, operation, binding):
     path = root / STATE_DIR / 'paused'
     marker = {'owner': 'health-watchdog', 'operation_id': operation, 'binding': binding, 'created_at': time.time()}
-    with path.open('x', encoding='utf-8') as stream:
-        json.dump(marker, stream);stream.flush();os.fsync(stream.fileno())
+    if not atomic_create(path, marker):
+        raise FileExistsError(path)
     return marker
 
 

@@ -43,6 +43,21 @@ def atomic(path, value):
     os.replace(temp, path)
 
 
+def atomic_create(path, value):
+    """Publish a complete new file without ever replacing an existing owner."""
+    path = pathlib.Path(path)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.create')
+    try:
+        atomic(temporary, value)
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            return False
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 @contextlib.contextmanager
 def locked(path, timeout=20):
     path = pathlib.Path(path)

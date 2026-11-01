@@ -37,7 +37,17 @@ def main():
     parser.add_argument('--native', required=True, type=Path)
     parser.add_argument('--backend', required=True, type=Path)
     parser.add_argument('--out', required=True, type=Path)
+    parser.add_argument('--cases', default='', help='Extra explicit viewport/theme matrix, e.g. 320x800:dark,768x1024:light; default retains the original three cases.')
     args = parser.parse_args()
+    cases = [('mobile-320-light', 320, 800, 'light'), ('mobile-390-dark', 390, 844, 'dark'), ('landscape-844-light', 844, 390, 'light')]
+    if args.cases:
+        cases = []
+        for value in args.cases.split(','):
+            match = re.fullmatch(r'([0-9]{3,4})x([0-9]{3,4}):(light|dark)', value)
+            if not match:
+                parser.error('Use WIDTHxHEIGHT:light or WIDTHxHEIGHT:dark for --cases')
+            width, height, theme = int(match[1]), int(match[2]), match[3]
+            cases.append((f'{width}x{height}-{theme}', width, height, theme))
     native, backend, out = args.native.resolve(), args.backend.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     for directory, name in [(native, 'native-manifest.json'), (backend, 'workbench-release.json')]:
@@ -126,7 +136,7 @@ def main():
             browser = playwright.chromium.launch(executable_path='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless=True, args=['--ignore-certificate-errors'])
             with fixture.isolated(native, b'TEMP unused image') as data, patch.object(harnesses, 'describe', lambda runtime: {'id': runtime, 'label': LABELS[runtime], 'installed': True, 'protocol': 'TEMP synthetic capabilities', 'install_hint': 'TEMP CLI instruction ' + LONG_MODEL}):
                 data['close_clients'] = lambda: [context.close() for context in browser.contexts]
-                for profile, width, height, theme in [('mobile-320-light', 320, 800, 'light'), ('mobile-390-dark', 390, 844, 'dark'), ('landscape-844-light', 844, 390, 'light')]:
+                for profile, width, height, theme in cases:
                     report['profiles'].append({'id': profile, 'width': width, 'height': height, 'theme': theme, 'is_mobile': True, 'has_touch': True})
                     context = browser.new_context(ignore_https_errors=True, viewport={'width': width, 'height': height}, is_mobile=True, has_touch=True, color_scheme=theme, service_workers='block')
                     context.add_cookies([{'name': '__Host-desk_session', 'value': 'fixture-owner', 'url': data['origin'], 'secure': True, 'httpOnly': True, 'sameSite': 'Strict'}])

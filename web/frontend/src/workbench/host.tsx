@@ -9,7 +9,11 @@ const nonce=()=>document.querySelector<HTMLMetaElement>('meta[name="style-nonce"
 type Theme='light'|'dark'|'system';
 type Layout='auto'|'compact'|'expanded';
 function initialTheme():Theme{try{const t=localStorage.getItem('native:theme')||localStorage.getItem('desk-theme');return t==='dark'||t==='light'?t:'system'}catch{return 'system'}}
-class Boundary extends React.Component<{children:ReactNode},{error:string}>{state={error:''};static getDerivedStateFromError(error:Error){return {error:error.message}}render(){return this.state.error?<main className="native-boot-failure" role="alert"><h1>界面未能打开</h1><p>输入保留在这台设备上。</p><button onClick={()=>location.reload()}>重新打开</button><details><summary>错误详情</summary>{this.state.error}</details></main>:this.props.children}}
+class Boundary extends React.Component<{children:ReactNode},{error:string;detailsOpen:boolean}>{
+ state={error:'',detailsOpen:false};
+ static getDerivedStateFromError(error:Error){return {error:error.message}}
+ render(){return this.state.error?<main className="native-boot-failure" role="alert"><h1>界面未能打开</h1><p>输入保留在这台设备上。</p><button className="btn btn-primary" onClick={()=>location.reload()}>重新打开</button><button className="btn btn-ghost" aria-expanded={this.state.detailsOpen} aria-controls="native-boot-diagnostic" onClick={()=>this.setState({detailsOpen:!this.state.detailsOpen})}>{this.state.detailsOpen?'收起错误详情':'查看错误详情'}</button>{this.state.detailsOpen&&<pre id="native-boot-diagnostic" className="native-boot-diagnostic">{this.state.error}</pre>}</main>:this.props.children}
+}
 function InputNotice(){const vm=useWorkbench();return vm.persistenceError?<aside className="native-host-notice" role="alert">本机保存未完成：{vm.persistenceError}。请保留当前页面。</aside>:vm.expired?<aside className="native-host-notice" role="alert">登录已过期，草稿保留。<a href={'/native/login?'+new URLSearchParams({next:location.pathname+location.search})}>重新登录</a></aside>:null}
 function RuntimeServices({activities,path,direction}:{activities:ActivityCoordinator;path:string;direction:string}){
  const {ready,persistenceError}=useWorkbench(),usage=useUsage();

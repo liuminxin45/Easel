@@ -306,6 +306,15 @@ def main():
                     fixture['auth'].lock = threading.RLock()
                     fixture['auth'].data['sessions'] = {token_hash('fixture-owner'): dict(fixture['auth'].session('fixture-owner'))}
                     report['auth_fixture'] = {'contract': 'AuthState lock + token_hash keyed session table; real signed image route', 'authorization_bypassed': False}
+                    # Read the immutable release's actual official skill catalog.
+                    # TEMP has private skills only; no skill protocol is mocked and
+                    # no catalog or execution version is written by this binding.
+                    fixture['app'].state.chat_business.upstream.source = backend
+                    official_skill = backend / 'skills/builtin/ai-image-gen/SKILL.md'
+                    assert official_skill.is_file(), official_skill
+                    report['official_skill_fixture'] = {'source_root': str(backend),
+                        'selected_id': 'ai-image-gen', 'entry_sha256': sha(official_skill),
+                        'service': 'real frozen UpstreamSkills', 'protocol_mocked': False}
                     ids = seed(fixture, image, video)
                     report['seed'] = ids
                     report['fixture_assets'] = {p.relative_to(fixture['root']).as_posix(): sha(p)
@@ -581,7 +590,10 @@ def main():
                                                                                  'controls_clicked': False, 'full_card_in_one_viewport': False}
                                 news_reading = verify_news_scroll(target) if surface == 'news.reading' else None
                                 text = target.inner_text().strip()
-                                assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
+                                if surface == 'host.route-errors':
+                                    assert text.strip() == '作品不存在', (surface, 'missing-work reason changed', text)
+                                else:
+                                    assert len(text) >= 8, (surface, 'no meaningful rendered content', text)
                                 metrics = target.evaluate(MEASURE)
                                 if touch_input and width <= 1100:
                                     touch_failures = []
@@ -740,7 +752,7 @@ def main():
                                 print(('PASS ' if item['passed'] else 'REFLOW ') + label + ' ' + surface + ' ' + state, flush=True)
                                 return target
                             def open_version_operations():
-                                region = page.locator('details.ew-disclosure:has(> summary:text-is("版本与操作"))').first
+                                region = page.locator('details.ew-disclosure:has(> summary > span:text-is("版本与操作"))').first
                                 expect(region).to_be_visible()
                                 if not region.evaluate('element=>element.open'):
                                     region.locator(':scope > summary').click()
@@ -860,6 +872,36 @@ def main():
                                         catalog_diagnostic(catalog_state)
                             run('profiles.main', '/toolbox?section=profiles', '.profile-page')
                             run('profiles.create', '/toolbox?section=profiles&item=new', '.overlay .modal')
+                            if args.phase == 'full':
+                                def wizard_step(wanted):
+                                    modal = page.locator('.overlay .modal')
+                                    expect(modal).to_be_visible()
+                                    for _ in range(5):
+                                        name = modal.get_by_placeholder('如：科技数码达人', exact=True)
+                                        direction = modal.get_by_placeholder('如：平价护肤测评', exact=True)
+                                        current = 0 if name.count() else 2 if direction.count() else 1 if modal.get_by_text(re.compile('^贴上各平台主页链接')).count() else 3
+                                        if current == 0:
+                                            name.fill(LONG)
+                                            platform = modal.get_by_role('button', name='小红书', exact=True)
+                                            if '--accent-soft' not in (platform.get_attribute('style') or ''):
+                                                platform.click()
+                                        elif current == 1:
+                                            for link in modal.locator('input').all():
+                                                link.fill('https://example.test/' + 'retained-reference-' * 12)
+                                        elif current == 2:
+                                            direction.fill(LONG)
+                                            for field in modal.locator('textarea').all():
+                                                field.fill(LONG)
+                                        else:
+                                            for field in modal.locator('input,textarea').all():
+                                                field.fill(LONG)
+                                        if current == wanted:
+                                            return
+                                        modal.get_by_role('button', name='下一步' if current < wanted else '上一步', exact=True).click()
+                                    raise AssertionError('Official profile wizard did not reach requested step: ' + str(wanted))
+                                for step, state in enumerate(('basic_information', 'social_links', 'operation_intent', 'preferences')):
+                                    run('profiles.create', '/toolbox?section=profiles&item=new', '.overlay .modal', state,
+                                        before=lambda step=step: wizard_step(step))
                             run('accounts.main', '/toolbox?section=distribution&pane=connections', '.accounts-page', marker='微信公众号')
                             run('publishing.main', '/toolbox?section=publications', '.publishing-workspace', marker=MARK)
                             run('settings.panel', '/settings?panel=model', '.settings-panel', 'model_section', marker='设置')
@@ -1035,11 +1077,11 @@ def main():
                                 run('work.discussion', work_path, '.chat-page', 'raw_draft', before=discuss_version)
                                 def records():
                                     page.locator('details.ew-disclosure > summary').filter(has_text=re.compile('^版本与记录$')).click()
-                                    page.locator('details.ew-disclosure:has(> summary:text-is("版本与记录")) details > summary').first.click()
-                                run('work.records', work_path, 'details.ew-disclosure:has(> summary:text-is("版本与记录"))', 'history_expanded', marker=MARK, before=records)
+                                    page.locator('details.ew-disclosure:has(> summary > span:text-is("版本与记录")) details > summary').first.click()
+                                run('work.records', work_path, 'details.ew-disclosure:has(> summary > span:text-is("版本与记录"))', 'history_expanded', marker=MARK, before=records)
                                 def record_sheet():
                                     page.locator('details.ew-disclosure > summary').filter(has_text=re.compile('^版本与记录$')).click()
-                                    page.locator('details.ew-disclosure:has(> summary:text-is("版本与记录")) details > summary').first.click()
+                                    page.locator('details.ew-disclosure:has(> summary > span:text-is("版本与记录")) details > summary').first.click()
                                     trigger = page.get_by_role('button', name='本版制作设置', exact=True)
                                     sheet = page.locator('.drawer[role="dialog"][aria-label="本版制作设置"]')
                                     observations = []
@@ -1087,7 +1129,7 @@ def main():
                                                     steps.append({'before': before['top'], 'after': after})
                                                     assert after > before['top'] + 1, ('First/effective record gesture did not advance the scroll body', before, after)
                                                     assert page.evaluate(background) == background_before, 'Record sheet gesture scrolled its background'
-                                                tail = pre.evaluate("""el=>{const node=el.lastChild,body=el.closest('.drawer-body'),b=body.getBoundingClientRect();let r=null;if(node?.nodeType===Node.TEXT_NODE&&node.length){const range=document.createRange();range.setStart(node,Math.max(0,node.length-1));range.setEnd(node,node.length);r=range.getBoundingClientRect();}return {top:body.scrollTop,max:body.scrollHeight-body.clientHeight,tail:r?{top:r.top,bottom:r.bottom}:null,body:{top:b.top,bottom:b.bottom}};}""")
+                                                tail = pre.evaluate("""el=>{const node=el.lastChild,body=el.closest('.drawer[role=dialog]'),b=body.getBoundingClientRect();let r=null;if(node?.nodeType===Node.TEXT_NODE&&node.length){const range=document.createRange();range.setStart(node,Math.max(0,node.length-1));range.setEnd(node,node.length);r=range.getBoundingClientRect();}return {top:body.scrollTop,max:body.scrollHeight-body.clientHeight,tail:r?{top:r.top,bottom:r.bottom}:null,body:{top:Math.max(0,b.top),bottom:Math.min(innerHeight,b.bottom)}};}""")
                                                 assert steps and tail['top'] >= tail['max'] - 1 and tail['tail'] and tail['tail']['top'] >= tail['body']['top'] - 1 and tail['tail']['bottom'] <= tail['body']['bottom'] + 1, ('Record end text is not actually visible', tail)
                                                 gesture(-1)
                                                 assert page.evaluate(background) == background_before, 'Record sheet bottom boundary scrolled its background'
@@ -1118,7 +1160,9 @@ def main():
                                 run('drafts.local', '/posters?drafts=1', '.page-scroll', 'nonempty_local_inputs', marker=MARK)
                                 skill_path = '/toolbox?section=skills&item=' + ids['skill'] + '&version=' + str(ids['skill_version'])
                                 def open_skill():
-                                    page.locator('.skill-card').first.click()
+                                    card = page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname', has_text=re.compile(r'^ai-image-gen$')))
+                                    expect(card).to_have_count(1)
+                                    card.click()
                                     expect(page.locator('.drawer .skill-body-md')).to_be_visible()
                                 run('skills.drawer', '/toolbox?section=skills', '.drawer-overlay .drawer', 'official_skill', before=open_skill)
                                 run('skills.version', skill_path, DRAWER, 'candidate_edit', marker=MARK,
@@ -1242,7 +1286,27 @@ def main():
                                             capture('accounts.logout-confirm', '.accounts-page', 'cancel_preserves_connection', '微信公众号')
                                         except Exception as error:
                                             report['checks'].append({'case': label, 'surface_id': 'accounts.logout-confirm', 'state': 'cancel_preserves_connection', 'passed': False, 'rendered': False, 'error': str(error)})
-                                    run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.notice-error', 'missing_work_retry', marker='作品')
+                                    recovery_draft_key = 'toolbox:draft:mobile-audit:route-recovery'
+                                    recovery_draft = json.dumps({'text': LONG, 'files': [{'name': '原附件.png', 'local_id': 'TEMP-original-attachment'}]}, ensure_ascii=False)
+                                    page.evaluate('([key,value])=>localStorage.setItem(key,value)', [recovery_draft_key, recovery_draft])
+                                    def missing_work_recovery():
+                                        expect(page.locator('.notice-error')).to_have_text('作品不存在')
+                                        assert page.evaluate('key=>localStorage.getItem(key)', recovery_draft_key) == recovery_draft
+                                        opener = page.get_by_role('button', name='打开导航', exact=True)
+                                        opened_navigation = opener.is_visible()
+                                        if opened_navigation:
+                                            opener.click()
+                                        expect(page.locator('.sidebar .nav-item')).to_have_count(6)
+                                        for item in page.locator('.sidebar .nav-item').all():
+                                            expect(item).to_be_visible()
+                                            expect(item).to_be_enabled()
+                                        if opened_navigation:
+                                            page.keyboard.press('Escape')
+                                        report.setdefault('route_recovery_observations', []).append({'case': label,
+                                            'error': '作品不存在', 'navigation_destinations': 6,
+                                            'draft_and_attachment_metadata_preserved': True,
+                                            'draft_sha256': hashlib.sha256(recovery_draft.encode()).hexdigest()})
+                                    run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.notice-error', 'missing_work_route', marker='作品不存在', before=missing_work_recovery)
                                     def open_nav():
                                         expect(page.locator('.sidebar .nav-item')).to_have_count(6)
                                         opener = page.get_by_role('button', name='打开导航', exact=True)

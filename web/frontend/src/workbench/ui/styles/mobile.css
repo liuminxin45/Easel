@@ -116,6 +116,7 @@
   /* div overlays scroll their card; native dialogs use one scrolling body. */
   html[data-native-platform] .overlay { padding: 12px; block-size: var(--native-height, 100dvh); overscroll-behavior-y: contain; }
   html[data-native-platform] .overlay > .modal { max-inline-size: 100%; max-block-size: calc(var(--native-height, 100dvh) - 24px); padding: 18px; overflow-y: auto; overscroll-behavior-y: contain; }
+  html[data-native-platform] .overlay > .modal > div:first-child > button { min-inline-size: 44px; min-block-size: 44px; flex-shrink: 0; }
   html[data-native-platform] .overlay > .modal > div:has(> div > input[type="date"]),
   html[data-native-platform] .overlay > .modal > div:has(> div > input[type="time"]),
   html[data-native-platform] .overlay > .modal > div:has(> button.chip) { flex-wrap: wrap; min-inline-size: 0; }
@@ -137,6 +138,8 @@
   html[data-native-platform] .trend-manager-row { flex-wrap: wrap; }
 
   html[data-native-platform] .settings-panel { inline-size: calc(100% - 16px); max-inline-size: none; block-size: calc(var(--native-height, 100dvh) - 16px); max-block-size: calc(var(--native-height, 100dvh) - 16px); }
+  html[data-native-platform] .settings-panel button.tag.backup,
+  html[data-native-platform] .settings-panel button.adv-btn { min-inline-size: 44px; min-block-size: 44px; }
   html[data-native-platform] .settings-body { flex-direction: column; min-block-size: 0; }
   html[data-native-platform] .settings-nav { inline-size: 100%; flex-direction: row; overflow-x: auto; flex: 0 0 auto; }
   html[data-native-platform] .settings-nav .snav { flex-shrink: 0; }

@@ -29,7 +29,8 @@ def test_native_catalog_is_complete_without_editing_upstream_skill_sources(libra
     assert {row['id'] for row in native}=={'card-quote','ai-image-gen','asset-manager'}
     assert all(row['launch_actions'][0]['task']=='native' for row in native)
     assert len([row for row in rows if row.get('origin')=='workbench'])==8
-    assert b.skill('card-quote')['body'] in b.skill('card-quote')['prompt']
+    # Official display parsing joins lines; the frozen prompt keeps its raw CRLF.
+    assert b.skill('card-quote')['body'] in b.skill('card-quote')['prompt'].replace('\r\n','\n')
     assert all(path.read_bytes()==raw for path,raw in before.items())
     with b.store.connect() as c:assert not c.execute("SELECT 1 FROM creator_skills WHERE id='card-quote'").fetchone()
 

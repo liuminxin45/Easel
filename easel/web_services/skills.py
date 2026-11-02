@@ -98,9 +98,12 @@ for _spec in SKILL_API_REQUIREMENTS.values():
 
 
 def _parse_skill_md(path: Path) -> tuple[str, str, str]:
+    return parse_skill_text(path.read_text(encoding='utf-8'))
+
+
+def parse_skill_text(text: str) -> tuple[str, str, str]:
     """解析 SKILL.md → (description, layer, body)。body 为去掉 frontmatter 的正文。
     正确处理 YAML 块标量 description（`>-` / `>` / `|` 后跟缩进多行）。"""
-    text = path.read_text(encoding='utf-8')
     desc, layer, body = '', '', text
     lines = text.splitlines()
     if not (lines and lines[0].strip() == '---'):
@@ -206,7 +209,7 @@ def skill_status(name, environment):
             'apiConfigured':_skill_api_configured(name,environment) if needed else True,
             'apiSpec':_api_spec_status(name,environment) if needed else None}
 
-EXPORTS=('_model_spec','_short_drama_spec','_parse_skill_md','_mask','_key_configured','_skill_api_configured','_api_spec_status', 'SKILL_API_REQUIREMENTS', '_ENV_ALLOWLIST')
+EXPORTS=('_model_spec','_short_drama_spec','_parse_skill_md','parse_skill_text','_mask','_key_configured','_skill_api_configured','_api_spec_status', 'SKILL_API_REQUIREMENTS', '_ENV_ALLOWLIST')
 
 def bind(context=None, *, into=None):
     import sys

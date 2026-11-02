@@ -12,7 +12,7 @@ import json
 import mimetypes
 from pathlib import Path
 import shutil
-from easel.web_services.skills import skill_status
+from easel.web_services.skills import parse_skill_text, skill_status
 
 from .skill_catalog import parse_skill
 from .runtime.creator_runtime import packed, digest
@@ -40,12 +40,13 @@ class UpstreamSkills:
     def entries(self):
         result=[]
         for path in sorted((self.source/'skills/builtin').glob('*/SKILL.md')):
-            raw=self._read(path);meta,body=parse_skill(raw.decode('utf-8-sig'))
+            raw=self._read(path);text=raw.decode('utf-8-sig');meta,_=parse_skill(text)
             if ((meta.get('metadata') or {}).get('openclaw') or {}).get('workbench') is not None:continue
+            description,layer,body=parse_skill_text(text)
             # Easel discovers by directory; some upstream skills deliberately
             # keep a different frontmatter alias (e.g. skill-xhs-analyzer/redbook).
             result.append({'id':path.parent.name,'entry':path.relative_to(self.source).as_posix(),
-                           'description':meta.get('description',''),'layer':meta.get('layer','general'),
+                           'description':description,'layer':layer,
                            'prompt':raw.decode('utf-8'),'body':body,'meta':meta})
         return result
 
@@ -111,10 +112,11 @@ class UpstreamSkills:
         return result
 
     def detail(self, sid):
-        release=self.release(sid);meta,body=parse_skill(release['prompt'].lstrip('\ufeff'))
+        release=self.release(sid);text=release['prompt'].lstrip('\ufeff');meta,_=parse_skill(text)
+        description,layer,body=parse_skill_text(text)
         configuration=self.configuration() if hasattr(self,'configuration') else {'revision':None,'environment':self.environment() if hasattr(self,'environment') else {}}
         environment=configuration['environment']
-        return {**release,'name':sid,'body':body,'content':body,'meta':meta,'raw':release['prompt'],
+        return {**release,'name':sid,'description':description,'layer':layer,'body':body,'content':body,'meta':meta,'raw':release['prompt'],
                 **skill_status(sid,environment),'configuration_revision':configuration['revision']}
 
     def snapshot(self, profile, sid, version=None):

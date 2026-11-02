@@ -198,13 +198,13 @@ def exercise_official_skill_drawer(page, open_catalog, out, label, *, hosted):
         page.screenshot(path=str(out / (label + '-skill-result.png')))
         initial.update(result_retained_in_drawer=True, saved_once=True, executed_once=True, wire_calls=state['calls'],
                        protocol_fixture_only=True, actual_model_calls=0, actual_credentials_saved=0)
-        drawer.get_by_role('button', name='关闭', exact=True).click();expect(drawer).to_have_count(0)
+        drawer.get_by_title('关闭', exact=True).click();expect(drawer).to_have_count(0)
         card.click();expect(drawer.locator('.skill-body-md')).to_be_visible()
         if hosted:
             page.go_back();expect(drawer).to_have_count(0)
             initial['browser_back_closes_only_drawer'] = True
         else:
-            drawer.get_by_role('button', name='关闭', exact=True).click()
+            drawer.get_by_title('关闭', exact=True).click()
         return initial
     finally:
         page.unroute('**/api/**', wire)

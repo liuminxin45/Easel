@@ -32,14 +32,68 @@ def test_skill_rules_and_parsers_are_moved_from_official_without_duplicate_bodie
     official=ast.parse(subprocess.check_output(['git','show','0f43dc9:web/app.py'],cwd=ROOT,text=True,encoding='utf-8'))
     shared=ast.parse((ROOT/'easel/web_services/skills.py').read_text(encoding='utf-8'))
     current=ast.parse((ROOT/'web/app.py').read_text(encoding='utf-8'))
-    for name in ('_model_spec','_short_drama_spec','_parse_skill_md','_mask','_key_configured','_skill_api_configured','_api_spec_status'):
+    for name in ('_model_spec','_short_drama_spec','_mask','_key_configured','_skill_api_configured','_api_spec_status'):
         before=next(n for n in official.body if isinstance(n,ast.FunctionDef) and n.name==name)
         after=next(n for n in shared.body if isinstance(n,ast.FunctionDef) and n.name==name)
         assert ast.dump(before,include_attributes=False)==ast.dump(after,include_attributes=False),name
         assert not any(isinstance(n,ast.FunctionDef) and n.name==name for n in current.body),name
+    before=next(n for n in official.body if isinstance(n,ast.FunctionDef) and n.name=='_parse_skill_md')
+    parser=next(n for n in shared.body if isinstance(n,ast.FunctionDef) and n.name=='parse_skill_text')
+    # The original parser body is unchanged except that the host supplies text.
+    expected=copy.deepcopy(before);expected.name=parser.name;expected.args=copy.deepcopy(parser.args)
+    del expected.body[1]  # text = path.read_text(encoding='utf-8')
+    assert ast.dump(expected,include_attributes=False)==ast.dump(parser,include_attributes=False)
+    wrapper=next(n for n in shared.body if isinstance(n,ast.FunctionDef) and n.name=='_parse_skill_md')
+    assert ast.dump(wrapper.body[0],include_attributes=False)==ast.dump(ast.parse("return parse_skill_text(path.read_text(encoding='utf-8'))").body[0],include_attributes=False)
+    assert len(wrapper.body)==1
+    assert not any(isinstance(n,ast.FunctionDef) and n.name=='_parse_skill_md' for n in current.body)
     def table(tree):return next(n for n in tree.body if isinstance(n,ast.AnnAssign) and isinstance(n.target,ast.Name) and n.target.id=='SKILL_API_REQUIREMENTS')
     assert ast.dump(table(official),include_attributes=False)==ast.dump(table(shared),include_attributes=False)
     assert not any(isinstance(n,ast.AnnAssign) and isinstance(n.target,ast.Name) and n.target.id=='SKILL_API_REQUIREMENTS' for n in current.body)
+
+
+OFFICIAL_SKILL_PATHS=[name for name in subprocess.check_output(
+    ['git','ls-tree','-r','--name-only','0f43dc9','--','skills/builtin'],cwd=ROOT,text=True,encoding='utf-8').splitlines()
+    if name.endswith('/SKILL.md')]
+
+
+@pytest.fixture(scope='module')
+def official_skill_parser():
+    source=subprocess.check_output(['git','show','0f43dc9:web/app.py'],cwd=ROOT,text=True,encoding='utf-8')
+    node=next(n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name=='_parse_skill_md')
+    namespace={'Path':Path};exec(compile(ast.Module(body=[node],type_ignores=[]),'official-parser','exec'),namespace)
+    return namespace['_parse_skill_md']
+
+
+@pytest.mark.parametrize('relative',OFFICIAL_SKILL_PATHS)
+def test_each_official_skill_uses_the_original_text_parser_without_rewriting_sources(relative,official_skill_parser):
+    path=ROOT/relative;original=path.read_bytes()
+    expected=official_skill_parser(path)
+    assert shared_skills.parse_skill_text(path.read_text(encoding='utf-8'))==expected
+    assert shared_skills._parse_skill_md(path)==expected
+    assert path.read_bytes()==original
+
+
+def test_upstream_entries_and_historical_detail_share_display_parsing_without_mutating_releases(monkeypatch):
+    from easel_workbench.upstream_skills import UpstreamSkills
+    library=UpstreamSkills.__new__(UpstreamSkills);library.root=library.source=ROOT
+    entries={item['entry']:item for item in library.entries()}
+    assert len(OFFICIAL_SKILL_PATHS)==115
+    for relative in OFFICIAL_SKILL_PATHS:
+        item=entries[relative];raw=(ROOT/relative).read_bytes()
+        description,layer,body=shared_skills._parse_skill_md(ROOT/relative)
+        assert (item['description'],item['layer'],item['body'])==(description,layer,body)
+        assert item['prompt'].encode('utf-8')==raw
+    release={'id':'original-id','name':'original-alias','version':8,'sha256':'frozen-historical-sha',
+             'source_revision':'frozen-source','description':'old YAML display','layer':'old-layer',
+             'prompt':'---\nname: original-alias\ndescription: |\n  Original first line\n  Original second line\nlayer: produce\n---\n\n# Frozen original body\n'}
+    preserved=copy.deepcopy(release)
+    monkeypatch.setattr(library,'release',lambda sid:release)
+    detail=library.detail('original-id')
+    assert (detail['description'],detail['layer'],detail['body'])==shared_skills.parse_skill_text(release['prompt'])
+    assert detail['raw']==detail['prompt']==preserved['prompt']
+    for field in ('id','version','sha256','source_revision'):assert detail[field]==preserved[field]
+    assert release==preserved
 
 def test_all_seven_official_skills_have_exact_configuration_shape_and_masking():
     assert len(shared_skills.SKILL_API_REQUIREMENTS)==7

@@ -56,6 +56,10 @@ def test_external_worker_dry_bootstrap_uses_real_services_only_inside_canary(bus
     monkeypatch.setenv('AI_DESK_RELEASE',os.environ.get('AI_DESK_RELEASE','test-only'))
     sys.path.insert(0,str(controller))
     from easel_health_control import canary_worker
+    from easel_health_control import renderer
+    # Native permission/staging has its own real Windows sandbox probe. This
+    # fixture verifies the app service graph without copying an interpreter.
+    monkeypatch.setattr(renderer,'stage_runtime',lambda python,root: {'python':str(root/'.tools/python.exe'),'renderer':str(root/'.tools/renderer.py')})
     prepared(business)
     source=business.root
     registry=source/'easel_workbench/runtime/sources.json'
@@ -86,5 +90,7 @@ def test_external_worker_dry_bootstrap_uses_real_services_only_inside_canary(bus
             assert c.execute('SELECT count(*) FROM easel_chat_sessions').fetchone()[0]==0
         asyncio.run(context['admission'].close());asyncio.run(context['chat'].close())
     finally:
+        assert workspace.resolve().parent==business.root.resolve().parent
+        assert workspace.name==business.root.name+'-external' and workspace.resolve()!=business.root.resolve()
         shutil.rmtree(workspace,ignore_errors=True)
         sys.path[:]=old_paths

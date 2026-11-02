@@ -13,6 +13,27 @@ from .monitor import Monitor
 from .state import StateStore
 
 
+def reconcile_pending(adapter, store):
+    policy = store.policy()
+    pending = policy.get('pending_operation') if isinstance(policy, dict) else None
+    if not pending: return
+    original = store.read('repair-'+pending+'.json', {})
+    request = original.get('request', {})
+    answer = adapter.reconcile(request)
+    if (answer.get('status') != 'receipt_confirmed'
+            or any(answer.get(key) != request.get(key) for key in ('operation_id', 'action', 'binding'))
+            or answer.get('outcome') not in ('server_restart_requested', 'manager_restart_requested', 'already_healthy', 'deferred')):
+        return
+    with store.lock():
+        fresh = store.policy()
+        if not isinstance(fresh, dict) or fresh.get('pending_operation') != pending: return
+        # Read the original completed receipt; never issue another recovery.
+        store.write('repair-'+pending+'.json', {**original, 'phase': 'acknowledged', 'outcome': answer['outcome']})
+        fresh.update(pending_operation=None, decision='repair_receipt_reconciled')
+        store.save_policy(fresh)
+        store.event('repair_receipt_reconciled', at=time.time(), operation_id=pending, outcome=answer['outcome'])
+
+
 def report(store):
     status = store.read('status.json', {})
     daily = store.read('daily-status.json', {})
@@ -60,12 +81,9 @@ def main(argv=None):
         monitor = Monitor(config, store, inspect_target=adapter.inspect, recovery_bridge=adapter.recover)
         deadline = time.monotonic() + max(0, min(options.duration, 50))
         while True:
-            policy = store.policy()
-            pending = policy.get('pending_operation') if isinstance(policy, dict) else None
-            if config.get('auto_repair') is True and pending:
-                original = store.read('repair-'+pending+'.json', {})
+            if config.get('auto_repair') is True:
                 try:
-                    adapter.reconcile(original.get('request', {}))
+                    reconcile_pending(adapter, store)
                 except Exception:
                     # A missing/dead application cannot stop the independent
                     # monitor. Keep the original unknown budget/receipt intact.

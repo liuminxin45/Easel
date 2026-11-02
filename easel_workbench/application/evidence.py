@@ -470,9 +470,9 @@ class LearningService:
             return snapshot
 
     def claim_task(self, owner, lease_seconds=300):
+        flags = self.batch.runtime_flags()
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
-            flags = self.batch.runtime_flags()
             if flags.get('cutover_paused') is True:
                 return None
             # Do not automatically reclaim an expired running AI call. The old
@@ -492,7 +492,9 @@ class LearningService:
                     self._put(c, 'learning_evidence', evidence)
             busy = self.batch.busy(c)
             where = " AND kind='production_review'" if busy else ''
-            self.batch.sync_sources(c)
+            # Claiming a queue entry is not a request to rebuild all historical
+            # learning projections. Explicit manual cycles prepare their actual
+            # sources through BatchLearning.start's sole sync_sources call.
             self.batch.admit_scheduled(c)
             if self.batch.settings(c)['paused']:
                 where += " AND (kind<>'batch_analysis' OR coalesce(json_extract(payload,'$.manual'),0)=1)"

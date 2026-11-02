@@ -14,4 +14,4 @@
 
 验收：应用缺失/HTTP 超时/中控重启/PID 复用/上游500/忙碌任务/未知回执/重复日程故障注入；真实规模性能回归；首次真实 canary；独立任务实际运行及中控自恢复；自有 fork 提交推送与不可变版本部署。物理 vivo 未实测不得冒称验收。GitHub Actions 当前仓库禁用，日常检测不依赖云端 CI。
 
-当前状态：实施中。证据将保存在 `.local/workbench-validation/independent-health-20261103/` 与中控外部 runtime。
+当前状态：首批380通过、36项冻结版浏览器闭环及10个线上页面通过，已推送并部署首版。独立任务实机注册、旧健康任务归档停用。首次真实样本已采集并执行Agent，但因严格沙箱不能启动AppData Python未生成PNG，失败保留、未重放。工作区Python工具已经实际无模型沙箱验证修复；中控又检出learning长写锁并修复，增量182项通过，正冻结最终配对版本及独立自恢复演练。证据位于 `.local/workbench-validation/independent-health-20261103/` 与中控外部 runtime。

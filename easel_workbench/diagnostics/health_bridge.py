@@ -128,8 +128,12 @@ def recover(root, request):
         executor = _self_identity()
         if not atomic_create(path, {'schema': 1, 'request': request, 'phase': 'attempted', 'executor': executor}):
             raise watchdog.GuardError('recovery_operation_already_exists')
+        mutation_entry = None
         try:
-            watchdog.operator_gates(root)
+            try:
+                watchdog.operator_gates(root)
+            except (ValueError, TimeoutError) as error:
+                raise watchdog.GuardError('business_queue_not_idle') from error
             bound = watchdog.controls(root)
             if not selected['alive']:
                 if request['action'] != 'restart_manager' or not current['manager_task_verified']:
@@ -142,6 +146,7 @@ def recover(root, request):
                 elif latest['manager']['alive']:
                     outcome = 'already_healthy'
                 else:
+                    mutation_entry = 'task'
                     task(root, start=True)
                     outcome = 'manager_restart_requested'
             else:
@@ -156,14 +161,29 @@ def recover(root, request):
                 else:
                     status = watchdog.read(root / watchdog.STATE_DIR / 'pids.json')
                     if request['action'] == 'restart_manager':
+                        mutation_entry = 'manager'
                         _, outcome = watchdog.recover_manager(root, bound, selected, policy)
                     else:
+                        mutation_entry = 'server'
                         _, outcome = watchdog.recover_server(root, bound, status, selected, policy, current['health_token'])
                     if outcome.endswith('without_restart'):
                         outcome = 'already_healthy'
             reply['outcome'] = outcome
             atomic(path, {'schema': 1, 'request': request, 'phase': 'completed', 'outcome': outcome, 'executor': executor})
             return reply
+        except watchdog.GuardError:
+            # A proven pre-termination guard failure is a deferral, not an
+            # ambiguous kill. Keep the consumed budget; never repeat this op.
+            journal_path = root/watchdog.STATE_DIR/'health-recovery.json'
+            journal = watchdog.read(journal_path) if journal_path.exists() else {}
+            uncertain = mutation_entry in ('task', 'manager') or (journal.get('watchdog_pid') == executor['pid']
+                and journal.get('watchdog_creation_ticks') == executor['creation_ticks']
+                and journal.get('phase') in ('stopping', 'stopped'))
+            if uncertain:
+                atomic(path, {'schema': 1, 'request': request, 'phase': 'unknown', 'executor': executor})
+                raise
+            atomic(path, {'schema': 1, 'request': request, 'phase': 'completed', 'outcome': 'deferred', 'executor': executor})
+            return {**reply, 'outcome': 'deferred'}
         except BaseException:
             atomic(path, {'schema': 1, 'request': request, 'phase': 'unknown', 'executor': executor})
             raise
@@ -178,6 +198,10 @@ def reconcile(root, request):
     record = watchdog.read(state/('external-health-'+operation+'.json'))
     if record.get('request') != request:
         raise watchdog.GuardError('reconciliation_request_changed')
+    if record.get('phase') == 'completed' and record.get('outcome') in (
+            'server_restart_requested', 'manager_restart_requested', 'already_healthy', 'deferred'):
+        return {key: request[key] for key in ('operation_id', 'action', 'binding')} | {
+            'status': 'receipt_confirmed', 'outcome': record['outcome']}
     executor = record.get('executor', {})
     current = rows().get(executor.get('pid'))
     if current and int(current['creation_ticks'])//10 == int(executor['creation_ticks'])//10:

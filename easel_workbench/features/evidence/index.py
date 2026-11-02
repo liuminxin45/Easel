@@ -59,6 +59,10 @@ class EvidenceIndex:
 
     def _search_text(self,c,evidence,body):
         if not isinstance(body,str) or len(body)>8*1024*1024:return
+        # Even a no-op UPSERT starts an implicit write transaction in SQLite.
+        # Verify this derived row before issuing DML, preserving exact-body repair.
+        if c.execute('SELECT 1 FROM learning_evidence_search WHERE id=? AND sha256=? AND body=?',
+                     (evidence['id'],evidence['sha256'],body)).fetchone():return
         c.execute('INSERT INTO learning_evidence_search VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET sha256=excluded.sha256,body=excluded.body WHERE sha256<>excluded.sha256 OR body<>excluded.body',
                   (evidence['id'],evidence['sha256'],body))
 
@@ -303,9 +307,9 @@ class EvidenceIndex:
 
     def queue_index_refresh(self, fingerprint=None):
         fingerprint = fingerprint or self.watch_fingerprint()
+        flags = self.batch.runtime_flags()
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
-            flags = self.batch.runtime_flags()
             if flags.get('cutover_paused') is True:
                 return None
             previous = c.execute("SELECT document FROM learning_index_state WHERE id='file-watch'").fetchone()

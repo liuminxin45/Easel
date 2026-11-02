@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS learning_batch_calls(id TEXT PRIMARY KEY,document TEX
         return [json.loads(row[0]) for row in c.execute('SELECT document FROM ' + table + ' ORDER BY updated_at,rowid')]
 
     def put(self, c, table, item):
-        c.execute('INSERT INTO ' + table + ' VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET document=excluded.document,updated_at=excluded.updated_at',
+        c.execute('INSERT INTO ' + table + ' VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET document=excluded.document,updated_at=excluded.updated_at WHERE document<>excluded.document',
                   (item['id'], packed(item), self.now()))
         return item
 
@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS learning_batch_calls(id TEXT PRIMARY KEY,document TEX
         if old:
             # Byte-identical evidence can recur on another version. Keep every
             # occurrence without creating another model call for those bytes.
+            if old.get('occurrences')==item['occurrences']:return old
             old['occurrences'] = item['occurrences']
             return self.put(c, 'learning_batch_sources', old)
         item.update(status='pending', first_seen_at=self.now())

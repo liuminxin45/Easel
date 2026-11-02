@@ -64,6 +64,17 @@ def test_unknown_bridge_receipt_does_not_repeat_task_start(prepared, monkeypatch
     assert json.loads(path.read_text(encoding='utf-8'))['phase'] == 'unknown'
 
 
+def test_changed_idle_queue_before_any_mutation_is_acknowledged_deferral(prepared, monkeypatch):
+    def busy(root): raise ValueError('native queue accepted new work')
+    monkeypatch.setattr(bridge.watchdog,'operator_gates',busy)
+    answer=bridge.recover(prepared.root,prepared.request)
+    assert answer['outcome']=='deferred' and prepared.calls==[]
+    path=prepared.root/bridge.watchdog.STATE_DIR/('external-health-'+'a'*32+'.json')
+    assert json.loads(path.read_text(encoding='utf-8'))['phase']=='completed'
+    proof=bridge.reconcile(prepared.root,prepared.request)
+    assert proof['status']=='receipt_confirmed' and proof['outcome']=='deferred'
+
+
 def test_manager_start_race_checks_binding_again(prepared, monkeypatch):
     first = prepared.current
     changed = {**first, 'binding': {**first['binding'], 'release': 'workbench-other'}}

@@ -138,6 +138,13 @@ def test_png_nonce_must_match_actual_operation(tmp_path):
     with pytest.raises(ValueError,match='operation_metadata'):canary_worker.verify_image_receipt(root,tid,'op')
 
 
+def test_terminal_native_without_image_is_failed_acceptance_not_unknown_execution(tmp_path):
+    root,tid,image=image_database(tmp_path)
+    with sqlite3.connect(root/'data/desk.sqlite') as c:c.execute('DELETE FROM artifacts')
+    result=canary_worker.checked_image_receipt(root,tid,'op')
+    assert result=={'status':'failed','reason':'artifact_validation_failed','validation_code':'canary_requires_exactly_one_png'}
+
+
 def test_confirmed_exited_preflight_can_retry_same_operation_at_most_three_times(tmp_path):
     root=tmp_path/'controller';ids=[]
     def runner(command,**kwargs):

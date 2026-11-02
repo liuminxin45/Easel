@@ -20,18 +20,8 @@ class CollectionQueue:
         self.store=store;self.root=Path(root);self.clock=clock or (lambda:dt.datetime.now(TZ))
         self.state=self.root/'data/collection';self.state.mkdir(parents=True,exist_ok=True)
         with store.connect() as c:
-            c.executescript('''
-CREATE TABLE IF NOT EXISTS collection_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,run_id TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS collection_runs(id TEXT PRIMARY KEY,trigger TEXT NOT NULL,scope TEXT NOT NULL,created_at TEXT NOT NULL,retry_of TEXT);
-CREATE TABLE IF NOT EXISTS collection_tasks(id TEXT PRIMARY KEY,source_id TEXT NOT NULL,status TEXT NOT NULL,phase TEXT NOT NULL,created_at TEXT NOT NULL,started_at TEXT,finished_at TEXT,force INTEGER NOT NULL DEFAULT 0,attempts INTEGER NOT NULL DEFAULT 0,next_attempt REAL NOT NULL DEFAULT 0,owner TEXT,owner_pid INTEGER,owner_creation TEXT,lease_token TEXT,lease_until REAL,heartbeat TEXT,fetched INTEGER NOT NULL DEFAULT 0,selected INTEGER NOT NULL DEFAULT 0,inserted INTEGER NOT NULL DEFAULT 0,duplicates INTEGER NOT NULL DEFAULT 0,error TEXT,message TEXT NOT NULL DEFAULT '',warnings TEXT NOT NULL DEFAULT '[]',retry_of TEXT);
-CREATE UNIQUE INDEX IF NOT EXISTS collection_source_active ON collection_tasks(source_id) WHERE status IN ('queued','running');
-CREATE TABLE IF NOT EXISTS collection_run_tasks(run_id TEXT NOT NULL,task_id TEXT NOT NULL,PRIMARY KEY(run_id,task_id));
-CREATE INDEX IF NOT EXISTS collection_tasks_created ON collection_tasks(created_at);
-CREATE TABLE IF NOT EXISTS collection_schedule_state(source_id TEXT PRIMARY KEY,next_run_at TEXT NOT NULL,last_slot TEXT,schedule_hash TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS collection_slots(source_id TEXT NOT NULL,scheduled_for TEXT NOT NULL,task_id TEXT NOT NULL,PRIMARY KEY(source_id,scheduled_for));
-''')
-            if 'resume_from' not in {row[1] for row in c.execute('PRAGMA table_info(collection_tasks)')}:c.execute('ALTER TABLE collection_tasks ADD COLUMN resume_from TEXT')
-            if 'source_snapshot' not in {row[1] for row in c.execute('PRAGMA table_info(collection_tasks)')}:c.execute('ALTER TABLE collection_tasks ADD COLUMN source_snapshot TEXT')
+            from easel_workbench.infrastructure.storage.schema import initialize_collection
+            initialize_collection(c)
         self.registry=registry
 
     def configuration(self):

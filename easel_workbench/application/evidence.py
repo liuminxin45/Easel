@@ -60,16 +60,8 @@ class LearningService:
         self.index=EvidenceIndex(store=self.store,project=self.project,records=self.records,wake_event=self.wake_event,enqueue=lambda *a,**k:self._enqueue(*a,**k))
         self.rules=EvidenceRules(store=self.store,index=self.index,records=self.records)
         with self.store.connect() as c:
-            c.executescript('''
-CREATE TABLE IF NOT EXISTS learning_evidence(id TEXT PRIMARY KEY,sha256 TEXT NOT NULL UNIQUE,document TEXT NOT NULL,updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS learning_evidence_search(id TEXT PRIMARY KEY,sha256 TEXT NOT NULL,body TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS learning_proposals(id TEXT PRIMARY KEY,document TEXT NOT NULL,updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS learning_runs(id TEXT PRIMARY KEY,document TEXT NOT NULL,updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS learning_operations(operation_id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS learning_analysis_queue(id TEXT PRIMARY KEY,kind TEXT NOT NULL,status TEXT NOT NULL,priority INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL,started_at TEXT,finished_at TEXT,owner TEXT,lease_token TEXT,lease_until REAL,result TEXT,error TEXT);
-CREATE INDEX IF NOT EXISTS learning_queue_ready ON learning_analysis_queue(status,priority,created_at);
-CREATE TABLE IF NOT EXISTS learning_index_state(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-''')
+            from easel_workbench.infrastructure.storage.schema import initialize_evidence
+            initialize_evidence(c)
             from easel_workbench.runtime.batch_learning import BatchLearning
             self.batch = BatchLearning(self)
             self.index.batch=self.batch

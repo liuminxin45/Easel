@@ -31,13 +31,13 @@ PLATFORMS = {
 class EaselAccounts:
     def __init__(self, box, distribution, *, runner=None, autostart=True, vault=None):
         self.box, self.store, self.root, self.distribution = box, box.store, pathlib.Path(box.root), distribution
-        from easel_workbench.runtime.distribution_runtime import DPAPIVault
+        from easel_workbench.infrastructure.credentials import DPAPIVault
         # Keep legacy table names and vault location so existing operation IDs,
         # sessions and encrypted credentials remain readable. No media service.
         self.vault = vault or DPAPIVault(self.root / 'data/media-vault')
         with self.store.connect() as c:
-            c.executescript('CREATE TABLE IF NOT EXISTS media_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL); CREATE TABLE IF NOT EXISTS media_account_sessions(id TEXT PRIMARY KEY,document TEXT NOT NULL);')
-            c.execute('CREATE TABLE IF NOT EXISTS easel_native_account_bindings(platform TEXT PRIMARY KEY,session_id TEXT NOT NULL)')
+            from easel_workbench.infrastructure.storage.schema import initialize_accounts
+            initialize_accounts(c)
         self.runner, self.autostart = runner, autostart
 
     def _native_session(self, platform, *, create=False):
@@ -187,7 +187,7 @@ class EaselAccounts:
         with self.store.connect() as c:
             documents=[json.loads(r['document']) for r in c.execute('SELECT document FROM media_account_sessions ORDER BY rowid')]
             if self.autostart:
-                from easel_workbench.runtime.distribution_runtime import process_identity
+                from easel_workbench.infrastructure.processes import process_identity
                 for item in documents:
                     if not item.get('_native_managed') and item.get('state') in ('login','checking') and item.get('_owner_identity') and process_identity(item.get('_owner_pid'))!=item['_owner_identity']:
                         item.update(state='unknown',error='原登录进程已结束；请核对身份，不会自动重放登录。')
@@ -265,7 +265,7 @@ class EaselAccounts:
                     raise ValueError('不支持的账号操作')
             self._put(c, session)
             if launch:
-                from easel_workbench.runtime.distribution_runtime import process_identity
+                from easel_workbench.infrastructure.processes import process_identity
                 session.update(_owner_pid=os.getpid(),_owner_identity=process_identity(os.getpid()))
                 self._put(c,session)
             response = {'id': operation, 'status': 'accepted' if launch else 'completed', 'result': {'session': self._public(session)}}

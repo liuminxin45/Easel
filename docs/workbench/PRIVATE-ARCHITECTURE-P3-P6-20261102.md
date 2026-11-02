@@ -75,6 +75,27 @@ asyncio 的执行器退出，线程转储与 300 秒超时记录均保留。将�
 194 模块静态职责/边界无错，保护字节与正式指针保持。未下载或安装真实依赖。
 证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-installation/`。
 
+## P5：存储装配与复用基础能力
+
+`bootstrap/storage.py` 集中 Store/Toolbox 原初始化调用次序及一次性历史导入，
+`infrastructure/storage/schema.py` 保存对应原始 schema 片段；原入口按原连接调用。
+技能/任务 initializer 仍逐条 execute，保持调用方事务，不改成隐式提交的 executescript。
+没有新增迁移框架、库或迁移标记。显式 `create_app(root=...)` 的默认 Store 改为
+该 root 的 `data/desk.sqlite`，修复此前落到全局路径的问题。
+
+`infrastructure/credentials.py` 保存同一 DPAPI vault/异常对象、熵、NDV1 格式和 ACL；
+`infrastructure/processes.py` 保存原 PID/创建时间及采集 owner 判断。
+设置、账号、安装和历史角色直接复用；旧桥接继续兼容导出，不启用退役功能。
+七角色参数、OS 锁、原 Windows handle 实现、vendor 与脚本资产均保留。
+边界检查增加新 feature 经旧兼容模块反向进入应用，以及复用能力反向依赖退役桥接的反例。
+
+247 项存储/并发/进程身份/部署围栏/冻结/账号/技能回归通过；增加边界守卫与纯叶子导入后，
+143 项受影响检查重跑通过（与前组重叠）。真实 TEMP SQLite 的 158 个 master 成员，
+包括 SQL 与创建次序，与保存的原 Store/Toolbox 实现完全一致；21 处完整语句/行为对照通过。
+实际当前 Windows 用户 DPAPI TEMP 往返、连接隔离与密文头验证通过。
+Edge TEMP 内容闭环 34 项通过；200 模块边界/职责无错，927 份原字节和正式指针保持。
+证据：`.local/workbench-validation/architecture-p3-p6-20261102/p5/`。
+
 ## 后续切片
 
 P4 分采集、交付、安装三批；P5 整理装配与共享基础能力；P6 核对前端依赖、

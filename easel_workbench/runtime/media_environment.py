@@ -35,7 +35,8 @@ class MediaEnvironment:
         self.directory = self.root / '.runtime/media-tools'
         self._lock = threading.RLock()
         with self.store.connect() as c:
-            c.executescript('CREATE TABLE IF NOT EXISTS media_install_jobs(id TEXT PRIMARY KEY,recipe TEXT NOT NULL,document TEXT NOT NULL);')
+            from easel_workbench.infrastructure.storage.schema import initialize_installations
+            initialize_installations(c)
 
     @property
     def python(self):
@@ -47,7 +48,7 @@ class MediaEnvironment:
                               creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
     def _install_run(self,job,args,timeout=30):
-        from easel_workbench.runtime.distribution_runtime import process_identity
+        from easel_workbench.infrastructure.processes import process_identity
         process=subprocess.Popen([str(a) for a in args],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',
             env={**os.environ,'PLAYWRIGHT_BROWSERS_PATH':str(self.directory/'browsers')},creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         job.update(child_pid=process.pid,child_identity=process_identity(process.pid))
@@ -86,7 +87,7 @@ class MediaEnvironment:
             jobs = [json.loads(r['document']) for r in c.execute('SELECT document FROM media_install_jobs ORDER BY rowid DESC LIMIT 30')]
         # A restart cannot leave a permanent running lock. Wait while either
         # the owner or its child is alive; after both exit, only re-check files.
-        from easel_workbench.runtime.distribution_runtime import process_identity
+        from easel_workbench.infrastructure.processes import process_identity
         for job in jobs:
             if job['state'] not in ('queued','running') or not job.get('owner_identity'):continue
             live=process_identity(job.get('owner_pid'))==job['owner_identity'] or bool(job.get('child_identity') and process_identity(job.get('child_pid'))==job['child_identity'])

@@ -209,7 +209,7 @@ def main():
         previous=json.loads(receipt_path.read_text(encoding='utf-8'))
         if previous.get('job_id')!=payload['id'] or previous.get('fingerprint')!=payload['fingerprint']:raise ValueError('原任务回执身份不符')
         receipt=previous;receipt['outputs']=[]
-    from easel_workbench.runtime.distribution_runtime import process_identity
+    from easel_workbench.infrastructure.processes import process_identity
     receipt.update(worker_pid=os.getpid(),worker_identity=process_identity(os.getpid()))
     atomic(receipt_path, receipt)
     env = safe_env(payload['env'], directory)

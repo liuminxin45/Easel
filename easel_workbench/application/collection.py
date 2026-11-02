@@ -24,33 +24,11 @@ from easel_workbench.features.collection.schedules import LeaseLost,timestamp,TE
 from easel_workbench.runtime.feedback_ledger import atomic,locked
 
 
-def process_creation(pid):
-    if os.name=='nt':
-        from easel_workbench.runtime.scripts.windows_process_identity import ProcessIdentity
-        with ProcessIdentity(pid) as handle:return str(handle.creation_ticks)
-    path=Path('/proc')/str(pid)/'stat'
-    if path.exists():return path.read_text().rsplit(')',1)[1].split()[19]
-    return None
 
 
-def owner_is_gone(task):
-    """PID reuse is safe; unknown/access-denied identity is never treated as gone."""
-    pid=task.get('owner_pid');expected=task.get('owner_creation')
-    if type(pid) is not int or pid<=0:return False
-    if os.name=='nt':
-        from easel_workbench.runtime.scripts.windows_process_identity import ProcessIdentity
-        try:
-            with ProcessIdentity(pid) as handle:
-                if handle.exited():return True
-                return expected is not None and str(handle.creation_ticks)!=str(expected)
-        except OSError as error:return getattr(error,'winerror',None)==87
-    try:
-        os.kill(pid,0)
-    except ProcessLookupError:return True
-    except PermissionError:return False
-    actual=process_creation(pid)
-    return expected is not None and actual is not None and actual!=str(expected)
 
+
+from easel_workbench.infrastructure.processes import process_creation,owner_is_gone
 
 class CollectionWorker:
     def __init__(self,service,runner=None,concurrency=3,is_gone=owner_is_gone):

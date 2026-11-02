@@ -17,7 +17,7 @@ import contextlib
 
 from easel_workbench.skill_catalog import ProjectSkillCatalog,parse_skill
 from easel_workbench.paths import owned_output_path
-from easel_workbench.runtime.creator_runtime import packed, key, digest
+from easel_workbench.features.skills.records import packed, key, digest
 from easel_workbench.runtime.desk import stamp
 from easel_workbench.contracts.values import text
 
@@ -44,7 +44,8 @@ class ChatBusiness:
         self.bundles=SkillBundles(root=self.root,store=self.store,upstream=self.upstream)
         self.chat=None
         with self.store.connect() as c:
-            c.execute('CREATE TABLE IF NOT EXISTS easel_chat_plans(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,signature TEXT NOT NULL,document TEXT NOT NULL)')
+            from easel_workbench.infrastructure.storage.schema import initialize_chat_plans
+            initialize_chat_plans(c)
 
     def skills(self,include_upstream=True):
         from easel_workbench.skills import launch_metadata

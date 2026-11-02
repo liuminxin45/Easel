@@ -31,7 +31,7 @@ def signature(value):
 
 class SettingsService:
     def __init__(self, box, *, vault=None):
-        from .runtime.distribution_runtime import DPAPIVault
+        from easel_workbench.infrastructure.credentials import DPAPIVault
         self.box, self.store, self.root = box, box.store, Path(box.root).resolve()
         self.vault = vault or DPAPIVault(self.root / 'data/workbench-settings')
         self.lock = threading.RLock()
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
         path = directory / 'openclaw.json'
         if not path.exists():
             harness_store.write_json(path, document)
-            from .runtime.distribution_runtime import _private_acl
+            from easel_workbench.infrastructure.credentials import _private_acl
             _private_acl(directory, True)
             _private_acl(path)
         elif json.loads(path.read_text(encoding='utf-8')) != document:

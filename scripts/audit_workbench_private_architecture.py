@@ -201,10 +201,22 @@ def boundary_errors(record):
             forbidden = (PREFIX + '.http', PREFIX + '.application',
                          PREFIX + '.chat', PREFIX + '.chat_api',
                          PREFIX + '.chat_business', PREFIX + '.chat_products',
-                         PREFIX + '.runtime.native_api', PREFIX + '.runtime.toolbox_server')
+                         PREFIX + '.runtime.native_api', PREFIX + '.runtime.toolbox_server',
+                         PREFIX + '.integrations', PREFIX + '.bootstrap',
+                         *(PREFIX + '.runtime.' + name for name in (
+                             'creator_runtime', 'learning_service', 'collection_service',
+                             'source_registry', 'collection_worker', 'collection_sources',
+                             'custom_source_collection', 'distribution_service',
+                             'distribution_worker', 'easel_accounts', 'easel_distribution',
+                             'connection_environment')))
             if any(value == part or value.startswith(part + '.')
                    for value in (module, target) for part in forbidden):
                 errors.append({'rule': 'feature-import-http-application-or-compat', **edge})
+        if module == PREFIX + '.runtime.distribution_runtime' and edge['symbol'] in {
+            'DPAPIVault', 'VaultError', 'process_identity', '_dpapi', '_private_acl',
+            '_Blob', '_blob', '_json', '_identifier', 'ENTROPY', '_HANDLE', '*',
+        }:
+            errors.append({'rule': 'shared-capability-import-retired-bridge', **edge})
         if record['path'] == 'easel_workbench/runtime/download_delivery.py' and (
             module.startswith(PREFIX + '.http') or any(part in (module, target) for part in (
                 PREFIX + '.runtime.native_api', PREFIX + '.runtime.toolbox_server'))

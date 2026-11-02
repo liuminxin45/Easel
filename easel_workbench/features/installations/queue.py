@@ -45,7 +45,7 @@ class InstallationQueue:
             busy = c.execute("SELECT document FROM media_install_jobs WHERE json_extract(document,'$.state') IN ('queued','running') LIMIT 1").fetchone()
             if busy:
                 raise self.conflict('当前运行目录已有安装任务，请先核对其结果')
-            from easel_workbench.runtime.distribution_runtime import process_identity
+            from easel_workbench.infrastructure.processes import process_identity
             job = {'id': jid, 'recipe': recipe, 'state': 'queued', 'host': platform.node(), 'owner_pid':os.getpid(),'owner_identity':process_identity(os.getpid()),'target': str(self.directory), 'packages': list(dict.fromkeys([*self.base_packages,*self.recipes[recipe]['packages']])), 'created_at': stamp(), 'lines': []}
             c.execute('INSERT INTO media_install_jobs VALUES(?,?,?)', (jid, recipe, pack(job)))
             created = True

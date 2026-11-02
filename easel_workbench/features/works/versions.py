@@ -9,7 +9,7 @@ from pathlib import Path
 
 from easel_workbench.contracts.production import PlanConflict
 from easel_workbench.paths import owned_output_path
-from easel_workbench.runtime.creator_runtime import packed, key, digest
+from easel_workbench.features.skills.records import packed, key, digest
 from easel_workbench.runtime.desk import stamp
 
 

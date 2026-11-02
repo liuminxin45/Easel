@@ -114,7 +114,7 @@ def test_disconnect_during_login_prevents_a_late_success_from_reconnecting(accou
 def test_dead_login_owner_becomes_unknown_without_replaying(accounts,monkeypatch):
     session=create(accounts);accounts.command({'id':'login','action':'login','session_id':session['id'],'base_revision':1})
     accounts.autostart=True
-    monkeypatch.setattr('easel_workbench.runtime.distribution_runtime.process_identity',lambda pid:None)
+    monkeypatch.setattr('easel_workbench.infrastructure.processes.process_identity',lambda pid:None)
     assert accounts.bootstrap()['sessions'][0]['state']=='unknown'
 
 

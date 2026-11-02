@@ -34,28 +34,8 @@ class Store:
     def __init__(self,path=ROOT/'data/desk.sqlite'):
         self.path=pathlib.Path(path); self.path.parent.mkdir(parents=True,exist_ok=True)
         with self.connect() as c:
-            c.executescript('''
-CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY,source_job TEXT NOT NULL,run_id TEXT NOT NULL,run_at TEXT NOT NULL,hash TEXT NOT NULL,final_text TEXT NOT NULL,UNIQUE(source_job,run_id,hash));
-CREATE TABLE IF NOT EXISTS articles(id TEXT PRIMARY KEY,source_job TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,url TEXT NOT NULL,publisher TEXT,published_at TEXT,run_at TEXT NOT NULL,run TEXT NOT NULL,unread INTEGER NOT NULL DEFAULT 1,selected INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,article_id TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL,started_at TEXT,finished_at TEXT,reply TEXT,error TEXT,thread TEXT NOT NULL,turn_id TEXT,rollout_offset INTEGER,output_path TEXT);
-CREATE TABLE IF NOT EXISTS artifacts(id TEXT PRIMARY KEY,task_id TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,mime TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS provenance(article_id TEXT NOT NULL,run TEXT NOT NULL,PRIMARY KEY(article_id,run));
-''')
-            if 'published_at_raw' not in {r[1] for r in c.execute('pragma table_info(articles)')}: c.execute('alter table articles add column published_at_raw TEXT')
-            if 'source_event_id' not in {r[1] for r in c.execute('pragma table_info(articles)')}: c.execute('alter table articles add column source_event_id TEXT')
-            for field,kind in (('source_order','INTEGER'),('hot','TEXT'),('fetched_at','TEXT'),('source_protocol_id','TEXT')):
-                if field not in {r[1] for r in c.execute('pragma table_info(articles)')}:c.execute('alter table articles add column '+field+' '+kind)
-            from easel_workbench.runtime.source_registry import migrate as source_migrate
-            source_migrate(c)
-            c.execute('create unique index if not exists articles_source_event on articles(source_job,source_event_id) where source_event_id is not null')
-            from easel_workbench.runtime import notifications as notifications
-            notifications.migrate(c)
-            from easel_workbench.runtime import news_feedback as news_feedback
-            news_feedback.migrate(c)
-            from easel_workbench.runtime import creative_review as creative_review
-            creative_review.migrate(c)
-            from easel_workbench.runtime.weekly_periodical import migrate as periodical_migrate
-            periodical_migrate(c)
+            from easel_workbench.bootstrap.storage import initialize_store
+            initialize_store(c)
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20,factory=Connection); c.row_factory=sqlite3.Row; c.execute('pragma journal_mode=WAL'); return c
     def ingest(self,d):

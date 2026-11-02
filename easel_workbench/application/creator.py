@@ -37,22 +37,7 @@ from easel_workbench.features.skills.records import DEFAULT_PROFILE, MANIFEST, M
 
 
 
-def initialize(c):
-    statements = '''
-CREATE TABLE IF NOT EXISTS creator_profiles(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_profile_history(id TEXT NOT NULL,revision INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(id,revision));
-CREATE TABLE IF NOT EXISTS creator_skills(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_skill_versions(skill_id TEXT NOT NULL,version INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(skill_id,version));
-CREATE TABLE IF NOT EXISTS creator_skill_pointers(skill_id TEXT PRIMARY KEY,revision INTEGER NOT NULL,version INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_skill_blobs(sha256 TEXT PRIMARY KEY,bytes BLOB NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_skill_events(id TEXT PRIMARY KEY,skill_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL,document TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_work_owners(work_id TEXT PRIMARY KEY,profile_id TEXT NOT NULL,profile_revision INTEGER NOT NULL,document TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS creator_profile_proposals(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-'''
-    for statement in statements.split(';'):
-        if statement.strip():
-            c.execute(statement)
+from easel_workbench.infrastructure.storage.schema import initialize_creator as initialize
 
 
 class CreatorRuntime:

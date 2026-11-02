@@ -14,7 +14,7 @@ import pathlib
 import threading
 
 from easel_workbench.runtime.desk import ROOT, Store, stamp
-from easel_workbench.runtime.distribution_runtime import process_identity
+from easel_workbench.infrastructure.processes import process_identity
 from easel_workbench.features.distribution.service import DistributionService, digest
 from easel_workbench.features.distribution.assets import preflight_assets
 from easel_workbench.runtime.toolbox_store import Toolbox

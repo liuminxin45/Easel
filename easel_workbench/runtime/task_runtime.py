@@ -22,16 +22,7 @@ from easel_workbench.runtime import desk as _desk
 
 
 
-def initialize(c):
-    # execute, rather than executescript, preserves the caller's transaction.
-    for sql in (
-        'CREATE TABLE IF NOT EXISTS creator_task_runs(id TEXT PRIMARY KEY,work_id TEXT,document TEXT NOT NULL,updated_at TEXT NOT NULL)',
-        'CREATE TABLE IF NOT EXISTS creator_model_calls(id TEXT PRIMARY KEY,task_id TEXT,document TEXT NOT NULL,updated_at TEXT NOT NULL)',
-        'CREATE TABLE IF NOT EXISTS creator_thread_contexts(id TEXT PRIMARY KEY,document TEXT NOT NULL,updated_at TEXT NOT NULL)',
-        'CREATE TABLE IF NOT EXISTS creator_experience_receipts(id TEXT PRIMARY KEY,document TEXT NOT NULL,updated_at TEXT NOT NULL)',
-        'CREATE TABLE IF NOT EXISTS creator_experience_coverage(profile_id TEXT NOT NULL,source_key TEXT NOT NULL,task_id TEXT NOT NULL,status TEXT NOT NULL,PRIMARY KEY(profile_id,source_key))',
-    ):
-        c.execute(sql)
+from easel_workbench.infrastructure.storage.schema import initialize_tasks as initialize
 
 
 def runtime_box(box):

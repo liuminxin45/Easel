@@ -31,7 +31,8 @@ class ConnectionEnvironment:
         self.directory = self.root / '.runtime/media-tools'
         self._lock = threading.RLock()
         with self.store.connect() as c:
-            c.executescript('CREATE TABLE IF NOT EXISTS media_install_jobs(id TEXT PRIMARY KEY,recipe TEXT NOT NULL,document TEXT NOT NULL);')
+            from easel_workbench.infrastructure.storage.schema import initialize_installations
+            initialize_installations(c)
         self.host=InstallationHost(store=self.store,root=self.root,directory=self.directory,run=lambda *a,**k:self._run(*a,**k))
         self.queue=InstallationQueue(store=self.store,root=self.root,directory=self.directory)
 

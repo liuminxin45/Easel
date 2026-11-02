@@ -19,11 +19,7 @@ def packed(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
 
-def migrate(connection):
-    connection.executescript('''
-CREATE TABLE IF NOT EXISTS collection_source_versions(source_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(source_id,revision));
-CREATE TABLE IF NOT EXISTS collection_source_operations(operation_id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL);
-''')
+from easel_workbench.infrastructure.storage.schema import initialize_sources as migrate
 
 
 class SourceRegistry:

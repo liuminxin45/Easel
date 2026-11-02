@@ -66,6 +66,25 @@ def test_guards_allow_actual_leaf_dependencies_and_storage_class_consumers():
                      'easel_workbench/runtime/download_delivery.py')
 
 
+@pytest.mark.parametrize('source',[
+    'from easel_workbench.runtime.creator_runtime import digest',
+    'from easel_workbench.runtime.learning_service import LearningService',
+    'from easel_workbench.runtime.collection_service import CollectionService',
+    'from easel_workbench.runtime.easel_accounts import service',
+    'from easel_workbench.integrations.platform_accounts import service',
+    'from easel_workbench.bootstrap.storage import initialize_store',
+])
+def test_migrated_features_cannot_reenter_application_through_legacy_exports(source):
+    assert check(source,'easel_workbench/features/example.py')
+
+
+def test_shared_native_capability_does_not_depend_on_retired_bridge():
+    assert check('from easel_workbench.runtime.distribution_runtime import DPAPIVault',
+                 'easel_workbench/settings.py')
+    assert not check('from easel_workbench.infrastructure.credentials import DPAPIVault',
+                     'easel_workbench/settings.py')
+
+
 @pytest.mark.parametrize('source', [
     'import easel_workbench.runtime.toolbox_store as store\ndef use(store):\n return store.pack({})',
     'def first():\n from . import toolbox_store as store\n return store.Toolbox\ndef second(store):\n return store.text()',
@@ -82,7 +101,9 @@ def test_current_checkout_obeys_migrated_private_boundaries():
     assert set(entry['declared_roles']) == {'server', 'worker', 'collector', 'publisher', 'learning', 'local', 'feedback'}
     assert {role['role'] for role in entry['role_targets']} == {'worker', 'collector', 'publisher', 'learning', 'local', 'feedback'}
     store = next(module for module in report['modules'] if module['path'].endswith('/toolbox_store.py'))
-    assert any('toolbox_jobs' in effect['created_tables'] for effect in store['sql_effects'])
+    bootstrap = next(module for module in report['modules'] if module['path'] == 'easel_workbench/bootstrap/storage.py')
+    assert any('toolbox_jobs' in effect['created_tables'] for effect in bootstrap['sql_effects'])
+    assert not any(effect['created_tables'] for effect in store['sql_effects'])
     assert not any(symbol['name'] in {'ident', 'pack', 'text'} for symbol in store['symbols'])
 
 

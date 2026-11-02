@@ -91,7 +91,17 @@
     "easel_workbench/infrastructure/installations/host.py",
     "easel_workbench/features/installations/queue.py",
     "easel_workbench/application/installation.py",
-    "easel_workbench/runtime/media_environment.py"
+    "easel_workbench/runtime/media_environment.py",
+    "easel_workbench/bootstrap/storage.py",
+    "easel_workbench/infrastructure/storage/schema.py",
+    "easel_workbench/application/chat.py",
+    "easel_workbench/infrastructure/credentials.py",
+    "easel_workbench/infrastructure/processes.py",
+    "easel_workbench/settings.py",
+    "easel_workbench/runtime/distribution_checks.py",
+    "easel_workbench/runtime/distribution_check_relay.py",
+    "easel_workbench/runtime/toolbox_server.py",
+    "easel_workbench/features/works/versions.py"
   ],
   "modules": [
     {
@@ -188,75 +198,6 @@
       "next_slice": "P2"
     },
     {
-      "path": "easel_workbench/runtime/desk.py",
-      "reviewed_sha256": "809cb409481e588418d1278b79b0ba599fdc743d2477dd97803e4011512dea18",
-      "area": "composition/store",
-      "responsibility": "单一 SQLite 连接、采集新闻查询及旧 CLI 组合",
-      "lifecycle": [
-        "current",
-        "historical-read",
-        "legacy-execution"
-      ],
-      "state_contract": "desk.sqlite；collection runs/articles/provenance，旧 tasks 仅保留；action 只读标记或选题反馈",
-      "next_slice": "P5",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "stamp",
-            "digest",
-            "article_identity",
-            "url_ok"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "Connection",
-            "Store"
-          ]
-        },
-        {
-          "area": "infrastructure/sqlite",
-          "members": [
-            "Connection.__exit__"
-          ]
-        },
-        {
-          "area": "infrastructure/sqlite",
-          "members": [
-            "Store.__init__",
-            "Store.connect"
-          ]
-        },
-        {
-          "area": "features/collection",
-          "members": [
-            "Store.ingest",
-            "Store.sources",
-            "Store.articles",
-            "Store.selected_articles",
-            "Store.article_day",
-            "Store.detail",
-            "Store.action"
-          ]
-        },
-        {
-          "area": "compat/cli",
-          "members": [
-            "main",
-            "serve"
-          ]
-        },
-        {
-          "area": "application/collection",
-          "members": [
-            "save_digest"
-          ]
-        }
-      ]
-    },
-    {
       "path": "easel_workbench/runtime/direct_handoff.py",
       "reviewed_sha256": "4a10656d42f3cdc817d606a77dca06ae76e7c35a2ccfd269980950a5650534c0",
       "area": "compat/desktop-cli",
@@ -267,102 +208,6 @@
       ],
       "state_contract": "委托 DirectTurns/Toolbox；不伪装普通静态 import 调用者",
       "next_slice": "P2"
-    },
-    {
-      "path": "easel_workbench/runtime/distribution_runtime.py",
-      "reviewed_sha256": "9a65c27c6d724db01f6a815f4693dea10bd3a95ff09e6444bd4fe3f4a7d1dd8b",
-      "area": "compat/distribution",
-      "responsibility": "当前复用的凭据/进程能力与旧 bridge 驱动组合",
-      "lifecycle": [
-        "current",
-        "legacy-execution",
-        "reconcile"
-      ],
-      "state_contract": "DPAPI 私有文件；旧 bridge 指针/准确批准任务，不能整文件退役",
-      "next_slice": "P5",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "_json",
-            "_identifier"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "VaultError",
-            "BridgeError",
-            "BridgeTimeout",
-            "DPAPIVault",
-            "DistributionRuntime"
-          ]
-        },
-        {
-          "area": "infrastructure/security",
-          "members": [
-            "DPAPIVault.__init__",
-            "DPAPIVault._ensure",
-            "DPAPIVault._path",
-            "DPAPIVault._write",
-            "DPAPIVault._read",
-            "DPAPIVault.put",
-            "DPAPIVault.put_reserved",
-            "DPAPIVault.get",
-            "DPAPIVault.validate",
-            "DPAPIVault.read_proof",
-            "DPAPIVault.write_proof"
-          ]
-        },
-        {
-          "area": "compat/bridge",
-          "members": [
-            "DistributionRuntime.__init__",
-            "DistributionRuntime._receipt",
-            "DistributionRuntime._bridge_pointer",
-            "DistributionRuntime._write_bridge_pointer",
-            "DistributionRuntime._global_settings",
-            "DistributionRuntime.bridge_status",
-            "DistributionRuntime.configure_bridge",
-            "DistributionRuntime.discover_accounts",
-            "DistributionRuntime._installation_evidence",
-            "DistributionRuntime.summary",
-            "DistributionRuntime._binding",
-            "DistributionRuntime._validate_settings",
-            "DistributionRuntime._settings",
-            "DistributionRuntime._invoke",
-            "DistributionRuntime.probe",
-            "DistributionRuntime.capability",
-            "DistributionRuntime._remote",
-            "DistributionRuntime.verify",
-            "DistributionRuntime.send"
-          ]
-        },
-        {
-          "area": "infrastructure/security",
-          "members": [
-            "DistributionRuntime.configure_secret",
-            "DistributionRuntime.validate_secret_ref",
-            "DistributionRuntime.credentials_for_connection"
-          ]
-        },
-        {
-          "area": "infrastructure/processes",
-          "members": [
-            "process_identity",
-            "_bridge_mutex"
-          ]
-        },
-        {
-          "area": "infrastructure/security",
-          "members": [
-            "_Blob",
-            "_blob",
-            "_dpapi",
-            "_private_acl"
-          ]
-        }
-      ]
     },
     {
       "path": "easel_workbench/runtime/easel_account_worker.py",
@@ -396,99 +241,6 @@
         "current"
       ],
       "state_contract": "easel_topics/plans/history/ui_operations；计划不成为调度任务",
-      "next_slice": "P4"
-    },
-    {
-      "path": "easel_workbench/runtime/easel_integration.py",
-      "reviewed_sha256": "af90cd83bca269ea7d1ed78ab6a27f9bf5571fba4c32cc4a05a40b0a7238141a",
-      "area": "application/media",
-      "responsibility": "显式媒体方案/受理、冻结配置与旧任务核对组合",
-      "lifecycle": [
-        "current",
-        "legacy-execution",
-        "reconcile"
-      ],
-      "state_contract": "media_* 与 works/jobs/review_inputs/runs；新任务受 accept_new_tasks/stages 限制，受理同事务",
-      "next_slice": "P4",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "digest",
-            "load_catalog",
-            "initialize",
-            "service"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "IntegrationConflict",
-            "EaselIntegration"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "EaselIntegration.__init__"
-          ]
-        },
-        {
-          "area": "features/settings",
-          "members": [
-            "EaselIntegration.config",
-            "EaselIntegration._save_config"
-          ]
-        },
-        {
-          "area": "features/works",
-          "members": [
-            "EaselIntegration.transcript",
-            "EaselIntegration._records",
-            "EaselIntegration._job",
-            "EaselIntegration._public_job",
-            "EaselIntegration.bootstrap",
-            "EaselIntegration.job",
-            "EaselIntegration.work"
-          ]
-        },
-        {
-          "area": "application/media",
-          "members": [
-            "EaselIntegration.accepts_new",
-            "EaselIntegration.preview",
-            "EaselIntegration._create_job",
-            "EaselIntegration._put_job",
-            "EaselIntegration.command",
-            "EaselIntegration._decision"
-          ]
-        },
-        {
-          "area": "integrations/easel",
-          "members": [
-            "EaselIntegration._directory",
-            "EaselIntegration._worker_alive",
-            "EaselIntegration.start",
-            "EaselIntegration._payload",
-            "EaselIntegration._invoke_worker",
-            "EaselIntegration.run_job",
-            "EaselIntegration.run_reconcile",
-            "EaselIntegration._recover_outputs"
-          ]
-        }
-      ]
-    },
-    {
-      "path": "easel_workbench/runtime/easel_media_worker.py",
-      "reviewed_sha256": "7cdd44ef1ed18d10a3db94b06d10a665a56244bd419778b296a1629f7e6f5331",
-      "area": "integrations/easel",
-      "responsibility": "准确冻结媒体阶段的隔离子进程及原任务只读核对",
-      "lifecycle": [
-        "current",
-        "legacy-execution",
-        "reconcile"
-      ],
-      "state_contract": "输出目录及已记录 task/receipt；未知 POST 不重发，vendor 仅在该子进程加载",
       "next_slice": "P4"
     },
     {
@@ -788,63 +540,6 @@
       "next_slice": "P3"
     },
     {
-      "path": "easel_workbench/runtime/toolbox_store.py",
-      "reviewed_sha256": "4045dbc262d47b9ce5ded3033c2425d92ee09764c468d970c3ef9ebf5f1626c8",
-      "area": "composition/toolbox",
-      "responsibility": "表初始化、作品决定、读聚合与文件登记的现有组合",
-      "lifecycle": [
-        "current",
-        "historical-read",
-        "legacy-execution"
-      ],
-      "state_contract": "单一 store.connect；多域初始化顺序和事务保留，不复制纯校验实现",
-      "next_slice": "P5",
-      "symbol_groups": [
-        {
-          "area": "composition/container",
-          "members": [
-            "Toolbox"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "Toolbox.__init__"
-          ]
-        },
-        {
-          "area": "compat/historical-read",
-          "members": [
-            "Toolbox._import_history"
-          ]
-        },
-        {
-          "area": "features/works",
-          "members": [
-            "Toolbox.create",
-            "Toolbox.action",
-            "Toolbox.job",
-            "Toolbox.retry",
-            "Toolbox.options",
-            "Toolbox.news_production",
-            "Toolbox.works",
-            "Toolbox.work"
-          ]
-        },
-        {
-          "area": "features/assets",
-          "members": [
-            "Toolbox.archive",
-            "Toolbox._files",
-            "Toolbox.upload",
-            "Toolbox.register_file",
-            "Toolbox._store_file",
-            "Toolbox.file"
-          ]
-        }
-      ]
-    },
-    {
       "path": "easel_workbench/runtime/ui_document.py",
       "reviewed_sha256": "6abdbf9d937ae3dd952e05bf809bb61e13b85776c017eaef2f67288808347239",
       "area": "compat/web-preview",
@@ -899,58 +594,6 @@
       "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
       "next_slice": "P3",
       "symbol_groups": [],
-      "prior_review": {
-        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
-        "path": "easel_workbench/runtime/creator_runtime.py",
-        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
-      }
-    },
-    {
-      "path": "easel_workbench/application/creator.py",
-      "reviewed_sha256": "7c6a6a4567ff25400c35f37d64ea74d4030473ca3513934d3e571cc512f627f6",
-      "area": "composition/creator",
-      "responsibility": "P3 unique implementation in application/creator.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
-      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
-      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
-      "next_slice": "P3",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "initialize",
-            "CreatorRuntime",
-            "CreatorRuntime.__init__",
-            "CreatorRuntime._safe",
-            "CreatorRuntime._profile",
-            "CreatorRuntime._put_profile",
-            "CreatorRuntime.bind_work",
-            "CreatorRuntime._seed",
-            "CreatorRuntime._resource",
-            "CreatorRuntime._release_hash",
-            "CreatorRuntime._published",
-            "CreatorRuntime._skill",
-            "CreatorRuntime.accounts",
-            "CreatorRuntime.bootstrap",
-            "CreatorRuntime.detail",
-            "CreatorRuntime._uses",
-            "CreatorRuntime._validate_defaults",
-            "CreatorRuntime._uploaded_asset",
-            "CreatorRuntime._profile_assets",
-            "CreatorRuntime._save_profile",
-            "CreatorRuntime._bind",
-            "CreatorRuntime.propose",
-            "CreatorRuntime._event",
-            "CreatorRuntime._publish",
-            "CreatorRuntime.command",
-            "CreatorRuntime.resolve",
-            "CreatorRuntime.resource",
-            "CreatorRuntime.profile_resource",
-            "CreatorRuntime.export",
-            "CreatorRuntime.materialize",
-            "service"
-          ]
-        }
-      ],
       "prior_review": {
         "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
         "path": "easel_workbench/runtime/creator_runtime.py",
@@ -1073,70 +716,6 @@
       }
     },
     {
-      "path": "easel_workbench/runtime/task_runtime.py",
-      "reviewed_sha256": "ab80a4f72cd634cf1fa9de5132d161158b4750a82a8942f8010cc9092d718419",
-      "area": "composition/task-contracts",
-      "responsibility": "P3 unique implementation in runtime/task_runtime.py; 冻结快照、原生目标适配、调用台账及显式经验任务组合",
-      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
-      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
-      "next_slice": "P2",
-      "symbol_groups": [
-        {
-          "area": "runtime/explicit-task-receipts",
-          "members": [
-            "initialize",
-            "runtime_box",
-            "registry",
-            "read_run",
-            "_put_run",
-            "workflow_template",
-            "freeze",
-            "step",
-            "clone_correction",
-            "projection",
-            "production_prompt",
-            "clean_explicit_contract",
-            "attach_profile_contract",
-            "attach_review_basis",
-            "production_call",
-            "preparation_state",
-            "production_started",
-            "production_transport_failure",
-            "production_finish",
-            "context_id",
-            "thread_id_for",
-            "target_for_thread",
-            "PreparedTarget",
-            "PreparedTarget.__init__",
-            "PreparedTarget.__enter__",
-            "PreparedTarget.__exit__",
-            "PreparedTarget.close",
-            "_unused_context",
-            "_native_context_absent",
-            "_start_target",
-            "prepare_target",
-            "reconcile_preparation_failure",
-            "named_prompt",
-            "contract_prompt",
-            "begin_call",
-            "finish_call",
-            "observed_call",
-            "request_snapshot",
-            "enqueue_experience",
-            "complete_experience",
-            "freeze_image",
-            "experience_detail",
-            "enqueue_reference"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
-        "path": "easel_workbench/runtime/task_runtime.py",
-        "reviewed_sha256": "d6068877d5f363171ff8e7a77e5f6341a60965eae8bf64ff3efab57a284ab1db"
-      }
-    },
-    {
       "path": "easel_workbench/features/skills/prepared.py",
       "reviewed_sha256": "2616f0dd0ed32706461763eb1254326460e3ef999259bdfadd414a60ca32db14",
       "area": "composition/task-contracts",
@@ -1169,77 +748,6 @@
       "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
       "next_slice": "P3",
       "symbol_groups": [],
-      "prior_review": {
-        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
-        "path": "easel_workbench/runtime/learning_service.py",
-        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
-      }
-    },
-    {
-      "path": "easel_workbench/application/evidence.py",
-      "reviewed_sha256": "22ab7bc714377addc08b20bd90b4a75806ed0b25f46a39627fcfbf22c90b9f6d",
-      "area": "composition/evidence",
-      "responsibility": "P3 unique implementation in application/evidence.py; 证据索引、经验候选、技能规则解析与快照组合",
-      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
-      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
-      "next_slice": "P3",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "LearningService",
-            "LearningService.__init__",
-            "LearningService._safe_path",
-            "LearningService.policy",
-            "LearningService._conditions",
-            "LearningService._validate_entry",
-            "LearningService._validate_policy",
-            "LearningService._all",
-            "LearningService._get",
-            "LearningService._put",
-            "LearningService._search_text",
-            "LearningService._table_exists",
-            "LearningService._metadata_file",
-            "LearningService._upsert_evidence",
-            "LearningService._file_candidates",
-            "LearningService._source_rows",
-            "LearningService._index",
-            "LearningService._coverage",
-            "LearningService._processing_state",
-            "LearningService._save_processing",
-            "LearningService.processing_status",
-            "LearningService._finish_history_budget",
-            "LearningService.index_database",
-            "LearningService.watch_fingerprint",
-            "LearningService.queue_index_refresh",
-            "LearningService.list_evidence",
-            "LearningService._evidence_summary",
-            "LearningService._run_summary",
-            "LearningService.bootstrap",
-            "LearningService._read_locator",
-            "LearningService.evidence_content",
-            "LearningService.original_file",
-            "LearningService.detail",
-            "LearningService._enqueue",
-            "LearningService.enqueue_review",
-            "LearningService.read_run",
-            "LearningService.clone_run",
-            "LearningService.update_run",
-            "LearningService._proposal",
-            "LearningService._disjoint",
-            "LearningService.relationship",
-            "LearningService._preview",
-            "LearningService._apply",
-            "LearningService.command",
-            "LearningService._match",
-            "LearningService._required_ref",
-            "LearningService.resolve",
-            "LearningService.freeze",
-            "LearningService.claim_task",
-            "LearningService.finish_task"
-          ]
-        }
-      ],
       "prior_review": {
         "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
         "path": "easel_workbench/runtime/learning_service.py",
@@ -1390,78 +898,12 @@
       }
     },
     {
-      "responsibility": "p4-collection sole implementation: features/collection",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "98d82cb0cfa29cf8c516ccef3d6045b4b5bdb9fa66cafba38c6ff5be6e520a2b",
-      "path": "easel_workbench/features/collection/registry.py",
-      "symbol_groups": [
-        {
-          "area": "features/collection",
-          "members": [
-            "packed",
-            "migrate",
-            "SourceRegistry",
-            "SourceRegistry.__init__",
-            "SourceRegistry.baseline",
-            "SourceRegistry.entries",
-            "SourceRegistry.public",
-            "SourceRegistry.update",
-            "SourceRegistry.receipt",
-            "SourceRegistry.prepare",
-            "SourceRegistry.source"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "e32b2cdd487524115c1532f9cff9059dcd30f22c",
-        "path": "easel_workbench/runtime/source_registry.py",
-        "reviewed_sha256": "ef8ee4da8dabc1d0ee14321c6af55312bb2dae1c0a5911ec3349de46fc745d9d"
-      }
-    },
-    {
       "responsibility": "p4-collection sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
       "reviewed_sha256": "dbeb5d29e6996e6ee931acc38f7c9e99d2e2e9ef3a432f2232b35baed9b02e0a",
       "path": "easel_workbench/runtime/collection_service.py",
       "symbol_groups": [],
-      "prior_review": {
-        "source_commit": "e32b2cdd487524115c1532f9cff9059dcd30f22c",
-        "path": "easel_workbench/runtime/collection_service.py",
-        "reviewed_sha256": "100244c6e8f9617b47b0b134ad5e9be45691f3b8a1fcabd2950fcb19da4d5f09"
-      }
-    },
-    {
-      "responsibility": "p4-collection sole implementation: features/collection",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "e94dcc93695d9ea9126e8f96a0d0141565c7914c2fe88af6ad5fffa674c94215",
-      "path": "easel_workbench/features/collection/queue.py",
-      "symbol_groups": [
-        {
-          "area": "features/collection",
-          "members": [
-            "CollectionQueue",
-            "CollectionQueue.__init__",
-            "CollectionQueue.configuration",
-            "CollectionQueue.definitions",
-            "CollectionQueue._sources",
-            "CollectionQueue._enqueue",
-            "CollectionQueue.enqueue",
-            "CollectionQueue._task",
-            "CollectionQueue._get",
-            "CollectionQueue.get",
-            "CollectionQueue.status",
-            "CollectionQueue.retry",
-            "CollectionQueue.schedule_due",
-            "CollectionQueue.claim",
-            "CollectionQueue.progress",
-            "CollectionQueue.finish",
-            "CollectionQueue.recover"
-          ]
-        }
-      ],
       "prior_review": {
         "source_commit": "e32b2cdd487524115c1532f9cff9059dcd30f22c",
         "path": "easel_workbench/runtime/collection_service.py",
@@ -1586,111 +1028,12 @@
       }
     },
     {
-      "responsibility": "p4-collection sole implementation: application",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "4759c863616ebedd5d8266de2d5636a43e4f325d5adfe47c62c1a1cc5ed9744c",
-      "path": "easel_workbench/application/collection.py",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "process_creation",
-            "owner_is_gone",
-            "CollectionWorker",
-            "CollectionWorker.__init__",
-            "CollectionWorker.prepare_resume",
-            "CollectionWorker.execute",
-            "CollectionWorker.tick",
-            "CollectionWorker.close",
-            "run"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "e32b2cdd487524115c1532f9cff9059dcd30f22c",
-        "path": "easel_workbench/runtime/collection_worker.py",
-        "reviewed_sha256": "8a7dd9ca853aaa49abaf628c266036414109b54ea10e859953cb3e232b8f7692"
-      }
-    },
-    {
       "responsibility": "p4-delivery sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
       "reviewed_sha256": "6073477795099e4be80a7e04666da6f07c55af55378208bc27353e861ae54bef",
       "path": "easel_workbench/runtime/distribution_service.py",
       "symbol_groups": [],
-      "prior_review": {
-        "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
-        "path": "easel_workbench/runtime/distribution_service.py",
-        "reviewed_sha256": "2e2d2a00733242bcbf520faec9055acff00951212aa8917ac731394b3a427867"
-      }
-    },
-    {
-      "responsibility": "p4-delivery sole implementation: features/distribution",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "2e2d2a00733242bcbf520faec9055acff00951212aa8917ac731394b3a427867",
-      "path": "easel_workbench/features/distribution/service.py",
-      "symbol_groups": [
-        {
-          "area": "features/distribution",
-          "members": [
-            "Capability",
-            "AssetManifest",
-            "Revision",
-            "RemoteResult",
-            "Connection",
-            "Approval",
-            "Delivery",
-            "Attempt",
-            "Batch",
-            "Runner",
-            "DistributionConflict",
-            "digest",
-            "raw_digest",
-            "object_id",
-            "_now",
-            "_iso",
-            "_time",
-            "safe_url",
-            "_no_secrets",
-            "_public",
-            "DistributionService",
-            "DistributionService.__init__",
-            "DistributionService._get",
-            "DistributionService._records",
-            "DistributionService.connection_internal",
-            "DistributionService._put",
-            "DistributionService._capability",
-            "DistributionService._runnable",
-            "DistributionService._connection_save",
-            "DistributionService._source",
-            "DistributionService._publication_hash",
-            "DistributionService._rejected",
-            "DistributionService._validate_approval",
-            "DistributionService.freeze_completion",
-            "DistributionService.complete_adoption",
-            "DistributionService._prepare",
-            "DistributionService._validate_revision",
-            "DistributionService._approve",
-            "DistributionService._enqueue",
-            "DistributionService._cancel",
-            "DistributionService._retry",
-            "DistributionService._normalize",
-            "DistributionService.command",
-            "DistributionService._expire",
-            "DistributionService.claim_next",
-            "DistributionService._lease",
-            "DistributionService.mark_dispatched",
-            "DistributionService._result",
-            "DistributionService._project",
-            "DistributionService.finish_attempt",
-            "DistributionService._reconcile",
-            "DistributionService.bootstrap"
-          ]
-        }
-      ],
       "prior_review": {
         "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
         "path": "easel_workbench/runtime/distribution_service.py",
@@ -1731,75 +1074,12 @@
       }
     },
     {
-      "responsibility": "p4-delivery sole implementation: application",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "2c98413714d530eabb66f7c1ac5b933af4ae22de262de0becf68fb18dc6ddff7",
-      "path": "easel_workbench/application/distribution.py",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "DistributionWorker",
-            "DistributionWorker.__init__",
-            "DistributionWorker._heartbeat",
-            "DistributionWorker._probe_due_connections",
-            "DistributionWorker.run_once",
-            "DistributionWorker.run",
-            "run"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
-        "path": "easel_workbench/runtime/distribution_worker.py",
-        "reviewed_sha256": "266c33f5e77db9cbabbee021ab121d1f292f490fed058df9283ba622a198c0ae"
-      }
-    },
-    {
       "responsibility": "p4-delivery sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
       "reviewed_sha256": "3ea860d2dec20b92e61875d61a32d0d1c6d8e38b3c455d79aa9d7a3b1b0eb92d",
       "path": "easel_workbench/runtime/easel_accounts.py",
       "symbol_groups": [],
-      "prior_review": {
-        "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
-        "path": "easel_workbench/runtime/easel_accounts.py",
-        "reviewed_sha256": "55e948f44460d703cf70b98b641a07529cca2b9ead6bf3e93e01d87aa470175a"
-      }
-    },
-    {
-      "responsibility": "p4-delivery sole implementation: integrations",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "5f53cbecec8fe33ce2ad552abb105576c771572a8647c0b15f4131e6fc02337f",
-      "path": "easel_workbench/integrations/platform_accounts.py",
-      "symbol_groups": [
-        {
-          "area": "integrations",
-          "members": [
-            "EaselAccounts",
-            "EaselAccounts.__init__",
-            "EaselAccounts._native_session",
-            "EaselAccounts.native_context",
-            "EaselAccounts.close_native",
-            "EaselAccounts.prepare_native_login",
-            "EaselAccounts.record_native_logout",
-            "EaselAccounts.record_native_observation",
-            "EaselAccounts._get",
-            "EaselAccounts._put",
-            "EaselAccounts._public",
-            "EaselAccounts.bootstrap",
-            "EaselAccounts.command",
-            "EaselAccounts.run",
-            "EaselAccounts._run_locked",
-            "EaselAccounts.session_for",
-            "EaselAccounts.capability",
-            "service"
-          ]
-        }
-      ],
       "prior_review": {
         "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
         "path": "easel_workbench/runtime/easel_accounts.py",
@@ -1926,59 +1206,255 @@
       }
     },
     {
-      "responsibility": "p4-installation sole implementation: infrastructure/installations",
+      "path": "easel_workbench/runtime/desk.py",
+      "reviewed_sha256": "8cfee052ff30d4594f7c16f6d421e75be12c8c5824bea98fd6c8487fb7826dc7",
+      "area": "composition/store",
+      "responsibility": "p5 sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "346618cb59b8c19e6c02ceea886bc6cea3e5caa9bb95f508294f75faac87318e",
-      "path": "easel_workbench/infrastructure/installations/host.py",
+      "state_contract": "desk.sqlite；collection runs/articles/provenance，旧 tasks 仅保留；action 只读标记或选题反馈",
+      "next_slice": "P5",
       "symbol_groups": [
         {
-          "area": "infrastructure/installations",
+          "area": "runtime",
           "members": [
-            "InstallationHost",
-            "InstallationHost.__init__",
-            "InstallationHost.python",
-            "InstallationHost.remotion",
-            "InstallationHost.child_environment",
-            "InstallationHost._run",
-            "InstallationHost._install_run",
-            "InstallationHost.check"
+            "stamp",
+            "digest",
+            "article_identity",
+            "url_ok",
+            "Connection",
+            "Connection.__exit__",
+            "Store",
+            "Store.__init__",
+            "Store.connect",
+            "Store.ingest",
+            "Store.sources",
+            "Store.articles",
+            "Store.selected_articles",
+            "Store.article_day",
+            "Store.detail",
+            "Store.action",
+            "save_digest",
+            "main",
+            "serve"
           ]
         }
       ],
       "prior_review": {
-        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
-        "path": "easel_workbench/runtime/connection_environment.py",
-        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/desk.py",
+        "reviewed_sha256": "809cb409481e588418d1278b79b0ba599fdc743d2477dd97803e4011512dea18"
       }
     },
     {
-      "responsibility": "p4-installation sole implementation: features/installations",
+      "path": "easel_workbench/runtime/toolbox_store.py",
+      "reviewed_sha256": "edb96bb5de5e313ffc38362c6e7c445c2f6594e70593f08ffd3c4dc758ebb4fb",
+      "area": "composition/toolbox",
+      "responsibility": "p5 sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "e071b16fb24f7d0f42faea0dd8332dcec1ac38507a0de188e5633553e5816ff9",
-      "path": "easel_workbench/features/installations/queue.py",
+      "state_contract": "单一 store.connect；多域初始化顺序和事务保留，不复制纯校验实现",
+      "next_slice": "P5",
       "symbol_groups": [
         {
-          "area": "features/installations",
+          "area": "runtime",
           "members": [
-            "InstallationQueue",
-            "InstallationQueue.__init__",
-            "InstallationQueue.enqueue"
+            "Toolbox",
+            "Toolbox.__init__",
+            "Toolbox.archive",
+            "Toolbox._import_history",
+            "Toolbox._files",
+            "Toolbox.create",
+            "Toolbox.action",
+            "Toolbox.job",
+            "Toolbox.retry",
+            "Toolbox.options",
+            "Toolbox.news_production",
+            "Toolbox.works",
+            "Toolbox.work",
+            "Toolbox.upload",
+            "Toolbox.register_file",
+            "Toolbox._store_file",
+            "Toolbox.file"
           ]
         }
       ],
       "prior_review": {
-        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
-        "path": "easel_workbench/runtime/connection_environment.py",
-        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/toolbox_store.py",
+        "reviewed_sha256": "4045dbc262d47b9ce5ded3033c2425d92ee09764c468d970c3ef9ebf5f1626c8"
       }
     },
     {
-      "responsibility": "p4-installation sole implementation: application",
+      "path": "easel_workbench/bootstrap/storage.py",
+      "reviewed_sha256": "878a2129a53b442cc99f80edaff9f0e71f2d94c5accadb3b1474f47e0c0b3b5b",
+      "area": "composition/toolbox",
+      "responsibility": "p5 sole implementation: bootstrap",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "单一 store.connect；多域初始化顺序和事务保留，不复制纯校验实现",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "bootstrap",
+          "members": [
+            "initialize_store",
+            "initialize_toolbox"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/toolbox_store.py",
+        "reviewed_sha256": "4045dbc262d47b9ce5ded3033c2425d92ee09764c468d970c3ef9ebf5f1626c8"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: features/collection",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "00d222753918271fee5118e847a938ab8bf9367c5a623dc75b3068facf584591",
+      "reviewed_sha256": "4dfb48125123a642b207d97d7e617f8a7225bb690689d4be1faff2c66ea851b0",
+      "path": "easel_workbench/features/collection/queue.py",
+      "symbol_groups": [
+        {
+          "area": "features/collection",
+          "members": [
+            "CollectionQueue",
+            "CollectionQueue.__init__",
+            "CollectionQueue.configuration",
+            "CollectionQueue.definitions",
+            "CollectionQueue._sources",
+            "CollectionQueue._enqueue",
+            "CollectionQueue.enqueue",
+            "CollectionQueue._task",
+            "CollectionQueue._get",
+            "CollectionQueue.get",
+            "CollectionQueue.status",
+            "CollectionQueue.retry",
+            "CollectionQueue.schedule_due",
+            "CollectionQueue.claim",
+            "CollectionQueue.progress",
+            "CollectionQueue.finish",
+            "CollectionQueue.recover"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/collection/queue.py",
+        "reviewed_sha256": "e94dcc93695d9ea9126e8f96a0d0141565c7914c2fe88af6ad5fffa674c94215"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: features/distribution",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "e8d9d4e1c9c736d99c8fcc3c974020c6adb1833b2f6b3f7a1cf7be27cd6ff1fa",
+      "path": "easel_workbench/features/distribution/service.py",
+      "symbol_groups": [
+        {
+          "area": "features/distribution",
+          "members": [
+            "Capability",
+            "AssetManifest",
+            "Revision",
+            "RemoteResult",
+            "Connection",
+            "Approval",
+            "Delivery",
+            "Attempt",
+            "Batch",
+            "Runner",
+            "DistributionConflict",
+            "digest",
+            "raw_digest",
+            "object_id",
+            "_now",
+            "_iso",
+            "_time",
+            "safe_url",
+            "_no_secrets",
+            "_public",
+            "DistributionService",
+            "DistributionService.__init__",
+            "DistributionService._get",
+            "DistributionService._records",
+            "DistributionService.connection_internal",
+            "DistributionService._put",
+            "DistributionService._capability",
+            "DistributionService._runnable",
+            "DistributionService._connection_save",
+            "DistributionService._source",
+            "DistributionService._publication_hash",
+            "DistributionService._rejected",
+            "DistributionService._validate_approval",
+            "DistributionService.freeze_completion",
+            "DistributionService.complete_adoption",
+            "DistributionService._prepare",
+            "DistributionService._validate_revision",
+            "DistributionService._approve",
+            "DistributionService._enqueue",
+            "DistributionService._cancel",
+            "DistributionService._retry",
+            "DistributionService._normalize",
+            "DistributionService.command",
+            "DistributionService._expire",
+            "DistributionService.claim_next",
+            "DistributionService._lease",
+            "DistributionService.mark_dispatched",
+            "DistributionService._result",
+            "DistributionService._project",
+            "DistributionService.finish_attempt",
+            "DistributionService._reconcile",
+            "DistributionService.bootstrap"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/distribution/service.py",
+        "reviewed_sha256": "2e2d2a00733242bcbf520faec9055acff00951212aa8917ac731394b3a427867"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: integrations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "e83f61d6caa9ee9bc852a555ddc2a933f97bd2d625df18da6325e8154f42144c",
+      "path": "easel_workbench/integrations/platform_accounts.py",
+      "symbol_groups": [
+        {
+          "area": "integrations",
+          "members": [
+            "EaselAccounts",
+            "EaselAccounts.__init__",
+            "EaselAccounts._native_session",
+            "EaselAccounts.native_context",
+            "EaselAccounts.close_native",
+            "EaselAccounts.prepare_native_login",
+            "EaselAccounts.record_native_logout",
+            "EaselAccounts.record_native_observation",
+            "EaselAccounts._get",
+            "EaselAccounts._put",
+            "EaselAccounts._public",
+            "EaselAccounts.bootstrap",
+            "EaselAccounts.command",
+            "EaselAccounts.run",
+            "EaselAccounts._run_locked",
+            "EaselAccounts.session_for",
+            "EaselAccounts.capability",
+            "service"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/integrations/platform_accounts.py",
+        "reviewed_sha256": "5f53cbecec8fe33ce2ad552abb105576c771572a8647c0b15f4131e6fc02337f"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "87b7cd21178a06cb161e534a47ffdca6be5d71cc4b7f233b80f43f73a3360b0e",
       "path": "easel_workbench/application/installation.py",
       "symbol_groups": [
         {
@@ -2002,16 +1478,87 @@
         }
       ],
       "prior_review": {
-        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
-        "path": "easel_workbench/runtime/connection_environment.py",
-        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/installation.py",
+        "reviewed_sha256": "00d222753918271fee5118e847a938ab8bf9367c5a623dc75b3068facf584591"
       }
     },
     {
-      "responsibility": "p4-installation sole implementation: runtime",
+      "path": "easel_workbench/application/evidence.py",
+      "reviewed_sha256": "a64d12a8206c249b7847dd3d5e795e6a2d53b8a360d3c44bfac09aecb9ed0dc0",
+      "area": "composition/evidence",
+      "responsibility": "p5 sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "LearningService",
+            "LearningService.__init__",
+            "LearningService._safe_path",
+            "LearningService.policy",
+            "LearningService._conditions",
+            "LearningService._validate_entry",
+            "LearningService._validate_policy",
+            "LearningService._all",
+            "LearningService._get",
+            "LearningService._put",
+            "LearningService._search_text",
+            "LearningService._table_exists",
+            "LearningService._metadata_file",
+            "LearningService._upsert_evidence",
+            "LearningService._file_candidates",
+            "LearningService._source_rows",
+            "LearningService._index",
+            "LearningService._coverage",
+            "LearningService._processing_state",
+            "LearningService._save_processing",
+            "LearningService.processing_status",
+            "LearningService._finish_history_budget",
+            "LearningService.index_database",
+            "LearningService.watch_fingerprint",
+            "LearningService.queue_index_refresh",
+            "LearningService.list_evidence",
+            "LearningService._evidence_summary",
+            "LearningService._run_summary",
+            "LearningService.bootstrap",
+            "LearningService._read_locator",
+            "LearningService.evidence_content",
+            "LearningService.original_file",
+            "LearningService.detail",
+            "LearningService._enqueue",
+            "LearningService.enqueue_review",
+            "LearningService.read_run",
+            "LearningService.clone_run",
+            "LearningService.update_run",
+            "LearningService._proposal",
+            "LearningService._disjoint",
+            "LearningService.relationship",
+            "LearningService._preview",
+            "LearningService._apply",
+            "LearningService.command",
+            "LearningService._match",
+            "LearningService._required_ref",
+            "LearningService.resolve",
+            "LearningService.freeze",
+            "LearningService.claim_task",
+            "LearningService.finish_task"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/evidence.py",
+        "reviewed_sha256": "22ab7bc714377addc08b20bd90b4a75806ed0b25f46a39627fcfbf22c90b9f6d"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "e4151f80006f1028fb48596e84fdbf0eebfc41f021e47b9b7d64b5486e1411b3",
+      "reviewed_sha256": "7b61d646e54a427352394ffdd83449619547cc66db2231903fb28c7855c36ae7",
       "path": "easel_workbench/runtime/media_environment.py",
       "symbol_groups": [
         {
@@ -2030,9 +1577,684 @@
         }
       ],
       "prior_review": {
-        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
         "path": "easel_workbench/runtime/media_environment.py",
-        "reviewed_sha256": "3ad087f62fe981c3d4e5f1bc5650cb115cf164b8dd618b300ecde2437d24860c"
+        "reviewed_sha256": "e4151f80006f1028fb48596e84fdbf0eebfc41f021e47b9b7d64b5486e1411b3"
+      }
+    },
+    {
+      "path": "easel_workbench/application/creator.py",
+      "reviewed_sha256": "90beb9389b7a7169e6dd7e566e762ceb4bd6395634888a07c79c20a0708278a8",
+      "area": "composition/creator",
+      "responsibility": "p5 sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "CreatorRuntime",
+            "CreatorRuntime.__init__",
+            "CreatorRuntime._safe",
+            "CreatorRuntime._profile",
+            "CreatorRuntime._put_profile",
+            "CreatorRuntime.bind_work",
+            "CreatorRuntime._seed",
+            "CreatorRuntime._resource",
+            "CreatorRuntime._release_hash",
+            "CreatorRuntime._published",
+            "CreatorRuntime._skill",
+            "CreatorRuntime.accounts",
+            "CreatorRuntime.bootstrap",
+            "CreatorRuntime.detail",
+            "CreatorRuntime._uses",
+            "CreatorRuntime._validate_defaults",
+            "CreatorRuntime._uploaded_asset",
+            "CreatorRuntime._profile_assets",
+            "CreatorRuntime._save_profile",
+            "CreatorRuntime._bind",
+            "CreatorRuntime.propose",
+            "CreatorRuntime._event",
+            "CreatorRuntime._publish",
+            "CreatorRuntime.command",
+            "CreatorRuntime.resolve",
+            "CreatorRuntime.resource",
+            "CreatorRuntime.profile_resource",
+            "CreatorRuntime.export",
+            "CreatorRuntime.materialize",
+            "service"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/creator.py",
+        "reviewed_sha256": "7c6a6a4567ff25400c35f37d64ea74d4030473ca3513934d3e571cc512f627f6"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/task_runtime.py",
+      "reviewed_sha256": "0e43f900d2df108a830876cb48c3468928c928cbe42ce4934ecc779328b75569",
+      "area": "composition/task-contracts",
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
+      "next_slice": "P2",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "runtime_box",
+            "registry",
+            "read_run",
+            "_put_run",
+            "workflow_template",
+            "freeze",
+            "step",
+            "clone_correction",
+            "projection",
+            "production_prompt",
+            "clean_explicit_contract",
+            "attach_profile_contract",
+            "attach_review_basis",
+            "production_call",
+            "preparation_state",
+            "production_started",
+            "production_transport_failure",
+            "production_finish",
+            "context_id",
+            "thread_id_for",
+            "target_for_thread",
+            "PreparedTarget",
+            "PreparedTarget.__init__",
+            "PreparedTarget.__enter__",
+            "PreparedTarget.__exit__",
+            "PreparedTarget.close",
+            "_unused_context",
+            "_native_context_absent",
+            "_start_target",
+            "prepare_target",
+            "reconcile_preparation_failure",
+            "named_prompt",
+            "contract_prompt",
+            "begin_call",
+            "finish_call",
+            "observed_call",
+            "request_snapshot",
+            "enqueue_experience",
+            "complete_experience",
+            "freeze_image",
+            "experience_detail",
+            "enqueue_reference"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/task_runtime.py",
+        "reviewed_sha256": "ab80a4f72cd634cf1fa9de5132d161158b4750a82a8942f8010cc9092d718419"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: features/collection",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "7a62a78de1b96d4878a26f1879d27b942c2a31168d524e6c44af1ea1a24b9456",
+      "path": "easel_workbench/features/collection/registry.py",
+      "symbol_groups": [
+        {
+          "area": "features/collection",
+          "members": [
+            "packed",
+            "SourceRegistry",
+            "SourceRegistry.__init__",
+            "SourceRegistry.baseline",
+            "SourceRegistry.entries",
+            "SourceRegistry.public",
+            "SourceRegistry.update",
+            "SourceRegistry.receipt",
+            "SourceRegistry.prepare",
+            "SourceRegistry.source"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/collection/registry.py",
+        "reviewed_sha256": "98d82cb0cfa29cf8c516ccef3d6045b4b5bdb9fa66cafba38c6ff5be6e520a2b"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: infrastructure/storage",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "a32c9d651cb9cfd97bb665c5400c8a944d0b2ad79f3f5739e6ebe3911a1660c1",
+      "path": "easel_workbench/infrastructure/storage/schema.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/storage",
+          "members": [
+            "initialize_collection",
+            "initialize_distribution",
+            "initialize_accounts",
+            "initialize_installations",
+            "initialize_evidence",
+            "initialize_chat_plans",
+            "initialize_creator",
+            "initialize_tasks",
+            "initialize_sources"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/collection/registry.py",
+        "reviewed_sha256": "98d82cb0cfa29cf8c516ccef3d6045b4b5bdb9fa66cafba38c6ff5be6e520a2b"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/distribution_runtime.py",
+      "reviewed_sha256": "24f577f2b48f1a1f8f812d3b10549bd944373db53727af83c23271ecf1056c55",
+      "area": "compat/distribution",
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "DPAPI 私有文件；旧 bridge 指针/准确批准任务，不能整文件退役",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "BridgeError",
+            "BridgeTimeout",
+            "_bridge_mutex",
+            "DistributionRuntime",
+            "DistributionRuntime.__init__",
+            "DistributionRuntime._receipt",
+            "DistributionRuntime.configure_secret",
+            "DistributionRuntime.validate_secret_ref",
+            "DistributionRuntime._bridge_pointer",
+            "DistributionRuntime._write_bridge_pointer",
+            "DistributionRuntime._global_settings",
+            "DistributionRuntime.bridge_status",
+            "DistributionRuntime.configure_bridge",
+            "DistributionRuntime.credentials_for_connection",
+            "DistributionRuntime.discover_accounts",
+            "DistributionRuntime._installation_evidence",
+            "DistributionRuntime.summary",
+            "DistributionRuntime._binding",
+            "DistributionRuntime._validate_settings",
+            "DistributionRuntime._settings",
+            "DistributionRuntime._invoke",
+            "DistributionRuntime.probe",
+            "DistributionRuntime.capability",
+            "DistributionRuntime._remote",
+            "DistributionRuntime.verify",
+            "DistributionRuntime.send"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/distribution_runtime.py",
+        "reviewed_sha256": "9a65c27c6d724db01f6a815f4693dea10bd3a95ff09e6444bd4fe3f4a7d1dd8b"
+      }
+    },
+    {
+      "path": "easel_workbench/infrastructure/credentials.py",
+      "reviewed_sha256": "ad2863116a2a758cf523dbff13c04eebe0658dbaa24296dc67d5cf100726c400",
+      "area": "compat/distribution",
+      "responsibility": "p5 sole implementation: infrastructure",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "DPAPI 私有文件；旧 bridge 指针/准确批准任务，不能整文件退役",
+      "next_slice": "P5",
+      "symbol_groups": [
+        {
+          "area": "infrastructure",
+          "members": [
+            "VaultError",
+            "_json",
+            "_identifier",
+            "_Blob",
+            "_blob",
+            "_dpapi",
+            "_private_acl",
+            "DPAPIVault",
+            "DPAPIVault.__init__",
+            "DPAPIVault._ensure",
+            "DPAPIVault._path",
+            "DPAPIVault._write",
+            "DPAPIVault._read",
+            "DPAPIVault.put",
+            "DPAPIVault.put_reserved",
+            "DPAPIVault.get",
+            "DPAPIVault.validate",
+            "DPAPIVault.read_proof",
+            "DPAPIVault.write_proof"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/distribution_runtime.py",
+        "reviewed_sha256": "9a65c27c6d724db01f6a815f4693dea10bd3a95ff09e6444bd4fe3f4a7d1dd8b"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "88f281edeb7be22346845c2087cd2d4567c4a38a03d27384ef344ecc4e3af7e3",
+      "path": "easel_workbench/application/collection.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "CollectionWorker",
+            "CollectionWorker.__init__",
+            "CollectionWorker.prepare_resume",
+            "CollectionWorker.execute",
+            "CollectionWorker.tick",
+            "CollectionWorker.close",
+            "run"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/collection.py",
+        "reviewed_sha256": "4759c863616ebedd5d8266de2d5636a43e4f325d5adfe47c62c1a1cc5ed9744c"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: infrastructure",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "dd53de8d10ea6f12891884eb0c07568bcdfe286a138d0b458d11740aaf11932c",
+      "path": "easel_workbench/infrastructure/processes.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure",
+          "members": [
+            "process_identity",
+            "process_creation",
+            "owner_is_gone"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/collection.py",
+        "reviewed_sha256": "4759c863616ebedd5d8266de2d5636a43e4f325d5adfe47c62c1a1cc5ed9744c"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: ",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "56e2cccf581abf2d949588aec1804e1d752620dc21364083ac778f3e44d2e81c",
+      "path": "easel_workbench/settings.py",
+      "symbol_groups": [
+        {
+          "area": "",
+          "members": [
+            "SettingsConflict",
+            "signature",
+            "SettingsService",
+            "SettingsService.__init__",
+            "SettingsService.current",
+            "SettingsService.environment",
+            "SettingsService.capture",
+            "SettingsService.public",
+            "SettingsService.execution_environment",
+            "SettingsService.openclaw_environment",
+            "SettingsService.operation",
+            "SettingsService._module",
+            "SettingsService.channels",
+            "SettingsService.status",
+            "SettingsService.native_models",
+            "SettingsService.command",
+            "SettingsService._async_guard",
+            "SettingsService.installation_api",
+            "SettingsService.scrub",
+            "SettingsService._execute",
+            "service",
+            "handle"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/settings.py",
+        "reviewed_sha256": "85e81d0dd40eaeff121560a6c722eb841057d3cbef39bc728256ceb29510c45d"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "e8dc92e007bdc421bc6902f1145a6dfcc9b6630e345f9f5fc5a88698b09c4de7",
+      "path": "easel_workbench/application/distribution.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "DistributionWorker",
+            "DistributionWorker.__init__",
+            "DistributionWorker._heartbeat",
+            "DistributionWorker._probe_due_connections",
+            "DistributionWorker.run_once",
+            "DistributionWorker.run",
+            "run"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/distribution.py",
+        "reviewed_sha256": "2c98413714d530eabb66f7c1ac5b933af4ae22de262de0becf68fb18dc6ddff7"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "b49fa0f6fae5c32329b786a9dc030432329f33c1612be19b8fc9de829c3a3bf6",
+      "path": "easel_workbench/runtime/distribution_checks.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "CheckConflict",
+            "CheckUnauthorized",
+            "CheckExpired",
+            "CheckUnavailable",
+            "_canonical",
+            "_sha",
+            "_time",
+            "_safe_accounts",
+            "CheckService",
+            "CheckService.__init__",
+            "CheckService._now",
+            "CheckService._row",
+            "CheckService._save",
+            "CheckService._expire",
+            "CheckService._public",
+            "CheckService._ticket",
+            "CheckService.begin",
+            "CheckService.status",
+            "CheckService.fail_launch",
+            "CheckService._authenticate",
+            "CheckService._ack",
+            "CheckService._write_observation",
+            "CheckService.accept"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/distribution_checks.py",
+        "reviewed_sha256": "2da3d659ea9724c43bbfd3c32543de58ab09d85a893053eb98d1aba60ab267ca"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "023432502e5a7099bf47c4d4cfe3887596d250f086b527d387855a961d502ca6",
+      "path": "easel_workbench/runtime/distribution_check_relay.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "RelayUnauthorized",
+            "RelayUnavailable",
+            "_time",
+            "_hash",
+            "AutoCheckRelay",
+            "AutoCheckRelay.__init__",
+            "AutoCheckRelay._now",
+            "AutoCheckRelay._state",
+            "AutoCheckRelay._save_state",
+            "AutoCheckRelay._enabled",
+            "AutoCheckRelay._eligible",
+            "AutoCheckRelay._leases",
+            "AutoCheckRelay._save_lease",
+            "AutoCheckRelay._outbox",
+            "AutoCheckRelay._save_task",
+            "AutoCheckRelay._revoke",
+            "AutoCheckRelay.set_generation",
+            "AutoCheckRelay._refresh",
+            "AutoCheckRelay._active",
+            "AutoCheckRelay.status",
+            "AutoCheckRelay.launch_or_reuse",
+            "AutoCheckRelay._ensure_launch",
+            "AutoCheckRelay.maintain",
+            "AutoCheckRelay._authenticate",
+            "AutoCheckRelay.poll"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/distribution_check_relay.py",
+        "reviewed_sha256": "18340195de83597f3b826f33106fc061d8260881accb142f8c8889e2fda1f9a9"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/easel_integration.py",
+      "reviewed_sha256": "a0aeab6ca007ee0d15d34e92cfacf4ca0b39ff0d672cbb33efad9462ae6c76c0",
+      "area": "application/media",
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "media_* 与 works/jobs/review_inputs/runs；新任务受 accept_new_tasks/stages 限制，受理同事务",
+      "next_slice": "P4",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "IntegrationConflict",
+            "digest",
+            "load_catalog",
+            "initialize",
+            "EaselIntegration",
+            "EaselIntegration.__init__",
+            "EaselIntegration._records",
+            "EaselIntegration.accepts_new",
+            "EaselIntegration.transcript",
+            "EaselIntegration._job",
+            "EaselIntegration._put_job",
+            "EaselIntegration._public_job",
+            "EaselIntegration.config",
+            "EaselIntegration.bootstrap",
+            "EaselIntegration._save_config",
+            "EaselIntegration.preview",
+            "EaselIntegration._create_job",
+            "EaselIntegration.command",
+            "EaselIntegration._decision",
+            "EaselIntegration._directory",
+            "EaselIntegration._worker_alive",
+            "EaselIntegration.start",
+            "EaselIntegration._payload",
+            "EaselIntegration._invoke_worker",
+            "EaselIntegration.run_job",
+            "EaselIntegration.run_reconcile",
+            "EaselIntegration._recover_outputs",
+            "EaselIntegration.job",
+            "EaselIntegration.work",
+            "service"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/easel_integration.py",
+        "reviewed_sha256": "af90cd83bca269ea7d1ed78ab6a27f9bf5571fba4c32cc4a05a40b0a7238141a"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/easel_media_worker.py",
+      "reviewed_sha256": "e0166cbfe6d318bc30b7d9bcceff2e1db2126f6b36949f9a6d1c16f5eca8d9c5",
+      "area": "integrations/easel",
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "输出目录及已记录 task/receipt；未知 POST 不重发，vendor 仅在该子进程加载",
+      "next_slice": "P4",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "TaskPending",
+            "read_only_reconcile",
+            "atomic",
+            "run_vendor",
+            "compose",
+            "transcribe",
+            "main"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/easel_media_worker.py",
+        "reviewed_sha256": "7cdd44ef1ed18d10a3db94b06d10a665a56244bd419778b296a1629f7e6f5331"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: infrastructure/installations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "b0d07983f54da7729eb2eac08d25a22b31d1cacd227582584f647c0db376e7bb",
+      "path": "easel_workbench/infrastructure/installations/host.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/installations",
+          "members": [
+            "InstallationHost",
+            "InstallationHost.__init__",
+            "InstallationHost.python",
+            "InstallationHost.remotion",
+            "InstallationHost.child_environment",
+            "InstallationHost._run",
+            "InstallationHost._install_run",
+            "InstallationHost.check"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/infrastructure/installations/host.py",
+        "reviewed_sha256": "346618cb59b8c19e6c02ceea886bc6cea3e5caa9bb95f508294f75faac87318e"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: features/installations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "1c15bcf4135e2e891e9d53aace0a9eb5f5bd190c38974e7577ded05cd156a346",
+      "path": "easel_workbench/features/installations/queue.py",
+      "symbol_groups": [
+        {
+          "area": "features/installations",
+          "members": [
+            "InstallationQueue",
+            "InstallationQueue.__init__",
+            "InstallationQueue.enqueue"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/installations/queue.py",
+        "reviewed_sha256": "e071b16fb24f7d0f42faea0dd8332dcec1ac38507a0de188e5633553e5816ff9"
+      }
+    },
+    {
+      "responsibility": "p5 sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "499b830594af19d26c29cb670638e336aa848805ee064f12c6679cd519b46a60",
+      "path": "easel_workbench/runtime/toolbox_server.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "create_app",
+            "main"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/runtime/toolbox_server.py",
+        "reviewed_sha256": "a4bcae336066ddd2516534404cd0775570239b3ae9e3abb3bdf71fe32432edbe"
+      }
+    },
+    {
+      "responsibility": "p5 canonical leaf imports sole implementation: features/works",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "c6d9d6e378b2d2a6df54ef991d9838558e8eb5798799c15709a732a438477dc2",
+      "path": "easel_workbench/features/works/versions.py",
+      "symbol_groups": [
+        {
+          "area": "features/works",
+          "members": [
+            "WorkVersions",
+            "WorkVersions.__init__",
+            "WorkVersions.parent",
+            "WorkVersions.accept",
+            "WorkVersions.started",
+            "WorkVersions.finished"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/features/works/versions.py",
+        "reviewed_sha256": "e12e1c56a74ce9917af071b9f88bcb0e4957ecf8bb5dc261130b1dc2210c511b"
+      }
+    },
+    {
+      "responsibility": "p5 canonical leaf imports sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "f67b89cbb32bb93959c1905917621e0c8cb81108f120ae4c01068a004e648428",
+      "path": "easel_workbench/application/chat.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "ChatBusiness",
+            "ChatBusiness.__init__",
+            "ChatBusiness.skills",
+            "ChatBusiness.skill",
+            "ChatBusiness.history",
+            "ChatBusiness._session",
+            "ChatBusiness._selection",
+            "ChatBusiness._parent",
+            "ChatBusiness._news_source",
+            "ChatBusiness._attachments",
+            "ChatBusiness._freeze_attachments",
+            "ChatBusiness._instruction",
+            "ChatBusiness._review_document",
+            "ChatBusiness._workspace",
+            "ChatBusiness._bundle",
+            "ChatBusiness._plan_request",
+            "ChatBusiness.plan",
+            "ChatBusiness._public_plan",
+            "ChatBusiness.prepare",
+            "ChatBusiness.accept",
+            "ChatBusiness._accept_work",
+            "ChatBusiness.started",
+            "ChatBusiness.finished"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "path": "easel_workbench/application/chat.py",
+        "reviewed_sha256": "c608d64512effc9e438e640b83265618b44c396e547dbe56238f01e626b09e89"
       }
     }
   ],

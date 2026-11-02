@@ -27,7 +27,7 @@ TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description
 
 
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
-    root=pathlib.Path(root);store=store or Store();auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
+    root=pathlib.Path(root);store=store or Store(root/'data/desk.sqlite');auth=auth or AuthState(CONFIG);box=box or Toolbox(store,root)
     forms=Forms(auth,inert=True);csrf=csrf_token(store);origin=auth.data['origin'];host=auth.data['host']
     def error(code,message):return JSONResponse({'error':message},status_code=code,headers={'Cache-Control':'no-store'})
     def reply(data,code=200):return JSONResponse(data,status_code=code,headers={'Cache-Control':'no-store'})

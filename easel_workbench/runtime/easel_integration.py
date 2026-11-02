@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS media_job_work ON media_jobs(work_id);
 
 class EaselIntegration:
     def __init__(self, box, *, autostart=True, vault=None, runner=None):
-        from easel_workbench.runtime.distribution_runtime import DPAPIVault
+        from easel_workbench.infrastructure.credentials import DPAPIVault
         self.box, self.store, self.root = box, box.store, pathlib.Path(box.root).resolve()
         self.autostart, self.runner = autostart, runner
         self.vault = vault or DPAPIVault(self.root / 'data/media-vault')
@@ -382,7 +382,7 @@ class EaselIntegration:
         path=self._directory(job)/'receipt.json'
         try:
             receipt=json.loads(path.read_text(encoding='utf-8'))
-            from easel_workbench.runtime.distribution_runtime import process_identity
+            from easel_workbench.infrastructure.processes import process_identity
             return bool(receipt.get('worker_identity') and process_identity(receipt.get('worker_pid'))==receipt['worker_identity'])
         except (ValueError,OSError,TypeError):return False
 

@@ -202,13 +202,13 @@ def test_installation_keeps_operation_identity_across_settings_and_shared_queue(
 @pytest.mark.parametrize('detected',[True,False])
 def test_interrupted_installer_only_rechecks_dependencies_and_never_replays(settings,monkeypatch,detected):
     from easel_workbench.runtime.connection_environment import service
-    from easel_workbench.runtime import distribution_runtime
+    from easel_workbench.infrastructure import processes
     environment=service(settings.box)
     environment.python.parent.mkdir(parents=True)
     environment.python.write_bytes(b'TEMP never executed')
     monkeypatch.setattr(environment,'_run',lambda *args,**kwargs:SimpleNamespace(returncode=0 if detected else 1,stdout='v24.19.0',stderr=''))
     monkeypatch.setattr(environment,'_install_run',lambda *args,**kwargs:pytest.fail('Interrupted installer replayed'))
-    monkeypatch.setattr(distribution_runtime,'process_identity',lambda *args:None)
+    monkeypatch.setattr(processes,'process_identity',lambda *args:None)
     job={'id':'install-recovery','recipe':'browser','state':'running','owner_pid':999999,'owner_identity':{'created':'old'}}
     with settings.store.connect() as c:c.execute('INSERT INTO media_install_jobs VALUES(?,?,?)',(job['id'],job['recipe'],json.dumps(job)))
     result=environment.check();recovered=next(row for row in result['jobs'] if row['id']==job['id'])

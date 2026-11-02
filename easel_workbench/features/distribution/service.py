@@ -273,23 +273,8 @@ class DistributionService:
         self.runtime = runtime
         self.studio = getattr(box, 'studio', None) or StudioService(box)
         with self.store.connect() as c:
-            c.executescript('''
-CREATE TABLE IF NOT EXISTS distribution_connections(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_revisions(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_approvals(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_deliveries(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_attempts(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_batches(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_runners(id TEXT PRIMARY KEY,document TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS distribution_operations(operation_id TEXT PRIMARY KEY,signature TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE UNIQUE INDEX IF NOT EXISTS distribution_delivery_dedupe ON distribution_deliveries(json_extract(document,'$.dedupe_key'));
-CREATE INDEX IF NOT EXISTS distribution_delivery_status ON distribution_deliveries(json_extract(document,'$.status'));
-CREATE INDEX IF NOT EXISTS distribution_revision_work ON distribution_revisions(json_extract(document,'$.work_id'));
-CREATE TRIGGER IF NOT EXISTS distribution_revision_no_update BEFORE UPDATE ON distribution_revisions BEGIN SELECT RAISE(ABORT,'distribution revisions are immutable'); END;
-CREATE TRIGGER IF NOT EXISTS distribution_revision_no_delete BEFORE DELETE ON distribution_revisions BEGIN SELECT RAISE(ABORT,'distribution revisions are immutable'); END;
-CREATE TRIGGER IF NOT EXISTS distribution_approval_no_update BEFORE UPDATE ON distribution_approvals BEGIN SELECT RAISE(ABORT,'distribution approvals are immutable'); END;
-CREATE TRIGGER IF NOT EXISTS distribution_approval_no_delete BEFORE DELETE ON distribution_approvals BEGIN SELECT RAISE(ABORT,'distribution approvals are immutable'); END;
-''')
+            from easel_workbench.infrastructure.storage.schema import initialize_distribution
+            initialize_distribution(c)
 
     def _get(self, c, kind, key, required=True):
         assert kind in TABLES

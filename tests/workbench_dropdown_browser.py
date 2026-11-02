@@ -47,7 +47,7 @@ def main():
                         try:
                             page.goto(f['origin']+'/native/',wait_until='domcontentloaded')
                             page.evaluate('(theme)=>{localStorage.setItem("easel-theme",theme);document.documentElement.dataset.theme=theme}',theme)
-                            if mobile:page.get_by_role('button',name='打开工作导航',exact=True).click()
+                            if mobile:page.get_by_role('button',name='打开导航',exact=True).click()
                             trigger=page.get_by_role('button',name='选择用户画像',exact=True);expect(trigger).to_be_visible()
                             trigger.click();menu=page.get_by_role('listbox',name='选择用户画像',exact=True)
                             expect(menu.get_by_role('option').filter(has_text='TEMP 验收角色 23')).to_have_count(1)

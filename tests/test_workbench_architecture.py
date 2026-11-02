@@ -221,7 +221,8 @@ def test_upstream_python_does_not_import_or_launch_private_features():
 
 
 def test_upstream_patch_surface_is_explicit_and_small():
-    baseline=json.loads((ROOT/'docs/workbench/import-baseline.json').read_text(encoding='utf-8'))['easel_base']
+    # Measure private edits against the current integrated official baseline, not initial import history.
+    baseline=json.loads((ROOT/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))['upstream_commit']
     protected=['easel','web/app.py','web/frontend/src','web/frontend/package.json',
         'web/frontend/package-lock.json','web/frontend/tsconfig.app.json','agents','skills']
     git=shutil.which('git')

@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(path.join(root,'web/frontend/package.json'));
 const ts=require('typescript'),postcss=require('postcss');
-export const OFFICIAL_BASELINE='5a597e5f3ef5b01098b53f36caf719dd9a32b7bf';
+export const OFFICIAL_BASELINE='0f43dc98277eac85fb48952878acad349731d3fc';
 const hostWrappers=new Set(['ew-page','ew-app','ew-main','ew-settings-host']);
 const protectedClasses=new Set(['nav-item','persona-select','theme-toggle','accounts-page','accounts-grid']);
 

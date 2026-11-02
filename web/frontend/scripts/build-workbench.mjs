@@ -21,7 +21,7 @@ const sources=()=>{
     .filter(n=>fs.statSync(path.join(frontend,'src',n)).isFile())
     .map(n=>'web/frontend/src/'+n.replaceAll('\\','/'));
   files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
-    'web/static/easel-icon-transparent.png','scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','docs/workbench/upstream-base.json','scripts/audit_easel_base.mjs','LICENSE');
+    'web/static/easel-icon-transparent.png','web/static/dropdown.css','scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','docs/workbench/upstream-base.json','scripts/audit_easel_base.mjs','LICENSE');
   return Object.fromEntries(files.sort().map(n=>[n,sha(fs.readFileSync(path.join(root,n)))]));
 };
 const inputs=sources();

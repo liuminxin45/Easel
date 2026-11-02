@@ -113,8 +113,11 @@ def main():
     parser.add_argument('--backend', default=str(ROOT))
     parser.add_argument('--canonical')
     parser.add_argument('--canonical-ref')
+    parser.add_argument('--comparison-only', action='store_true', help='Compare shared UI against the same TEMP data; omit unrelated account/action scenarios.')
     parser.add_argument('--out', required=True)
     args = parser.parse_args()
+    if args.comparison_only and not args.canonical:
+        parser.error('--comparison-only requires an actual canonical build')
     backend, native, out = Path(args.backend).resolve(), Path(args.native).resolve(), Path(args.out).resolve()
     canonical = Path(args.canonical).resolve() if args.canonical else None
     out.mkdir(parents=True, exist_ok=True)
@@ -137,7 +140,7 @@ def main():
               'native': {'release': native.name, 'manifest_sha256': h.sha(native / 'native-manifest.json')},
               'backend': {'directory':str(backend),'release':frozen.get('release') if frozen else None,'manifest_sha256':h.sha(frozen_path) if frozen else None}, 'harness_sha256':h.sha(__file__), 'canonical': str(canonical) if canonical else None,
               'comparison_kind': 'reference application against identical TEMP data' if canonical else None,
-              'canonical_ref': args.canonical_ref,
+              'canonical_ref': args.canonical_ref, 'comparison_only': args.comparison_only,
               'allowed_visual_extensions': ['15 visible trend rows with internal scrolling', 'dashboard lists capped at 360px', 'private exact-version lifecycle extension slots']}
     def check(name, **evidence):
         report['checks'].append({'name': name, 'passed': True, **evidence})
@@ -206,7 +209,7 @@ def main():
                         assert not any(item['path'].startswith('/native/api/') for item in requests),requests
                         check(label+': startup gate prevents premature page effects, legacy account caches and native-relative API requests')
                         expect(page.locator('.sidebar .nav-item')).to_have_count(6)
-                        assert page.locator('.sidebar select.persona-select').count() == 1
+                        assert page.locator('.sidebar .persona-control button.settings-select').count() == 1
                         assert page.locator('.sidebar-logo-icon').count() == 1
                         assert page.locator('.sidebar .theme-toggle').count() == 1
                         assert page.locator('.ew-topbar').count() == 0
@@ -214,8 +217,8 @@ def main():
                         expect(page.locator('.dash-card-list')).to_have_count(4)
                         assert all(row<=360 for row in page.locator('.dash-card-list').evaluate_all('items=>items.map(el=>el.clientHeight)'))
                         capture('dashboard')
-                        check(label + ': native sidebar, select, logo, theme and dashboard')
-                        dashboard_styles = styles(page, ['.sidebar .nav-item', '.sidebar .persona-select', '.dash-quick-btn', '.dash-stat'])
+                        check(label + ': native sidebar, shared profile dropdown, logo, theme and dashboard')
+                        dashboard_styles = styles(page, ['.sidebar .nav-item', '.sidebar .persona-control .settings-select', '.dash-quick-btn', '.dash-stat'])
                         assert not [item for item in requests if item['path'] == '/api/collection/runs' and item['method'] == 'POST']
                         check(label + ': entry only reads stored collection results')
                         for path, selector, name in [
@@ -283,6 +286,9 @@ def main():
                             reference.screenshot(path=str(out / (label + '-canonical-accounts.png')), full_page=True)
                             reference_context.close()
                             check(label + ': default-app and hosted shared controls have equal computed styles')
+                        if args.comparison_only:
+                            context.close()
+                            continue
                         modal = page.locator('.modal').filter(has=page.get_by_role('heading', name='登录 微信公众号 · 后台取数', exact=True))
                         def start_login():
                             count=len(synthetic.calls)

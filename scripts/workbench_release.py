@@ -104,12 +104,12 @@ main()
     import importlib.metadata
     dependencies=sorted(d.metadata['Name']+'=='+d.version for d in importlib.metadata.distributions())
     value={'schema':1,'release':name,'architecture':'easel-workbench-extension',
-        'easel_base':'5a597e5f3ef5b01098b53f36caf719dd9a32b7bf','files':files,
+        'easel_base':'0f43dc98277eac85fb48952878acad349731d3fc','files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,
         'capabilities_type':'easel_project_builtin','capabilities_sha256':capabilities,
         'workspace_sha256':workspace,
-        'upstream_commit':'5a597e5f3ef5b01098b53f36caf719dd9a32b7bf',
+        'upstream_commit':'0f43dc98277eac85fb48952878acad349731d3fc',
         'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     if committed_source()!=revision:

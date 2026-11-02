@@ -95,7 +95,7 @@ def test_host_viewport_cannot_introduce_a_second_font_system():
 def test_official_source_manifest_and_native_build_remain_verifiable():
     report=inspect('auditEaselBase',[str(ROOT)])
     assert report['passed'],report['violations']
-    assert report['upstream_commit']=='5a597e5f3ef5b01098b53f36caf719dd9a32b7bf'
+    assert report['upstream_commit']=='0f43dc98277eac85fb48952878acad349731d3fc'
 
 
 def test_shared_backend_has_no_private_dependencies_or_runtime_source_copies():

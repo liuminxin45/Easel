@@ -1317,6 +1317,9 @@ def main():
                                             capture('accounts.logout-confirm', '.accounts-page', 'cancel_preserves_connection', '微信公众号')
                                         except Exception as error:
                                             report['checks'].append({'case': label, 'surface_id': 'accounts.logout-confirm', 'state': 'cancel_preserves_connection', 'passed': False, 'rendered': False, 'error': str(error)})
+                                    if page.url == 'about:blank':
+                                        go('/toolbox')
+                                        expect(page.locator('.dash-page')).to_be_visible()
                                     recovery_draft_key = 'toolbox:draft:mobile-audit:route-recovery'
                                     recovery_draft = json.dumps({'text': LONG, 'files': [{'name': '原附件.png', 'local_id': 'TEMP-original-attachment'}]}, ensure_ascii=False)
                                     page.evaluate('([key,value])=>localStorage.setItem(key,value)', [recovery_draft_key, recovery_draft])
@@ -1329,7 +1332,8 @@ def main():
                                         expect(retry).to_be_visible()
                                         with page.expect_response(lambda response: urlsplit(response.url).path == '/api/works/MOBILE_AUDIT_MISSING' and response.request.method == 'GET') as retry_response:
                                             retry.click()
-                                        assert retry_response.value.status == 404
+                                        assert retry_response.value.status == 400, ('Missing work follows actual ValueError HTTP contract', retry_response.value.status)
+                                        assert retry_response.value.json().get('error') == '作品不存在', retry_response.value.json()
                                         expect(notice).to_have_text('作品不存在')
                                         assert page.evaluate('key=>localStorage.getItem(key)', recovery_draft_key) == recovery_draft
                                         opener = page.get_by_role('button', name='打开导航', exact=True)

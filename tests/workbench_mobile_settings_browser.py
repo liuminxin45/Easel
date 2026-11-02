@@ -85,6 +85,16 @@ def main():
     def inspect(page, profile, surface_id, state, selector='.settings-panel'):
         scope = page.locator(selector).last
         expect(scope).to_be_visible()
+        # Measure the settled original drawer, not its slide/fade entrance.
+        # Include ancestors because a parent's opacity/transform affects the
+        # whole nested confirmation; ongoing spinners do not block this read.
+        scope.evaluate('''async element=>{
+          const animations=new Set(element.getAnimations({subtree:true}));
+          for(let parent=element.parentElement;parent;parent=parent.parentElement)
+            for(const animation of parent.getAnimations())animations.add(animation);
+          await Promise.allSettled([...animations].filter(animation=>
+            animation.effect?.getComputedTiming().endTime!==Infinity).map(animation=>animation.finished));
+        }''')
         info = scope.evaluate('''element=>{
           const r=element.getBoundingClientRect(),v=visualViewport;
           const width=v?.width||innerWidth,height=v?.height||innerHeight;

@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "passed": true,
+  "created_at": "2026-11-02T04:57:20.712617+00:00",
+  "spec": "private-workbench-architecture",
+  "production_activated": true,
+  "source_commit": "1415930a86ae73cea89ec625de4943df489a3861",
+  "pre_deployment_delivery_commit": "680aa3e0f22482f0621468ab61ee6fe5f348274c",
+  "official_base": "0f43dc98277eac85fb48952878acad349731d3fc",
+  "candidate": {
+    "release": "workbench-20261102-042728",
+    "manifest_sha256": "9a09fb2001a4c67ddf51d9fda133a3bf4bde99a2eaf79205c093335cb870bd8a",
+    "native": {
+      "release": "native-easel-workbench-20261102042113",
+      "manifest_sha256": "bd2e90c7a71f349aea7f4030a158d7ad0db78548c13f9c5f206415ac4991555a"
+    }
+  },
+  "previous_runtime": {
+    "release": "workbench-20261102-015158",
+    "manifest_sha256": "4f0b758e836199fecf8dd8874fef90fce0975cc19b25288055c68161dec15c89"
+  },
+  "previous_native": {
+    "release": "native-easel-workbench-20261102014712",
+    "manifest_sha256": "b320ae42d8fc4f220ad35ca0b8e85e8771848b3b7f1f440d4dd52d6aa22a704d"
+  },
+  "manager_and_roles_verified": 8,
+  "role_backoff_failures": 0,
+  "health_probes": "local and actual HTTPS ingress healthy",
+  "same_database_file_identity": true,
+  "database_copied": false,
+  "database_restored": false,
+  "builtin_migration": false,
+  "unknown_receipts_unchanged": true,
+  "unknown_requests_replayed": false,
+  "shared_candidate_unchanged": true,
+  "protected_source_files_unchanged": 927,
+  "authenticated_core_routes": 4,
+  "live_browser_views": 18,
+  "settled_data_views": 2,
+  "anonymous_entries": 3,
+  "real_model_calls": 0,
+  "real_platform_writes": 0,
+  "physical_device_tested": false,
+  "remaining_observations": [
+    "First extra settled-data run timed out; a sequential actual-browser repeat passed without changing product code or timeout.",
+    "Content library measured 267 top-level items, 4249211 response bytes, 14.577 seconds; mobile dashboard settled in 21.658 seconds. Performance remains an observation, not a claimed improvement.",
+    "Previously visible source collection failures remain; no replay was requested."
+  ],
+  "evidence": {
+    ".local/workbench-validation/p3-p6-production-20261102/admission.py": "295aa9804eff5dc8a802a9c677a6296dd74f7b264427fac70e6172e1ca938d90",
+    ".local/workbench-validation/p3-p6-production-20261102/admission.json": "63253b8f27ac0168a05ed09f16751e9767f18569912704756c0165e57773a728",
+    ".local/workbench-validation/p3-p6-production-20261102/acceptance.json": "ec2cf49c24b0cb6c0d3bf3c2b8ee5cbe1d30a0effeb23d6477e527f9ee7fd7ad",
+    ".local/workbench-validation/p3-p6-production-20261102/upgrade.log": "6d6832c78942018a3d3341b96f57d7a635cfa38b57eda0f28083dea90db22517",
+    ".local/workbench-validation/p3-p6-production-20261102/upgrade-result.json": "c0071d1cb23e7c41a7c6c47892ec55cf9860543443e1655b60482731852810ef",
+    ".local/workbench-validation/p3-p6-production-20261102/health.json": "9ba9d39fbccaed7e79da0918684a82c84caf723e27c776e04761a2f2efe1ec63",
+    ".local/workbench-validation/p3-p6-production-20261102/postflight.py": "cafa7e98065f12f77c8ba2c0b095c12cbc510b4425c83d05ce7b0ced7dd770c2",
+    ".local/workbench-validation/p3-p6-production-20261102/postflight-final.log": "4191ab7f7f195e302b1a079cc089aae8a0dc62d3ec7cdb27e18cd24b2a604308",
+    ".local/workbench-validation/p3-p6-production-20261102/live_verify.py": "e3ff6372e31307a1874b96b29d04aa00d7975925e62a7a9627121a60df9bed8c",
+    ".local/workbench-validation/p3-p6-production-20261102/live-browser.json": "23a356b0343c1335cfc0a6bc4f052778dc38d63680c5216779f4987a69dd5961",
+    ".local/workbench-validation/p3-p6-production-20261102/settled_views.py": "dd9142d32301e1665efcdf8f2132e7d36b5b8a6c142609116d07d6cf8233e64a",
+    ".local/workbench-validation/p3-p6-production-20261102/settled-views-r2.json": "2d99458b29cf279a4060090da0aeb0ee422be3b826c27f99e8a50f07245ffd56",
+    ".local/workbench-validation/p3-p6-production-20261102/settled.log": "902f9c4d0761371252a2f443e18aa514b3ef911a2a7aad542173641455fe77ff",
+    ".local/workbench-validation/p3-p6-production-20261102/settled_views_r3.py": "3f8f9b560c52ce250b6c481ed36f10e9ea067e64bcc7392a863e9be760930f69",
+    ".local/workbench-validation/p3-p6-production-20261102/settled-views-r3.json": "0686ae707801b3773f979aceba80e10fcb6d8e2faa0ae8b7798f29f3500cac28",
+    ".local/workbench-validation/p3-p6-production-20261102/settled-r3.log": "618627ebda5a836c33085ab723c9e7207e0c7ebc98f8be5e41b015dd5a177dca",
+    ".local/workbench-validation/p3-p6-production-20261102/readiness-latency.json": "9a2d836e04f84276d53de70e42e7524f0e35e39daaf8af37ae3748c5b2238463",
+    ".local/workbench-validation/p3-p6-production-20261102/outputs-source-comparison.json": "b65339829cdb2d5c58bc07cbbd3800b9c87e381e6f2ceac4a0cd0fbde0e6b01d",
+    ".local/workbench-validation/p3-p6-production-20261102/watchdog-health.json": "cf4068bd217555cd8e29c3570842093f384d861797fe1adeb1d779b760f21c63"
+  }
+}

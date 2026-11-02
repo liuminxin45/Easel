@@ -14,4 +14,6 @@
 
 验收：应用缺失/HTTP 超时/中控重启/PID 复用/上游500/忙碌任务/未知回执/重复日程故障注入；真实规模性能回归；首次真实 canary；独立任务实际运行及中控自恢复；自有 fork 提交推送与不可变版本部署。物理 vivo 未实测不得冒称验收。GitHub Actions 当前仓库禁用，日常检测不依赖云端 CI。
 
-当前状态：首批380通过、36项冻结版浏览器闭环及10个线上页面通过，已推送并部署首版。独立任务实机注册、旧健康任务归档停用。首次真实样本已采集并执行Agent，但因严格沙箱不能启动AppData Python未生成PNG，失败保留、未重放。工作区Python工具已经实际无模型沙箱验证修复；中控又检出learning长写锁并修复，增量182项通过，正冻结最终配对版本及独立自恢复演练。证据位于 `.local/workbench-validation/independent-health-20261103/` 与中控外部 runtime。
+当前状态：已部署并推送自有fork。应用3c7cbab，后端workbench-20261102-194136；中控62acfecbb274174d独立安装并运行，旧健康任务归档停用。主回归380通过、增量182通过、远端新检出97通过，最终冻结版36项浏览器闭环及10个线上页面通过。真实Windows挂起server+结束中控演练212.232秒自动恢复，只换server，19个历史表哈希相同，原未知身份/其余角色保留。
+
+首次真实样本已采集并执行Agent，但因严格沙箱不能启动AppData Python未生成PNG；失败保留、未重放，不能称完整Agent贴图通过。工作区Python/Pillow/字体工具已以实际无模型沙箱验证修复，工作区外写仍拒绝；下一日真实样本尚未发生。中控还检出并修复learning长锁（3024→15查询；线上写锁约0.3～3.4ms）。单个来源部分失败继续显示degraded，不以假绿代替验收。完整绑定及证据见 `docs/workbench/INDEPENDENT-HEALTH-20261103.md`、`.local/workbench-validation/independent-health-20261103/` 与中控外部 runtime。

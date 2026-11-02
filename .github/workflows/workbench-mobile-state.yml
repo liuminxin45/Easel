@@ -85,7 +85,7 @@ jobs:
         working-directory: web/frontend
         run: npm run check:workbench
       - name: Verify independent health, daily idempotency and production scale performance without real model calls
-        run: python -m pytest -q tools/health-control/tests tests/test_workbench_canary_export.py tests/test_workbench_health_bridge.py tests/test_workbench_health_endpoint.py tests/test_workbench_atomic_state.py tests/test_workbench_performance_diagnostics.py tests/test_workbench_creative_preview_readonly.py
+        run: python -m pytest -q tools/health-control/tests tests/test_workbench_canary_export.py tests/test_workbench_health_bridge.py tests/test_workbench_health_endpoint.py tests/test_workbench_atomic_state.py tests/test_workbench_performance_diagnostics.py tests/test_workbench_creative_preview_readonly.py tests/test_workbench_learning_idle_cost.py
       - name: Build original Easel independently
         working-directory: web/frontend
         run: npm run build

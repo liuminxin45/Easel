@@ -22,4 +22,9 @@ page_state负责热点订阅及首页/拆解/画像/日历/内容库真实失败
 Git仅origin/main，upstream只读；精确配对切换、历史保留、数据不回滚。
 
 当前实施证据：`.local/workbench-validation/functional-health-20261103/`。
-当前状态：修复和并行验证中，尚未部署本轮候选。
+当前状态：本轮确认的问题已修复、提交推送自有fork并配对上线。
+应用23f59b0；后端workbench-20261102-181354，前端native-functional-health-20261103-r1。
+真实失败批次已恢复，新增62条，最新入库11月3日02:10；8来源完成，NewsNow因36kr上游500部分完成。
+前端486、不同后端416、完整内容闭环36通过；同一前端明暗主题各59区域覆盖，后端差异分层验证。
+方案只读预览与原合同深等，最终线上方案校验约3秒；无制作/发布或未知重放，排期与历史保留。
+详情及Git/manifest见`docs/workbench/FUNCTIONAL-HEALTH-20261103.md`。

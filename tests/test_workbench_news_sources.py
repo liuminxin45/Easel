@@ -83,7 +83,7 @@ def test_protocol_batch_ingest_missing_urls_and_no_model(setup, monkeypatch, tmp
     store, service, registry = setup
     identifier = add(registry)
     from easel.trends.protocol import validate_payload
-    from easel_workbench.runtime import custom_source_collection as custom
+    from easel_workbench.integrations.collection import custom
     payload = validate_payload({'version':1,'fetched_at':'2026-10-30T08:00:00Z','items':[
         {'id':str(index),'title':'TEMP '+str(index),'url':'' if index==0 else 'https://example.com/'+str(index),'heat':{'text':'热度 '+str(index)}} for index in range(250)]})
     monkeypatch.setattr(custom,'collect',lambda source,env:payload)

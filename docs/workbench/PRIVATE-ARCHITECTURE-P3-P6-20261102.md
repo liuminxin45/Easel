@@ -29,6 +29,21 @@ TEMP 内容闭环 34 项通过。模型与平台为合成执行，不代表真�
 主要为 `fixed.xml`、`evidence.xml`、`statement-parity.json`、
 `inventory-final.json`、`protected.json` 与 `closedloop-fixed/`。
 
+## P4 采集：排期、队列和来源适配
+
+`features/collection/` 保留唯一来源版本、排期规则和原 SQLite 队列；
+`integrations/collection/` 负责原内置采集器、通用协议及 Python 资产校验。
+`application/collection_sources.py` 显式装配来源适配与队列，
+`application/collection.py` 保留原 worker 生命周期。历史模块与直接脚本入口继续可用。
+包内 sources、排期与 newsnow 资源仍定位原冻结成员；没有另建注册表、队列或脚本副本。
+
+185 项来源/采集器/历史行形状/架构/技能检查通过；生产者改用唯一适配模块后，
+20 项采集器检查重跑通过（与 185 项重叠，不相加）。真实 Edge TEMP RSS、
+桌面/模拟移动制作与采纳闭环 34 项通过。来源注册本身不触发采集，250 条协议批量
+入库、准确来源快照、幂等和删除后历史可读均按原断言验证。迁移中的 19 个
+未改方法语句对照保持；构造装配与资源路径单独验证。927 份保护字节和正式指针保持。
+证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-collection/`。
+
 ## 后续切片
 
 P4 分采集、交付、安装三批；P5 整理装配与共享基础能力；P6 核对前端依赖、

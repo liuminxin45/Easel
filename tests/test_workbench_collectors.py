@@ -48,7 +48,7 @@ def test_changed_receipt_is_rejected(tmp_path, monkeypatch):
 
 
 def test_producer_only_calls_raw_reader_and_binds_receipt(tmp_path, monkeypatch):
-    from easel_workbench.runtime import collection_sources
+    from easel_workbench.integrations.collection import builtin as collection_sources
     monkeypatch.setattr(collection_sources,'collect_aihot',lambda folder,**kwargs:([{'event_id':'exact','description':'完整原文'}],{'coverage':'ok'}))
     receipt=tmp_path/'raw.json'
     result=collectors.produce({'mode':'aihot','source':'60028244fb76','root':str(tmp_path),

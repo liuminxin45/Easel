@@ -148,7 +148,7 @@ def produce(request):
     os.environ['EASEL_WORKBENCH_COLLECTOR_CHILD']='1'
     mode=request['mode'];p=decode(request['parameters'])
     if mode=='aihot':
-        from .runtime.collection_sources import collect_aihot
+        from .integrations.collection.builtin import collect_aihot
         value=collect_aihot(Path(p.pop('folder')),**p)
     elif mode=='newsnow':
         from .runtime.collection_adapters.newsnow_ai_digest import process
@@ -202,7 +202,7 @@ def source_preview(source, root):
             elif mode=='aibot':parameters={}
             elif mode=='watcha':parameters={'queue':str(directory/'watcha.sqlite'),'limit':27}
             else:
-                from .runtime.collection_sources import settings
+                from .integrations.collection.builtin import settings
                 parameters={'source':source,'folder':str(directory),'seen':[],'profile_dir':str(settings(root)['profile_dir'])}
             receipt=directory/'payload.json'
             produce({'root':str(root),'mode':mode,'source':source,'parameters':parameters,'receipt':str(receipt)})

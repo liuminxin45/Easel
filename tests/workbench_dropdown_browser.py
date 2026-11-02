@@ -25,7 +25,11 @@ def main():
         expect(menu).to_be_visible()
         result=menu.evaluate('''el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el),v=visualViewport;return {background:s.backgroundColor,border:s.borderTopWidth,zIndex:s.zIndex,shadow:s.boxShadow,top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,viewportWidth:v.width,viewportHeight:v.height}}''')
         assert result['background']!='rgba(0, 0, 0, 0)' and result['background']!='transparent',result
-        assert result['border']=='1px' and int(result['zIndex'])>=1000 and result['shadow']!='none',result
+        assert result['border']=='1px' and result['shadow']!='none',result
+        # Official menus use z-index:100; actual top-layer hit testing verifies reachability.
+        hit=menu.evaluate('el=>{const r=el.getBoundingClientRect(),target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!target&&el.contains(target)}')
+        assert hit,('Shared menu is covered by another surface',result)
+        result['center_hit']=hit
         assert result['top']>=7 and result['left']>=7 and result['right']<=result['viewportWidth']-7 and result['bottom']<=result['viewportHeight']-7,result
         assert result['height']<=321,result
         return result
@@ -53,7 +57,7 @@ def main():
                             expect(menu.get_by_role('option').filter(has_text='TEMP 验收角色 23')).to_have_count(1)
                             info=surface(page,menu)
                             assert info['scrollHeight']>info['clientHeight'];mark(profile,'role menu is opaque, themed, scrollable and bounded')
-                            assert menu.get_by_role('option').first.evaluate('el=>el.getBoundingClientRect().height')>=(44 if mobile else 36)
+                            assert menu.get_by_role('option').first.evaluate('el=>el.getBoundingClientRect().height')>=(44 if mobile else 24)
                             if mobile:
                                 before=menu.evaluate('el=>el.scrollTop');box=menu.bounding_box()
                                 session=context.new_cdp_session(page)

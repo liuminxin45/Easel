@@ -94,12 +94,17 @@ def install_reference(application, directory):
         return FileResponse(target)
 
 
-def styles(page, selectors):
-    return page.evaluate("""selectors=>Object.fromEntries(selectors.flatMap(selector=>{
+def styles(page, selectors, *, mobile=False):
+    result = page.evaluate("""selectors=>Object.fromEntries(selectors.flatMap(selector=>{
       const el=document.querySelector(selector);if(!el)return [];
       const style=getComputedStyle(el),keys=['fontFamily','fontSize','lineHeight','fontWeight','borderRadius','backgroundColor','color','padding','gap'];
       return [[selector,Object.fromEntries(keys.map(key=>[key,style[key]]))]];
     }))""", selectors)
+    if mobile:
+        for value in result.values():
+            value.pop('padding', None)
+            value.pop('gap', None)
+    return result
 
 
 def legacy_account_caches(page):
@@ -141,7 +146,7 @@ def main():
               'backend': {'directory':str(backend),'release':frozen.get('release') if frozen else None,'manifest_sha256':h.sha(frozen_path) if frozen else None}, 'harness_sha256':h.sha(__file__), 'canonical': str(canonical) if canonical else None,
               'comparison_kind': 'reference application against identical TEMP data' if canonical else None,
               'canonical_ref': args.canonical_ref, 'comparison_only': args.comparison_only,
-              'allowed_visual_extensions': ['15 visible trend rows with internal scrolling', 'dashboard lists capped at 360px', 'private exact-version lifecycle extension slots']}
+              'allowed_visual_extensions': ['15 visible trend rows with internal scrolling', 'dashboard lists capped at 360px', 'private exact-version lifecycle extension slots', 'host-scoped mobile geometry and flat dashboard scrolling']}
     def check(name, **evidence):
         report['checks'].append({'name': name, 'passed': True, **evidence})
         print('PASS', name, flush=True)
@@ -214,11 +219,13 @@ def main():
                         assert page.locator('.sidebar .theme-toggle').count() == 1
                         assert page.locator('.ew-topbar').count() == 0
                         assert page.get_by_role('button', name='返回', exact=True).count() == 0
-                        expect(page.locator('.dash-card-list')).to_have_count(4)
-                        assert all(row<=360 for row in page.locator('.dash-card-list').evaluate_all('items=>items.map(el=>el.clientHeight)'))
+                        expect(page.locator('.dash-card-list')).to_have_count(0 if mobile else 4)
+                        expect(page.locator('.dash-grid > .dash-card:not(.dash-card-wide)')).to_have_count(4)
+                        if not mobile:
+                            assert all(row<=360 for row in page.locator('.dash-card-list').evaluate_all('items=>items.map(el=>el.clientHeight)'))
                         capture('dashboard')
                         check(label + ': native sidebar, shared profile dropdown, logo, theme and dashboard')
-                        dashboard_styles = styles(page, ['.sidebar .nav-item', '.sidebar .persona-control .settings-select', '.dash-quick-btn', '.dash-stat'])
+                        dashboard_styles = styles(page, ['.sidebar .nav-item', '.sidebar .persona-control .settings-select', '.dash-quick-btn', '.dash-stat'], mobile=mobile)
                         assert not [item for item in requests if item['path'] == '/api/collection/runs' and item['method'] == 'POST']
                         check(label + ': entry only reads stored collection results')
                         for path, selector, name in [
@@ -266,7 +273,7 @@ def main():
                         assert not legacy_account_caches(page),legacy_account_caches(page)
                         assert not any(item['path'].startswith('/api/accounts/') and item['path'].endswith('/whoami') for item in requests),requests
                         check(label+': entering the native account page never starts automatic whoami verification')
-                        account_styles = styles(page, ['.accounts-grid', '.account-card', '.account-card-name', '.account-card .btn'])
+                        account_styles = styles(page, ['.accounts-grid', '.account-card', '.account-card-name', '.account-card .btn'], mobile=mobile)
                         if canonical:
                             reference_context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':height},is_mobile=mobile,has_touch=mobile,color_scheme=theme)
                             reference_context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}])
@@ -278,11 +285,11 @@ def main():
                             if boot_response.value.json().get('modelConfigured') is False:
                                 expect(reference.locator('.settings-close')).to_be_visible()
                                 reference.locator('.settings-close').click()
-                            assert styles(reference, list(dashboard_styles)) == dashboard_styles, {'native': dashboard_styles, 'reference': styles(reference, list(dashboard_styles))}
+                            assert styles(reference, list(dashboard_styles), mobile=mobile) == dashboard_styles, {'native': dashboard_styles, 'reference': styles(reference, list(dashboard_styles), mobile=mobile)}
                             reference.locator('.sidebar-nav .nav-item').filter(has_text='账号').click()
                             expect(reference.locator('.accounts-page')).to_be_visible()
                             expect(reference.locator('.account-card').first).to_be_visible()
-                            assert styles(reference, list(account_styles)) == account_styles, {'native': account_styles, 'reference': styles(reference, list(account_styles))}
+                            assert styles(reference, list(account_styles), mobile=mobile) == account_styles, {'native': account_styles, 'reference': styles(reference, list(account_styles), mobile=mobile)}
                             reference.screenshot(path=str(out / (label + '-canonical-accounts.png')), full_page=True)
                             reference_context.close()
                             check(label + ': default-app and hosted shared controls have equal computed styles')

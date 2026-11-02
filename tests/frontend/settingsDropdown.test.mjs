@@ -132,3 +132,19 @@ test('short menus below the trigger size to actual wrapped content', () => {
   assert.equal(result.width, 260);
   assert.equal(result.maxHeight, 320);
 });
+
+
+test('a dropdown remains inside a div drawer instead of underneath its backdrop', () => {
+  const body = { name: 'body' };
+  const drawer = { name: 'drawer' };
+  const component = runInNewContext(outputText, {
+    useRef: () => ({ current: null }),
+    useState: () => [null, () => {}],
+    useEffect: () => {}, useLayoutEffect: () => {},
+    React: { createElement: (...args) => ({ args }) },
+    createPortal: (element, parent) => ({ element, parent }), document: { body },
+  });
+  const props = { items: [], current: '', onPick() {}, onClose() {} };
+  const anchor = { closest: selector => selector === '.drawer-overlay' ? drawer : null, getAttribute: () => null };
+  assert.equal(component({ ...props, anchor }).parent, drawer);
+});

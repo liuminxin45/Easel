@@ -177,6 +177,6 @@ export function OptionsDropdown({ id, label, anchor, items, current, emptyHint, 
         </div>
       ))}
     </div>,
-    anchor?.closest('dialog[open]') || document.body,
+    anchor?.closest('dialog[open]') || anchor?.closest('.drawer-overlay') || document.body,
   );
 }

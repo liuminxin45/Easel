@@ -36,3 +36,10 @@ Spec: upstream-sync-20261102
 capabilities与workspace修订恢复且与活动包相同，历史文件/哈希声明不变。
 新增真实仓库内容寻址原件回归，先红后绿；原有.gitattributes已声明LF，不能依赖重放完成后自动重写既有工作文件。
 初个隔离包/全零检查报告保留为诊断，重新冻结后再运行浏览器，不放松守卫。
+
+
+官方0f43原始构建的额外真实回归：SkillDrawer新choices控件将菜单portal到body（z100），
+被drawer-overlay（z1000）遮挡；桌面和手机的实际elementFromPoint均命中panel而非菜单。
+本fork仅在SettingsSelect增加最近drawer-overlay挂载点，不改官方CSS层级，并补共享控件回归及编译后真实命中验证。
+旧测试的z1000/桌面36px阈值改为实际命中及24px鼠标/44px触控标准；保留真实可见范围、键盘和触控断言。
+横屏单次160px触控可能未覆盖178px滚动范围，已用真实maxScroll证明可达；改为有界可信手势并逐次检查响应，不改生产CSS。

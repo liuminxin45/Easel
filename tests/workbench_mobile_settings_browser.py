@@ -208,22 +208,33 @@ def main():
                         if width <= 760: page.locator('.sidebar-toggle').click()
                         gear = page.locator('.settings-gear')
                         box = gear.bounding_box()
-                        if box and (box['y'] < 0 or box['y'] + box['height'] > page.viewport_size['height']):
-                            # A low-height expanded sidebar may intentionally
-                            # scroll. Prove reachability with a trusted swipe.
+                        gesture_history = []
+                        for attempt in range(3):
+                            if not box or (box['y'] >= 0 and box['y'] + box['height'] <= page.viewport_size['height'] + 1):
+                                break
+                            # A trusted gesture must react immediately; one 160px swipe
+                            # need not cover the entire scroll range in a short viewport.
                             sidebar = page.locator('.sidebar')
-                            scroll_before = sidebar.evaluate('element=>element.scrollTop')
+                            metrics_before = sidebar.evaluate('el=>({scrollTop:el.scrollTop,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,maxScroll:el.scrollHeight-el.clientHeight})')
+                            down = box['y'] < 0
+                            if (not down and metrics_before['scrollTop'] >= metrics_before['maxScroll']) or (down and metrics_before['scrollTop'] <= 0):
+                                break
                             session = context.new_cdp_session(page)
-                            session.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': 150, 'y': 290}]})
+                            start_y = 110 if down else min(290, page.viewport_size['height'] - 70)
+                            session.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': 150, 'y': start_y}]})
                             for step in range(1, 9):
-                                session.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': 150, 'y': 290 - step * 20}]})
+                                session.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': 150, 'y': start_y + (1 if down else -1) * step * 20}]})
                                 page.wait_for_timeout(20)
                             session.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
                             page.wait_for_timeout(500)
-                            mark(profile, 'nav.selectors', 'landscape_sidebar_scroll', 'trusted touch reveals the bottom settings entry', sidebar.evaluate('element=>element.scrollTop') > scroll_before)
+                            session.detach()
+                            metrics_after = sidebar.evaluate('el=>({scrollTop:el.scrollTop,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,maxScroll:el.scrollHeight-el.clientHeight})')
+                            moved = metrics_after['scrollTop'] < metrics_before['scrollTop'] if down else metrics_after['scrollTop'] > metrics_before['scrollTop']
+                            gesture_history.append({'before': metrics_before, 'after': metrics_after})
+                            mark(profile, 'nav.selectors', 'landscape_sidebar_scroll', 'trusted touch responds and approaches the bottom settings entry', moved, sidebar_metrics=metrics_after, gesture=attempt + 1)
                             box = gear.bounding_box()
                         reachable = bool(box and box['y'] >= 0 and box['y'] + box['height'] <= page.viewport_size['height'] + 1)
-                        mark(profile, 'nav.selectors', 'settings_button', 'sidebar bottom settings entry is touch reachable at this height', reachable, box=box)
+                        mark(profile, 'nav.selectors', 'settings_button', 'sidebar bottom settings entry is touch reachable at this height', reachable, box=box, trusted_gestures=gesture_history)
                         screenshot(page, profile, 'nav.selectors', 'sidebar-bottom')
                         if not reachable: raise AssertionError('sidebar settings remains unreachable after native touch')
                         gear.click()

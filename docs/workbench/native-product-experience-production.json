@@ -1,0 +1,60 @@
+{
+  "spec": "native-product-experience",
+  "status": "live",
+  "candidate": {
+    "release": "workbench-20261102-091443",
+    "manifest_sha256": "3204c5db3fcd5552774451f2659dba71525254ebf0a213b757d89c012edbaee5",
+    "native": {
+      "release": "native-easel-workbench-20261102091353",
+      "manifest_sha256": "babf7733f05a08ff8d81e458ab6ce184ada15ab11db6bc2ab70274ceb6b22a41"
+    }
+  },
+  "source_commit": "842b837e138047e0d2b3fcae0685f587e431f334",
+  "data_file_identity_unchanged": true,
+  "unknown_records_unchanged": true,
+  "previous_runtime_stopped": true,
+  "all_seven_roles_live": true,
+  "business_writes_during_browser_verification": 0,
+  "repair": {
+    "passed": true,
+    "job_id": "a02464b3-c48e-4c61-b8b3-aa405a9e1de7",
+    "status": "completed",
+    "registered_deliverables": 4,
+    "original_files_unchanged": true,
+    "delivery_manifest_unchanged": true,
+    "original_failure_preserved": true,
+    "model_calls_unchanged": true,
+    "native_turns_unchanged": true,
+    "durable_submissions_unchanged": true,
+    "original_execution_timestamps_unchanged": true,
+    "independent_review": "pending_manual_check",
+    "model_replayed": false,
+    "adopted": false,
+    "published": false,
+    "plan_sha256": "eedf0697bbb5b9bb96988cc45c60994070270d575a63ff890565750ffb31140d",
+    "files": [
+      {
+        "name": "01-AI调用量与实际价值.png",
+        "sha256": "ed3c943d00dcb3a9d2bbed370d80cec6ddf0935941ecb757ea1c6546a2918ba6"
+      },
+      {
+        "name": "02-先看时间再看口径.png",
+        "sha256": "0901841b887430a75ec50a422c4d3f41ebf451cc0e5985da1cf97f459c6ebd65"
+      },
+      {
+        "name": "03-判断AI有没有用的三个问题.png",
+        "sha256": "cf5f696594747fb4783e406898bb08750eb654234f980505459f80727475b210"
+      },
+      {
+        "name": "标题与配文.txt",
+        "sha256": "f66b9e951f8f7664ff42bc4b0cba483f3178022987ffa5c86b4d135f2add8dd9"
+      }
+    ]
+  },
+  "human_feedback": "pending",
+  "physical_mobile_device_tested": false,
+  "delivery_remote": "origin",
+  "delivery_branch": "codex/easel-sync-20261102-082005",
+  "upstream_push": false,
+  "evidence_index": "docs/workbench/native-product-experience-evidence.json"
+}

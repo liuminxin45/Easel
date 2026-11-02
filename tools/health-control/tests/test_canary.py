@@ -151,6 +151,20 @@ def test_confirmed_exited_preflight_can_retry_same_operation_at_most_three_times
     assert result['reason']=='daily_preflight_attempt_limit' and not result['dispatch_started']
 
 
+def test_confirmed_unsent_preparation_error_does_not_label_a_later_success_failed(tmp_path):
+    root=tmp_path/'controller';calls=[]
+    def runner(command,**kwargs):
+        request=json.loads(Path(command[-1]).read_text(encoding='utf-8'));calls.append(request['operation_id'])
+        value={'operation_id':request['operation_id'],'status':'completed'} if len(calls)>1 else {
+            'operation_id':request['operation_id'],'status':'blocked','reason':'preflight_missing_registry','error_type':'FileNotFoundError',
+            'native_intent_saved':False,'preflight_confirmed_unsent':True}
+        StateStore(request['workspace']).write('receipt.json',value)
+        return SimpleNamespace(returncode=0,stdout='')
+    for n in range(2): result=canary.run_daily(config(tmp_path),root,execute=True,clock=lambda:1793670000,runner=runner)
+    assert len(calls)==2 and len(set(calls))==1 and result['status']=='completed'
+    assert 'reason' not in result and 'error_type' not in result
+
+
 def test_worker_saved_native_intent_only_inspects_without_bootstrapping(tmp_path,monkeypatch,capsys):
     workspace=tmp_path/'run';workspace.mkdir();(workspace/'native-intent.json').write_text('{}')
     request=workspace/'request.json';request.write_text(json.dumps({'operation_id':'op','workspace':str(workspace),'execute':True}))

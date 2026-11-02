@@ -32,6 +32,8 @@ def run_daily(config, runtime_root, *, execute=False, clock=time.time, runner=su
             return {**operation,'status':'blocked','reason':'daily_preflight_attempt_limit'}
         if execute and operation.get('worker_launch_attempted') and not (operation.get('preflight_confirmed_unsent') and operation.get('worker_exited')):
             return {**operation,'status':'unknown','reason':'worker_outcome_not_confirmed_unsent'}
+        for field in ('reason','error_type','error_frames'):
+            operation.pop(field,None)
         workspace=Path(operation['workspace']);workspace.mkdir(parents=True,exist_ok=True)
         request={**operation,'execute':execute,'timeout_seconds':int(config.get('canary_timeout_seconds',900))}
         request_path=workspace/'request.json';StateStore(workspace).write('request.json',request)

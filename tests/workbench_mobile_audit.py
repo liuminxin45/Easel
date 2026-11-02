@@ -862,6 +862,7 @@ def main():
                             run('profiles.create', '/toolbox?section=profiles&item=new', '.overlay .modal')
                             run('accounts.main', '/toolbox?section=distribution&pane=connections', '.accounts-page', marker='微信公众号')
                             run('publishing.main', '/toolbox?section=publications', '.publishing-workspace', marker=MARK)
+                            run('settings.panel', '/settings?panel=model', '.settings-panel', 'model_section', marker='设置')
                             if not args.skip_settings:
                                 for tab in ['对话与脚本', '语音转写', '配音', '生图', '视频', '音乐']:
                                     run('settings.channels', '/settings?panel=model', '.settings-panel', tab,
@@ -870,7 +871,6 @@ def main():
                                 run('settings.usage', '/settings?panel=more', '.settings-panel', marker='使用与路径')
                                 run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
                             else:
-                                run('settings.panel', '/settings?panel=model', '.settings-panel', 'model_section', marker='设置')
                                 run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', 'confirm_text', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
                             if args.phase == 'full':
                                 chat_path = '/chat/' + ids['session']

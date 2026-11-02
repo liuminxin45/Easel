@@ -12,7 +12,7 @@ export interface PreparedSkillExecution {
 interface SkillRun {sessionId:string;turnId:string;input:string;selection:NativeSelection;state:'planned'|'submitted'|'finished'}
 const preparedRequests=new WeakMap<PreparedSkillExecution,JsonRecord>();
 interface ExecutionView {sessionId:string;turnId:string;questions:ChatQuestion[]}
-interface ExecutionOwner {store:StoreApi<ExecutionView>;runtime?:ReturnType<typeof sessionRuntime>;release?:()=>void;configurationRevision?:number}
+interface ExecutionOwner {store:StoreApi<ExecutionView>;runtime?:ReturnType<typeof sessionRuntime>;release?:()=>void;configurationRevision?:number;detailReadSequence:number}
 const executionOwners=new WeakMap<WorkbenchClient,Map<string,ExecutionOwner>>();
 const pause=()=>new Promise<void>(resolve=>setTimeout(resolve,1000));
 const sameSelection=(a:NativeSelection,b:NativeSelection)=>JSON.stringify(a)===JSON.stringify(b);
@@ -21,7 +21,7 @@ const sameSelection=(a:NativeSelection,b:NativeSelection)=>JSON.stringify(a)===J
 export function createSkillServices(client:WorkbenchClient,profileId:string,skills:NativeSkill[],skillName=''){
   let owners=executionOwners.get(client);if(!owners){owners=new Map();executionOwners.set(client,owners);}
   const ownerKey=client.authenticationEpoch+':'+profileId+':'+skillName;
-  let owner=owners.get(ownerKey);if(!owner){owner={store:createStore<ExecutionView>(()=>({sessionId:'',turnId:'',questions:[]}))};owners.set(ownerKey,owner);}
+  let owner=owners.get(ownerKey);if(!owner){owner={store:createStore<ExecutionView>(()=>({sessionId:'',turnId:'',questions:[]})),detailReadSequence:0};owners.set(ownerKey,owner);}
   const execution=owner.store,executionOwner=owner;
   const observe=(run:SkillRun)=>{
     executionOwner.release?.();const runtime=sessionRuntime(client,run.sessionId);executionOwner.runtime=runtime;
@@ -145,16 +145,19 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
   }};
   return {
     loadDetail:async(name:string)=>{
+      const sequence=++executionOwner.detailReadSequence;
       const detail=await client.api.get<SkillDetail&{configuration_revision?:number}>('/api/skill/'+encodeURIComponent(name));
-      executionOwner.configurationRevision=typeof detail.configuration_revision==='number'?detail.configuration_revision:undefined;
+      // A closed drawer's late read cannot replace the currently visible parent.
+      if(sequence===executionOwner.detailReadSequence)executionOwner.configurationRevision=typeof detail.configuration_revision==='number'?detail.configuration_revision:undefined;
       return detail;
     },
     saveEnv:async(updates:Record<string,string>)=>{
       if(executionOwner.configurationRevision===undefined)throw Error('请重新打开技能详情核对配置版本；本次尚未保存。');
+      const sequence=executionOwner.detailReadSequence;
       const fields={updates,expected_revision:executionOwner.configurationRevision};
       const requestSignature=await requestFingerprint(fields);
       const value=await client.mutate<{ok:boolean;skills:Record<string,boolean>;revision?:number}>('settings','/api/env',fields,{metadataOnly:true,requestSignature,receiptPath:id=>'/api/settings/operations/'+encodeURIComponent(id)});
-      if(typeof value.revision==='number')executionOwner.configurationRevision=value.revision;
+      if(sequence===executionOwner.detailReadSequence&&executionOwner.configurationRevision===fields.expected_revision&&typeof value.revision==='number')executionOwner.configurationRevision=value.revision;
       void client.invalidate(['creator','easel','settings']);return value;
     },
     execute:async(name:string,input:string,persona?:string)=>{

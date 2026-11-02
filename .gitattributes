@@ -6,3 +6,7 @@ scripts/git-hooks/* text eol=lf
 
 # Content-addressed prompt archives must retain their recorded LF SHA256 bytes.
 "/skills/shared/workbench/规范/创作方案/策略文本/**" text eol=lf
+
+# Reviewed collection policies are bound to their original LF byte hashes.
+/easel_workbench/runtime/collection_model.py text eol=lf
+/easel_workbench/runtime/readonly_codex.py text eol=lf

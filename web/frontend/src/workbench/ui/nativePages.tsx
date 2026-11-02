@@ -101,5 +101,5 @@ export function WorkbenchNativePage({page,profileId,onUseTopic,search=new URLSea
 export function WorkLibrary({id,versionId}:{id:string;versionId?:string}){
  const resource=useResource<import('@workbench/core').Work>('/api/works/'+encodeURIComponent(id));
  const vid=versionId||resource.data?.latest_version||resource.data?.versions.at(-1)?.id;
- return resource.data?<NativeLibrary jumpPath={'workbench-'+id+(vid?'/'+vid:'')}/>:<Notice sources={[resource]}/>;
+ return resource.data?<NativeLibrary jumpPath={'workbench-'+id+(vid?'/'+vid:'')}/>:<div className="page-scroll"><Notice sources={[resource]}/>{resource.error&&<button className="btn" onClick={()=>void resource.reload()}>重试</button>}</div>;
 }

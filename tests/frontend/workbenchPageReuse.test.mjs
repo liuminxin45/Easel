@@ -156,7 +156,7 @@ test('native gallery resolves declared virtual file paths independently of displ
  exports.default({jumpPath:file.path,onJumpHandled:()=>{handled++}});
  for(const effect of effects)effect();
  await new Promise(resolve=>setImmediate(resolve));
- assert.deepEqual(Array.from(states[3]),['显示标题','v03']);
+ assert.deepEqual(Array.from(states[3]),['workbench-id','workbench-id/exact-version']);
  assert.equal(states[5],file);
  assert.deepEqual(reads,[file.path]);
  assert.equal(handled,1);

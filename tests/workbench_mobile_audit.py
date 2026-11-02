@@ -26,7 +26,7 @@ import threading
 import time
 from types import SimpleNamespace
 import wave
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +127,20 @@ def seed(fixture, image, video):
         c.execute('INSERT INTO artifacts VALUES(?,?,?,?,?)', ('mobile-audit-article-body', article, '正文.md', str(article_body), 'text/markdown'))
         c.execute('INSERT INTO artifacts VALUES(?,?,?,?,?)', ('mobile-audit-article-receipt', article, '文章交付.json', str(article_receipt), 'application/json'))
     session = fixture['app'].state.chat.create_session({'id': 'mobile-audit-session', 'profile_id': 'oil-pig'})['session']
+    # Seed an actual completed TEMP relation: real work GET supplies native_chat.
+    prior_turn = {'id': 'mobile-audit-turn', 'session_id': session['id'],
+        'status': 'completed', 'message': LONG, 'output': LONG,
+        'snapshot': {'task': 'discuss'}, 'work': {'work_id': work, 'version_id': work},
+        'created_at': dt.datetime.now(dt.timezone.utc).isoformat()}
+    prior_turn.update(updated_at=prior_turn['created_at'], runtime='codex', delivery_state='completed')
+    with box.store.connect() as c:
+        c.execute('INSERT INTO easel_chat_turns VALUES(?,?,?,?,?)',
+                  (prior_turn['id'], session['id'], 'mobile-audit-prior-turn',
+                   'TEMP prior completed turn; no producer', json.dumps(prior_turn, ensure_ascii=False)))
+    from easel_workbench.runtime.article_drafts import save as save_draft
+    save_draft(box, {'id': 'mobile-audit-draft-save', 'revision': 0,
+        'title': 'MOBILE_AUDIT 原有草稿 ' + LONG, 'material': LONG, 'guidance': LONG,
+        'format': 'poster', 'files': []}, 'mobile-audit-draft')
     creator = fixture['app'].state.creator
     profile = next(p for p in creator.bootstrap()['profiles'] if p['id'] == 'oil-pig')
     creator.command({'id': 'mobile-profile-seed', 'action': 'profile-save', 'profile_id': profile['id'],
@@ -161,9 +175,6 @@ def synthetic_reads(f, ids):
                                        'options': [{'label': '选项一', 'description': LONG}, {'label': '选项二', 'description': LONG}], 'multiSelect': True}]}]},
     ]
     work = f['box'].work(ids['work'])
-    draft = copy.deepcopy(work)
-    draft.update(id='mobile-audit-draft', versions=[], latest_version=None, pending=[], history=[], state='draft')
-    draft['draft'].update(title=LONG, material=LONG, guidance=LONG)
     connection = {'id': 'mobile-audit-account', 'platform': 'wechat-oa', 'account': LONG[:70], 'label': LONG[:70],
                   'enabled': True, 'revision': 1, 'secret_configured': False,
                   'capabilities': {a: {'status': 'available', 'verified': True, 'account': LONG[:70], 'reason': 'TEMP fixture only'} for a in ('draft', 'publish', 'verify')}}
@@ -197,7 +208,6 @@ def synthetic_reads(f, ids):
                'manual_channels': [{'id': 'wechat-oa', 'name': '公众号'}, {'id': 'xiaohongshu', 'name': '小红书'}], 'history': []}
     return {'/api/chat/sessions/' + ids['session']: history,
             '/api/chat/products/mobile-audit-turn': {'work_id': ids['work'], 'version_id': ids['version'], 'session_id': ids['session'], 'can_adopt': True, 'files': [artifact], 'text_blocks': [{'label': 'TEMP 配文', 'text': LONG}]},
-            '/api/works/mobile-audit-draft': draft,
             '/api/studio/bootstrap': studio, '/api/distribution/bootstrap': distribution,
             '/api/works/' + ids['work'] + '/versions/' + ids['version'] + '/completion-options': options,
             '/api/creator/experience/mobile-audit-experience': experience,
@@ -392,7 +402,16 @@ def main():
                             page.on('requestfailed',static_failure)
                             preflight = context.request.get(fixture['origin'] + '/api/works/' + ids['work'])
                             assert preflight.ok, ('TEMP work API failed', preflight.status, preflight.text())
-                            picture = next(file for version in preflight.json()['versions'] for file in version['artifacts'] if file['mime'].startswith('image/'))
+                            original_work = preflight.json()
+                            assert original_work['id'] == ids['work']
+                            assert original_work['native_chat'] == {'session_id': ids['session'], 'work_id': ids['work'], 'version_id': ids['version']}
+                            original_version = next(v for v in original_work['versions'] if v['id'] == ids['version'])
+                            assert original_version['creative']['workspace']['style_guidance'] == RECORD_GUIDANCE
+                            report.setdefault('existing_work_preflight', []).append({'case': label,
+                                'work_id': original_work['id'], 'native_chat': original_work['native_chat'],
+                                'guidance_sha256': hashlib.sha256(RECORD_GUIDANCE.encode()).hexdigest(),
+                                'same_title_completed_works_retained': True, 'read_protocol_mocked': False})
+                            picture = next(file for version in original_work['versions'] for file in version['artifacts'] if file['mime'].startswith('image/'))
                             signed = context.request.get(fixture['origin'] + picture['image_url'])
                             assert signed.status == 200 and signed.headers.get('content-type', '').startswith('image/')
                             assert hashlib.sha256(signed.body()).hexdigest() == hashlib.sha256(image).hexdigest()
@@ -766,6 +785,12 @@ def main():
                                     # native OutputsPage. Open its real lifecycle region.
                                     if surface.startswith('work.') and path.startswith('/works/'):
                                         open_version_operations()
+                                        requested_version = parse_qs(urlsplit(path).query).get('version', [])
+                                        if requested_version:
+                                            expect(page.get_by_role('combobox', name='作品版本', exact=True)).to_have_value(requested_version[0])
+                                            report.setdefault('exact_version_navigation', []).append({'case': label,
+                                                'surface_id': surface, 'state': state, 'route': path,
+                                                'selected_version_id': requested_version[0], 'same_title_works_retained': True})
                                     if before:
                                         before()
                                     capture(surface, selector, state, marker)
@@ -1071,8 +1096,14 @@ def main():
                                     before=lambda: page.locator('.cal-more').first.click())
                                 run('work.draft', '/works/mobile-audit-draft', '.ew-version-operations', 'existing_draft_edit', marker=MARK)
                                 def discuss_version():
+                                    before_requests = business_request_count()
                                     page.get_by_role('button', name='讨论这版', exact=True).click()
                                     expect(page.locator('.chat-page')).to_be_visible()
+                                    route = urlsplit(parse_qs(urlsplit(page.url).query).get('path', [''])[0])
+                                    assert route.path == '/chat/' + ids['session'], ('Wrong existing work conversation', page.url)
+                                    assert parse_qs(route.query).get('work') == [ids['work']]
+                                    assert parse_qs(route.query).get('version') == [ids['version']]
+                                    assert business_request_count() == before_requests, 'Discussion navigation started a new operation'
                                     page.get_by_role('textbox', name='对话输入', exact=True).fill(LONG)
                                 run('work.discussion', work_path, '.chat-page', 'raw_draft', before=discuss_version)
                                 def records():
@@ -1290,7 +1321,16 @@ def main():
                                     recovery_draft = json.dumps({'text': LONG, 'files': [{'name': '原附件.png', 'local_id': 'TEMP-original-attachment'}]}, ensure_ascii=False)
                                     page.evaluate('([key,value])=>localStorage.setItem(key,value)', [recovery_draft_key, recovery_draft])
                                     def missing_work_recovery():
-                                        expect(page.locator('.notice-error')).to_have_text('作品不存在')
+                                        notice = page.locator('.notice-error')
+                                        expect(notice).to_have_text('作品不存在')
+                                        error_box = notice.bounding_box()
+                                        assert error_box and error_box['height'] < 120, ('Small route error occupies the page', error_box)
+                                        retry = page.get_by_role('button', name='重试', exact=True)
+                                        expect(retry).to_be_visible()
+                                        with page.expect_response(lambda response: urlsplit(response.url).path == '/api/works/MOBILE_AUDIT_MISSING' and response.request.method == 'GET') as retry_response:
+                                            retry.click()
+                                        assert retry_response.value.status == 404
+                                        expect(notice).to_have_text('作品不存在')
                                         assert page.evaluate('key=>localStorage.getItem(key)', recovery_draft_key) == recovery_draft
                                         opener = page.get_by_role('button', name='打开导航', exact=True)
                                         opened_navigation = opener.is_visible()
@@ -1304,6 +1344,7 @@ def main():
                                             page.keyboard.press('Escape')
                                         report.setdefault('route_recovery_observations', []).append({'case': label,
                                             'error': '作品不存在', 'navigation_destinations': 6,
+                                            'error_bounds': error_box, 'retry_get_status': retry_response.value.status,
                                             'draft_and_attachment_metadata_preserved': True,
                                             'draft_sha256': hashlib.sha256(recovery_draft.encode()).hexdigest()})
                                     run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.notice-error', 'missing_work_route', marker='作品不存在', before=missing_work_recovery)

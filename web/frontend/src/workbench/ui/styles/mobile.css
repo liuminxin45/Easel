@@ -86,6 +86,7 @@
   html[data-native-platform] .copyable-text pre,
   html[data-native-platform] .outputs-viewer-content pre,
   html[data-native-platform] .skill-result pre { max-inline-size: 100%; overflow-x: auto; }
+  html[data-native-platform] .skill-body-md :not(pre) > code { white-space: normal; overflow-wrap: anywhere; }
   html[data-native-platform] .artifact-header,
   html[data-native-platform] .artifact-footer { flex-wrap: wrap; }
   html[data-native-platform] .artifact-name { flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }

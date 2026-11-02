@@ -59,15 +59,17 @@ function coverNode(m?: OutputMeta): OutputNode | null {
   return { name: 'cover', type: 'file', path: m.cover, kind } as OutputNode;
 }
 
-/** 按名称路径解析到当前目录的 children（stackNames 稳定，刷新后仍有效）。 */
-function resolvePath(roots: OutputNode[], names: string[]): OutputNode[] {
+/** 按节点路径解析目录链；展示名称可以重复或在刷新后改变。 */
+function resolvePath(roots: OutputNode[], paths: string[]): OutputNode[] {
   let nodes = roots;
-  for (const nm of names) {
-    const found = nodes.find((n) => n.type === 'dir' && n.name === nm);
-    if (!found) return nodes;   // 路径失效（被删/改）→ 停在能解析到的层
+  const directories: OutputNode[] = [];
+  for (const path of paths) {
+    const found = nodes.find((n) => n.type === 'dir' && n.path === path);
+    if (!found) break;   // 路径失效（被删/改）→ 停在能解析到的层
+    directories.push(found);
     nodes = found.children || [];
   }
-  return nodes;
+  return directories;
 }
 
 function Thumb({ f, big }: { f: OutputNode | null; big?: boolean }) {
@@ -91,7 +93,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   const [treeError, setTreeError] = useState('');
   const [treeLoading, setTreeLoading] = useState(true);
   const treeSeq = useRef(0);
-  const [stack, setStack] = useState<string[]>([]);   // 当前所在的文件夹名称路径
+  const [stack, setStack] = useState<string[]>([]);   // 当前所在目录链的节点路径
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<OutputNode | null>(null);
   const [content, setContent] = useState('');
@@ -115,7 +117,8 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const currentNodes = useMemo(() => resolvePath(roots, stack), [roots, stack]);
+  const directories = useMemo(() => resolvePath(roots, stack), [roots, stack]);
+  const currentNodes = directories.length ? directories[directories.length - 1].children || [] : roots;
   const dirs = useMemo(
     () => currentNodes.filter((n) => n.type === 'dir').sort((a, b) => (b.mtime || 0) - (a.mtime || 0)),
     [currentNodes]);
@@ -125,19 +128,15 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   }, [currentNodes, filter]);
 
   const selectedProject = useMemo(() => {
-    let nodes = roots;
     let selected: OutputNode | undefined;
-    for (const name of stack) {
-      const node = nodes.find(candidate => candidate.type === 'dir' && candidate.name === name);
-      if (!node) break;
+    for (const node of directories) {
       if (node.meta) selected = node;
-      nodes = node.children || [];
     }
     return selected;
-  }, [roots, stack]);
+  }, [directories]);
 
-  const atTop = stack.length === 0;
-  const atProjectRoot = stack.length === 1;
+  const atTop = directories.length === 0;
+  const atProjectRoot = directories.length === 1;
   // 当前项目的展示头（进入项目后才有），用于「成品/素材」分区
   const projectMeta = useMemo(
     () => selectedProject?.meta,
@@ -153,7 +152,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     () => (hasSplit ? files.filter((f) => !deliverableSet.has(f.path)) : files),
     [files, deliverableSet, hasSplit]);
 
-  const enterDir = useCallback((name: string) => { setStack((s) => [...s, name]); setFilter('all'); }, []);
+  const enterDir = useCallback((path: string) => { setStack([...directories.map(node => node.path), path]); setFilter('all'); }, [directories]);
   const goTo = useCallback((depth: number) => { setStack((s) => s.slice(0, depth)); setFilter('all'); }, []);
 
   const remove = useCallback(async (node: OutputNode, e: React.MouseEvent) => {
@@ -189,7 +188,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     const wanted = jumpPath.split('/').filter(Boolean).join('/');
     const find = (nodes: OutputNode[], parents: string[]): {node: OutputNode; parents: string[]} | undefined => {
       for (const node of nodes) {
-        const path = node.type === 'dir' ? [...parents, node.name] : parents;
+        const path = node.type === 'dir' ? [...parents, node.path] : parents;
         if (node.path === wanted) return {node, parents: path};
         if (node.type === 'dir') {
           const match = find(node.children || [], path);
@@ -236,7 +235,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     const m = d.meta;
     const cover = coverNode(m) || firstMedia(d);
     return (
-      <div key={d.path} className="card card-hover gcard" onClick={() => enterDir(d.name)}>
+      <div key={d.path} className="card card-hover gcard" onClick={() => enterDir(d.path)}>
         <div className="gcard-thumb">
           <span className="gcard-kind">{m?.kind ? (KIND_LABEL[m.kind] || m.kind) : '文件夹'}</span>
           {canDelete(d) && <button className="gcard-del" title="删除" onClick={(e) => remove(d, e)}><IconTrash size={14} /></button>}
@@ -278,12 +277,12 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
           <h1 className="page-title gallery-breadcrumbs">
             <IconOutputs size={21} />
             <span className="crumb" onClick={() => goTo(0)}>内容库</span>
-            {stack.map((name, i) => (
-              <span key={i}>
+            {directories.map((node, i) => (
+              <span key={node.path}>
                 <span className="crumb-sep">/</span>
-                {i === stack.length - 1
-                  ? (projectMeta?.title && i === 0 ? projectMeta.title : name)
-                  : <span className="crumb" onClick={() => goTo(i + 1)}>{name}</span>}
+                {i === directories.length - 1
+                  ? (projectMeta?.title && i === 0 ? projectMeta.title : node.name)
+                  : <span className="crumb" onClick={() => goTo(i + 1)}>{node.name}</span>}
               </span>
             ))}
           </h1>
@@ -309,9 +308,9 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
       )}
 
       {/* 面包屑返回 + 文件过滤（进入任意层后显示） */}
-      {stack.length > 0 && (
+      {directories.length > 0 && (
         <div className="gallery-filters">
-          <button className="btn btn-sm" onClick={() => goTo(stack.length - 1)}>
+          <button className="btn btn-sm" onClick={() => goTo(directories.length - 1)}>
             <span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><IconChevron size={13} /></span> 返回上级
           </button>
           {files.length > 0 && FILTERS.map((f) => (

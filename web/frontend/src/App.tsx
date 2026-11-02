@@ -202,6 +202,7 @@ function NativeApp() {
     const initialPersonaRequest = personaRequestId.current + 1;
     // The profile list remains available even if the broader status request fails.
     const profileList = refreshPersonas().catch(() => null);
+    const invalidateProfiles = () => { personaRequestId.current++; };
     // 先问 bootstrap：模型没配好时，画像推荐弹窗要让位 —— 一次只问用户一件事，
     // 而且画像配得再好，没有模型也对话不了。
     const bootstrap = fetch('./api/settings/bootstrap')
@@ -231,7 +232,7 @@ function NativeApp() {
       .catch(() => {
         if (active) setGatewayStatus('disconnected');
       });
-    return () => { active = false; personaRequestId.current++; };
+    return () => { active = false; invalidateProfiles(); };
   }, [refreshPersonas]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;

@@ -81,7 +81,7 @@ def apply(root,plan,expected):
     from easel_workbench.runtime.production_delivery import record_delivery
     box=Toolbox(Store(database),root)
     result=record_delivery(box,plan['turn_id'],plan['job']['reply'],plan['native_turn_id'],
-        product_roots=[root/'outputs'/plan['session_id']/plan['turn_id']/'products'],enqueue_review=False)
+        product_roots=[root/'outputs'/plan['session_id']/plan['turn_id']/'products'],enqueue_review=False,record_execution=False)
     if result['status']!='completed':raise ValueError('原成品接收仍未完成；保留纠正证据，不重新制作')
     with box.store.connect() as c:
         c.execute('UPDATE toolbox_jobs SET started_at=?,finished_at=? WHERE id=?',

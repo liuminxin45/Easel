@@ -47,12 +47,15 @@ def fence(root):
 
 def test_exact_failed_receipt_is_corrected_once_with_original_evidence(business,monkeypatch):
     calls=failed_delivery(business,monkeypatch);plan=preview(business.root,'turn-one')
+    with business.store.connect() as c:
+        original_calls=[tuple(row) for row in c.execute('SELECT * FROM creator_model_calls ORDER BY id')]
     assert len(plan['files'])==2 and plan['outcome']['code']=='missing_deliverables'
     with pytest.raises(ValueError):apply(business.root,plan,plan['plan_sha256'])
     fence(business.root)
     result=apply(business.root,plan,plan['plan_sha256']);assert result['status']=='completed' and not result['model_replayed']
     assert apply(business.root,plan,plan['plan_sha256'])==result and len(calls)==1
     with business.store.connect() as c:
+        assert [tuple(row) for row in c.execute('SELECT * FROM creator_model_calls ORDER BY id')]==original_calls
         assert c.execute("SELECT status FROM toolbox_jobs WHERE id='turn-one'").fetchone()[0]=='completed'
         assert tuple(c.execute("SELECT started_at,finished_at FROM toolbox_jobs WHERE id='turn-one'").fetchone())==(plan['job']['started_at'],plan['job']['finished_at'])
         assert {r[0] for r in c.execute("SELECT name FROM artifacts WHERE task_id='turn-one'")}=={'成品.png','标题与配文.txt'}

@@ -7,7 +7,7 @@ from .desk import stamp
 from . import server_logging as journal
 
 
-def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None, execution_identity=None, *, enqueue_review=True):
+def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None, execution_identity=None, *, enqueue_review=True, record_execution=True):
     from .bridge import capture_artifacts
     from .task_runtime import production_finish, step
     with box.store.connect() as c:
@@ -58,7 +58,8 @@ def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receive
         c.execute('UPDATE toolbox_jobs SET status=?,turn_id=?,reply=?,finished_at=?,error=? WHERE id=?',
                   (status, native_turn_id, reply, stamp(), outcome['message'] if outcome and status != 'completed' else warning, jid))
     journal.emit('production_state', operation_ref=journal.reference(jid), phase=status)
-    production_finish(box, jid, 'completed', {'turn_id': native_turn_id, 'reply': reply})
+    if record_execution:
+        production_finish(box, jid, 'completed', {'turn_id': native_turn_id, 'reply': reply})
     with box.store.connect() as c:
         step(c, jid, 'capture', 'completed' if status == 'completed' else 'failed', delivery_status=status,
              artifacts=[dict(row) for row in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=?', (jid,))])

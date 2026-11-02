@@ -2483,7 +2483,7 @@
       "responsibility": "Explicit receipt maintenance preserves execution times and never replays review/correction sole implementation: application",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "b1f0a4620b038d8dc95c7e32a235c8154a91d2faa13c42b091507b412ea86952",
+      "reviewed_sha256": "b77e9281e51d99bf4e1c7177ce0b17780b4575e4f6d8bab4afeb322b16ad8e04",
       "path": "easel_workbench/application/delivery_reconciliation.py",
       "symbol_groups": [
         {
@@ -2495,14 +2495,14 @@
         }
       ],
       "prior_review": {
-        "source_commit": "3835f1e9857c44108c5a81e83b454d2894b7bd4e",
+        "source_commit": "1614d12219bc81d0343192b50aea1ddd5d871efd",
         "path": "easel_workbench/application/delivery_reconciliation.py",
-        "reviewed_sha256": "ce1cb47f80350b27f7044fc0ee26a1c40a8e41ae207041196e2213ce4ade5d56"
+        "reviewed_sha256": "b1f0a4620b038d8dc95c7e32a235c8154a91d2faa13c42b091507b412ea86952"
       }
     },
     {
       "path": "easel_workbench/runtime/production_delivery.py",
-      "reviewed_sha256": "b3c8e51c4845c12e07627e950a1c8c6decf707b64855017254ab10d4d92320e3",
+      "reviewed_sha256": "f013b5f99f448c2f8fc896b8072ab3af42685b1078773bd4284a6904e6810cad",
       "area": "application/delivery",
       "responsibility": "Explicit receipt maintenance preserves execution times and never replays review/correction sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
@@ -2517,9 +2517,9 @@
         }
       ],
       "prior_review": {
-        "source_commit": "3835f1e9857c44108c5a81e83b454d2894b7bd4e",
+        "source_commit": "1614d12219bc81d0343192b50aea1ddd5d871efd",
         "path": "easel_workbench/runtime/production_delivery.py",
-        "reviewed_sha256": "cab62c107b8886ba46ba647f1cb605ec5bd9ddf5a202f1058fc5da213b4ad7e3"
+        "reviewed_sha256": "b3c8e51c4845c12e07627e950a1c8c6decf707b64855017254ab10d4d92320e3"
       }
     }
   ],

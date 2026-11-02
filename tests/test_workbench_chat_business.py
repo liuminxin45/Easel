@@ -353,6 +353,35 @@ def test_news_source_is_server_frozen_and_selection_is_local(business,monkeypatc
     with pytest.raises(PlanConflict,match='资讯来源'):b.prepare(changed)
 
 
+def test_news_poster_rejects_eol_drift_then_plans_exact_published_input_after_restoration(business):
+    from easel_workbench.runtime.desk import SOURCES
+    b=business;source=next(iter(SOURCES))
+    b.store.ingest({'schema_version':1,'source_job':source,'feed_id':SOURCES[source]['feed'],'run_id':'eol-regression-news',
+                    'run_at':'2026-11-02T08:00:00+08:00','final_text':'TEMP source','articles':[{
+                    'title':'换行回归热点','body':'服务器保留的准确来源正文','url':'https://example.invalid/eol-source',
+                    'source_event_id':'eol-news-event'}]})
+    with b.store.connect() as c:
+        aid=c.execute('SELECT id FROM articles').fetchone()[0]
+        before=[tuple(row) for row in c.execute('SELECT * FROM creator_skill_versions ORDER BY skill_id,version')]
+    v=value(tid='news-eol-regression');v['context']['article_id']=aid
+    path=b.root/'skills/shared/workbench/production-contract.md';raw=path.read_bytes()
+    path.write_bytes(raw.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
+    with pytest.raises(ValueError,match='此项目技能尚不可调用'):b.plan(v)
+    with b.store.connect() as c:
+        for table in ('easel_chat_plans','toolbox_jobs','creator_model_calls'):
+            assert c.execute('SELECT count(*) FROM '+table).fetchone()[0]==0
+    path.write_bytes(raw)
+    assert all(skill['available'] for skill in b.skills(False))
+    plan=b.plan(v);v['context']['plan_token']=plan['plan_token']
+    prepared=b.prepare(v);payload=json.loads(prepared['actual_prompt'].split('## 本轮冻结输入\n')[-1])
+    assert payload['source_article']['id']==aid and payload['source_article']['body']=='服务器保留的准确来源正文'
+    assert payload['session_task']=='poster'
+    assert prepared['actual_prompt']==plan['plan']['execution_prompt']['body']
+    with b.store.connect() as c:
+        assert [tuple(row) for row in c.execute('SELECT * FROM creator_skill_versions ORDER BY skill_id,version')]==before
+        assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==0
+
+
 def test_default_discussion_keeps_profile_pin_after_global_skill_publication(business):
     b=business;base=b.creator.detail('skill','topic-research')
     candidate=b.creator.command({'id':'new-current-topic','action':'skill-draft','skill_id':base['id'],'base_version':base['version'],

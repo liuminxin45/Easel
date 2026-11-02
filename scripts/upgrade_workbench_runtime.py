@@ -15,7 +15,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from activate_workbench import STATE,OLD,PYTHON,read,atomic,sha,verify,idle,queue_idle,authenticate,smoke,stop_new_profile
-from workbench_release import validate_source_binding
+from workbench_release import validate_source_binding,validate_published_skills
 
 
 def validate_candidate(root, state, acceptance_path, candidate_path=None):
@@ -50,6 +50,8 @@ def validate_candidate(root, state, acceptance_path, candidate_path=None):
         member=(root/name).resolve()
         if not member.is_relative_to(root.resolve()) or sha(member)!=expected:
             raise ValueError('Acceptance evidence changed')
+    validate_published_skills(root)
+    validate_published_skills(root,source_root=Path(root)/'workbench-releases'/choice['release'])
     return choice,package
 
 
@@ -171,6 +173,10 @@ def upgrade(options):
             stop_new_profile();stopped=True
             fence.execute('ROLLBACK')
         builtin_activation=activate_builtin_after_stop(ROOT,builtin)
+        # Recheck behind the writer fence, including an explicit migration's
+        # resulting published versions, before selecting or admitting services.
+        validate_published_skills(ROOT)
+        validate_published_skills(ROOT,source_root=ROOT/'workbench-releases'/choice['release'])
         delivery_reconciliation=None
         if delivery:
             if sha(delivery['path'])!=delivery['sha256']:raise ValueError('Delivery correction plan changed after stop')

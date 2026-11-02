@@ -10,3 +10,18 @@ scripts/git-hooks/* text eol=lf
 # Reviewed collection policies are bound to their original LF byte hashes.
 /easel_workbench/runtime/collection_model.py text eol=lf
 /easel_workbench/runtime/readonly_codex.py text eol=lf
+
+# Private skill releases hash raw resource bytes, including intentional mixed EOLs.
+# Keep upstream skills on their original attributes; only our versioned packages
+# bypass Git text conversion. Do not normalize or re-hash historical releases.
+/skills/shared/workbench/** -text
+/skills/builtin/content-production/** -text
+/skills/builtin/content-writing/** -text
+/skills/builtin/delivery-review/** -text
+/skills/builtin/experience-distillation/** -text
+/skills/builtin/image-production/** -text
+/skills/builtin/publication-analysis/** -text
+/skills/builtin/reference-analysis/** -text
+/skills/builtin/topic-research/** -text
+# One published reference deliberately contains a retained CRLF line.
+"/skills/shared/workbench/规范/公众号贴图写作要求.md" whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

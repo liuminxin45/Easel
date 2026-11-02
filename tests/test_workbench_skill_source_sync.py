@@ -5,6 +5,8 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
+import shutil
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -51,6 +53,85 @@ def draft(project,prompt=None,resources=None):
 def publish(runtime,sid):
     return runtime.command({'id':'publish-three','action':'skill-publish','skill_id':sid,'version':3,
                             'expected_published_version':2,'confirm':True})
+
+
+def admission_module():
+    spec=importlib.util.spec_from_file_location('published_skill_admission',Path(__file__).resolve().parents[1]/'scripts/workbench_release.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    return module
+
+
+def freeze_reference(project,raw):
+    """Create a TEMP release containing real LF or mixed-EOL resource bytes."""
+    runtime,sid,_,path=project;path.write_bytes(raw)
+    with runtime.store.connect() as c:
+        release=json.loads(c.execute('SELECT document FROM creator_skill_versions WHERE skill_id=? AND version=2',(sid,)).fetchone()[0])
+        release['resources']=[runtime._resource(c,{k:v for k,v in release['resources'][0].items() if k in sync.FIELDS})]
+        release['sha256']=runtime._release_hash(release)
+        c.execute('UPDATE creator_skill_versions SET document=? WHERE skill_id=? AND version=2',(packed(release),sid))
+    return release
+
+
+@pytest.mark.parametrize('raw',[b'Original reference\nsecond line\n',b'Original reference\r\nsecond line\n'])
+def test_line_ending_drift_blocks_admission_and_exact_restoration_preserves_history(project,raw):
+    runtime,sid,_,path=project;release=freeze_reference(project,raw);gate=admission_module()
+    with runtime.store.connect() as c:
+        before=c.execute('SELECT document FROM creator_skill_versions WHERE skill_id=? AND version=2',(sid,)).fetchone()[0]
+    assert gate.validate_published_skills(runtime.root,source_root=runtime.project)['checked']==1
+    path.write_bytes(raw.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
+    assert not sync.matches_source(runtime,release)
+    with pytest.raises(ValueError,match='topic-research@2'):
+        gate.validate_published_skills(runtime.root,source_root=runtime.project)
+    path.write_bytes(raw)
+    assert gate.validate_published_skills(runtime.root,source_root=runtime.project)['skills']==[{'id':sid,'version':2,'available':True}]
+    with runtime.store.connect() as c:
+        assert c.execute('SELECT document FROM creator_skill_versions WHERE skill_id=? AND version=2',(sid,)).fetchone()[0]==before
+        assert not c.execute("SELECT name FROM sqlite_master WHERE name='creator_skill_source_outbox'").fetchone()
+
+
+@pytest.mark.parametrize('mutation',['content','missing','pending'])
+def test_admission_keeps_real_resource_and_publication_failures_closed(project,mutation):
+    runtime,_,_,path=project;gate=admission_module()
+    if mutation=='content':path.write_bytes(b'Unapproved new instruction')
+    elif mutation=='missing':path.unlink()
+    else:
+        with runtime.store.connect() as c:
+            sync.initialize(c)
+            c.execute('INSERT INTO creator_skill_source_outbox VALUES(?,?,?,?)',('pending','topic-research',2,packed({'status':'pending'})))
+    with pytest.raises(ValueError,match='not callable'):
+        gate.validate_published_skills(runtime.root,source_root=runtime.project)
+
+
+def test_admission_checks_frozen_sources_against_same_actual_database(project,tmp_path):
+    runtime,_,_,path=project;gate=admission_module();frozen=tmp_path/'frozen'
+    shutil.copytree(runtime.project/'skills',frozen/'skills')
+    assert gate.validate_published_skills(runtime.root,source_root=frozen)['checked']==1
+    (frozen/path.relative_to(runtime.project)).write_bytes(b'wrong frozen candidate')
+    assert gate.validate_published_skills(runtime.root,source_root=runtime.project)['checked']==1
+    with pytest.raises(ValueError,match='not callable'):
+        gate.validate_published_skills(runtime.root,source_root=frozen)
+
+
+@pytest.mark.parametrize('raw',[b'LF first\nLF second\n',b'mixed first\r\nLF second\n'])
+def test_private_skill_bytes_survive_real_git_checkout_with_autocrlf_true(tmp_path,raw):
+    source=tmp_path/'source';source.mkdir();checkout=tmp_path/'checkout'
+    relative=Path('skills/shared/workbench/byte-fixture.md')
+    resource=source/relative;resource.parent.mkdir(parents=True);resource.write_bytes(raw)
+    (source/'.gitattributes').write_bytes((Path(__file__).resolve().parents[1]/'.gitattributes').read_bytes())
+    def git(cwd,*args):return subprocess.check_output(['git',*args],cwd=cwd,stderr=subprocess.STDOUT)
+    git(source,'init','-q');git(source,'config','core.autocrlf','true')
+    git(source,'add','.gitattributes',relative.as_posix())
+    git(source,'-c','core.hooksPath=NUL','-c','user.name=TEMP','-c','user.email=temp@example.invalid','-c','commit.gpgsign=false','commit','-qm','TEMP byte preservation')
+    git(tmp_path,'clone','--quiet','--no-checkout',str(source),str(checkout))
+    git(checkout,'config','core.autocrlf','true');git(checkout,'checkout','--quiet','HEAD')
+    assert (checkout/relative).read_bytes()==raw
+    assert sync.digest((checkout/relative).read_bytes())==sync.digest(raw)
+    assert git(checkout,'check-attr','text','--',relative.as_posix()).decode().strip().endswith(': unset')
+
+
+def test_initial_admission_does_not_create_database(tmp_path):
+    assert admission_module().validate_published_skills(tmp_path)['checked']==0
+    assert not (tmp_path/'data').exists()
 
 
 def test_candidate_never_changes_source_and_publish_preserves_original_versions(project):

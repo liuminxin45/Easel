@@ -88,6 +88,21 @@ def test_upgrade_verifies_new_runtime_and_frontend_as_one_pair(tmp_path,monkeypa
     assert not (tmp_path/'data').exists()
 
 
+@pytest.mark.parametrize('fail_frozen',[False,True])
+def test_upgrade_rejects_unavailable_published_skills_before_fencing(tmp_path,monkeypatch,fail_frozen):
+    upgrade,state,_,acceptance,_=upgrade_fixture(tmp_path,monkeypatch);calls=[]
+    def check(root,*,source_root=None):
+        calls.append((root,source_root))
+        if bool(source_root)==fail_frozen:raise ValueError('Published project skills are not callable: content-production@2')
+        return {'checked':8}
+    monkeypatch.setattr(upgrade,'validate_published_skills',check)
+    with pytest.raises(ValueError,match='content-production@2'):
+        upgrade.validate_candidate(tmp_path,state,acceptance)
+    assert len(calls)==(2 if fail_frozen else 1)
+    assert not (state/'admission.json').exists()
+    assert not (tmp_path/'data').exists()
+
+
 def test_upgrade_rejects_changed_frontend_before_fencing(tmp_path,monkeypatch):
     upgrade,state,native,acceptance,choice=upgrade_fixture(tmp_path,monkeypatch)
     (native/'index.html').write_text('unreviewed frontend',encoding='utf-8')

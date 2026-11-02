@@ -38,6 +38,44 @@ def validate_source_binding(package,root):
         raise ValueError('Workspace instructions changed after candidate validation')
 
 
+def validate_published_skills(root, *, source_root=None):
+    """Read-only admission check against the actual published DB releases.
+
+    A self-consistent source fingerprint alone does not prove that the running
+    skill can pass ChatBusiness's source check. Use that same check against both
+    the checkout and the frozen candidate, without seeding or rewriting the DB.
+    Initial/legacy installations still use the explicit builtin migration gate.
+    """
+    import contextlib
+    import sqlite3
+    from types import SimpleNamespace
+    from easel_workbench.project_skill_sync import managed,matches_source
+    root=Path(root).resolve();source=Path(source_root or root).resolve()
+    database=root/'data/desk.sqlite'
+    result={'checked':0,'source_root':str(source),'skills':[]}
+    if not database.is_file():return result
+    with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
+        tables={row[0] for row in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if 'creator_skill_pointers' not in tables:return result
+        rows=c.execute('SELECT p.skill_id,p.version,v.document FROM creator_skill_pointers p '
+                       'LEFT JOIN creator_skill_versions v ON v.skill_id=p.skill_id AND v.version=p.version').fetchall()
+        unavailable=[]
+        for sid,version,raw in rows:
+            if version==0:continue  # unpublished candidates are not callable
+            if raw is None:raise ValueError('Published skill release missing: '+sid)
+            release=json.loads(raw)
+            if release.get('id')!=sid or release.get('version')!=version:
+                raise ValueError('Published skill identity changed: '+sid)
+            if not managed(release):continue
+            available=matches_source(SimpleNamespace(project=source),release,c)
+            result['skills'].append({'id':sid,'version':version,'available':available})
+            result['checked']+=1
+            if not available:unavailable.append(sid+'@'+str(version))
+        if unavailable:
+            raise ValueError('Published project skills are not callable; exact source bytes or publication receipt differ: '+', '.join(unavailable))
+    return result
+
+
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -73,6 +111,7 @@ def committed_source(root=None):
 
 def freeze(native, *, candidate_path=None):
     revision=committed_source()
+    validate_published_skills(ROOT)
     native=ROOT/'native-releases'/native
     n=json.loads((native/'native-manifest.json').read_text(encoding='utf-8'))
     for name,digest in n['files'].items():
@@ -88,6 +127,7 @@ def freeze(native, *, candidate_path=None):
         raise ValueError('Project skill source changed while freezing')
     if workspace_revision(target)!=workspace or workspace_revision(ROOT)!=workspace:
         raise ValueError('Project workspace changed while freezing')
+    validate_published_skills(ROOT,source_root=target)
     (target/'launch.py').write_text('''from pathlib import Path
 import os,sys,json,hashlib
 root=Path(__file__).resolve().parent

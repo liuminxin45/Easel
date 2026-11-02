@@ -79,7 +79,7 @@ def seed(data, image):
         'profile_id': 'oil-pig', 'title': 'TEMP 返回与阅读验证'})['session']
     documents = []
     for n in range(24):
-        stamp = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=n)).isoformat()
+        stamp = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=24-n)).isoformat()
         document = {'id': f'TEMP-return-turn-{n:02d}', 'session_id': session['id'], 'status': 'completed',
             'message': f'TEMP 第 {n} 条原始问题', 'output': f'TEMP 第 {n} 条历史回答\n\n' + ('历史正文保留原字。' * 100),
             'snapshot': {'task': 'discuss'}, 'created_at': stamp, 'updated_at': stamp,

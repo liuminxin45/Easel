@@ -134,6 +134,42 @@ export function inspectMobileCss(source,file='mobile.css'){
  });return violations;
 }
 
+/** Host composition cannot silently replace the upstream presentation contract. */
+export function inspectOfficialPresentation(source,file='host.tsx'){
+ const facts=inspectSource(source,file),violations=[];
+ const report=(node,rule,extra={})=>violations.push({file,line:facts.ast.getLineAndCharacterOfPosition(node.getStart(facts.ast)).line+1,rule,...extra});
+ const blockedSkillProps=new Set(['canConfigure','onUse','useActions','useDisabled','useNotice']);
+ const visit=node=>{
+  if(ts.isJsxOpeningElement(node)||ts.isJsxSelfClosingElement(node)){
+   const tag=node.tagName.getText(facts.ast);
+   if(tag==='Modal')report(node,'private-modal-shell-retired');
+   for(const attribute of node.attributes.properties){
+    if(!ts.isJsxAttribute(attribute))continue;
+    const name=attribute.name.getText(facts.ast),initializer=attribute.initializer;
+    if(tag==='SkillDrawer'&&blockedSkillProps.has(name))report(attribute,'official-skill-area-cannot-be-replaced',{property:name});
+    if(tag==='SkillPage'&&name==='subtitle')report(attribute,'official-catalog-default-copy-must-remain');
+    if(name==='className'&&initializer&&ts.isStringLiteral(initializer)&&initializer.text.split(/\s+/).some(value=>value==='drawer-overlay'||value==='modal'||value==='overlay'||value.startsWith('ew-dialog')))report(attribute,'host-must-use-original-shell');
+    if(tag==='ChatPage'&&name==='emptyState'&&initializer&&ts.isJsxExpression(initializer)){
+     const expression=initializer.expression;
+     if(!expression||!ts.isObjectLiteralExpression(expression))report(attribute,'official-chat-defaults-must-remain');
+     else for(const property of expression.properties){
+      if(!ts.isPropertyAssignment(property)||property.name.getText(facts.ast)!=='icon')report(property,'official-chat-defaults-must-remain');
+     }
+    }
+   }
+  }
+  ts.forEachChild(node,visit);
+ };
+ visit(facts.ast);return violations;
+}
+
+export function inspectOfficialListStyles(source,file='styles/index.css'){
+ const violations=[];postcss.parse(source,{from:file}).walkRules(rule=>{
+  if(!splitSelectors(rule.selector).some(selector=>/^\.(?:trend-list|dash-card-list)$/.test(selector)))return;
+  rule.walkDecls(decl=>{if(['max-height','max-block-size','overflow','overflow-y','overscroll-behavior'].includes(decl.prop))violations.push({file,line:decl.source.start.line,rule:'host-list-limit-must-be-explicit',property:decl.prop});});
+ });return violations;
+}
+
 export function auditEaselBase(base=root){
  const read=file=>fs.readFileSync(path.join(base,file),'utf8');const violations=[];
  const nativeUse=[['web/frontend/src/workbench/ui/index.tsx','App','../../App'],
@@ -147,6 +183,11 @@ export function auditEaselBase(base=root){
   ['web/frontend/src/workbench/ui/NativeSkills.tsx','SkillDrawer','../../components/SkillDrawer'],
   ['web/frontend/src/workbench/ui/system.tsx','SettingsPanel','../../components/SettingsPanel']];
  for(const [file,component,target] of nativeUse)violations.push(...inspectNativeUse(read(file),component,target,file));
+ const privateUi='web/frontend/src/workbench/ui';
+ for(const name of fs.readdirSync(path.join(base,privateUi),{recursive:true}).filter(name=>name.endsWith('.tsx'))){
+  const file=privateUi+'/'+name.replaceAll('\\','/');violations.push(...inspectOfficialPresentation(read(file),file));
+ }
+ violations.push(...inspectOfficialListStyles(read('web/frontend/src/styles/index.css')));
  violations.push(...inspectFrame(read('web/frontend/src/App.tsx')));
  violations.push(...inspectExtensionCss(read('web/frontend/src/workbench/ui/styles/workbench.css')));
  violations.push(...inspectHostCss(read('web/frontend/src/workbench/host.css')));

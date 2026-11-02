@@ -37,7 +37,7 @@ parent 只读核对会话关联，作品层不写会话状态；调用台账由�
 - 架构、私有边界、技能策略/命令及 P2 故障回滚 130 项通过：`architecture.xml`。
 - 设置、原生核对/归属/API/响应性、媒体、下载、外部 CLI、合同及冻结源码兼容检查 174 项通过：`compatibility.xml`。
 - 57 处迁移 AST 语句对照一致，包含完整 submit/_run、父版/登记、开始/完成及产物查询；只归一化导入、准确重命名和显式读取依赖：`statement-parity.json`。
-- 155 个私有 Python 模块的迁移边界违规、职责审查错误均为零：`inventory.json`。新增 feature 边界有局部/动态导入反例，不放宽上游边界。
+- 155 个私有 Python 模块的迁移边界违规、职责审查错误均为零：`inventory.json`。19 个历史审查 SHA 仍提示变化，经逐字节核对均与固定旧提交的独立检出一致，本批未改这些源码；保留提示而不重写原 P0 记录，见 `historical-review-source-drift.json`。新增 feature 边界有局部/动态导入反例，不放宽上游边界。
 - 真实 TEMP HTTP 中，在作品、版本和 workflow 写入后，通过 SQLite trigger 使调用登记失败：原宿主返回既有 503，业务写入一起回滚，pending/执行所有权清空，模型调用为零。
 - Windows Edge 桌面及 390px 模拟手机：自动 RSS→选题→讨论→V1→不采纳→准确父版 V2→独立核验→下载→采纳→TEMP 归档→刷新，34 项通过：`closedloop-r2/content-closedloop-browser.json`。
 - Node 24.19.0 的 check:workbench、build:workbench 通过；前端产品源码未改。复用现有锁定依赖目录，不冒称独立重装。浏览器验证使用原 R6 不可变前端，新构建未上线。
@@ -55,3 +55,22 @@ harnesses.describe 抛 AttributeError，运行环境检测失败且菜单不可�
 没有迁入技能或复制/恢复生产库；统一部署需与官方同步确定最终组合后按既有准入执行。
 推理和独立检查为 TEMP 合成执行，真实 AI、真实平台发布为零。
 实体 vivo/WebToApp 保存及实际用户体验反馈仍待验，不以模拟手机代填。
+
+## 冻结候选验证与交付
+
+功能提交：`6bbb1f0eb7429d6c9b877986cc2dd79d108033d1`。
+独立候选 `workbench-20261102-004153`，manifest SHA256
+`e745d5bf19047fa25d45354222b1a93134e4d7afa551ad9d30d030688ee9a64b`。
+绑定原 R6 前端 `native-mobile-unified-r6-20261102001420`，manifest SHA256
+`8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5`。
+
+候选位于本批隔离工作树，未写主工程共享 candidate 或活动指针。
+1126 包成员、391 个 Python 文件编译、capabilities/workspace 原字节绑定通过；
+新包入口齐全，无旧 application.py 与新包冲突，见 `frozen-package.json`。
+准确冻结包另跑 Edge 桌面/模拟手机内容闭环 34 项及移动断线/停止/unknown 9 项，均通过。
+实际加载模块均来自该冻结包、所有 manifest 原成员字节保持；
+见 `frozen-closedloop/content-closedloop-browser.json`、`frozen-recovery/chat-recovery-browser.json`。
+已实际查看移动 V1 成品和 unknown 截图，不用截图证明事务或模型质量。
+
+本批代码与文档提交至自有 origin 的 `codex/easel-base-alignment`，最终推送以 Git 远端 SHA 核对。
+P2 实现与隔离运行验证完成；正式生产升级仍交统一准入与上游同步最终组合处理。

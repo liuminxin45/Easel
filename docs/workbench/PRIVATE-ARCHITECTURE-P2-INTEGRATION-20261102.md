@@ -65,3 +65,33 @@ frozen-closedloop/content-closedloop-browser.json、frozen-recovery-r2/chat-reco
 新官方提交及原同步交付均为当前分支祖先；旧 P2 两提交和旧分支保持原样。
 本轮提交推送自有 origin 的当前分支 `codex/easel-sync-20261102-082005`，不用 force、
 不向官方推送或创建 PR。最终远端 SHA 和证据哈希记录于本轮 delivery.json。
+
+## 2026-11-02：新官方基线与 P2 正式切换
+
+用户随后明确要求“线上切换，包括 p2”。总调度复核当前交付提交 5574f49、
+自有 origin、1126 个冻结成员、156 个前端构建输入及上列准确配对；
+内容闭环 34 项、恢复 9 项和组合回归报告的原始 SHA 均重新核对。
+本次直接部署已验运行源码 8747400 的同一冻结包，不另造候选或更改共享 candidate。
+
+按原升级器完成空闲、原生队列、历史未知回执及经理/七角色创建身份核对，
+围栏停写后由 Windows 计划任务重启经理，配对切到上列 015158 后端与 014712 前端。
+认证核心接口四项通过，workers 准入恢复，七角色无启动退避故障。
+原 SQLite 文件身份保持，无复制、恢复或 builtin 迁移，历史及采集 unknown 投影不变。
+旧运行包保留为历史，旧运行进程已退出，不参与新业务写入。
+
+正式 HTTPS 上的 Windows Edge 桌面/390px 模拟手机共 18 个页面视图通过，
+无 pageerror、无业务 POST，检查期间经理和七角色身份不变。
+匿名 /native、/native/、/native/login 均 200，最多一次跳转，返回新版本登录壳。
+以上是线上只读验收，内容制作/修改/采纳的完整执行仍由同一冻结包的 TEMP 合成闭环证明，
+不冒称线上真实模型制作、平台发布或实体 vivo 验收。
+
+部署和线上原始证据：`.local/workbench-validation/p2-production-20261102/` 中
+admission.json、acceptance.json、upgrade.log、health.json、live-browser.json。
+
+补充等候实际成功 API 回执后核查移动工作台/热点页，两页通过且无 API 错误，
+见 settled-views-r2.json。首次补充探针误写 /api/trend-sources，实际官方路径为
+/api/trends/sources；保留首次失败记录，仅修正本地探针，无产品改动。
+部分来源显示过期缓存及 CollectorError/OperationalError；只读查询确认最近失败发生在
+10:00 或更早，早于本次 10:04 的部署准入。这是现存来源采集故障，本次未冒称修复，
+也未手动重放任务或隐去错误。首轮页面截图抓到加载初态，不用它证明数据加载完成；
+补充截图 settled-r2-mobile-dashboard.png、settled-r2-mobile-news.png 才对应加载后状态。

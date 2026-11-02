@@ -314,3 +314,14 @@ check:workbench、build:workbench、官方 build 通过，原打包体积提示�
 共享候选与两个活动指针未变，不部署。原 P2 两提交/分支及官方同步历史均保留，
 当前主工作区分支 codex/easel-sync-20261102-082005 同时包含新官方基线与 P2。
 详见 `docs/workbench/PRIVATE-ARCHITECTURE-P2-INTEGRATION-20261102.md`。
+
+## 十五、P2 与官方更新配对上线（2026-11-02）
+
+用户明确授权“线上切换，包括 p2”。使用已验 8747400 冻结后端
+workbench-20261102-015158 与 native-easel-workbench-20261102014712 前端，
+在当前新基线分支执行原升级器的统一准入、身份围栏和计划任务重启。
+四个认证核心接口、18 个正式桌面/模拟手机只读视图和三个匿名入口通过；
+经理及七角色健康，旧运行进程退出，SQLite 文件身份和历史 unknown 保持。
+无数据库复制/恢复、builtin 迁移或未知请求重放，共享 candidate 未改。
+证据 `.local/workbench-validation/p2-production-20261102/`；
+新基线与 P2 均已实际上线，实体 vivo 与真实模型/发布不由上述证据代填。

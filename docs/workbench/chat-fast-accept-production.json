@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "spec": "chat-fast-accept",
+  "passed": true,
+  "created_at": "2026-11-02T05:53:41.047487+00:00",
+  "source_commit": "2c801cc9646665a1dc498d7c17b418f0d2559657",
+  "deployment_delivery_commit": "55c9b99e7058e66cb897eda7d890a2797b279f92",
+  "candidate": {
+    "release": "workbench-20261102-053959",
+    "manifest_sha256": "b1b49c3a32b33eb74aba00b824fb5505c3b33cf639796689799a416692be18e8",
+    "native": {
+      "release": "native-easel-workbench-20261102053143",
+      "manifest_sha256": "1ac098c6a6b70ee31983483173c56f9b65d23245489baaf2e89636ef817748a8"
+    }
+  },
+  "previous_runtime": {
+    "release": "workbench-20261102-042728",
+    "manifest_sha256": "9a09fb2001a4c67ddf51d9fda133a3bf4bde99a2eaf79205c093335cb870bd8a"
+  },
+  "previous_native": {
+    "release": "native-easel-workbench-20261102042113",
+    "manifest_sha256": "bd2e90c7a71f349aea7f4030a158d7ad0db78548c13f9c5f206415ac4991555a"
+  },
+  "all_seven_roles_live": true,
+  "same_database_file_identity": true,
+  "unknown_receipts_retained": true,
+  "case_existing_turns_unchanged": true,
+  "case_legacy_requests_replayed": false,
+  "live_page_checks": 18,
+  "settled_page_checks": 2,
+  "production_model_requests": 0,
+  "production_platform_writes": 0,
+  "physical_mobile_device_tested": false,
+  "records": [
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/admission.json",
+      "sha256": "e85a8512bc9b1542ea9742520b3cdd0be9219f1e9054f6b4707c02481d8b2f45"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/acceptance.json",
+      "sha256": "3bd8bdca89148a92face6be3b46a8a4828d77bd36c4b9676b79e1b2313ba51f7"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/candidate.json",
+      "sha256": "aed8eaaddda91c3173a96fae42cdd7b353d933b944271a16eec20973df569645"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/health.json",
+      "sha256": "6303f6236388fed0a3384ddf09870b90b5da1a89d0e21dd89ad77d20d1e8002b"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/live-browser.json",
+      "sha256": "ca36d4a164f0dc2083080df579c9454ed5bb11491b57b453c7b7ec8f1ac26649"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/settled-views-r3.json",
+      "sha256": "354761bd4896342fa8a98ac8614b467f001a04df089f194ca9a28891c573089d"
+    },
+    {
+      "path": ".local/workbench-deployment/upgrades/workbench-20261102-053959.json",
+      "sha256": "7b7b200785c671b50f6ecb036fbf154485ee09879787fbb7540ef82220f6225a"
+    }
+  ]
+}

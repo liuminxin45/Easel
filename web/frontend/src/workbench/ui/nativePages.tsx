@@ -8,7 +8,8 @@ import BreakdownPage from '../../components/BreakdownPage';
 import type {Page} from '../../components/Sidebar';
 import {nativePageRoutes} from '../platform/native-routes';
 import type {OutputNode} from '../../lib/api';
-import {useWorkbench,useResource,useDraft,creatorLaunchSelection,workPath,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
+import {creatorLaunchSelection,workPath,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
+import {useWorkbench,useResource,useDraft} from './hooks';
 import {Notice} from './common';
 import {SkillTask} from './management';
 

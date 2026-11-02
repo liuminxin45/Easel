@@ -1,4 +1,5 @@
-import {useResource,string,type NewsListing,type NewsItem,type CollectionStatus} from '@workbench/core';
+import {string,type NewsListing,type NewsItem,type CollectionStatus} from '@workbench/core';
+import {useResource} from './hooks';
 import type {NewsNavigationContext} from '@workbench/platform';
 import type {TrendManagedSource} from '../../lib/api';
 import type {TrendViewGroup} from '../../components/TrendsView';

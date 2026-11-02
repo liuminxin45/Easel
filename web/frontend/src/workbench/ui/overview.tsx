@@ -1,4 +1,4 @@
-import {useWorkbench} from '@workbench/core';
+import {useWorkbench} from './hooks';
 import EaselSubNav from '../../components/SubNav';
 import type {Page} from '../../components/Sidebar';
 import {NativeDashboard,NativeLibrary,NativeTopics,NativeBreakdown,nativePageRoutes} from './nativePages';

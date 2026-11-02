@@ -1,7 +1,8 @@
 import {ExtensionDetails} from './ExtensionDetails';
 import {useMemo,useState} from 'react';
 import ProfilePage,{type ProfilePageDraft} from '../../components/ProfilePage';
-import {useWorkbench,useResource,useDraft,useAsyncAction,creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
+import {creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
+import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {ActionButton,Field,Panel,Notice,Pending,resultDocument} from './common';
 
 export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;profileId?:string}){

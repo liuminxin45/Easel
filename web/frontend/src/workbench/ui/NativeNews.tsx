@@ -1,6 +1,7 @@
 import {NativeTrends} from './nativePages';
 import CopyableText from '../../components/CopyableText';
-import {useResource,string,type JsonRecord} from '@workbench/core';
+import {string,type JsonRecord} from '@workbench/core';
+import {useResource} from './hooks';
 import {Notice,PageHead,Panel,SourceLink} from './common';
 export default function NativeNews({onUseTopic,id}:{id?:string;search:URLSearchParams;onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  const source=useResource<JsonRecord>(id?'/api/news/'+encodeURIComponent(id):null);

@@ -1,6 +1,7 @@
 import {useMemo} from 'react';
 import type {PublishingAgentActions} from '../../components/PublishingPage';
-import {useWorkbench,useResource,record,string} from '@workbench/core';
+import {record,string} from '@workbench/core';
+import {useWorkbench,useResource} from './hooks';
 import {nativeSkillChoices,type NativeSkill} from './ChatSessionView';
 
 /** Page actions enter the same explicit-skill composer as the skill library. */

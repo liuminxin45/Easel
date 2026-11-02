@@ -22,6 +22,7 @@ function load(file, imports = {}, suffix = '') {
     require: id => {
       if(id==='./common')return {ActionButton:'button',...(imports[id]||{})};
       if (id in imports) return imports[id];
+      if (id === './hooks') return imports['@workbench/core'];
       if (file.startsWith('core/') && id.startsWith('./')) return load('core/' + id.slice(2) + '.ts');
       if (id === './lib/workChatPath') return load('ui/lib/workChatPath.ts', {'@workbench/core': imports['@workbench/core']});
       if (id === './ExtensionDetails') return {ExtensionDetails: () => {}};

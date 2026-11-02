@@ -2,7 +2,8 @@ import React,{useEffect} from 'react';
 import SkillPage from '../../components/SkillPage';
 import SkillDrawer from '../../components/SkillDrawer';
 import type {SkillDetail} from '../../lib/api';
-import {useWorkbench,useResource,type JsonRecord} from '@workbench/core';
+import {type JsonRecord} from '@workbench/core';
+import {useWorkbench,useResource} from './hooks';
 import {nativeSkillChoices,nativeSkillDestination,nativeSkillInputTarget,type NativeSkill,type NativeSelection} from './ChatSessionView';
 export function NativeSkills({profileId,onUse}:{profileId:string;onUse:(selection:NativeSelection,input:string)=>Promise<void>}){
  const vm=useWorkbench(),resource=useResource<NativeSkill[]>('/api/skills');

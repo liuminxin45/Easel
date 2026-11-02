@@ -1,6 +1,7 @@
 import DownloadLink from '../../components/DownloadLink';
 import React,{useEffect,useRef,useState,type ReactNode} from 'react';
-import {useWorkbench,useOperation,useSessionMediaImage,fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
+import {fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
+import {useWorkbench,useOperation,useSessionMediaImage} from './hooks';
 import {renderMarkdown} from './lib/sanitize';
 import {InteractionNotice} from '../../components/InteractionNotice';
 import {DetailChevron} from './ExtensionDetails';

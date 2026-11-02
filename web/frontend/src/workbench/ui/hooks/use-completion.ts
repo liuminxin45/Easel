@@ -1,7 +1,7 @@
-import {interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
+import {interactionFeedback,type InteractionFeedback} from "../../../lib/interaction";
 import {useEffect,useRef,useState} from 'react';
-import {useDraft,useResource,useWorkbench} from './react';
-import {blankCompletion,completionOptionsPath,completionPlanInput,initialCompletionSelection,type CompletionOptions,type CompletionPlan,type CompletionPreview} from './completion';
+import {useDraft,useResource,useWorkbench} from "./context";
+import {blankCompletion,completionOptionsPath,completionPlanInput,initialCompletionSelection,type CompletionOptions,type CompletionPlan,type CompletionPreview} from "../../core/completion";
 
 export function useCompletionPlan(workId:string,versionId:string,opened:boolean){
  const {service}=useWorkbench(),options=useResource<CompletionOptions>(opened?completionOptionsPath(workId,versionId):null),[input,patch,reset]=useDraft<{scope:string[];plan:CompletionPlan;initialized:boolean}>('completion:'+workId+':'+versionId,{scope:[],plan:blankCompletion,initialized:false}),[preview,setPreview]=useState<CompletionPreview|null>(null),[error,setError]=useState(''),[feedback,setFeedback]=useState<InteractionFeedback|undefined>(),[loading,setLoading]=useState(false),sequence=useRef(0);

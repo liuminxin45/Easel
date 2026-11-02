@@ -1,9 +1,9 @@
 import React,{createContext,useCallback,useContext,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {useStore} from 'zustand';
 import {createStore} from 'zustand/vanilla';
-import {createWorkbenchClient,type ClientOptions,type PendingOperation,type ResourceState,type WorkbenchClient} from './client';
-import {interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
-import type {ActivityDelegate,JsonRecord,NavigationDelegate,StudioAction} from './models';
+import {createWorkbenchClient,type ClientOptions,type PendingOperation,type ResourceState,type WorkbenchClient} from "../../core/client";
+import {interactionFeedback,type InteractionFeedback} from "../../../lib/interaction";
+import type {ActivityDelegate,JsonRecord,NavigationDelegate,StudioAction} from "../../core/models";
 
 const Context=createContext<{client:WorkbenchClient;navigation?:NavigationDelegate}|null>(null);
 const fallbackNavigation:NavigationDelegate={get path(){return typeof location==='undefined'?'/toolbox':location.pathname+location.search},navigate:path=>location.assign(path),replace:path=>location.replace(path),back:()=>history.back()};

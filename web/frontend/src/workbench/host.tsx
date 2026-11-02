@@ -1,5 +1,5 @@
 import React,{Suspense,lazy,useEffect,useLayoutEffect,useMemo,useState,useSyncExternalStore,type ReactNode} from 'react';
-import {CoreProvider,useWorkbench,useUsage} from '@workbench/core';
+import {CoreProvider,useWorkbench,useUsage} from './ui/hooks';
 import {ActivityCoordinator,NavigationService,bindViewport,bindNavigationLinks,browserProfile,prepareNativeWorker,type PlatformProfile} from '@workbench/platform';
 import {bindNativeModalFocus} from './platform/modal-focus';
 import {bindNativeUpgradeChecks} from './platform/native-resume';

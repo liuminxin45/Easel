@@ -1,7 +1,8 @@
 import {ExtensionDetails} from './ExtensionDetails';
 import {ActionButton} from './common';
 import React,{useEffect,useRef,useState} from 'react';
-import {useWorkbench,useResource,useDraft,useAsyncAction,creatorAssetInputs,creatorLaunchPath,creatorLaunchSelection,creatorSkillLabels,creatorCommandResult,array,record,string,number,formatTime,type CreatorBootstrap,type CreatorProfile,type CreatorSkillDetail,type JsonRecord,type DraftAttachment,type WorkList} from '@workbench/core';
+import {creatorAssetInputs,creatorLaunchPath,creatorLaunchSelection,creatorSkillLabels,creatorCommandResult,array,record,string,number,formatTime,type CreatorBootstrap,type CreatorProfile,type CreatorSkillDetail,type JsonRecord,type DraftAttachment,type WorkList} from '@workbench/core';
+import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {IconSkills,IconSearch,IconProfile,IconPlus,IconAccounts,IconImage,IconText} from './components/icons';
 import {Field,Panel,Modal,Notice,PageHead,Markdown,Pending,TextRecord,JsonDetails,resultDocument} from './common';
 

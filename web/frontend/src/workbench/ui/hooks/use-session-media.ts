@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {useWorkbench} from './react';
-import {fileUrl,type Artifact} from './models';
-import {mediaDescriptorPath,MediaSessionExpired,sessionMediaCache,type MediaLease} from './session-media';
+import {useWorkbench} from "./context";
+import {fileUrl,type Artifact} from "../../core/models";
+import {mediaDescriptorPath,MediaSessionExpired,sessionMediaCache,type MediaLease} from "../../core/session-media";
 
 export function useSessionMediaImage(file:Artifact,compact=false,retry=0){
  const {client,ready,expired}=useWorkbench(),path=mediaDescriptorPath(file,compact),key=path||fileUrl(file),generation=sessionMediaCache.generation,[visible,setVisible]=useState(!compact),observer=useRef<IntersectionObserver|null>(null),[state,setState]=useState<{key:string;generation:number;src:string;error:string}>({key:'',generation,src:'',error:''});

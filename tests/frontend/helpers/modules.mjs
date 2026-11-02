@@ -16,7 +16,10 @@ export function moduleLoader({imports={},globals={}}={}){
   const settings={module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true};
   runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:filename,compilerOptions:settings}).outputText,{exports,URL,URLSearchParams,Error,TypeError,TextEncoder,TextDecoder,Blob,File,Response,Headers,AbortController,AbortSignal,crypto:webcrypto,performance,fetch,setTimeout,clearTimeout,...globals,require:id=>{
    if(Object.hasOwn(imports,id))return imports[id];if(!id.startsWith('.'))return require(id);
-   let target=path.resolve(path.dirname(filename),id);if(!fs.existsSync(target))target+=fs.existsSync(target+'.ts')?'.ts':'.tsx';return load(target);
+   let target=path.resolve(path.dirname(filename),id);
+   if(fs.existsSync(target)&&fs.statSync(target).isDirectory())target=path.join(target,fs.existsSync(path.join(target,'index.ts'))?'index.ts':'index.tsx');
+   else if(!fs.existsSync(target))target+=fs.existsSync(target+'.ts')?'.ts':'.tsx';
+   return load(target);
   }});return exports;
  };
 }

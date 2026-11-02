@@ -5,7 +5,8 @@ import {ActionButton} from './common';
 import React,{useState,useEffect,useMemo,useCallback} from 'react';
 import SettingsPanel from '../../components/SettingsPanel';
 import {workbenchSettingsApi} from './settingsApi';
-import {useWorkbench,useResource,useDraft,useAsyncAction,useOperation,useUsage,creationDrafts,array,record,string,number,type JsonRecord} from '@workbench/core';
+import {creationDrafts,array,record,string,number,type JsonRecord} from '@workbench/core';
+import {useWorkbench,useResource,useDraft,useAsyncAction,useOperation,useUsage} from './hooks';
 import {Panel,PageHead,Field,Modal,Notice,Pending,TextRecord} from './common';
 
 export function Settings(){

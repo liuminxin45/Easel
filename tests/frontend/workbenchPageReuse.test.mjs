@@ -27,7 +27,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
  runInNewContext(compiled,{exports,matchMedia:()=>({matches:viewport.compact,addEventListener(){},removeEventListener(){}}),require:specifier=>{
   if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}],useSyncExternalStore:(_,snapshot)=>snapshot()};
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
-  if(specifier==='@workbench/core')return core;
+  if(specifier==='@workbench/core'||specifier==='./hooks')return core;
   if(specifier==='../platform/native-routes')return routeModule;
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});

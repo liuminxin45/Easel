@@ -1,7 +1,8 @@
 import {ExtensionDetails} from './ExtensionDetails';
 import {ActionButton} from './common';
 import React,{useState} from 'react';
-import {useResource,array,record,string,type JsonRecord} from '@workbench/core';
+import {array,record,string,type JsonRecord} from '@workbench/core';
+import {useResource} from './hooks';
 import {Notice,TextRecord} from './common';
 
 /** Read the selected version's stored input, never today's profile or skill defaults. */

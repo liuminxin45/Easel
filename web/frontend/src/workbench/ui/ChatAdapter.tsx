@@ -3,7 +3,8 @@ import {ExtensionDetails} from './ExtensionDetails';
 import ChatPage,{type ChatCommand} from '../../components/ChatPage';
 import type {ChatSession,ChatMessage} from '../../lib/store';
 import {IconSkills} from './components/icons';
-import {useWorkbench,array,string,record,statusLabel,type CreatorBootstrap,type DraftAttachment,type HistoryEvent,type Work,type JsonRecord} from '@workbench/core';
+import {array,string,record,statusLabel,type CreatorBootstrap,type DraftAttachment,type HistoryEvent,type Work,type JsonRecord} from '@workbench/core';
+import {useWorkbench} from './hooks';
 
 export interface SkillCommand {skill_id:string;version:number;action_id:string;task:'poster'|'article'|'discuss';trial?:boolean}
 export interface SkillChoice extends ChatCommand {selection:SkillCommand}

@@ -52,7 +52,18 @@
     "easel_workbench/runtime/ui_document.py",
     "easel_workbench/runtime/usage_service.py",
     "easel_workbench/runtime/web_assets.py",
-    "easel_workbench/runtime/work_discussions.py"
+    "easel_workbench/runtime/work_discussions.py",
+    "easel_workbench/application/creator.py",
+    "easel_workbench/features/skills/records.py",
+    "easel_workbench/features/skills/releases.py",
+    "easel_workbench/features/profiles/service.py",
+    "easel_workbench/features/skills/snapshots.py",
+    "easel_workbench/features/skills/prepared.py",
+    "easel_workbench/application/evidence.py",
+    "easel_workbench/features/evidence/records.py",
+    "easel_workbench/features/evidence/storage.py",
+    "easel_workbench/features/evidence/index.py",
+    "easel_workbench/features/evidence/rules.py"
   ],
   "modules": [
     {
@@ -135,103 +146,6 @@
       ],
       "state_contract": "text_versions/style_presets/revisions/ops 与 artifacts；保存正文和作品登记保留原事务",
       "next_slice": "P2"
-    },
-    {
-      "path": "easel_workbench/runtime/creator_runtime.py",
-      "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667",
-      "area": "composition/creator",
-      "responsibility": "画像修订、技能资源、作品绑定和冻结解析的现有组合",
-      "lifecycle": [
-        "current",
-        "historical-read"
-      ],
-      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
-      "next_slice": "P3",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "packed",
-            "digest",
-            "key",
-            "text",
-            "validate_package"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "CreatorConflict",
-            "CreatorRuntime"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "CreatorRuntime.__init__",
-            "CreatorRuntime._seed"
-          ]
-        },
-        {
-          "area": "features/profiles",
-          "members": [
-            "CreatorRuntime._safe",
-            "CreatorRuntime._profile",
-            "CreatorRuntime._put_profile",
-            "CreatorRuntime.bind_work",
-            "CreatorRuntime.accounts",
-            "CreatorRuntime._validate_defaults",
-            "CreatorRuntime._profile_assets",
-            "CreatorRuntime._save_profile",
-            "CreatorRuntime._bind",
-            "CreatorRuntime.profile_resource"
-          ]
-        },
-        {
-          "area": "features/skills",
-          "members": [
-            "CreatorRuntime._resource",
-            "CreatorRuntime._release_hash",
-            "CreatorRuntime._published",
-            "CreatorRuntime._skill",
-            "CreatorRuntime._uses",
-            "CreatorRuntime._publish",
-            "CreatorRuntime.propose",
-            "CreatorRuntime._event",
-            "CreatorRuntime.resource"
-          ]
-        },
-        {
-          "area": "application/creator",
-          "members": [
-            "CreatorRuntime.bootstrap",
-            "CreatorRuntime.detail",
-            "CreatorRuntime.command",
-            "CreatorRuntime.resolve"
-          ]
-        },
-        {
-          "area": "infrastructure/files",
-          "members": [
-            "CreatorRuntime._uploaded_asset",
-            "CreatorRuntime.export",
-            "CreatorRuntime.materialize"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "initialize",
-            "service"
-          ]
-        },
-        {
-          "area": "features/profiles",
-          "members": [
-            "read_owner"
-          ]
-        }
-      ]
     },
     {
       "path": "easel_workbench/runtime/delivery_receipts.py",
@@ -609,104 +523,6 @@
       "next_slice": "P6"
     },
     {
-      "path": "easel_workbench/runtime/learning_service.py",
-      "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360",
-      "area": "composition/evidence",
-      "responsibility": "证据索引、经验候选、技能规则解析与快照组合",
-      "lifecycle": [
-        "current",
-        "historical-read",
-        "reconcile"
-      ],
-      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
-      "next_slice": "P3",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "packed",
-            "sha",
-            "stamp",
-            "identity",
-            "bounded",
-            "atomic_bytes",
-            "original_mime"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "LearningConflict",
-            "LearningService"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "LearningService.__init__"
-          ]
-        },
-        {
-          "area": "features/evidence",
-          "members": [
-            "LearningService._safe_path",
-            "LearningService._all",
-            "LearningService._get",
-            "LearningService._put",
-            "LearningService._search_text",
-            "LearningService._table_exists",
-            "LearningService._metadata_file",
-            "LearningService._upsert_evidence",
-            "LearningService._file_candidates",
-            "LearningService._source_rows",
-            "LearningService._index",
-            "LearningService._coverage",
-            "LearningService._processing_state",
-            "LearningService._save_processing",
-            "LearningService.processing_status",
-            "LearningService._finish_history_budget",
-            "LearningService.index_database",
-            "LearningService.watch_fingerprint",
-            "LearningService.queue_index_refresh",
-            "LearningService.list_evidence",
-            "LearningService._evidence_summary",
-            "LearningService._run_summary",
-            "LearningService.bootstrap",
-            "LearningService._read_locator",
-            "LearningService.evidence_content",
-            "LearningService.original_file",
-            "LearningService.detail",
-            "LearningService._enqueue",
-            "LearningService.enqueue_review",
-            "LearningService.read_run",
-            "LearningService.clone_run",
-            "LearningService.update_run",
-            "LearningService._proposal",
-            "LearningService._disjoint",
-            "LearningService.relationship",
-            "LearningService._preview",
-            "LearningService._apply",
-            "LearningService.command",
-            "LearningService.claim_task",
-            "LearningService.finish_task"
-          ]
-        },
-        {
-          "area": "features/skills",
-          "members": [
-            "LearningService.policy",
-            "LearningService._conditions",
-            "LearningService._validate_entry",
-            "LearningService._validate_policy",
-            "LearningService._match",
-            "LearningService._required_ref",
-            "LearningService.resolve",
-            "LearningService.freeze"
-          ]
-        }
-      ]
-    },
-    {
       "path": "easel_workbench/runtime/local_operations.py",
       "reviewed_sha256": "fe93ff24941f48d4c00acc258a63dcdc0ea8cb99776d191977dbcb92d64455c0",
       "area": "application/local-operations",
@@ -944,107 +760,6 @@
       "next_slice": "P3"
     },
     {
-      "path": "easel_workbench/runtime/task_runtime.py",
-      "reviewed_sha256": "d6068877d5f363171ff8e7a77e5f6341a60965eae8bf64ff3efab57a284ab1db",
-      "area": "composition/task-contracts",
-      "responsibility": "冻结快照、原生目标适配、调用台账及显式经验任务组合",
-      "lifecycle": [
-        "current",
-        "legacy-execution",
-        "reconcile"
-      ],
-      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
-      "next_slice": "P2",
-      "symbol_groups": [
-        {
-          "area": "module-local/contracts-and-errors",
-          "members": [
-            "packed",
-            "digest"
-          ]
-        },
-        {
-          "area": "composition/container",
-          "members": [
-            "PreparedTarget"
-          ]
-        },
-        {
-          "area": "bootstrap",
-          "members": [
-            "runtime_box",
-            "registry",
-            "initialize"
-          ]
-        },
-        {
-          "area": "features/skills",
-          "members": [
-            "validated_snapshot",
-            "freeze",
-            "clone_correction",
-            "production_prompt",
-            "clean_explicit_contract",
-            "attach_profile_contract",
-            "attach_review_basis",
-            "named_prompt",
-            "contract_prompt",
-            "request_snapshot",
-            "freeze_image"
-          ]
-        },
-        {
-          "area": "features/conversations",
-          "members": [
-            "context_id",
-            "thread_id_for",
-            "target_for_thread",
-            "_unused_context",
-            "_native_context_absent",
-            "_start_target",
-            "prepare_target",
-            "reconcile_preparation_failure"
-          ]
-        },
-        {
-          "area": "features/evidence",
-          "members": [
-            "enqueue_experience",
-            "complete_experience",
-            "experience_detail",
-            "enqueue_reference"
-          ]
-        },
-        {
-          "area": "features/works",
-          "members": [
-            "read_run",
-            "_put_run",
-            "workflow_template",
-            "step",
-            "projection",
-            "production_call",
-            "preparation_state",
-            "production_started",
-            "production_transport_failure",
-            "production_finish",
-            "begin_call",
-            "finish_call",
-            "observed_call"
-          ]
-        },
-        {
-          "area": "infrastructure/processes",
-          "members": [
-            "PreparedTarget.__init__",
-            "PreparedTarget.__enter__",
-            "PreparedTarget.__exit__",
-            "PreparedTarget.close"
-          ]
-        }
-      ]
-    },
-    {
       "path": "easel_workbench/runtime/toolbox_store.py",
       "reviewed_sha256": "4045dbc262d47b9ce5ded3033c2425d92ee09764c468d970c3ef9ebf5f1626c8",
       "area": "composition/toolbox",
@@ -1146,6 +861,492 @@
       ],
       "state_contract": "同事务写 jobs/article_inputs/works；只读讨论不扩权为制作或发布",
       "next_slice": "P2"
+    },
+    {
+      "path": "easel_workbench/runtime/creator_runtime.py",
+      "reviewed_sha256": "101ae38e1b554a260fe531d4e0ce1ed552054e2432b444acc74b3db74d031c62",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in runtime/creator_runtime.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "thin compatibility exports",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/application/creator.py",
+      "reviewed_sha256": "7c6a6a4567ff25400c35f37d64ea74d4030473ca3513934d3e571cc512f627f6",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in application/creator.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "initialize",
+            "CreatorRuntime",
+            "CreatorRuntime.__init__",
+            "CreatorRuntime._safe",
+            "CreatorRuntime._profile",
+            "CreatorRuntime._put_profile",
+            "CreatorRuntime.bind_work",
+            "CreatorRuntime._seed",
+            "CreatorRuntime._resource",
+            "CreatorRuntime._release_hash",
+            "CreatorRuntime._published",
+            "CreatorRuntime._skill",
+            "CreatorRuntime.accounts",
+            "CreatorRuntime.bootstrap",
+            "CreatorRuntime.detail",
+            "CreatorRuntime._uses",
+            "CreatorRuntime._validate_defaults",
+            "CreatorRuntime._uploaded_asset",
+            "CreatorRuntime._profile_assets",
+            "CreatorRuntime._save_profile",
+            "CreatorRuntime._bind",
+            "CreatorRuntime.propose",
+            "CreatorRuntime._event",
+            "CreatorRuntime._publish",
+            "CreatorRuntime.command",
+            "CreatorRuntime.resolve",
+            "CreatorRuntime.resource",
+            "CreatorRuntime.profile_resource",
+            "CreatorRuntime.export",
+            "CreatorRuntime.materialize",
+            "service"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/features/skills/records.py",
+      "reviewed_sha256": "9d7a5db8b6670bc97ff6a363f87bcc921df834fa41f97424e0d697461c1ed6dd",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in features/skills/records.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/skills",
+          "members": [
+            "CreatorConflict",
+            "packed",
+            "digest",
+            "key",
+            "text",
+            "validate_package"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/features/skills/releases.py",
+      "reviewed_sha256": "2c0b580278b12029bb23f83fdc76292d81d8cbe373741f1537865070ce113da8",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in features/skills/releases.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/skills",
+          "members": [
+            "SkillReleases",
+            "SkillReleases.__init__",
+            "SkillReleases._safe",
+            "SkillReleases._resource",
+            "SkillReleases._release_hash",
+            "SkillReleases._published",
+            "SkillReleases._skill",
+            "SkillReleases._event",
+            "SkillReleases.resource",
+            "SkillReleases.export",
+            "SkillReleases.materialize"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/features/profiles/service.py",
+      "reviewed_sha256": "e51acdfbd71d913f76e67783799ea58b9d770bb332f45e600d429047a8495d4e",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in features/profiles/service.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/profiles",
+          "members": [
+            "read_owner",
+            "ProfileService",
+            "ProfileService.__init__",
+            "ProfileService._profile",
+            "ProfileService._put_profile",
+            "ProfileService.bind_work",
+            "ProfileService._validate_defaults",
+            "ProfileService._uploaded_asset",
+            "ProfileService._profile_assets",
+            "ProfileService._save_profile",
+            "ProfileService.profile_resource"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/features/skills/snapshots.py",
+      "reviewed_sha256": "dc74ef8d47b25e758f11e7815746d3606d54152cb235698ef28726b8b52804b9",
+      "area": "composition/creator",
+      "responsibility": "P3 unique implementation in features/skills/snapshots.py; 画像修订、技能资源、作品绑定和冻结解析的现有组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_profiles/revisions/bindings 与项目技能准确版本；跨方法共享原连接与资源 SHA",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/skills",
+          "members": [
+            "SnapshotResolver",
+            "SnapshotResolver.__init__",
+            "SnapshotResolver.resolve"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/creator_runtime.py",
+        "reviewed_sha256": "ededd87045c7e3ebede6e220804bc104adab2daaefe5b34ade74e989afb61667"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/task_runtime.py",
+      "reviewed_sha256": "ab80a4f72cd634cf1fa9de5132d161158b4750a82a8942f8010cc9092d718419",
+      "area": "composition/task-contracts",
+      "responsibility": "P3 unique implementation in runtime/task_runtime.py; 冻结快照、原生目标适配、调用台账及显式经验任务组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
+      "next_slice": "P2",
+      "symbol_groups": [
+        {
+          "area": "runtime/explicit-task-receipts",
+          "members": [
+            "initialize",
+            "runtime_box",
+            "registry",
+            "read_run",
+            "_put_run",
+            "workflow_template",
+            "freeze",
+            "step",
+            "clone_correction",
+            "projection",
+            "production_prompt",
+            "clean_explicit_contract",
+            "attach_profile_contract",
+            "attach_review_basis",
+            "production_call",
+            "preparation_state",
+            "production_started",
+            "production_transport_failure",
+            "production_finish",
+            "context_id",
+            "thread_id_for",
+            "target_for_thread",
+            "PreparedTarget",
+            "PreparedTarget.__init__",
+            "PreparedTarget.__enter__",
+            "PreparedTarget.__exit__",
+            "PreparedTarget.close",
+            "_unused_context",
+            "_native_context_absent",
+            "_start_target",
+            "prepare_target",
+            "reconcile_preparation_failure",
+            "named_prompt",
+            "contract_prompt",
+            "begin_call",
+            "finish_call",
+            "observed_call",
+            "request_snapshot",
+            "enqueue_experience",
+            "complete_experience",
+            "freeze_image",
+            "experience_detail",
+            "enqueue_reference"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/task_runtime.py",
+        "reviewed_sha256": "d6068877d5f363171ff8e7a77e5f6341a60965eae8bf64ff3efab57a284ab1db"
+      }
+    },
+    {
+      "path": "easel_workbench/features/skills/prepared.py",
+      "reviewed_sha256": "2616f0dd0ed32706461763eb1254326460e3ef999259bdfadd414a60ca32db14",
+      "area": "composition/task-contracts",
+      "responsibility": "P3 unique implementation in features/skills/prepared.py; 冻结快照、原生目标适配、调用台账及显式经验任务组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "creator_task_runs/calls 与冻结输入；同一业务根、unknown 只核对、不重解析已受理输入",
+      "next_slice": "P2",
+      "symbol_groups": [
+        {
+          "area": "features/skills",
+          "members": [
+            "packed",
+            "digest",
+            "validated_snapshot"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/task_runtime.py",
+        "reviewed_sha256": "d6068877d5f363171ff8e7a77e5f6341a60965eae8bf64ff3efab57a284ab1db"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/learning_service.py",
+      "reviewed_sha256": "3fdc71e24e42cca8f75729d23a3d6238ca2399d525b57e419fcf38d471293740",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in runtime/learning_service.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "thin compatibility exports",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
+    },
+    {
+      "path": "easel_workbench/application/evidence.py",
+      "reviewed_sha256": "22ab7bc714377addc08b20bd90b4a75806ed0b25f46a39627fcfbf22c90b9f6d",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in application/evidence.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "LearningService",
+            "LearningService.__init__",
+            "LearningService._safe_path",
+            "LearningService.policy",
+            "LearningService._conditions",
+            "LearningService._validate_entry",
+            "LearningService._validate_policy",
+            "LearningService._all",
+            "LearningService._get",
+            "LearningService._put",
+            "LearningService._search_text",
+            "LearningService._table_exists",
+            "LearningService._metadata_file",
+            "LearningService._upsert_evidence",
+            "LearningService._file_candidates",
+            "LearningService._source_rows",
+            "LearningService._index",
+            "LearningService._coverage",
+            "LearningService._processing_state",
+            "LearningService._save_processing",
+            "LearningService.processing_status",
+            "LearningService._finish_history_budget",
+            "LearningService.index_database",
+            "LearningService.watch_fingerprint",
+            "LearningService.queue_index_refresh",
+            "LearningService.list_evidence",
+            "LearningService._evidence_summary",
+            "LearningService._run_summary",
+            "LearningService.bootstrap",
+            "LearningService._read_locator",
+            "LearningService.evidence_content",
+            "LearningService.original_file",
+            "LearningService.detail",
+            "LearningService._enqueue",
+            "LearningService.enqueue_review",
+            "LearningService.read_run",
+            "LearningService.clone_run",
+            "LearningService.update_run",
+            "LearningService._proposal",
+            "LearningService._disjoint",
+            "LearningService.relationship",
+            "LearningService._preview",
+            "LearningService._apply",
+            "LearningService.command",
+            "LearningService._match",
+            "LearningService._required_ref",
+            "LearningService.resolve",
+            "LearningService.freeze",
+            "LearningService.claim_task",
+            "LearningService.finish_task"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
+    },
+    {
+      "path": "easel_workbench/features/evidence/records.py",
+      "reviewed_sha256": "757bf5ddcfc5910405db333454e275b41c615359d81beac5242cb6a57fea85fa",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in features/evidence/records.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/evidence",
+          "members": [
+            "packed",
+            "sha",
+            "stamp",
+            "identity",
+            "bounded",
+            "atomic_bytes",
+            "original_mime",
+            "LearningConflict"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
+    },
+    {
+      "path": "easel_workbench/features/evidence/storage.py",
+      "reviewed_sha256": "53eaf8a9aa532f5ccd387258b6b82125f1580d05d411a012e72aa7339db74576",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in features/evidence/storage.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/evidence",
+          "members": [
+            "EvidenceRecords",
+            "EvidenceRecords._all",
+            "EvidenceRecords._get",
+            "EvidenceRecords._put"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
+    },
+    {
+      "path": "easel_workbench/features/evidence/index.py",
+      "reviewed_sha256": "3d95684fd45783117f6fbc18e1ceb68a778a6be4aae3a2d3b209d39ddfda4c11",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in features/evidence/index.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/evidence",
+          "members": [
+            "EvidenceIndex",
+            "EvidenceIndex.__init__",
+            "EvidenceIndex._safe_path",
+            "EvidenceIndex._search_text",
+            "EvidenceIndex._table_exists",
+            "EvidenceIndex._metadata_file",
+            "EvidenceIndex._upsert_evidence",
+            "EvidenceIndex._file_candidates",
+            "EvidenceIndex._source_rows",
+            "EvidenceIndex._index",
+            "EvidenceIndex._coverage",
+            "EvidenceIndex._processing_state",
+            "EvidenceIndex._save_processing",
+            "EvidenceIndex.processing_status",
+            "EvidenceIndex._finish_history_budget",
+            "EvidenceIndex.index_database",
+            "EvidenceIndex.watch_fingerprint",
+            "EvidenceIndex.queue_index_refresh",
+            "EvidenceIndex.list_evidence",
+            "EvidenceIndex._evidence_summary",
+            "EvidenceIndex._read_locator",
+            "EvidenceIndex.evidence_content",
+            "EvidenceIndex.original_file"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
+    },
+    {
+      "path": "easel_workbench/features/evidence/rules.py",
+      "reviewed_sha256": "74be7d7cb65438fc2d138797caf288f1ca161b70469ca7e49fc9cfe412140036",
+      "area": "composition/evidence",
+      "responsibility": "P3 unique implementation in features/evidence/rules.py; 证据索引、经验候选、技能规则解析与快照组合",
+      "lifecycle": "current canonical implementation; original transaction and snapshot contracts retained",
+      "state_contract": "learning_* 与准确技能版本；索引刷新不等于自动制作或学习采纳",
+      "next_slice": "P3",
+      "symbol_groups": [
+        {
+          "area": "features/evidence",
+          "members": [
+            "EvidenceRules",
+            "EvidenceRules.__init__",
+            "EvidenceRules.policy",
+            "EvidenceRules._conditions",
+            "EvidenceRules._validate_entry",
+            "EvidenceRules._validate_policy",
+            "EvidenceRules._disjoint",
+            "EvidenceRules.relationship",
+            "EvidenceRules._match",
+            "EvidenceRules._required_ref",
+            "EvidenceRules.resolve"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+        "path": "easel_workbench/runtime/learning_service.py",
+        "reviewed_sha256": "dc83162445f100959d79866f24bf0e54574a7e32f9567b791d3cce65ef748360"
+      }
     }
   ],
   "limits": [

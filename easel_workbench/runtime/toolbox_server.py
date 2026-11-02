@@ -560,7 +560,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         def picture_links(value):
             url=image_delivery.image_url(value,session,cookies(ctx.headers).get(SESSION))
             return {**value,'image_url':url} if url else value
-        if path=='/health':return reply({'ok':True,'architecture':'toolbox','thread':THREAD})
+        if path=='/health':
+            from easel_workbench.business_health import snapshot
+            business=await asyncio.to_thread(snapshot,root)
+            return reply({'ok':True,'architecture':'toolbox','thread':THREAD,'business':business})
         if path=='/api/config':
             definitions=await asyncio.to_thread(collection.definitions)
             return reply({'csrf':csrf,'sources':{key:{k:row[k] for k in ('name','kind','feed','enabled','default','builtin') if k in row} for key,row in definitions.items()},'tools':TOOLS,'thread_link':'codex://threads/'+THREAD,'architecture':'toolbox','usage':await asyncio.to_thread(usage.config,session['csrf'])})

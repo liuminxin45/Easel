@@ -308,6 +308,7 @@ class LearningWorker:
         task = self.service.claim_task(self.owner, lease_seconds=600)
         if not task:
             return None
+        self.progress('working',phase=task['kind'])
         try:
             if task['kind'] == 'production_review':
                 handler = self.production_review
@@ -470,9 +471,28 @@ class LearningWorker:
         self.service.finish_task(task['id'], task['lease_token'], result)
         return {'task': task, 'result': result}
 
+    def progress(self,state,*,error=None,success=False,phase=None):
+        from easel_workbench.runtime.feedback_ledger import atomic,now
+        value={**getattr(self,'_progress',{}),'pid':os.getpid(),'release':os.environ.get('AI_DESK_RELEASE'),
+               'heartbeat':now(),'state':state,'phase':phase,
+               'error_type':type(error).__name__ if error else None if success else getattr(self,'_progress',{}).get('error_type')}
+        if success:value['last_success_at']=value['heartbeat']
+        if error is not None:value['last_error_at']=value['heartbeat']
+        if getattr(self.service,'state',None) is not None:atomic(self.service.state/'heartbeat.json',value)
+        self._progress=value
+
     def tick(self):
-        self.service.queue_index_refresh()
-        return self.process_one()
+        self.progress('polling')
+        try:
+            self.service.queue_index_refresh()
+            result=self.process_one()
+        except Exception as error:
+            self.progress('error',error=error)
+            raise
+        status=(result.get('result') or {}).get('status') if isinstance(result,dict) else None
+        state='blocked' if status=='blocked' else 'failed' if status=='failed' else 'idle'
+        self.progress(state,success=state=='idle')
+        return result
 
     def close(self):
         self.stop.set()

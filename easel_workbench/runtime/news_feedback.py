@@ -218,22 +218,33 @@ def process_one(store, ledger=None, interpreter=None, heartbeat=lambda: None):
         with store.connect() as c:c.execute("UPDATE news_feedback SET next_attempt=?,error=?,updated_at=? WHERE id=?",(time.time()+60,'原始选中已保存，项目记录待接续（'+type(error).__name__+'）',now(),row['id']))
     heartbeat();return True
 
+def progress(state,status,*,error=None,success=False):
+    try:previous=json.loads(state.read_text(encoding='utf-8'))
+    except (OSError,ValueError):previous={}
+    value={**previous,'pid':os.getpid(),'release':os.environ.get('AI_DESK_RELEASE'),
+           'heartbeat':now(),'heartbeat_epoch':time.time(),'code_version':CODE_VERSION,
+           'state':status,'error_type':type(error).__name__ if error else None if success else previous.get('error_type')}
+    if success:value['last_success_at']=value['heartbeat']
+    if error is not None:value['last_error_at']=value['heartbeat']
+    atomic(state,value)
+    return value
+
+
 def worker(store):
     state = ROOT / 'data/news-feedback-worker.json'
     with locked(ROOT / 'data/news-feedback-worker.lock', timeout=0):
-        def beat():
-            atomic(state, {'pid': os.getpid(), 'heartbeat': now(), 'heartbeat_epoch': time.time(), 'code_version': CODE_VERSION})
-        beat()
+        progress(state,'starting')
         # Reconcile all preserved selections before processing the durable outbox.
         backfill(store)
         while True:
-            beat()
             try:
-                if not process_one(store, heartbeat=beat):
-                    time.sleep(5)
+                processed=process_one(store,heartbeat=lambda:progress(state,'working'))
+                progress(state,'working' if processed else 'idle',success=True)
+                if not processed:time.sleep(5)
             except Exception as e:
                 journal.exception('feedback_iteration_failed',e)
-                atomic(ROOT / 'data/news-feedback-error.json', {'at': now(), 'error_type': type(e).__name__})
+                outcome=progress(state,'error',error=e)
+                atomic(ROOT / 'data/news-feedback-error.json', {'at':outcome['heartbeat'],'error_type':type(e).__name__})
                 time.sleep(10)
 
 

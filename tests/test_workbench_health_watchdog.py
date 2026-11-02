@@ -418,6 +418,17 @@ def test_network_failure_with_local_health_never_restarts_processes(running, mon
     assert running.token not in json.dumps(report)
 
 
+def test_business_failure_is_visible_without_restarting_a_healthy_server(running, monkeypatch):
+    tick_fixture(running, monkeypatch, [{'ok': True, 'pid': 12}], ingress_ok=True)
+    put(running.root / 'data/collection/heartbeat.json', {
+        'heartbeat': 1999, 'state': 'blocked', 'error_type': 'OperationalError'})
+    report = watchdog.tick(running.root)
+    assert report['decision'] == 'healthy' and report['local']['ok']
+    assert report['business']['status'] == 'degraded'
+    assert report['business']['roles']['collector']['error_type'] == 'OperationalError'
+    assert report['policy']['action'] is None and not running.terminated
+
+
 def test_transient_local_failure_is_reset_by_a_healthy_probe(running, monkeypatch):
     bad = {'ok': False, 'recoverable': True, 'reason': 'connection_or_timeout'}
     tick_fixture(running, monkeypatch, [bad, bad, {'ok': True, 'pid': 12}, bad], ingress_ok=True)

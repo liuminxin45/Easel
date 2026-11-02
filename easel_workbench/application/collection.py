@@ -22,6 +22,7 @@ from easel_workbench.runtime.project_paths import ROOT
 from easel_workbench.application.collection_sources import CollectionService
 from easel_workbench.features.collection.schedules import LeaseLost,timestamp,TERMINAL,COUNTERS
 from easel_workbench.runtime.feedback_ledger import atomic,locked
+from easel_workbench.runtime import server_logging as journal
 
 
 
@@ -37,6 +38,7 @@ class CollectionWorker:
         self.runner=runner;self.is_gone=is_gone;self.concurrency=max(1,min(3,concurrency))
         self.pool=concurrent.futures.ThreadPoolExecutor(max_workers=self.concurrency,thread_name_prefix='news-collection')
         self.active={}
+        self.last_success_at=None
 
     def prepare_resume(self,task,directory):
         """Copy successful stages once; never rewind a restarted attempt's files."""
@@ -100,6 +102,7 @@ class CollectionWorker:
         except Exception as error:
             # Collector exceptions may contain URLs/credentials. Keep private
             # response bodies out of the public status and filesystem journal.
+            journal.exception('collection_source_failed',error,resource_ref=journal.reference(source),operation_ref=journal.reference(jid))
             result={'status':'failed','error':'采集未完成（'+type(error).__name__+'）。',
                     'message':'已保留本次阶段；可在采集记录中重试此来源。'}
             atomic(receipt,{'task_id':jid,'source_id':source,'result':result})
@@ -130,7 +133,9 @@ class CollectionWorker:
                 task=self.service.claim(self.owner,self.pid,self.creation)
                 if not task:break
                 self.active[self.pool.submit(self.execute,task)]=task
-        atomic(self.service.state/'heartbeat.json',{'heartbeat':timestamp(self.service.clock()),
+        self.last_success_at=timestamp(self.service.clock())
+        atomic(self.service.state/'heartbeat.json',{'heartbeat':self.last_success_at,'last_success_at':self.last_success_at,
+               'release':os.environ.get('AI_DESK_RELEASE'), 'pid':self.pid,
                'state':'running' if self.active else 'watching' if self.service.configuration().get('enabled',False) else 'disabled',
                'active_tasks':[task['id'] for task in self.active.values()]})
 
@@ -148,7 +153,11 @@ def run(root=ROOT):
                 while not worker.stop.is_set():
                     try:worker.tick()
                     except Exception as error:
-                        atomic(state/'heartbeat.json',{'heartbeat':timestamp(),'state':'blocked','error':'采集服务异常（'+type(error).__name__+'）。'})
+                        journal.exception('collection_cycle_failed',error)
+                        atomic(state/'heartbeat.json',{'heartbeat':timestamp(),'state':'blocked','error_type':type(error).__name__,
+                               'last_success_at':worker.last_success_at,'last_error_at':timestamp(),
+                               'release':os.environ.get('AI_DESK_RELEASE'),'pid':worker.pid,
+                               'error':'采集服务异常（'+type(error).__name__+'）。'})
                     worker.stop.wait(10)
             finally:worker.close()
     except TimeoutError:return

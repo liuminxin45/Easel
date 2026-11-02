@@ -121,6 +121,29 @@ def _seconds(value):
         return 0
 
 
+def _trend_freshness(meta, source, heartbeat, now, observed):
+    """Evaluate the actual collection calendar, never the page-query time.
+
+    A weekly source remains current until its next due slot. An unchanged feed
+    can be checked successfully without inserting another copy of its articles.
+    """
+    if heartbeat:
+        beat = _seconds(heartbeat.get('heartbeat'))
+        if heartbeat.get('state') in {'blocked', 'error', 'failed'} or beat and now - beat > 180:
+            return {'code': 'collection_unavailable', 'message': '自动采集服务需要恢复，显示已保存结果'}
+    checked = _seconds(source.get('last_success_at')) or _seconds(observed)
+    following = _seconds(source.get('next_run_at'))
+    overdue = following and following + 300 < now and checked < following
+    schedule = meta.get('schedule')
+    if schedule:
+        from easel_workbench.features.collection.schedules import slot, TZ
+        due = slot(schedule, dt.datetime.fromtimestamp(now, TZ), -1).timestamp()
+        overdue = overdue or due + 300 < now and checked < due
+    if overdue:
+        return {'code': 'collection_overdue', 'message': '已错过采集计划，显示历史结果；请检查采集记录'}
+    return None
+
+
 class NativeApi:
     """One compatibility adapter per private application, never another writer."""
 
@@ -318,7 +341,8 @@ class NativeApi:
     def _trends(self, request):
         collection = self._collection()
         definitions = collection.definitions()
-        status = {row['id']: row for row in collection.status().get('sources', [])}
+        service_status = collection.status()
+        status = {row['id']: row for row in service_status.get('sources', [])}
         available = {key: value for key, value in definitions.items() if value['enabled']}
         requested = request.query_params.get('platforms')
         selected = list(available) if requested is None else list(dict.fromkeys(
@@ -335,16 +359,23 @@ class NativeApi:
             source_warnings = [str(value) for value in latest.get('warnings', []) if value]
             warnings.extend(available[key]['label'] + '：' + value for value in source_warnings)
             message = str(latest.get('error') or latest.get('message') or '上次采集未完成')
+            age_error = _trend_freshness(available[key], status.get(key, {}), service_status.get('heartbeat'),
+                                         time.time(), rows[0].get('run_at') if rows else None)
+            if service_status.get('enabled') is False:
+                age_error = {'code': 'collection_paused', 'message': '自动采集已暂停，显示已保存结果'}
+            stale = incomplete or busy or bool(age_error)
             if outcome == 'partial' and not latest.get('error'):
                 message = '本轮采集不完整，已保留实际结果'
-            groups.append({'platform': key, 'label': available[key]['label'], 'ok': not incomplete,
-                           'status': 'stale' if incomplete and rows else 'error' if incomplete else 'fresh',
-                           'stale': (incomplete or busy) and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
+            groups.append({'platform': key, 'label': available[key]['label'], 'ok': not incomplete and not age_error,
+                           'status': 'stale' if stale and rows else 'error' if incomplete or age_error else 'fresh',
+                           'stale': stale and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
+                           'checked_at': status.get(key, {}).get('last_success_at'),
+                           'next_run_at': status.get(key, {}).get('next_run_at'),
                            'last_attempt_at': _seconds(latest.get('created_at')),
                            'finished_at': latest.get('finished_at'), 'collection_status': outcome,
                            'warnings': source_warnings,
                            'error': {'code': 'busy', 'message': '正在采集，先显示已保存结果'} if busy else
-                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete else None,
+                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete else age_error,
                            'items': [{'id': item['id'], 'title': item['title'], 'hot': str(item.get('hot') or ''),
                                       'url': item.get('url', ''), 'published_at': item.get('published_at'),
                                       'heat': {'value': None, 'text': str(item.get('hot') or ''), 'unit': ''}}

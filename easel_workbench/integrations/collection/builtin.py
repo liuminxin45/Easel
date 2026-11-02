@@ -407,6 +407,8 @@ def run_source(source_id,task_dir,report=None,force=False,*,root=ROOT):
     except ModelError as exc:
         value=result('blocked',error=safe_error(exc),message='模型筛选未完成，原始候选已保留')
     except Exception as exc:
+        from easel_workbench.runtime import server_logging as journal
+        journal.exception('collection_provider_failed',exc,resource_ref=journal.reference(source_id))
         value=result('failed',error=safe_error(exc),message='该来源本轮未完成，其他来源可继续')
     value.update(observed)
     if value.get('inserted',0)>0:

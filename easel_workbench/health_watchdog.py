@@ -20,6 +20,7 @@ import uuid
 
 from .health_endpoint import HEALTH_PATH, health_token
 from .health_policy import assess, attempted
+from .business_health import snapshot as business_snapshot
 from .runtime.feedback_ledger import atomic, atomic_create, locked
 
 ALLOWED_CHILDREN = frozenset(('python.exe', 'pythonw.exe', 'node.exe', 'codex.exe'))
@@ -346,7 +347,10 @@ def tick(root):
         previous = read(policy_path) if policy_path.exists() else (None if status_existed else {})
     except (ValueError, OSError):
         previous = None
-    report = {'schema': 1, 'at': now, 'watchdog_pid': os.getpid()}
+    # Business degradation is diagnostic. It must never turn a live transport
+    # into a restart candidate or replay an accepted/unknown operation.
+    report = {'schema': 1, 'at': now, 'watchdog_pid': os.getpid(),
+              'business': business_snapshot(root, now=now)}
     try:
         resume_fence(root)
         binding = controls(root)

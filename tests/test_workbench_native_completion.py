@@ -38,8 +38,18 @@ def test_native_files_enter_exact_review_queue_and_existing_adoption_gate(busine
     monkeypatch.setattr(harnesses,'adapter',lambda runtime:Producer())
     async def scenario():
         value,plan=_fixture.confirmed(b)
-        result=await b.chat.submit(value,**b.prepare(value));await b.chat._tasks[result['id']]
-        turn=b.chat.get_turn(result['id'],private=True);wid=turn['work']['work_id'];jid=turn['id']
+        result=await b.chat.submit(value,**b.prepare(value))
+        # Fast fake inference may finish and release its private asyncio task
+        # before submit returns. Observe the durable receipt and hook outcome.
+        deadline=asyncio.get_running_loop().time()+10
+        while True:
+            turn=b.chat.get_turn(result['id'],private=True)
+            if turn['status'] in ('completed','failed','stopped') and turn.get('hook_status') in ('completed','failed'):
+                break
+            assert asyncio.get_running_loop().time()<deadline,turn
+            await asyncio.sleep(.01)
+        assert turn['status']=='completed' and turn['hook_status']=='completed',turn
+        wid=turn['work']['work_id'];jid=turn['id']
         assert b.box.work(wid)['versions'][0]['status']=='completed'
         with b.store.connect() as c:
             doc=json.loads(c.execute('SELECT document FROM toolbox_review_inputs WHERE job_id=?',(jid,)).fetchone()[0])

@@ -164,8 +164,20 @@ class LocalOperations:
   c.execute('INSERT OR REPLACE INTO toolbox_project_bindings VALUES(?,?,?,?,?,?)',(wid,relative,revision,pack(evidence),old['created_at'] if old else now,now))
   return self._binding(c,wid)
 
- def _infer(self,c,wid):
+ def _inference_snapshot(self,c,wid):
+  """Only DB facts; never scan files while owning the global SQLite writer."""
+  return {
+   "binding":self._binding(c,wid),
+   "completions":[tuple(r) for r in c.execute("SELECT document FROM toolbox_completions WHERE work_id=? ORDER BY decision_id",(wid,))],
+   "origins":[tuple(r) for r in c.execute("SELECT o.* FROM toolbox_product_origins o JOIN toolbox_jobs j ON j.id=o.job_id WHERE j.work_id=? ORDER BY o.artifact_id",(wid,))],
+   "artifacts":[tuple(r) for r in c.execute("SELECT a.*,j.id AS job_id FROM artifacts a JOIN toolbox_jobs j ON j.id=a.task_id WHERE j.work_id=? ORDER BY a.id",(wid,))],
+  }
+
+ def _infer(self,c,wid,*,persist=True):
   current=self._binding(c,wid);candidates={}
+  def save(relative,evidence):
+   if persist:return self._save_binding(c,wid,relative,evidence)
+   return {'work_id':wid,'relative_path':relative,'evidence':evidence,'_inferred':True}
   if current and current['evidence']['kind']!='new_work_reservation':return current
   for row in c.execute('SELECT document FROM toolbox_completions WHERE work_id=?',(wid,)):
    item=json.loads(row['document']);proof=item.get('project_archive',{})
@@ -198,7 +210,7 @@ class LocalOperations:
     if matched:candidates['内容/'+item.name]={'kind':'exact_work_version_and_bytes','versions':sorted(set(matched))}
   if len(candidates)==1:
    relative,evidence=next(iter(candidates.items()))
-   if not current or relative!=current['relative_path']:return self._save_binding(c,wid,relative,evidence)
+   if not current or relative!=current['relative_path']:return save(relative,evidence)
    return current
   if len(candidates)>1:return None
   if current:
@@ -208,7 +220,7 @@ class LocalOperations:
     if not target.is_dir():return None
     catalog=target/'内容档案.md';body=catalog.read_text(encoding='utf-8-sig',errors='replace') if catalog.is_file() else ''
     if wid not in body:return None
-   else:return self._save_binding(c,wid,current['relative_path'],{'kind':'allocated_new_work','reservation':current['evidence']})
+   else:return save(current['relative_path'],{'kind':'allocated_new_work','reservation':current['evidence']})
    return current
   return None
 
@@ -278,20 +290,45 @@ class LocalOperations:
 
  def _process_one(self):
   from easel_workbench.runtime.feedback_ledger import locked
+  # Filesystem inference can take seconds per legacy work. Keep it entirely
+  # outside the shared database writer, and compare all admission facts again.
   with self.store.connect() as c:
-   c.execute('BEGIN IMMEDIATE')
-   # A previous local process can stop mid-copy. All local byte writes are
-   # write-once and Git has its own durable intent; resuming does not send AI.
-   rows=list(c.execute("SELECT document FROM toolbox_local_tasks WHERE status IN ('queued','waiting_binding','waiting_production','running') ORDER BY CASE kind WHEN 'record' THEN 0 WHEN 'project_archive' THEN 1 WHEN 'article_archive' THEN 2 WHEN 'cleanup' THEN 3 ELSE 4 END,rowid"))
-   task=None
-   for row in rows:
-    item=json.loads(row['document'])
-    if self._busy(c,item['work_id']):self._put(c,item,status='waiting_production',error='等待同作品正在执行的制作回合结束');continue
+   rows=[json.loads(r['document']) for r in c.execute("SELECT document FROM toolbox_local_tasks WHERE status IN ('queued','waiting_binding','waiting_production','running') ORDER BY CASE kind WHEN 'record' THEN 0 WHEN 'project_archive' THEN 1 WHEN 'article_archive' THEN 2 WHEN 'cleanup' THEN 3 ELSE 4 END,rowid")]
+  works=list(dict.fromkeys(item['work_id'] for item in rows if item['kind']!='sync'))
+  # Rotate a bounded scan window; unresolved legacy records cannot starve later
+  # work, and record/cleanup for one work share this round's inference result.
+  cursor=getattr(self,'_scan_cursor',0)%max(1,len(works));window=(works+works)[cursor:cursor+min(4,len(works))]
+  self._scan_cursor=(cursor+len(window))%max(1,len(works))
+  inferred={};task=None
+  for item in rows:
+   wid=item['work_id'];proposal=None;snapshot=None
+   if item['kind']!='sync':
+    if wid not in window:continue
+    if wid not in inferred:
+     with self.store.connect() as c:
+      if self._busy(c,wid):inferred[wid]=(None,None)
+      else:
+       snapshot=self._inference_snapshot(c,wid)
+       proposal=self._infer(c,wid,persist=False)
+       # A concurrent edit during scanning is stale before admission already.
+       inferred[wid]=(snapshot,proposal) if snapshot==self._inference_snapshot(c,wid) else (None,None)
+    snapshot,proposal=inferred[wid]
+   with self.store.connect() as c:
+    c.execute('BEGIN IMMEDIATE')
+    row=c.execute('SELECT document FROM toolbox_local_tasks WHERE id=?',(item['id'],)).fetchone()
+    if not row or json.loads(row['document'])!=item:continue
+    if self._busy(c,wid):
+     self._put(c,item,status='waiting_production',error='等待同作品正在执行的制作回合结束');continue
     if item['kind']!='sync':
-     binding=self._infer(c,item['work_id'])
-     if not binding:self._put(c,item,status='waiting_binding',error='项目归档待关联；决定和反馈已经保存');continue
-    task=self._put(c,item,status='running',error=None,attempts=item.get('attempts',0)+1);break
-   if task is None:return None
+     if snapshot is None or snapshot!=self._inference_snapshot(c,wid):continue
+     if not proposal:
+      if item['status']!='waiting_binding':self._put(c,item,status='waiting_binding',error='项目归档待关联；决定和反馈已经保存')
+      continue
+     if proposal.get('_inferred'):
+      self._save_binding(c,wid,proposal['relative_path'],proposal['evidence'])
+    task=self._put(c,item,status='running',error=None,attempts=item.get('attempts',0)+1)
+   break
+  if task is None:return None
   try:
    if task['kind']=='sync':result=self._sync(task)
    else:

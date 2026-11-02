@@ -21,12 +21,13 @@ def source(tmp_path):
     subprocess.run(['git','init','-q'],cwd=tmp_path,check=True)
     lock=tmp_path/checker.LOCK;lock.parent.mkdir(parents=True)
     lock.write_text(json.dumps({'schema':1,'purpose':'ci_exact_byte_lock_not_runtime_registry','files':checker.inventory(tmp_path)}),encoding='utf-8')
+    subprocess.run(['git','add','--','.gitattributes','skills'],cwd=tmp_path,check=True)
     return tmp_path,resource,lock
 
 
 def test_ci_byte_lock_accepts_exact_mixed_eol_sources_without_rewriting(source):
     root,resource,lock=source;before=(resource.read_bytes(),lock.read_bytes())
-    assert checker.verify(root)=={'passed':True,'files':2,'git_text_conversion_disabled':True}
+    assert checker.verify(root)=={'passed':True,'files':2,'git_text_conversion_disabled':True,'git_index_matches':True}
     assert (resource.read_bytes(),lock.read_bytes())==before
 
 
@@ -49,3 +50,15 @@ def test_ci_rejects_changed_method_until_explicit_review(source):
     root,_,_=source;entry=root/'skills/builtin/topic-research/SKILL.md'
     entry.write_bytes(entry.read_bytes().replace(b'---\nTEMP skill',b'---\nChanged method'))
     with pytest.raises(ValueError,match='SKILL.md'):checker.verify(root)
+
+
+def test_ci_rejects_old_normalized_index_even_when_working_file_matches_lock(source):
+    root,resource,_=source;relative=resource.relative_to(root).as_posix()
+    # Reproduce an index written under old text attributes, then restore the
+    # new -text attribute and exact on-disk bytes without refreshing the index.
+    normalized=resource.read_bytes().replace(b'\r\n',b'\n')
+    blob=subprocess.check_output(['git','hash-object','-w','--stdin'],cwd=root,input=normalized).decode().strip()
+    subprocess.run(['git','update-index','--cacheinfo','100644,'+blob+','+relative],cwd=root,check=True)
+    with pytest.raises(ValueError,match='Git index differs'):checker.verify(root)
+    subprocess.run(['git','add','--renormalize','--',relative],cwd=root,check=True)
+    assert checker.verify(root)['git_index_matches']

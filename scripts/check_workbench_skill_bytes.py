@@ -6,6 +6,7 @@ updates this source lock; publishing a DB version remains a separate operation.
 from pathlib import Path
 import argparse
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -36,7 +37,19 @@ def verify(root):
                                    input=('\0'.join(actual)+'\0').encode('utf-8')).decode('utf-8').split('\0')
     unprotected=[result[i] for i in range(0,len(result)-1,3) if result[i+2]!='unset']
     if unprotected:raise ValueError('Private skill files allow Git EOL conversion: '+', '.join(unprotected))
-    return {'passed':True,'files':len(actual),'git_text_conversion_disabled':True}
+    # Attribute changes can leave Git's stat cache saying "clean" while the
+    # index still contains formerly normalized bytes. Check the actual blobs,
+    # not git status, so a push cannot omit the correct mixed/CRLF originals.
+    payload=''.join(':'+name+'\n' for name in actual).encode('utf-8')
+    stream=io.BytesIO(subprocess.check_output(['git','cat-file','--batch'],cwd=root,input=payload))
+    index_changed=[]
+    for name,expected_sha in actual.items():
+        header=stream.readline().split()
+        if len(header)!=3 or header[1]!=b'blob':raise ValueError('Private skill is not staged in Git: '+name)
+        raw=stream.read(int(header[2]));assert stream.read(1)==b'\n'
+        if hashlib.sha256(raw).hexdigest()!=expected_sha:index_changed.append(name)
+    if index_changed:raise ValueError('Git index differs from reviewed skill bytes; explicitly stage exact resources: '+', '.join(index_changed))
+    return {'passed':True,'files':len(actual),'git_text_conversion_disabled':True,'git_index_matches':True}
 
 
 def main():

@@ -152,13 +152,17 @@ def direct_send_checks(browser,f,out,report,check,expect):
             execution=exported.json()['execution_prompt'];snapshot=execution['creator_snapshot']
             expect(panel.locator('p').filter(has_text='画像：'+snapshot['profile']['name'])).to_be_visible()
             for skill in snapshot['skills']:expect(panel.locator('p').filter(has_text=skill['name']+' · v'+str(skill['version']))).to_be_visible()
-            panel.get_by_text('完整实际制作指令',exact=True).click();panel.get_by_text('制作指令 SHA-256',exact=True).click()
-            records=panel.locator('pre').all_text_contents();assert execution['body'] in records and execution['sha256'] in records
+            records=[]
+            for title in ('完整实际制作指令','制作指令 SHA-256'):
+                panel.get_by_text(title,exact=True).click()
+                detail=page.get_by_role('dialog',name=title,exact=True);expect(detail).to_be_visible()
+                records.append(detail.locator('pre').inner_text());detail.get_by_role('button',name='关闭',exact=True).click()
+            assert records==[execution['body'],execution['sha256']]
             with f['box'].store.connect() as c:saved=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(turn['turnId'],)).fetchone()[0])
             assert execution['body']==saved['actual_prompt'] and execution['sha256']==saved['actual_prompt_sha256']
             assert [(s['id'],s['version']) for s in snapshot['skills']]==[(s['id'],s['version']) for s in saved['snapshot']['skills']]
             assert panel.evaluate('element=>element.scrollWidth<=element.clientWidth+1')
-            panel.get_by_text('完整实际制作指令',exact=True).click();panel.get_by_text('制作指令 SHA-256',exact=True).click();panel.scroll_into_view_if_needed()
+            panel.scroll_into_view_if_needed()
             page.screenshot(path=str(out/(profile+'-'+str(saved['snapshot']['task'])+'-parameters.png')))
             panel.locator('summary').first.click()
             return saved
@@ -209,7 +213,7 @@ def direct_send_checks(browser,f,out,report,check,expect):
         check(profile,'version modification sends once without a modal and keeps its exact parent')
         page.screenshot(path=str(out/(profile+'-direct-send.png')))
         page.goto(f['origin']+'/native/chat/'+sid);textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_be_enabled();choose('生成贴图','UNKNOWN_RECEIPT '+profile)
-        before=len(f['adapter'].requests);start=len(requests);page.get_by_role('button',name='发送',exact=True).click();status=page.get_by_role('status').filter(has_text='正在恢复原任务状态');expect(status.first).to_be_visible()
+        before=len(f['adapter'].requests);start=len(requests);page.get_by_role('button',name='发送',exact=True).click();status=page.get_by_role('status').filter(has_text='原任务执行结果待核对');expect(status.first).to_be_visible()
         pending=page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)
         expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible()
         assert page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)==pending and len(f['adapter'].requests)==before+1

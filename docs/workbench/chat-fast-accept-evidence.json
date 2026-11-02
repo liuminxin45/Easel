@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "spec": "chat-fast-accept",
+  "source_commit": "2c801cc9646665a1dc498d7c17b418f0d2559657",
+  "candidate": {
+    "release": "workbench-20261102-053959",
+    "manifest_sha256": "b1b49c3a32b33eb74aba00b824fb5505c3b33cf639796689799a416692be18e8",
+    "native": {
+      "release": "native-easel-workbench-20261102053143",
+      "manifest_sha256": "1ac098c6a6b70ee31983483173c56f9b65d23245489baaf2e89636ef817748a8"
+    }
+  },
+  "frontend_checks": 381,
+  "chat_checks": 66,
+  "related_checks": 214,
+  "architecture_final_checks": 79,
+  "browser_checks": {
+    "slow_admission_and_exit": 12,
+    "content_closed_loop": 34,
+    "actual_interruption_and_unknown": 9,
+    "poster_article_change_and_unknown": 12
+  },
+  "real_model_calls": 0,
+  "platform_writes": 0,
+  "physical_device_tested": false,
+  "records": [
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/chat-verified.xml",
+      "sha256": "01b9f9af6443d0cce3b13237d05f7e38935841b9e76adf47b2db3d3b40e436ec"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/related.xml",
+      "sha256": "3bb1167e832aa277dfd24094094744f586363ae4ebb24acaaff4ead541cf796a"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/architecture-final.xml",
+      "sha256": "6692248727ba11c3b408eeacbf097b5ab3fde506ffe30cbde2cda9f13fbfbd20"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/frontend-final.log",
+      "sha256": "c12813053a7c8954b2dcc20d52dbc2726b7977b0a9c2411f36db6a7ac298e573"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/check-final.log",
+      "sha256": "0b2ef026e616230f1af7740007956236cd193002668c0ca12da2ad408dda32f1"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/build-final.log",
+      "sha256": "1eaafef31a53763093a687069c663a7e4f3d0068e6b1cad407ebf6a32e9f5839"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/build-official.log",
+      "sha256": "d985b10821eeb3f7fe64f296f3e88c78672d0d1aa7a305ce25e794fcc1a960f1"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/inventory-final.json",
+      "sha256": "41d9933809d6aa51d64f20dfff4ce713094499f0b87bd8e2063209f1331c25a8"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/frozen-admission/chat-admission-browser.json",
+      "sha256": "9b596204ea4ec21ef3b1cec374b87b38cd712e5ebe528f0fffb05ce70df28571"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/frozen-content/content-closedloop-browser.json",
+      "sha256": "65de612ebbd31e026ccf5de32604b95ebd89a73748259de1ba930115154a5bbe"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/frozen-recovery-r2/chat-recovery-browser.json",
+      "sha256": "7e9c2fe1a067a100f9ad2e4246b306a66e95db15c300929d34cf670386e6ce12"
+    },
+    {
+      "path": ".local/workbench-validation/chat-fast-accept-20261102/frozen-direct-r4/native-browser.json",
+      "sha256": "ae23620d73b1a91890e51955c16005122ef6186a82f386e67e3bc5d9842a5eee"
+    }
+  ]
+}

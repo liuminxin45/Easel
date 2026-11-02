@@ -34,6 +34,7 @@ class StreamFault:
         self.started = started
         self.allow_resume = threading.Event()
         self.keepalive = threading.Event()
+        self.ended = threading.Event()
         self.enabled = True
         self.turn_id = None
         self.calls = Counter()
@@ -71,6 +72,7 @@ class StreamFault:
                             self.replayed_events.append(int(text.split('\n', 1)[0][3:]))
                     yield frame
                     if first and text.startswith('id:') and int(text.split('\n', 1)[0][3:]) >= final_id:
+                        self.ended.set()
                         return  # EOF, while the separately owned native run stays alive.
             finally:
                 await response.body_iterator.aclose()
@@ -171,6 +173,10 @@ def main():
                     sid = new_session()
                     original = 'TEMP 准确原字贴图；连接恢复不能再次制作'
                     send_poster(original)
+                    deadline = time.monotonic() + 45
+                    while not fault.ended.is_set():
+                        assert time.monotonic() < deadline, 'The actual initial stream must reach the injected EOF after preparation'
+                        page.wait_for_timeout(50)
                     interrupted = page.get_by_role('status').filter(has_text='连接暂时中断，正在恢复原任务状态。输入已保留。')
                     expect(interrupted).to_be_visible()
                     screenshot(page, '390-transport-interrupted.png')

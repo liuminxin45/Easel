@@ -1,0 +1,96 @@
+name: Workbench mobile state
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'easel/**'
+      - 'easel_workbench/**'
+      - 'skills/builtin/**'
+      - 'skills/shared/workbench/**'
+      - 'agents/workspace/**'
+      - 'tests/frontend/**'
+      - 'tests/test_workbench_chat_history_windows.py'
+      - 'tests/test_workbench_architecture.py'
+      - 'tests/test_workbench_skill_policy.py'
+      - 'tests/test_workbench_skill_commands.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'scripts/audit_easel_base.mjs'
+      - 'scripts/audit_workbench_interactions.mjs'
+      - 'docs/workbench/upstream-base.json'
+      - 'docs/workbench/import-baseline.json'
+      - '.gitattributes'
+      - 'AGENTS.md'
+      - '.github/workflows/workbench-mobile-state.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'easel/**'
+      - 'easel_workbench/**'
+      - 'skills/builtin/**'
+      - 'skills/shared/workbench/**'
+      - 'agents/workspace/**'
+      - 'tests/frontend/**'
+      - 'tests/test_workbench_chat_history_windows.py'
+      - 'tests/test_workbench_architecture.py'
+      - 'tests/test_workbench_skill_policy.py'
+      - 'tests/test_workbench_skill_commands.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'scripts/audit_easel_base.mjs'
+      - 'scripts/audit_workbench_interactions.mjs'
+      - 'docs/workbench/upstream-base.json'
+      - 'docs/workbench/import-baseline.json'
+      - '.gitattributes'
+      - 'AGENTS.md'
+      - '.github/workflows/workbench-mobile-state.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shared-mobile-state:
+    if: github.repository == 'liuminxin45/Easel'
+    name: Mobile state (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install validation dependencies without media or model runtimes
+        run: python -m pip install --prefer-binary pytest fastapi httpx requests websocket-client cryptography pyyaml python-multipart sse-starlette
+      - name: Install locked frontend dependencies
+        working-directory: web/frontend
+        run: npm ci
+      - name: Verify mobile state and all frontend regressions
+        working-directory: web/frontend
+        run: node --test --test-concurrency=2 ../../tests/frontend/*.test.mjs
+      - name: Verify bounded history and business boundaries using TEMP data
+        run: python -m pytest -q tests/test_workbench_chat_history_windows.py tests/test_workbench_architecture.py tests/test_workbench_skill_policy.py tests/test_workbench_skill_commands.py
+      - name: Verify host types, interactions and official ancestry
+        working-directory: web/frontend
+        run: npm run check:workbench
+      - name: Build original Easel independently
+        working-directory: web/frontend
+        run: npm run build
+      - name: Build the private host from the same shared components
+        working-directory: web/frontend
+        run: npm run build:workbench

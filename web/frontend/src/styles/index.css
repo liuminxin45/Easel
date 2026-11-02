@@ -1117,6 +1117,11 @@ textarea.field { resize: vertical; min-height: 90px; }
 
 /* ============ 内容库画廊 ============ */
 .gallery-page { height: 100%; overflow-y: auto; padding: 28px 32px 60px; }
+.gallery-breadcrumbs { flex-wrap: wrap; }
+.gallery-breadcrumbs > svg,
+.gallery-breadcrumbs > .crumb { flex-shrink: 0; }
+.gallery-breadcrumbs > .crumb { white-space: nowrap; }
+.gallery-breadcrumbs > span:not(.crumb) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .gallery-head { max-width: 1160px; margin: 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .gallery-filters { display: flex; gap: 8px; flex-wrap: wrap; max-width: 1160px; margin: 14px auto 0; }
 .gallery-grid { max-width: 1160px; margin: 16px auto 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }

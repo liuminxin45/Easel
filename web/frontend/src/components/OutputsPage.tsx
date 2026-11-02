@@ -275,7 +275,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     <div className="gallery-page">
       <div className="gallery-head">
         <div>
-          <h1 className="page-title">
+          <h1 className="page-title gallery-breadcrumbs">
             <IconOutputs size={21} />
             <span className="crumb" onClick={() => goTo(0)}>内容库</span>
             {stack.map((name, i) => (

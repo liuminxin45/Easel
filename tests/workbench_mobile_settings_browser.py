@@ -210,8 +210,29 @@ def main():
                     page.set_default_timeout(12000)
                     errors = []
                     page.on('pageerror', lambda error: errors.append(str(error)))
+                    leave_guard = {'accept': True, 'engine_rejected': False, 'decisions': []}
+
+                    def dialog_decision(dialog):
+                        # Only this explicit draft-disposal confirmation is
+                        # expected. Do not accept arbitrary browser dialogs.
+                        expected = dialog.type == 'confirm' and dialog.message == '设置中有尚未保存的修改，确定离开并丢弃这些输入？'
+                        accepted = expected and leave_guard['accept']
+                        leave_guard['decisions'].append({'message': dialog.message, 'accepted': accepted})
+                        if not expected:
+                            mark(profile, 'settings.panel', 'unexpected-dialog', 'only the settings leave confirmation is shown', False,
+                                 dialog_type=dialog.type, message=dialog.message)
+                        if accepted: dialog.accept()
+                        else: dialog.dismiss()
+
+                    page.on('dialog', dialog_decision)
 
                     def go(path):
+                        # Each geometry scenario starts with a new document.
+                        # Explicitly dispose of the preceding scenario's TEMP
+                        # draft rather than relying on a UA beforeunload default.
+                        if page.locator('.settings-panel[data-native-dirty="true"]').count():
+                            page.locator('.settings-close').click()
+                            expect(page.get_by_role('dialog', name='设置', exact=True)).not_to_be_visible()
                         page.goto(data['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
 
                     def open_sidebar_settings():
@@ -252,6 +273,23 @@ def main():
 
                     def choose_runtime(runtime):
                         popup = menu(page, profile, 'engine_dropdown-' + runtime, page.get_by_role('button', name='执行引擎', exact=True), '执行引擎')
+                        model = page.locator('#harness-model')
+                        previous = page.get_by_role('button', name='执行引擎', exact=True).inner_text()
+                        if (not leave_guard['engine_rejected'] and model.count()
+                                and page.locator('.settings-panel[data-native-dirty="true"]').count()
+                                and LABELS[runtime] not in previous):
+                            raw_input, decisions = model.input_value(), len(leave_guard['decisions'])
+                            leave_guard['accept'] = False
+                            try:
+                                popup.get_by_role('option', name=re.compile('^' + re.escape(LABELS[runtime]))).click()
+                            finally:
+                                leave_guard['accept'] = True
+                            expect(model).to_have_value(raw_input)
+                            expect(page.get_by_role('button', name='执行引擎', exact=True)).to_have_text(previous)
+                            mark(profile, 'settings.harness', 'discard_rejected', 'rejecting an engine change keeps the engine and exact unsaved model',
+                                 len(leave_guard['decisions']) == decisions + 1 and not leave_guard['decisions'][-1]['accepted'])
+                            leave_guard['engine_rejected'] = True
+                            popup = menu(page, profile, 'engine_dropdown-confirmed-' + runtime, page.get_by_role('button', name='执行引擎', exact=True), '执行引擎')
                         popup.get_by_role('option', name=re.compile('^' + re.escape(LABELS[runtime]))).click()
                         expect(page.get_by_role('button', name='执行引擎', exact=True)).to_contain_text(LABELS[runtime])
 
@@ -427,8 +465,20 @@ def main():
                         controls = page.locator('.settings-panel').locator('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]').filter(visible=True)
                         controls.last.focus(); page.keyboard.press('Tab')
                         mark(profile, 'settings.panel', 'focus_loop', 'Tab from last control remains in settings', page.locator('.settings-panel').evaluate('element=>element.contains(document.activeElement)'))
+                        decisions = len(leave_guard['decisions'])
+                        leave_guard['accept'] = False
+                        try:
+                            page.keyboard.press('Escape')
+                        finally:
+                            leave_guard['accept'] = True
+                        expect(page.get_by_role('dialog', name='设置', exact=True)).to_be_visible()
+                        expect(model).to_have_value(LONG_MODEL)
+                        mark(profile, 'settings.panel', 'escape_discard_rejected', 'rejecting Escape keeps the settings and exact unsaved model',
+                             len(leave_guard['decisions']) == decisions + 1 and not leave_guard['decisions'][-1]['accepted'])
                         page.keyboard.press('Escape')
                         expect(page.get_by_role('dialog', name='设置', exact=True)).not_to_be_visible()
+                        mark(profile, 'settings.panel', 'escape_discard_confirmed', 'Escape closes only after explicitly confirming draft disposal',
+                             len(leave_guard['decisions']) == decisions + 2 and leave_guard['decisions'][-1]['accepted'])
                         go('/news')
                         page.wait_for_selector('.trends-page')
                         open_sidebar_settings()

@@ -328,6 +328,10 @@ def main():
                     confirm = adopt.get_by_role('button', name='确认采纳并完成', exact=True)
                     expect(confirm).to_be_visible()
                     expect(confirm).to_be_disabled()
+                    expect(adopt).to_contain_text('客观交付缺失：')
+                    expect(adopt).not_to_contain_text('[object Object]')
+                    check(profile, 'blocked adoption shows readable delivery reasons in the original drawer',
+                          '客观交付缺失：' in adopt.inner_text() and '[object Object]' not in adopt.inner_text())
                     screenshot(page, profile + '-04-unreviewed-adoption-blocked.png')
                     page.keyboard.press('Escape')
                     check(profile, 'merely having actual image and copy files cannot bypass the independent adoption gate', len(adapter.requests) == before_guard)

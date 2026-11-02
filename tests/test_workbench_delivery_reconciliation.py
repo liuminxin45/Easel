@@ -54,9 +54,13 @@ def test_exact_failed_receipt_is_corrected_once_with_original_evidence(business,
     assert apply(business.root,plan,plan['plan_sha256'])==result and len(calls)==1
     with business.store.connect() as c:
         assert c.execute("SELECT status FROM toolbox_jobs WHERE id='turn-one'").fetchone()[0]=='completed'
+        assert tuple(c.execute("SELECT started_at,finished_at FROM toolbox_jobs WHERE id='turn-one'").fetchone())==(plan['job']['started_at'],plan['job']['finished_at'])
         assert {r[0] for r in c.execute("SELECT name FROM artifacts WHERE task_id='turn-one'")}=={'成品.png','标题与配文.txt'}
         audit=json.loads(c.execute('SELECT document FROM toolbox_delivery_reconciliations').fetchone()[0])
         assert audit['original']['job']['status']=='error' and audit['original']['outcome']==plan['outcome']
+    from easel_workbench.features.works.products import ChatProducts
+    product=ChatProducts(business).describe('turn-one')
+    assert not product['incomplete'] and product['can_adopt'] and len(product['files'])==2
 
 
 def test_changed_original_file_rejects_correction_before_receipt_write(business,monkeypatch):

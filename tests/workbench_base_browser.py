@@ -244,11 +244,11 @@ def main():
                         visit('/works')
                         project=page.locator('.gcard').filter(has_text='TEMP 已登记版本')
                         expect(project).to_be_visible();project.click()
-                        exact=page.get_by_role('button',name='查看准确版本、采纳与交付',exact=True)
-                        expect(exact).to_be_visible();exact.click()
-                        page.wait_for_function('id=>new URLSearchParams(location.search).get("path")?.includes(id)',arg=work_id)
-                        target=parse_qs(urlsplit(page.url).query)['path'][0]
-                        assert target.split('?')[0].endswith('/'+work_id) and parse_qs(urlsplit(target).query)['version']==[work_id]
+                        exact=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
+                        expect(exact).to_be_visible();assert not exact.evaluate('element=>element.open')
+                        exact.locator('summary').first.click()
+                        expect(page.get_by_role('combobox',name='作品版本',exact=True)).to_have_value(work_id)
+                        expect(page.locator('.gallery-page')).to_be_visible()
                         visit('/works?'+urlencode({'path':'__workbench__/temp-base-image/成品.png'}))
                         expect(page.locator('.drawer img')).to_be_visible()
                         capture('registered-output')

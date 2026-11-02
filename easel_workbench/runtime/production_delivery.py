@@ -7,7 +7,7 @@ from .desk import stamp
 from . import server_logging as journal
 
 
-def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None, execution_identity=None):
+def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receiver=None, execution_identity=None, *, enqueue_review=True):
     from .bridge import capture_artifacts
     from .task_runtime import production_finish, step
     with box.store.connect() as c:
@@ -72,7 +72,7 @@ def record_delivery(box, jid, reply, native_turn_id, product_roots=None, receive
             from .local_operations import enqueue_delivery
             enqueue_delivery(c, job)
         learning = getattr(box, 'learning', None)
-        if learning and job['kind'] in ('create', 'change') and status == 'completed':
+        if learning and job['kind'] in ('create', 'change') and status == 'completed' and enqueue_review:
             learning.enqueue_review(c, jid)
         if learning and job['kind'] in ('feedback', 'accept', 'reject'):
             learning.index_database(c)

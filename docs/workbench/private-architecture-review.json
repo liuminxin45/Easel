@@ -392,19 +392,6 @@
       "next_slice": "P2"
     },
     {
-      "path": "easel_workbench/runtime/production_delivery.py",
-      "reviewed_sha256": "cab62c107b8886ba46ba647f1cb605ec5bd9ddf5a202f1058fc5da213b4ad7e3",
-      "area": "application/delivery",
-      "responsibility": "原生 Easel 与旧任务共同使用的准确交付登记",
-      "lifecycle": [
-        "current",
-        "legacy-execution",
-        "reconcile"
-      ],
-      "state_contract": "job/works/outcomes/artifacts/local_queue；模型完成与成品接收分开，原回执不能覆盖",
-      "next_slice": "P2"
-    },
-    {
       "path": "easel_workbench/runtime/production_outcome.py",
       "reviewed_sha256": "2312b570426ecfaffd78e83625f1a8f5b4d578e6846bf2e879fcc6b6f9e09ca8",
       "area": "features/works",
@@ -2351,27 +2338,6 @@
       }
     },
     {
-      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: application",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "ce1cb47f80350b27f7044fc0ee26a1c40a8e41ae207041196e2213ce4ade5d56",
-      "path": "easel_workbench/application/delivery_reconciliation.py",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "preview",
-            "apply"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
-        "path": "easel_workbench/application/chat.py",
-        "reviewed_sha256": "08f06d6647e29a712e2c541bbe6932aff5d9ee3df3d5e21701e9060882221101"
-      }
-    },
-    {
       "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: features/works",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
@@ -2511,6 +2477,49 @@
         "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
         "path": "easel_workbench/runtime/native_api.py",
         "reviewed_sha256": "04d2dc6536148f7e8879b3174d4b757a4fcccd9319e046c54b87c0b25e0a2613"
+      }
+    },
+    {
+      "responsibility": "Explicit receipt maintenance preserves execution times and never replays review/correction sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "b1f0a4620b038d8dc95c7e32a235c8154a91d2faa13c42b091507b412ea86952",
+      "path": "easel_workbench/application/delivery_reconciliation.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "preview",
+            "apply"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "3835f1e9857c44108c5a81e83b454d2894b7bd4e",
+        "path": "easel_workbench/application/delivery_reconciliation.py",
+        "reviewed_sha256": "ce1cb47f80350b27f7044fc0ee26a1c40a8e41ae207041196e2213ce4ade5d56"
+      }
+    },
+    {
+      "path": "easel_workbench/runtime/production_delivery.py",
+      "reviewed_sha256": "b3c8e51c4845c12e07627e950a1c8c6decf707b64855017254ab10d4d92320e3",
+      "area": "application/delivery",
+      "responsibility": "Explicit receipt maintenance preserves execution times and never replays review/correction sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "job/works/outcomes/artifacts/local_queue；模型完成与成品接收分开，原回执不能覆盖",
+      "next_slice": "P2",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "record_delivery"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "3835f1e9857c44108c5a81e83b454d2894b7bd4e",
+        "path": "easel_workbench/runtime/production_delivery.py",
+        "reviewed_sha256": "cab62c107b8886ba46ba647f1cb605ec5bd9ddf5a202f1058fc5da213b4ad7e3"
       }
     }
   ],

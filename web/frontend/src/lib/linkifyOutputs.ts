@@ -1,4 +1,4 @@
-export type OutputPathResolver=(path:string)=>string|undefined;
+export type OutputPathResolver=(path:string,kind:'media'|'library')=>string|undefined;
 import { mediaUrl } from './api';
 
 /**
@@ -41,12 +41,12 @@ const PROTECT = /(```[\s\S]*?```|`[^`\n]*`|\[[^\]]*\]\([^)\n]*\))/g;
 
 function toMediaUrl(outputsPath: string, resolve?:OutputPathResolver): string {
   const rel = outputsPath.replace(/^outputs\//, '');
-  return resolve?.(outputsPath)||mediaUrl(rel);
+  return resolve?.(outputsPath,'media')||mediaUrl(rel);
 }
 
 function toJumpUrl(outputsPath: string, resolve?:OutputPathResolver): string {
   const rel = outputsPath.replace(/^outputs\//, '').replace(/\/+$/, '');
-  return resolve?.(outputsPath)||`#/outputs/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  return resolve?.(outputsPath,'library')||`#/outputs/${rel.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 /** 单个 outputs 路径 token → markdown 链接 / 内联图。

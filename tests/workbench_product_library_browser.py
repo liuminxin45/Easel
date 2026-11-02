@@ -55,6 +55,12 @@ def main():
                         check(label,'only a native output hyperlink connects chat to the exact version','workbench-'+wid+'/'+tid in link.get_attribute('href'))
                         if width<600:
                             check(label,'navigation occupies space above messages rather than covering them',page.evaluate("()=>document.querySelector('.mobile-nav-bar').getBoundingClientRect().bottom<=document.querySelector('.chat-messages').getBoundingClientRect().top+1"))
+                        copy_link=helper.turn_view(page,history).get_by_role('link',name='标题与配文',exact=True)
+                        check(label,'the shared formatter opens text in the native registered-file preview',copy_link.get_attribute('href').startswith('#/outputs/__workbench__/'))
+                        copy_link.click();expect(page.locator('.drawer-body')).to_contain_text('TEMP 分开的准确配文。')
+                        page.get_by_role('button',name='关闭预览',exact=True).click()
+                        page.goto(f['origin']+'/native/chat/'+sid,wait_until='domcontentloaded')
+                        link=helper.turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True)
                         link.click();expect(page.locator('.gallery-page')).to_be_visible();expect(page.locator('.gallery-grid').first.locator('.gcard')).to_have_count(4)
                         expect(page.get_by_text('成品 · 4',exact=True)).to_be_visible();expect(page.locator('.ew-work')).to_have_count(0);expect(page.get_by_role('button',name='复制图文',exact=True)).to_have_count(0)
                         operations=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first

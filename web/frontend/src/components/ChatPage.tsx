@@ -53,7 +53,7 @@ interface ChatPageProps {
   linkifyArtifactPaths?: boolean;
   questionServices?:QuestionServices;
   messageArtifacts?:(message:ChatMessage)=>Artifact[]|undefined;
-  resolveArtifactPath?:(message:ChatMessage,path:string)=>string|undefined;
+  resolveArtifactPath?:(message:ChatMessage,path:string,kind:'media'|'library')=>string|undefined;
 }
 
 // 空态推荐（贴合 Easel 社媒创作场景）

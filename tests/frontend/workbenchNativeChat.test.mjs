@@ -316,10 +316,10 @@ test('historical turn products use registered file IDs and open the exact busine
  f.resources.session.messages=[{...message,role:'assistant',content:'已生成',library_path:'workbench-exact-work/exact-version'}];assert.match(f.render().chat.session.messages[0].content,/#\/outputs\/workbench-exact-work\/exact-version/);
 });
 function productActionsFixture(work,{navigation={},readWork}={}){
- let cursor=0;const state=[],drafts=new Map(),calls={reads:[],actions:[],navigate:[],errors:[],reloads:0,invalidate:[]};
+ let cursor=0;const state=[],drafts=new Map(),calls={reads:[],actions:[],reviews:[],navigate:[],errors:[],reloads:0,invalidate:[]};
  const react={useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]}};
  const product={work_id:'exact-work',version_id:'completed-v1',can_adopt:true,files:[],text_blocks:[]};
- const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args)}};
+ const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args),manualReview:async(...args)=>calls.reviews.push(args)}};
  const core={...productionRecovery,array,record,string,statusLabel:value=>value,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
   useWorkbench:()=>vm,useResource:path=>({data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}),
   useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]},
@@ -335,6 +335,11 @@ const completedActionWork=()=>({id:'exact-work',title:'准确作品',format:'pos
  {id:'completed-v1',label:'v01',artifacts:[],status:'completed',creative:{creator:{skills:[{id:'content-production',version:2}]}}},
  {id:'newer-v2',status:'completed',creative:{creator:{skills:[{id:'content-production',version:9}]}}}
 ]});
+
+test('an explicit independent check binds only this version and does not submit production',async()=>{
+ const f=productActionsFixture(completedActionWork());f.button(f.render(),'独立检查').props.onClick();await tick();await tick();
+ assert.deepEqual(plain(f.calls.reviews),[['exact-work','completed-v1']]);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.navigate.length,0);
+});
 
 test('editing a chat product rereads its exact completed version and navigates with its frozen skill without starting production',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'修改这版').props.onClick();await tick();await tick();

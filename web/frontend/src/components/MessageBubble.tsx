@@ -21,7 +21,7 @@ interface MessageBubbleProps {
   stillWorking?: string;   // 防呆心跳提示（未卡住）；仅流式时的独立提示，不替代思考/活动
   actions?: BubbleActions;
   linkifyArtifactPaths?: boolean;
-  resolveArtifactPath?:(message:ChatMessage,path:string)=>string|undefined;
+  resolveArtifactPath?:(message:ChatMessage,path:string,kind:'media'|'library')=>string|undefined;
   artifacts?:Artifact[];
 }
 
@@ -51,7 +51,7 @@ export default function MessageBubble({ message, isStreaming, thinking, activity
     // 流式中不转换：路径/围栏代码块可能被 SSE token 从中间切开（扩展名没收全会被
     // 误判成目录、未闭合的 ``` 会误伤命令示例里的 outputs/），转换只在流式结束后
     // 对完整正文做一次，避免闪烁成错误链接再跳变。
-    const body = isStreaming || !linkifyArtifactPaths ? message.content : linkifyOutputs(message.content,resolveArtifactPath?path=>resolveArtifactPath(message,path):undefined);
+    const body = isStreaming || !linkifyArtifactPaths ? message.content : linkifyOutputs(message.content,resolveArtifactPath?(path,kind)=>resolveArtifactPath(message,path,kind):undefined);
     const html = externalizeMediaLinks(renderMarkdown(body));
     return isStreaming || !linkifyArtifactPaths ? { html, artifacts: [], archives: [] } : extractArtifacts(html);
   }, [message, message.content, message.role, isStreaming, linkifyArtifactPaths,resolveArtifactPath]);

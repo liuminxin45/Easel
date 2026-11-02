@@ -41,7 +41,7 @@ export function nativeSkillInputTarget(selection:NativeSelection):{key:string;fi
  return task==='reference'?{key:'easel:reference',field:'text'}:task==='learning'?{key:'creator:experience',field:'goal'}:task==='analysis'?{key:'easel:metrics',field:'question'}:null;
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]|undefined{const files=productArtifacts(record(message).output_files);return files.length?files:undefined}
-export function nativeArtifactPath(message:unknown,path:string):string|undefined{const rel=path.replace(/^outputs\//,'');const file=array<JsonRecord>(record(message).output_files).find(file=>string(file.source_path)===rel);return file?string(file.url):undefined}
+export function nativeArtifactPath(message:unknown,path:string,kind:'media'|'library'='media'):string|undefined{const rel=path.replace(/^outputs\//,'');const file=array<JsonRecord>(record(message).output_files).find(file=>string(file.source_path)===rel);return file?(kind==='library'?'#/outputs/__workbench__/'+encodeURIComponent(string(file.id))+'/'+encodeURIComponent(string(file.name)):string(file.url)):undefined}
 export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>}
 /** Bind server-authorized continuation to this view's exact stopped version. */
 export function confirmedContinuation(message:unknown,sessionId:string,profileId:string):string|null{

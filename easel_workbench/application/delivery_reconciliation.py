@@ -81,12 +81,15 @@ def apply(root,plan,expected):
     from easel_workbench.runtime.production_delivery import record_delivery
     box=Toolbox(Store(database),root)
     result=record_delivery(box,plan['turn_id'],plan['job']['reply'],plan['native_turn_id'],
-        product_roots=[root/'outputs'/plan['session_id']/plan['turn_id']/'products'])
+        product_roots=[root/'outputs'/plan['session_id']/plan['turn_id']/'products'],enqueue_review=False)
     if result['status']!='completed':raise ValueError('原成品接收仍未完成；保留纠正证据，不重新制作')
+    with box.store.connect() as c:
+        c.execute('UPDATE toolbox_jobs SET started_at=?,finished_at=? WHERE id=?',
+                  (plan['job']['started_at'],plan['job']['finished_at'],plan['turn_id']))
     for file in plan['files']:
         if hashlib.sha256(Path(file['path']).read_bytes()).hexdigest()!=file['sha256']:raise ValueError('原文件发生变化')
     binding=plan.get('delivery_manifest')
     if binding and hashlib.sha256(Path(binding['path']).read_bytes()).hexdigest()!=binding['sha256']:raise ValueError('原交付清单发生变化')
-    receipt.update(status='completed',finished_at=now(),result=result)
+    receipt.update(status='completed',finished_at=now(),result=result,independent_review='pending_manual_check')
     with sqlite3.connect(database) as c:c.execute('UPDATE toolbox_delivery_reconciliations SET document=? WHERE id=?',(packed(receipt),expected))
     return receipt

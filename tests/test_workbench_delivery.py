@@ -51,6 +51,15 @@ def test_directory_link_does_not_receive_neighboring_files(products):
     with box.store.connect() as c:assert c.execute('SELECT count(*) FROM artifacts').fetchone()[0]==0
 
 
+def test_receipt_maintenance_does_not_enqueue_review_or_automatic_correction(products):
+    box,root=products
+    class Guard:
+        def enqueue_review(self,*args,**kwargs):pytest.fail('Maintenance must not start review/correction')
+    box.learning=Guard()
+    result=record_delivery(box,'delivery',links(root/'成品.png',root/'标题与配文.txt'),'native-turn',product_roots=[root],enqueue_review=False)
+    assert result['status']=='completed'
+
+
 def test_native_delivery_uses_only_exact_turn_products_without_executor(products,monkeypatch):
     box,root=products
     other=box.root/'outputs/session/another/products';other.mkdir(parents=True)

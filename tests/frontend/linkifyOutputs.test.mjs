@@ -25,6 +25,13 @@ test('a host resolves native Markdown through the same formatter to its immutabl
  assert.match(body,/\/api\/media\/other\/file.txt/);assert.ok(seen.includes('outputs/session/turn/products/成品.png'));
 });
 
+test('the formatter retains distinct media and native library-preview destinations',()=>{
+ const resolve=(path,kind)=>kind==='library'?'#/outputs/__workbench__/id/copy.txt':'/api/files/id';
+ const body=linkifyOutputs('[配文](D:/app/outputs/session/copy.txt)\n![成图](D:/app/outputs/session/image.png)',resolve);
+ assert.match(body,/\[配文\]\(#\/outputs\/__workbench__\/id\/copy.txt\)/);
+ assert.match(body,/!\[成图\]\(\/api\/files\/id\)/);
+});
+
 test('absolute Markdown report links retain their label and open the content preview', () => {
   const input = '[查看复盘](/Users/example/Easel/outputs/示例项目/报告.md)';
   const expected = '[查看复盘](#/outputs/示例项目/报告.md)';

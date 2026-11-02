@@ -7,17 +7,22 @@
 | 项目 | 已核验版本 |
 |---|---|
 | 官方仓库与跟踪分支 | [ZJU-REAL/Easel](https://github.com/ZJU-REAL/Easel)，`upstream/main` |
-| 官方准确提交 | [`5a597e5f3ef5b01098b53f36caf719dd9a32b7bf`](https://github.com/ZJU-REAL/Easel/commit/5a597e5f3ef5b01098b53f36caf719dd9a32b7bf) |
-| 官方提交时间 | 2026-10-25 14:24:13 +08:00 |
-| 官方提交标题 | `fix: resolve media, harness, chat lifecycle and skill visibility issues` |
-| 本次远端核验时间 | 2026-10-30 21:31:00 +08:00 |
-| 固定 Git 引用 | `easel-upstream/2026-10-30-5a597e5`，annotated tag，指向官方提交 |
-| 自有 fork 与集成分支 | [liuminxin45/Easel](https://github.com/liuminxin45/Easel)，`codex/easel-base-alignment` |
-| 建档时已交付 fork 提交 | `cc9d4858ae561640dc83ec3f32591ee672711448` |
-| 对应运行源码提交 | `59026d2250783b5d64c706134465ca58b8588fb5` |
-| 对应正式后端 / 前端 | `workbench-20261030-125044` / `native-easel-workbench-20261030125003` |
+| 官方准确提交 | [`0f43dc98277eac85fb48952878acad349731d3fc`](https://github.com/ZJU-REAL/Easel/commit/0f43dc98277eac85fb48952878acad349731d3fc) |
+| 官方提交时间 | 2026-11-02T00:41:47+08:00 |
+| 官方提交标题 | `fix: harden settings, collector cleanup and frontend diagnostics` |
+| 本次远端核验时间 | 2026-11-02T09:15:03.619870+08:00 |
+| 旧 → 新已集成基线 | `5a597e5` → `0f43dc9` |
+| 固定 Git 引用 | `easel-upstream/2026-11-02-0f43dc9`，annotated tag，指向官方准确提交 |
+| 自有 fork 与同步分支 | [liuminxin45/Easel](https://github.com/liuminxin45/Easel)，`codex/easel-sync-20261102-082005` |
+| 本次验收源码 | `2fa12825958db102c73d743ca906b7ddee0af7c0` |
+| 集成/发布状态 | 代码已集成并验收；新基线未部署 |
+| 仍在运行的后端 / 前端 | `workbench-20261101-161847` / `native-mobile-unified-r6-20261102001420` |
 
-按 `git describe --tags --match 'v[0-9]*'` 核对的版本描述为 `v0.3.0-77-g5a597e5`；限定标签范围可避免新基线标签改变此描述。实际基线固定到完整提交 SHA，不将其记作官方 `v0.3.0` 发布版。官方远端仅供读取；基线标签与私有提交只推送到自有 `origin`。
+准确版本描述为 `v0.3.0-92-g0f43dc9`，不是新的官方语义版本发布号。
+按项目流程新建分支执行 `git pull --rebase`；6条相同patch由Git识别为官方已包含，110条重放，无手动skip。
+旧分支保留；其间另有并行P2提交到旧分支，已登记且未覆盖，本次验收不包含P2，后续独立集成。
+当前验证376前端、212官方相关（1平台跳过）、59私有采集/回执、102架构/技能，以及R3定点612浏览器检查通过。
+官方原检出同数据对照、原件SHA冷启动和最小SkillDrawer portal修复均留原始证据；实体设备/真实模型/平台发布未验。
 
 ## 历史索引
 
@@ -25,9 +30,10 @@
 
 | 记录 | 已集成官方提交 | 状态 | 对应 fork 提交 | 机器可读快照 |
 |---|---|---|---|---|
+| 2026-11-02 | `0f43dc98277eac85fb48952878acad349731d3fc` | 已集成、未部署 | `2fa12825958db102c73d743ca906b7ddee0af7c0`（验收源码） | [2026-11-02-0f43dc9.json](upstream-versions/2026-11-02-0f43dc9.json) |
 | 2026-10-30 | `5a597e5f3ef5b01098b53f36caf719dd9a32b7bf` | 已集成、已发布 | `cc9d4858ae561640dc83ec3f32591ee672711448` | [2026-10-30-5a597e5.json](upstream-versions/2026-10-30-5a597e5.json) |
 
-本轮只增加基线档案与固定引用，不修改运行代码、`AGENTS.md`、当前基线指针或不可变发布文件。发布验收见 [整改交付记录](EASEL-BASE-ALIGNMENT-20261030.md)，公共接缝见 [适配点说明](ADAPTATION-POINTS.md)。
+2026-10-30初次建档只增加基线档案与固定引用，不修改运行代码、`AGENTS.md`、当前基线指针或不可变发布文件。发布验收见 [整改交付记录](EASEL-BASE-ALIGNMENT-20261030.md)，公共接缝见 [适配点说明](ADAPTATION-POINTS.md)。
 
 ## 以后跟进官方
 
@@ -42,7 +48,7 @@ git log --oneline easel-upstream/2026-10-30-5a597e5..upstream/main
 git diff --stat easel-upstream/2026-10-30-5a597e5 upstream/main
 ```
 
-以上标签是本次基线。以后从历史索引选取当时已集成的最新标签，并把新的官方完整 SHA 固定到同步分支；不要在实现期间反复跟随移动中的 `main`。
+上面的旧标签示例用于历史对照；当前基线取本页当前记录。以后从历史索引选取当时已集成的最新标签，并把新的官方完整 SHA 固定到同步分支；不要在实现期间反复跟随移动中的 `main`。
 
 1. 在干净工作区、总调度确认文件归属后，从当前私有 HEAD 建立新的 `codex/easel-sync-日期时间`，保留旧分支及旧 SHA；执行 `git -c rebase.updateRefs=false pull --rebase --no-autostash upstream main`。新同步分支承接私有改动，旧分支不重写；不能用重置或覆盖方式替换本工程。准确官方目标取本次 fetch 成功后的 `FETCH_HEAD^{commit}`。
 2. 按适配点清单审查原组件与公共服务的变化，再修正私有适配器。通用修复与私有业务分别提交；共通内容继续直接复用原实现。

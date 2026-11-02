@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "record_id": "2026-11-02-0f43dc9",
+  "record_kind": "integrated_upstream_baseline",
+  "observed_at": "2026-11-02T09:15:03.619870+08:00",
+  "current_baseline_source": "docs/workbench/upstream-base.json",
+  "upstream": {
+    "remote": "upstream",
+    "url": "https://github.com/ZJU-REAL/Easel.git",
+    "ref": "refs/heads/main",
+    "observed_head": "0f43dc98277eac85fb48952878acad349731d3fc",
+    "integrated_commit": "0f43dc98277eac85fb48952878acad349731d3fc",
+    "previous_integrated_commit": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
+    "tree": "7f73a40a20cd32c212e42710c4f3e58d0c9bf87d",
+    "subject": "fix: harden settings, collector cleanup and frontend diagnostics",
+    "authored_at": "2026-11-02T00:41:47+08:00",
+    "committed_at": "2026-11-02T00:41:47+08:00",
+    "commit_url": "https://github.com/ZJU-REAL/Easel/commit/0f43dc98277eac85fb48952878acad349731d3fc",
+    "release_tag_describe": "v0.3.0-92-g0f43dc9",
+    "release_tag_match": "v[0-9]*"
+  },
+  "pin": {
+    "ref": "refs/tags/easel-upstream/2026-11-02-0f43dc9",
+    "kind": "annotated_tag",
+    "tag_object": "d05bb13a3b4a179f9a9b4bca0ea613d85d8e78ec",
+    "target_commit": "0f43dc98277eac85fb48952878acad349731d3fc",
+    "published_remote": "origin",
+    "immutable": true
+  },
+  "fork_at_recording": {
+    "remote": "origin",
+    "url": "https://github.com/liuminxin45/Easel.git",
+    "branch": "codex/easel-sync-20261102-082005",
+    "validated_commit": "2fa12825958db102c73d743ca906b7ddee0af7c0",
+    "private_before_rebase": "3246babaaf1ecd22ecdd88217d6e33a3c974d067",
+    "private_after_rebase": "e70d6dcddec803ee1598ba1de8c7acdd740fcf1a",
+    "original_branch": "codex/easel-base-alignment",
+    "original_branch_at_start": "3246babaaf1ecd22ecdd88217d6e33a3c974d067",
+    "original_branch_at_mark": "05fe760ebc83b48e29b316756eaffd61c103655b",
+    "concurrent_commits_not_in_this_sync": [
+      "05fe760ebc83b48e29b316756eaffd61c103655b docs(workbench): 记录 P2 冻结包闭环验证与交付边界",
+      "6bbb1f0eb7429d6c9b877986cc2dd79d108033d1 refactor(workbench): 分离 P2 会话与作品闭环职责"
+    ]
+  },
+  "integration": {
+    "status": "validated",
+    "replayed_private_commits": 110,
+    "equivalent_upstream_commits": 6,
+    "manual_skipped_commits": 0,
+    "explicit_conflicts": 1,
+    "source_byte_guard_preserved": true,
+    "code_integrated": true,
+    "production_deployed": false
+  },
+  "validation": {
+    "frontend_tests": 376,
+    "official_related_passed": 212,
+    "official_platform_skipped": 1,
+    "private_collection_and_receipts_passed": 59,
+    "architecture_and_skills_passed": 102,
+    "official_reference_budget_passed": 34,
+    "r2_broad_browser_checks": 288,
+    "r3_focused_browser_checks": 612,
+    "r3_scope": "Focused shared controls, same-data official comparison, settings, profiles and actual compiled div-drawer menu; R2 not relabelled as R3",
+    "physical_device_tested": false,
+    "real_model_calls": 0,
+    "real_platform_writes": 0,
+    "evidence": {
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\patch-equivalence.json": "2f47bb098870d09ca43c50e44a7901c6219640c5cbbc4c580250e3a623f03e91",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\rebase-conflicts.json": "00fa940489335fd3ae84da38dd7ace62b5991c134ee01721923850405063a730",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\range-diff.txt": "0dc19fd3131bd685efc777b8326c0dd03318b4599b91c9db3f1990332408577d",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\original-byte-restoration.json": "22f54219ac25415ab8359c5970f6641aefb05ac3c5a41ed89c3395eb5fe94274",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\source-byte-proof.json": "7a000b8fb7f70cf63884b4f22f09133a79a4a8d0618c9fb61b392b4713fc90e2",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\official-final.xml": "92675aac9b8fef2615f92dced53b7c8f75c1088ddd792fbe00e6b953d2d632d1",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\official-reference-budget.xml": "9dab59135833fc4d07fb3d8cbe916b5a0b33a4e528a58170f3486d688f00d56c",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\private.xml": "aa4ddd92ad7ebdb4dfbdead1c51bbbf4898c3d0664dee2a705893d8e8c6bc9e5",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\architecture-restored.xml": "0f8ccc07c9fcdb2b79acb9b09b7e5ab3f348096278ae8c74e84028ea90e46785",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\frontend-final.log": "647b72ca0a7730e5fec7c7f9a422ea8378afcf16b85b6072a92b9485322f31b3",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\check-final.log": "35e69d25c6c861141e106371150630af4179a87b8dd8cbe21cfd5dd979cf6ce3",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\default-app-final.log": "db77dfa4e93e7a44c8caaa313d8d9aef37d607188154dd11a0b6ed9d455c23d5",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\official-reference-build.log": "ff46d603d38b589f38fde56b65c7925224b846b58a16de8c3cf54653f3a0e141",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r2\\phone-audit\\report.json": "1120ecf091e809924aca194f2e923460daa598aa630a854f8d0629ceccdc4d4a",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r2\\desktop-audit\\report.json": "29fa554ff57dcd542d553a01b8add488a2091071f7f01f28c8bb604802a09b72",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r2-r3-backend-parity.json": "948daa2c74d32ada4159ba0aaca83cbe7b3882c4483e37cf91447e8957dd4ecd",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r3\\browser-accepted.json": "c3f2556b046ba787f084fbb8ec83e0b48a90d8f9a265b1c4693e9ca59ac4e6ab",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r3\\native-build.log": "5ca49fed0c9eec24f54625e561d7f232fc1bdcdb87f0509bdbb48ba2ba6f515c",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\r3\\source-byte-proof.json": "b72e640328f77d5913e6e3134ed4e3a4f2db0c57359077c23f48a6b9e05e47a0",
+      ".local\\workbench-validation\\upstream-sync-20261102-082005\\visual-review.json": "0dda0966fc8a402f0db078f8775ff78882c6910cba9a67668236d55224c5b9d8"
+    }
+  },
+  "deployment_at_recording": {
+    "runtime": {
+      "release": "workbench-20261101-161847",
+      "manifest_sha256": "cd0dc72ce755f3a01692663494a19e6dc6ca9749029c321881d98f6607c4937b"
+    },
+    "native": {
+      "release": "native-mobile-unified-r6-20261102001420",
+      "manifest_sha256": "8ba00a9eb9f8285a0058fe1c12d5872bb3d6720aabf62f4e045a240713654ed5"
+    },
+    "status": "unchanged; new baseline not deployed"
+  },
+  "policy": {
+    "append_only_history": true,
+    "upstream_push_allowed": false,
+    "private_delivery_remote": "origin",
+    "concurrent_work_preserved": true
+  },
+  "adapter_record": "docs/workbench/ADAPTATION-POINTS.md",
+  "spec": "specs/upstream-sync-20261102/spec.md"
+}

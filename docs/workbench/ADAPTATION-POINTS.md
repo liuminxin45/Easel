@@ -55,3 +55,21 @@
 热点、摘要与选题的 `onUseTopic` 在原标题参数后兼容新增可选来源 ID 与备注，旧单参数调用方继续有效。共享 `IdeaItem`/`IdeaInput` 的可选 `source_id` 是通用来源引用；旧客户端不传该字段时不覆盖已有引用。私有 `NativeApi` 才校验它是否为服务器文章 ID，宿主才将其映射为 `article_id`，公共组件和共享 planning 均不认识私有台账或模块。
 
 准确新闻阅读属于私有采集扩展，`NativeNews` 组合现有 PageHead、Panel 和原 CopyableText，不替换原 TrendsPage。Worker/前台恢复状态机集中在私有 platform/native-resume.ts；不向共通页面散布 WebView 判断。验证及实际交付见 [移动闭环记录](MOBILE-CLOSEDLOOP-20261101.md)。
+
+
+## 2026-11-02 跟进官方 0f43dc9
+
+官方下拉、primary tokens/hover、暗色按钮及画像全宽滚动直接使用官方实现；
+已删除旧 model-dd 样式副本和覆盖官方按钮的修复。Sidebar 画像使用同一个 SettingsSelect，
+私有层只传 personaOptions 等已有可选接口。官方 dropdown.css 是私有 build-inputs 的显式 SHA 成员。
+
+保留的通用差异：SettingsSelect 在原生 dialog 优先规则后，允许 portal 到最近的 drawer-overlay，
+再回退 body。官方新 SkillDrawer 配置菜单原先被 z1000 遮罩盖住，已用原始官方构建实际复现，
+该差异只修挂载所有权，不提高 z-index 或重画菜单；未来上游解决同项时移除对应差异。
+
+官方采集器、协议、脚本校验与清理继续是唯一基础实现；私有来源修订、Python 协议及任务回执
+仍通过现有 SourceRegistry/官方 runner 适配，没有增加另一套采集系统。
+
+Git rebase 的文本等价不代表原始字节相同。内容寻址提示词必须匹配记录 SHA，
+原有 gitattributes LF 规则与仓库原件测试共同检查；不能修改历史声明 SHA 或运行时归一化放行。
+新基线的准确 SHA、固定标签、验证范围及未部署状态见 UPSTREAM-VERSIONS.md。

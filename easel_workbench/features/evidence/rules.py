@@ -21,6 +21,16 @@ import re
 import time
 import threading
 import uuid
+from contextvars import ContextVar
+
+_compilation_work=ContextVar('workbench_compilation_work',default=None)
+
+@contextlib.contextmanager
+def compilation_work(work):
+    """Trusted prepared-work scope for nested production context readers, not HTTP input."""
+    token=_compilation_work.set(work)
+    try:yield
+    finally:_compilation_work.reset(token)
 
 from easel_workbench.runtime.feedback_ledger import locked
 
@@ -188,7 +198,7 @@ class EvidenceRules:
         except (ValueError, OSError):
             return {'id': 'missing-' + sha(str(path).encode())[:32], 'source': {'kind': 'file', 'path': path}, 'available': False, 'missing_reason': '所引权威原件不可访问'}
 
-    def resolve(self, connection, wid, vid=None, creation=None, context=None):
+    def resolve(self, connection, wid, vid=None, creation=None, context=None, *, pending_work=None):
         creation = copy.deepcopy(creation or {})
         context = copy.deepcopy(context or {})
         with self.store.connect() if connection is None else contextlib.nullcontext(connection) as c:
@@ -433,7 +443,10 @@ class EvidenceRules:
                                         'provenance': copy.deepcopy(intent.get('provenance')), 'instructions': intent['text']})
             work_context = None
             if wid and self._table_exists(c, 'toolbox_works'):
-                work = c.execute('SELECT id,title,material FROM toolbox_works WHERE id=?', (wid,)).fetchone()
+                # A trusted keyword port, never read from the HTTP context dictionary.
+                work = pending_work if pending_work is not None else _compilation_work.get()
+                if work is not None and work.get('id')!=wid:work=None
+                if work is None:work = c.execute('SELECT id,title,material FROM toolbox_works WHERE id=?', (wid,)).fetchone()
                 if work:
                     work_context = {'id': work['id'], 'title': work['title'], 'material': work['material'], 'source': {'kind': 'database', 'table': 'toolbox_works', 'record_id': wid}}
             direct = context.get('_learning_direct_context')

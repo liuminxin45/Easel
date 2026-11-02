@@ -25,7 +25,9 @@ def url_ok(u):
     p=urllib.parse.urlsplit(u)
     return p.scheme in ('http','https') and bool(p.hostname) and not p.username and not p.password
 
-class Connection(sqlite3.Connection):
+from easel_workbench.diagnostics.performance import PerformanceConnection
+
+class Connection(PerformanceConnection):
     def __exit__(self,*args):
         try: return super().__exit__(*args)
         finally: self.close()

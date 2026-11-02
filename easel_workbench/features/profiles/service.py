@@ -58,7 +58,7 @@ class ProfileService:
         c.execute('INSERT INTO creator_profile_history VALUES(?,?,?)', (profile['id'], profile['revision'], raw))
         c.execute('INSERT INTO creator_profiles VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,document=excluded.document', (profile['id'], profile['revision'], raw))
 
-    def bind_work(self, c, work_id, selection=None, allow_historical=False):
+    def bind_work(self, c, work_id, selection=None, allow_historical=False, *, persist=True):
         """Bind ownership for human and AI work alike, without creating AI work."""
         key(work_id)
         previous = read_owner(c, work_id)
@@ -84,7 +84,7 @@ class ProfileService:
                     raise CreatorConflict('作品已有其他画像的冻结任务，不能改变归属')
         owner = {'work_id': work_id, 'profile_id': profile_id, 'profile_revision': profile['revision'],
                  'profile': copy.deepcopy(profile), 'created_at': previous['created_at'] if previous else stamp()}
-        if previous is None:
+        if previous is None and persist:
             c.execute('INSERT INTO creator_work_owners VALUES(?,?,?,?,?)', (work_id, profile_id, profile['revision'], packed(owner), owner['created_at']))
         return owner
 

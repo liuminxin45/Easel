@@ -65,9 +65,9 @@ def workflow_template(task='poster'):
 
 
 
-def freeze(c, box, work_id, job_id, creation_options, task=None, *, creator_snapshot=None):
+def freeze(c, box, work_id, job_id, creation_options, task=None, *, creator_snapshot=None,persist=True):
     """Called only while accepting a new operation, never to backfill old jobs."""
-    initialize(c)
+    if persist:initialize(c)
     old = read_run(c, job_id)
     if old:
         return old['snapshot']
@@ -101,7 +101,7 @@ def freeze(c, box, work_id, job_id, creation_options, task=None, *, creator_snap
         return None
     if prior and json.loads(prior[0])['snapshot']['profile']['id'] != profile_id:
         raise ValueError('这份作品属于另一个创作画像；请新建作品后使用新的画像')
-    service.bind_work(c,work_id,{'profile_id':snapshot['profile']['id'],'profile_revision':snapshot['profile']['revision']},allow_historical=True)
+    service.bind_work(c,work_id,{'profile_id':snapshot['profile']['id'],'profile_revision':snapshot['profile']['revision']},allow_historical=True,persist=persist)
     now = stamp()
     flow=workflow_template(task or creation.get('format','poster'))
     entries=[{k:r[k] for k in ('id','name','version','sha256')} for r in snapshot['skills'] if r.get('executor')=='workflow']
@@ -122,7 +122,7 @@ def freeze(c, box, work_id, job_id, creation_options, task=None, *, creator_snap
         creation_options['creator'] = {'profile_id': snapshot['profile']['id'], 'profile_revision': snapshot['profile']['revision'],
             'skills': [{'id': row['id'], 'version': row['version']} for row in snapshot['skills']],
             'trial': bool(snapshot.get('trial'))}
-    _put_run(c, document)
+    if persist:_put_run(c, document)
     return snapshot
 
 
@@ -236,7 +236,7 @@ def clean_explicit_contract(document):
                                     'notice':'原版本设计说明保留在原版本，不作为本轮活动风格参数。'}
 
 
-def attach_profile_contract(box, c, document, job_id, request_text=None):
+def attach_profile_contract(box, c, document, job_id, request_text=None, *, persist=True):
     """New personas get a V2 delivery contract without Oil Pig policy inference."""
     creator = document.get('creator_snapshot')
     if creator:clean_explicit_contract(document)
@@ -283,14 +283,14 @@ def attach_profile_contract(box, c, document, job_id, request_text=None):
                     instructions='交付设计说明.json并绑定本轮真实依据、成品SHA及位置。')
     document['creation_instructions'] = document.get('creation_instructions', '') + '\n' + snapshot['instructions']
     learning = getattr(box, 'learning', None)
-    if learning:
+    if learning and persist:
         learning._put(c, 'learning_runs', {'id': job_id, 'kind': 'production', 'work_id': document['work_id'],
             'version_id': document.get('candidate_id'), 'job_id': job_id, 'status': 'frozen', 'snapshot': snapshot,
             'created_at': stamp(), 'quality': {'status': 'pending', 'checked': False}})
-    attach_review_basis(box,c,document,job_id,editable_text=document.get('creation_options',{}).get('recipe',{}).get('prompt_text'))
+    attach_review_basis(box,c,document,job_id,editable_text=document.get('creation_options',{}).get('recipe',{}).get('prompt_text'),persist=persist)
 
 
-def attach_review_basis(box,c,document,job_id,editable_text=None,assets=None):
+def attach_review_basis(box,c,document,job_id,editable_text=None,assets=None,*,persist=True):
     """Bind the visible prompt and only the selected image bytes to inspection."""
     creator=document.get('creator_snapshot');snapshot=document.get('learning_snapshot')
     if not creator or not snapshot:return []
@@ -323,7 +323,7 @@ def attach_review_basis(box,c,document,job_id,editable_text=None,assets=None):
     document['style_delivery_contract']['expected_basis_ids']=[r['id'] for r in required]
     document['frozen_reference_assets']=bound
     learning=getattr(box,'learning',None)
-    if learning:
+    if learning and persist:
         run=learning.read_run(c,job_id)
         if run:run['snapshot']=copy.deepcopy(snapshot);learning._put(c,'learning_runs',run)
     return bound

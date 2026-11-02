@@ -450,10 +450,10 @@ class LearningService:
     def _required_ref(self, c, ref):
         return self.rules._required_ref(c, ref)
 
-    def resolve(self, connection, wid, vid=None, creation=None, context=None):
-        return self.rules.resolve(connection, wid, vid, creation, context)
+    def resolve(self, connection, wid, vid=None, creation=None, context=None, *, pending_work=None):
+        return self.rules.resolve(connection, wid, vid, creation, context,pending_work=pending_work)
 
-    def freeze(self, connection, wid, jid, vid=None, creation=None, context=None):
+    def freeze(self, connection, wid, jid, vid=None, creation=None, context=None, *, persist=True,pending_work=None):
         identity(jid)
         with self.store.connect() if connection is None else contextlib.nullcontext(connection) as c:
             existing = self.read_run(c, jid)
@@ -463,8 +463,8 @@ class LearningService:
                 return existing['snapshot']
             if not self.policy()['available']:
                 return None
-            snapshot = self.resolve(c, wid, vid, creation, context)
-            self._put(c, 'learning_runs', {'id': jid, 'kind': 'production', 'work_id': wid, 'version_id': vid, 'job_id': jid,
+            snapshot = self.resolve(c, wid, vid, creation, context,pending_work=pending_work)
+            if persist:self._put(c, 'learning_runs', {'id': jid, 'kind': 'production', 'work_id': wid, 'version_id': vid, 'job_id': jid,
                                          'status': 'needs_decision' if snapshot['decision_required'] else 'frozen', 'snapshot': snapshot,
                                          'created_at': stamp(), 'quality': {'status': 'pending', 'checked': False}})
             return snapshot

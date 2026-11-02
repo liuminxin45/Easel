@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 import pytest
 
-from easel_workbench.health_endpoint import HEALTH_PATH, health_token, install_health
+from easel_workbench.health_endpoint import HEALTH_PATH, DIAGNOSTIC_PATH, health_token, install_health
 
 
 NONCE = 'b4' * 16
@@ -123,6 +123,26 @@ def test_nonce_release_pid_are_exact_without_disclosing_token(protected_app):
         assert token not in response.text
         assert token not in str(dict(response.headers))
         assert 'set-cookie' not in response.headers
+    assert calls == []
+
+
+def test_diagnostics_is_separate_nonce_bound_and_content_free(protected_app, monkeypatch):
+    client, token, calls = protected_app
+    from easel_workbench import business_health
+    from easel_workbench.diagnostics import performance
+    monkeypatch.setattr(business_health, 'snapshot', lambda root: {'status': 'degraded', 'ok': False, 'degraded_roles': ['collector']})
+    monkeypatch.setattr(performance, 'snapshot', lambda: {'schema_version': 1, 'recent': [{'query_count': 3, 'db_copy_bytes': 0}]})
+    rejected = client.get(DIAGNOSTIC_PATH)
+    assert rejected.status_code == 404
+    response = client.get(DIAGNOSTIC_PATH, headers=headers(token))
+    assert response.status_code == 200
+    value = response.json()
+    assert value['nonce'] == NONCE and value['pid'] == os.getpid()
+    assert value['business']['ok'] is False
+    assert value['performance']['recent'][0]['db_copy_bytes'] == 0
+    assert response.headers['cache-control'] == 'no-store'
+    assert 'set-cookie' not in response.headers and token not in response.text
+    assert client.post(DIAGNOSTIC_PATH, headers=headers(token)).status_code == 404
     assert calls == []
 
 

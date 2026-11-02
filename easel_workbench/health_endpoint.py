@@ -5,6 +5,7 @@ import re
 import secrets
 
 HEALTH_PATH = '/_workbench/health'
+DIAGNOSTIC_PATH = '/_workbench/diagnostics'
 
 
 def health_token(root, *, create=False):
@@ -38,7 +39,7 @@ def install_health(app, root):
 
     @app.middleware('http')
     async def health(request, call_next):
-        if request.url.path != HEALTH_PATH:
+        if request.url.path not in (HEALTH_PATH, DIAGNOSTIC_PATH):
             return await call_next(request)
         nonce = request.headers.get('x-workbench-health-nonce', '')
         supplied = request.headers.get('x-workbench-health-token', '')
@@ -51,6 +52,18 @@ def install_health(app, root):
         if not valid:
             return JSONResponse({'error': 'not_found'}, status_code=404,
                                 headers={'Cache-Control': 'no-store'})
-        return JSONResponse({'ok': True, 'nonce': nonce, 'pid': os.getpid(),
-                             'release': os.environ.get('AI_DESK_RELEASE', 'development')},
+        value = {'ok': True, 'nonce': nonce, 'pid': os.getpid(),
+                 'release': os.environ.get('AI_DESK_RELEASE', 'development')}
+        if request.url.path == DIAGNOSTIC_PATH:
+            # Separate from bounded liveness: diagnostics never grants a session,
+            # returns business content or blocks the event loop on SQLite.
+            import asyncio
+            from .business_health import snapshot as business_snapshot
+            from .diagnostics.performance import snapshot as performance_snapshot
+            try:
+                value['business'] = await asyncio.wait_for(asyncio.to_thread(business_snapshot, root), timeout=2)
+            except (OSError, ValueError, TimeoutError):
+                value['business'] = {'status': 'unavailable', 'ok': None}
+            value['performance'] = performance_snapshot()
+        return JSONResponse(value,
                             headers={'Cache-Control': 'no-store', 'X-Workbench-Health': '1'})

@@ -36,11 +36,24 @@ def atomic(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     data = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, indent=2)
-    with temp.open('w', encoding='utf-8', newline='\n') as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temp, path)
+    try:
+        with temp.open('w', encoding='utf-8', newline='\n') as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        # Windows readers/antivirus can briefly deny replacement while an
+        # existing file is open. Retain atomic publication and the old complete
+        # record; never truncate it or turn permanent I/O failure into success.
+        for attempt in range(6):
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(min(.02 * 2**attempt, .25))
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def atomic_create(path, value):

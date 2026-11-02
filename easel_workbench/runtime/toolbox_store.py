@@ -54,13 +54,31 @@ class Toolbox:
             ident(fid)
             if not c.execute('SELECT 1 FROM toolbox_files WHERE id=?',(fid,)).fetchone():raise ValueError('附件不存在，请重新选择')
         return pack(ids)
-    def create(self,value):
+    def _compile_preview(self,c,work,job,article,creation=None,expected=None):
+        """Use the production review/compiler with trusted, not-yet-persisted inputs."""
+        from easel_workbench.runtime.work_review import freeze
+        from easel_workbench.features.evidence.rules import compilation_work
+        with compilation_work(work):
+            document=freeze(self,c,work['id'],job['id'],job.get('candidate_id'),expected,creation,
+                            kind_hint=job['kind'],format_hint=work['format'],persist=False,
+                            preview_inputs={'work':work,'job':job,'article':article,'files':json.loads(job['files'])})
+        return {'id':job['id'],'work_id':work['id'],'document':document}
+    def _change_input(self,c,wid,candidate,files):
+        from easel_workbench.runtime.article_drafts import job_work
+        from easel_workbench.runtime.work_discussions import freeze
+        source={**dict(c.execute('SELECT * FROM toolbox_works WHERE id=?',(wid,)).fetchone()),**self.options(wid,c)}
+        source=job_work(source,candidate,c)
+        document={k:source.get(k,'') for k in ('title','material','guidance','article_mode')}
+        document.update(freeze(c,wid,candidate));document['files']=json.loads(files)
+        return document,source.get('draft_revision',0)
+    def create(self,value,*,_preview=False):
         jid=ident(value.get('id'));title=text(value.get('title',''),500);material=text(value.get('material',''),100000);guidance=text(value.get('guidance',''),10000)
         format=value.get('format','poster');mode=value.get('article_mode','auto')
         if format not in ('poster','article') or mode not in ('auto','product'):raise ValueError('制作类型无效')
         aid=value.get('article_id') or None;signature=pack(value);now=stamp();wid=jid
         with self.store.connect() as c:
-            c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+            if _preview:c.execute('PRAGMA query_only=ON')
+            c.execute('BEGIN' if _preview else 'BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
             if old:
                 if old['signature']!=signature:
                     try:
@@ -77,6 +95,10 @@ class Toolbox:
             files=self._files(c,value.get('files',[]))
             if not any(v.strip() for v in (title,material,guidance)) and not json.loads(files):raise ValueError('提供一句话、一个链接或一个素材文件即可开始')
             title=title.strip() or next((line.strip()[:120] for line in (material or guidance).splitlines() if line.strip()),'图片选题' if format=='poster' else '素材文章')
+            if _preview:
+                return self._compile_preview(c,{'id':wid,'title':title,'material':material,'format':format},
+                    {'id':jid,'kind':'create','text':guidance,'files':files},
+                    {'title':title,'material':material,'guidance':guidance,'files':json.loads(files),'article_mode':mode},value.get('creative'))
             c.execute('INSERT INTO toolbox_works VALUES(?,?,?,?,?,?)',(wid,aid,title,material,now,now))
             c.execute('INSERT INTO toolbox_work_options VALUES(?,?,?)',(wid,format,mode))
             c.execute('INSERT INTO toolbox_jobs(id,work_id,kind,text,files,signature,status,created_at) VALUES(?,?,?,?,?,?,?,?)',(jid,wid,'create',guidance,files,signature,'queued',now))
@@ -90,9 +112,10 @@ class Toolbox:
                 from easel_workbench.runtime import news_feedback as news_feedback
                 news_feedback.enqueue(c,aid,guidance,task_id=jid,created_at=now)
         return {'id':jid,'work_id':wid,'status':'queued'}
-    def action(self,wid,value,*,origin='web'):
+    def action(self,wid,value,*,origin='web',_preview=False):
         ident(wid);jid=ident(value.get('id'));kind=value.get('kind');candidate=ident(value.get('candidate_id'));note=text(value.get('text',''),10000)
         if kind not in KINDS-{'create'}:raise ValueError('不支持的制作操作')
+        if _preview and kind!='change':raise ValueError('只有修改制作可预览')
         scope=value.get('scope',[])
         if not isinstance(scope,list) or len(scope)!=len(set(scope)) or kind=='accept' and not scope:raise ValueError('请选择本次采纳的范围')
         if kind!='accept' and 'completion' in value:raise ValueError('只有明确采纳可以设置完成方案')
@@ -105,7 +128,8 @@ class Toolbox:
         local=kind in ('accept','reject','feedback')
         signature=pack(value);now=stamp()
         with self.store.connect() as c:
-            c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+            if _preview:c.execute('PRAGMA query_only=ON')
+            c.execute('BEGIN' if _preview else 'BEGIN IMMEDIATE');old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
             if old:
                 if old['work_id']!=wid or old['signature']!=signature:raise ValueError('同一操作 ID 不能用于不同内容')
                 from easel_workbench.runtime.local_operations import execution_mode
@@ -140,6 +164,10 @@ class Toolbox:
                 artifacts=[dict(r) for r in c.execute('SELECT * FROM artifacts WHERE task_id=?',(candidate,))]
                 if not from_artifacts(artifacts,self.root/'data/artifacts',options['article_mode'])['ready']:raise ValueError('文章正文或实测材料未齐，请先补齐后采纳')
             files=self._files(c,value.get('files',[]))
+            if _preview:
+                article,_=self._change_input(c,wid,candidate,files)
+                work={**dict(c.execute('SELECT * FROM toolbox_works WHERE id=?',(wid,)).fetchone()),**options}
+                return self._compile_preview(c,work,{'id':jid,'kind':kind,'text':note,'files':files,'candidate_id':candidate},article,value.get('creative'),value.get('review_revision'))
             if completion:
                 completion.freeze(c,{'id':jid,'work_id':wid,'kind':kind,'candidate_id':candidate,'scope':pack(scope),'text':note,'files':files,'signature':signature,'status':'queued','created_at':now},value.get('completion'))
             status='completed' if local else 'queued'
@@ -149,13 +177,8 @@ class Toolbox:
             if local:queue_action(c,{**job,'_origin':origin})
             else:mark_execution(c,jid,'agent',origin)
             if kind=='change':
-                from easel_workbench.runtime.article_drafts import job_work
-                from easel_workbench.runtime.work_discussions import freeze
-                source={**dict(c.execute('SELECT * FROM toolbox_works WHERE id=?',(wid,)).fetchone()),**self.options(wid,c)}
-                source=job_work(source,candidate,c)
-                document={k:source.get(k,'') for k in ('title','material','guidance','article_mode')}
-                document.update(freeze(c,wid,candidate));document['files']=json.loads(files)
-                c.execute('INSERT INTO toolbox_article_inputs VALUES(?,?,?)',(jid,source.get('draft_revision',0),pack(document)))
+                document,revision=self._change_input(c,wid,candidate,files)
+                c.execute('INSERT INTO toolbox_article_inputs VALUES(?,?,?)',(jid,revision,pack(document)))
             if kind in ('change','feedback'):freeze_review(self,c,wid,jid,candidate,value.get('review_revision'),creation=value.get('creative'))
             elif kind in ('accept','reject') and human:freeze_review(self,c,wid,jid,candidate)
             if kind in ('accept','reject') and not local:

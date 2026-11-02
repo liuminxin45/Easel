@@ -8,6 +8,7 @@ import sys
 import time
 import re
 from .role_backoff import RoleBackoff
+from .runtime.feedback_ledger import atomic
 
 
 def main(root=None):
@@ -83,7 +84,7 @@ def main(root=None):
             status={'manager':os.getpid(),'release':choice['release'],'paused':paused,
                 'roles':{k:v.pid for k,v in children.items() if v.poll() is None},'heartbeat':time.time(),
                 'backoff':backoff.snapshot(choice['release'])}
-            temporary=state/'pids.new';temporary.write_text(json.dumps(status),encoding='utf-8');os.replace(temporary,state/'pids.json')
+            atomic(state/'pids.json',status)
             time.sleep(3)
 
 

@@ -7,6 +7,7 @@ on:
       - 'web/**'
       - 'easel/**'
       - 'easel_workbench/**'
+      - 'tools/health-control/**'
       - 'skills/builtin/**'
       - 'skills/shared/workbench/**'
       - 'agents/workspace/**'
@@ -26,6 +27,7 @@ on:
       - 'web/**'
       - 'easel/**'
       - 'easel_workbench/**'
+      - 'tools/health-control/**'
       - 'skills/builtin/**'
       - 'skills/shared/workbench/**'
       - 'agents/workspace/**'
@@ -70,7 +72,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install validation dependencies without media or model runtimes
-        run: python -m pip install --prefer-binary pytest fastapi httpx requests websocket-client cryptography pyyaml python-multipart sse-starlette
+        run: python -m pip install --prefer-binary pytest fastapi httpx requests websocket-client cryptography pyyaml python-multipart sse-starlette pillow
       - name: Install locked frontend dependencies
         working-directory: web/frontend
         run: npm ci
@@ -82,6 +84,8 @@ jobs:
       - name: Verify host types, interactions and official ancestry
         working-directory: web/frontend
         run: npm run check:workbench
+      - name: Verify independent health, daily idempotency and production scale performance without real model calls
+        run: python -m pytest -q tools/health-control/tests tests/test_workbench_canary_export.py tests/test_workbench_health_bridge.py tests/test_workbench_health_endpoint.py tests/test_workbench_atomic_state.py tests/test_workbench_performance_diagnostics.py tests/test_workbench_creative_preview_readonly.py
       - name: Build original Easel independently
         working-directory: web/frontend
         run: npm run build

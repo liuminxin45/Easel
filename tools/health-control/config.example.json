@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "app_root": "D:/Projects/Easel",
+  "state_root": "D:/Services/EaselHealthControl/state",
+  "ingress_origin": "https://leopc.tail2ce65.ts.net:8443",
+  "auto_repair": true,
+  "threshold": 3,
+  "startup_grace": 90,
+  "cooldown": 120,
+  "window": 1800,
+  "max_restarts": 2,
+  "local_timeout": 3,
+  "ingress_timeout": 5,
+  "slow_seconds": 2,
+  "daily_hour": 9,
+  "daily_minute": 10,
+  "daily_real_agent_authorized": true
+}

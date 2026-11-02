@@ -117,15 +117,17 @@ def mutate(box,wid,vid,value):
         if getattr(box,'learning',None):box.learning.index_database(c)
     return result
 
-def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,format_hint=None,pending_request=None,pending_material=None,origin=None,execution_task=None,creator_snapshot=None):
+def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,format_hint=None,pending_request=None,pending_material=None,origin=None,execution_task=None,creator_snapshot=None,*,persist=True,preview_inputs=None):
     """Attach a frozen data file readable even by the already-running worker."""
-    if c.execute('SELECT 1 FROM toolbox_review_inputs WHERE job_id=?',(jid,)).fetchone():return
+    existing=c.execute('SELECT document FROM toolbox_review_inputs WHERE job_id=?',(jid,)).fetchone()
+    if existing:return None if persist else json.loads(existing['document'])
+    pending_job=(preview_inputs or {}).get('job')
     if creation is not None and not isinstance(creation,dict):raise ValueError('创作输入格式无效')
     if creation is not None and 'creator' in creation and not isinstance(creation['creator'],dict):raise ValueError('执行技能选择无效')
     current=revision(c,wid,vid) if vid else 0
     if expected is not None and type(expected) is not int:raise ValueError('批注修订无效')
     if expected is not None and expected!=current:raise ReviewConflict('批注已有更新，请核对后重新提交；不会混入未看过的意见')
-    current_job=c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+    current_job=pending_job or c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
     requested_kind=current_job['kind'] if current_job else kind_hint
     if execution_task is not None and (requested_kind!='discuss' or execution_task not in ('discuss','analysis')):
         raise ValueError('只读执行任务须绑定讨论记录')
@@ -172,16 +174,16 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
     studio=getattr(box,'studio',None) if origin!='human_edit' and requested_kind in ('create','change','discuss') else None
     if studio:
         context=studio.context(wid,{**(creation or {}),**({'format':format_hint} if format_hint else {})},connection=c,candidate_id=vid,exclude_job_id=jid,task_kind=execution_task or requested_kind,creator_snapshot=creator_snapshot)
-        kind_row=c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+        kind_row=pending_job or c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
         kind=kind_row['kind'] if kind_row else kind_hint
         if kind in ('create','change') and context.get('blockers'):
             raise ValueError('流程有未接入能力，请先调整步骤：'+'；'.join(row['step_id']+'：'+row['reason'] for row in context['blockers']))
         document['studio_context']=context
         creation=context.get('creation_options',creation)
     document['creation_options'],document['creation_instructions']=freeze_options(box,c,wid,vid,creation)
-    if kind_hint=='change' or (current_kind:=c.execute('SELECT kind,text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()) and current_kind['kind']=='change':
+    if kind_hint=='change' or (current_kind:=pending_job or c.execute('SELECT kind,text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()) and current_kind['kind']=='change':
         from easel_workbench.runtime.revision_scope import conflicts
-        request=c.execute('SELECT text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+        request=pending_job or c.execute('SELECT text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
         problems=conflicts(document['creation_options'],request['text'] if request else pending_request or '') if origin!='human_edit' else []
         if problems:raise ReviewConflict('修改范围待确认：'+'；'.join(item['message'] for item in problems))
     from easel_workbench.runtime.feedback_context import collect as collect_feedback
@@ -195,7 +197,7 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
         document['creation_instructions']+='\n本作品相关原始反馈（尚未提炼，不因批量学习未运行而忽略）：\n'+packed(document['raw_feedback'])
     if studio:
         document['creation_instructions']+='\n同时读取 studio_context 中冻结的定位、读者、标准、流程、来源及适用范围。它是本次提交快照；未配置或未接入能力不能当作已完成。'
-    kind_row=c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+    kind_row=pending_job or c.execute('SELECT kind FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
     kind=kind_row['kind'] if kind_row else kind_hint
     learning=getattr(box,'learning',None)
     explicit_creator=bool(document['creation_options'].get('creator')) or bool(studio and (pathlib.Path(studio.project)/'.agents/skills/capabilities.json').is_file())
@@ -208,7 +210,7 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
             from easel_workbench.runtime.creative_recipes import service as recipes
             chosen=recipes(box).select(document['creation_options']['recipe'],format)
             learning_context['_learning_recipe_assets']=chosen['assets']
-        current_job=c.execute('SELECT text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
+        current_job=pending_job or c.execute('SELECT text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone()
         if current_job and current_job['text'].strip():
             learning_context['_learning_intent_evidence'].append({'id':'request-current','dimension':'style','kind':'current_request','text':current_job['text'],'provenance':{'scope':'request','source_id':jid}})
         elif pending_request:
@@ -216,7 +218,7 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
         if pending_request is not None or pending_material is not None:
             document['direct_context']={'request':pending_request or '','material':pending_material or ''}
             learning_context['_learning_direct_context']={**document['direct_context'],'title':(creation or {}).get('learning',{}).get('topic','').split('\n',1)[0]}
-        learned=learning.freeze(c,wid,jid,vid,document['creation_options'],learning_context)
+        learned=learning.freeze(c,wid,jid,vid,document['creation_options'],learning_context,**({} if persist else {'persist':False,'pending_work':(preview_inputs or {}).get('work')}))
         if learned:
             if learned.get('decision_required'):raise ReviewConflict('本次创作依据存在待确认分歧，请先选择适用方向。')
             from easel_workbench.runtime.production_style import V2_CONTRACT
@@ -234,18 +236,19 @@ def freeze(box,c,wid,jid,vid=None,expected=None,creation=None,kind_hint=None,for
     if kind not in ('create','change'):document['creation_instructions']='本次是'+kind+'，只处理当前动作的讨论、反馈或指定范围归档；不生成、改写或重做作品。原文、参数与成品路径仅供核对。'
     if kind in ('create','change','discuss') and origin!='human_edit':
         from easel_workbench.runtime.task_runtime import freeze as freeze_task
-        snapshot=freeze_task(c,box,wid,jid,document['creation_options'],task=execution_task or ('discuss' if kind=='discuss' else format),creator_snapshot=creator_snapshot)
+        snapshot=freeze_task(c,box,wid,jid,document['creation_options'],task=execution_task or ('discuss' if kind=='discuss' else format),creator_snapshot=creator_snapshot,persist=persist)
         if snapshot:
             document['creator_snapshot']=snapshot
             if kind in ('create','change'):
                 from easel_workbench.runtime.task_runtime import attach_profile_contract
-                attach_profile_contract(box,c,document,jid,request_text=pending_request)
+                attach_profile_contract(box,c,document,jid,request_text=pending_job['text'] if pending_job else pending_request,persist=persist)
             elif kind=='discuss':
                 from easel_workbench.runtime.task_runtime import clean_explicit_contract
                 clean_explicit_contract(document)
     if kind in ('create','change') and origin!='human_edit' and document['creation_options'].get('recipe') is not None:
         from easel_workbench.runtime.creative_recipes import service as recipes
-        recipes(box).freeze(c,wid,jid,document,pending_request,pending_material)
+        recipes(box).freeze(c,wid,jid,document,pending_request,pending_material,persist=persist,preview_inputs=preview_inputs)
+    if not persist:return document
     attach_document(box,c,wid,jid,document)
     if studio and kind in ('create','change'):
         # The accepted snapshot owns this revision's temporary settings. A

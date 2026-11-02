@@ -562,8 +562,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             return {**value,'image_url':url} if url else value
         if path=='/health':
             from easel_workbench.business_health import snapshot
+            from easel_workbench.diagnostics.performance import snapshot as performance_snapshot
             business=await asyncio.to_thread(snapshot,root)
-            return reply({'ok':True,'architecture':'toolbox','thread':THREAD,'business':business})
+            return reply({'ok':True,'architecture':'toolbox','thread':THREAD,'business':business,'performance':performance_snapshot()})
         if path=='/api/config':
             definitions=await asyncio.to_thread(collection.definitions)
             return reply({'csrf':csrf,'sources':{key:{k:row[k] for k in ('name','kind','feed','enabled','default','builtin') if k in row} for key,row in definitions.items()},'tools':TOOLS,'thread_link':'codex://threads/'+THREAD,'architecture':'toolbox','usage':await asyncio.to_thread(usage.config,session['csrf'])})
@@ -662,7 +663,11 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     @app.api_route('/{path:path}',methods=['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'])
     async def route(path,request:Request):
         start=time.monotonic();trace=secrets.token_hex(8)
-        try:result=await dispatch(path,request,trace)
+        from easel_workbench.diagnostics.performance import span
+        try:
+            with span(trace_id=trace,route=request.url.path,role='server',allow_db_copy=request.url.path not in {'/api/easel/plans','/api/chat/plan','/api/creative/preview'}) as measurement:
+                result=await dispatch(path,request,trace)
+                measurement.status=result.status_code
         except WorkspaceConflict as exc:result=error(409,str(exc))
         except WorkspaceUnavailable as exc:result=error(503,str(exc))
         except FileNotFoundError as exc:result=error(404,str(exc))

@@ -14,7 +14,7 @@ import time
 import traceback
 
 _sink=None
-FIELDS={'trace_id','route','method','status','duration_ms','error_type','operation_ref','resource_ref','phase','count','pid','exit_code','dropped','phases_ms','reads','commands','failures','frames','origin_state','android','webview','login_cookie_present','sqlite_errorcode','sqlite_errorname'}
+FIELDS={'trace_id','route','method','status','duration_ms','query_count','query_ms','db_copy_bytes','db_copy_count','db_copy_blocked','db_busy_count','write_tx_ms','error_type','operation_ref','resource_ref','phase','count','pid','exit_code','dropped','phases_ms','reads','commands','failures','frames','origin_state','android','webview','login_cookie_present','sqlite_errorcode','sqlite_errorname'}
 NAME=re.compile(r'^(server|worker|feedback|learning|local|supervisor|auth)-\d{10}-[a-f0-9]+-\d+\.jsonl$')
 
 def reference(value):return hashlib.sha256(str(value).encode()).hexdigest()[:24]
@@ -29,6 +29,9 @@ def route(path):
     if path in {'/api/wiki/overview','/api/wiki/notes','/api/wiki/notes/edit','/api/wiki/notes/delete','/api/wiki/categories','/api/wiki/document','/api/wiki/file','/api/wiki/jobs','/api/wiki/idea'}:return path
     if re.fullmatch(r'/api/wiki/jobs/[^/]+(?:/(?:apply|retry))?',path):return '/api/wiki/jobs/:id'+('/'+path.rsplit('/',1)[-1] if path.endswith(('/apply','/retry')) else '')
     if path in {'/api/release','/api/news','/api/news/read','/api/news/feedback','/api/news/feedback/retry','/api/works','/api/history','/api/uploads','/api/mobile/poll','/api/mobile/devices','/health'}:return path
+    if path in {'/api/easel/plans','/api/easel/commands','/api/trends','/api/trends/sources','/api/creative/preview','/api/creative/catalog','/api/studio/bootstrap','/api/studio/foundation','/api/studio/context','/api/chat/sessions','/api/accounts','/api/outputs','/api/ideas','/api/schedule','/api/schedule/context'}:return path
+    if path in {'/api/chat/plan','/api/chat/submit','/api/chat/artifacts','/api/chat/config','/api/skills'}:return path
+    if re.fullmatch(r'/api/chat/(?:sessions|turns|submissions|products)/[A-Za-z0-9_-]+(?:/(?:stream|stop|messages|history))?',path):return '/api/chat/'+path.split('/')[3]+'/:id'+('/'+path.split('/')[5] if len(path.split('/'))==6 else '')
     if re.fullmatch(r'/api/works/[^/]+/versions/[^/]+/download',path):return '/api/works/:id/versions/:id/download'
     if re.fullmatch(r'/api/works/[^/]+/actions',path):return '/api/works/:id/actions'
     if re.fullmatch(r'/api/works/[^/]+/(?:local-operations|project-binding|local-operations/retry)',path):return '/api/works/:id/'+path.split('/',4)[4]
@@ -124,7 +127,10 @@ class Journal:
 def configure(directory,role):
     global _sink
     if _sink:_sink.close()
-    _sink=Journal(directory,role);atexit.register(_sink.close);return _sink
+    _sink=Journal(directory,role)
+    from easel_workbench.diagnostics.performance import configure as configure_performance
+    configure_performance(role)
+    atexit.register(_sink.close);return _sink
 
 class SafeExceptionHandler(logging.Handler):
     def emit(self,record):

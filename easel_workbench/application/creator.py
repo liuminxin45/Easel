@@ -73,8 +73,8 @@ class CreatorRuntime:
     def _put_profile(self, c, profile):
         return self.profiles._put_profile(c, profile)
 
-    def bind_work(self, c, work_id, selection=None, allow_historical=False):
-        return self.profiles.bind_work(c, work_id, selection, allow_historical)
+    def bind_work(self, c, work_id, selection=None, allow_historical=False, *, persist=True):
+        return self.profiles.bind_work(c, work_id, selection, allow_historical,persist=persist)
 
     def _seed(self, c):
         if not c.execute('SELECT 1 FROM creator_profiles WHERE id=?', (DEFAULT_PROFILE,)).fetchone():

@@ -98,13 +98,14 @@ def save(box, value, wid=None):
     return result
 
 
-def finalize(box, wid, value):
+def finalize(box, wid, value, *, _preview=False):
     wid = ident(wid); jid = ident(value.get('id')); revision = value.get('revision')
     if type(revision) is not int or revision < 1:
         raise ValueError('请先保存草稿再成稿')
     signature = pack({'article_draft': wid, 'request': value}); now = stamp()
     with box.store.connect() as c:
-        c.execute('BEGIN IMMEDIATE')
+        if _preview:c.execute('PRAGMA query_only=ON')
+        c.execute('BEGIN' if _preview else 'BEGIN IMMEDIATE')
         old = c.execute('SELECT * FROM toolbox_jobs WHERE id=?', (jid,)).fetchone()
         if old:
             if old['signature'] != signature or old['work_id'] != wid:
@@ -129,6 +130,10 @@ def finalize(box, wid, value):
             raise DraftConflict('讨论已有更新，请重新读取后再制作')
         if draft['submitted_revision'] == revision and production_token(c,wid)==document['discussion_token']:
             raise DraftConflict('这份草稿与讨论已提交制作；请查看原任务，补充或修改后再制作')
+        if _preview:
+            work={**dict(c.execute('SELECT * FROM toolbox_works WHERE id=?',(wid,)).fetchone()),**box.options(wid,c)}
+            parent=c.execute("SELECT id FROM toolbox_jobs WHERE work_id=? AND id!=? AND kind IN ('create','change') AND status='completed' ORDER BY julianday(created_at) DESC,rowid DESC LIMIT 1",(wid,jid)).fetchone()
+            return box._compile_preview(c,work,{'id':jid,'kind':'change' if candidate else 'create','text':document['guidance'],'files':pack(document['files']),'candidate_id':parent['id'] if parent else None},document,value.get('creative',draft.get('creative')))
         c.execute('INSERT INTO toolbox_jobs(id,work_id,kind,text,candidate_id,files,signature,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
                   (jid, wid, 'change' if candidate else 'create', document['guidance'], candidate['id'] if candidate else None, pack(document['files']), signature, 'queued', now))
         c.execute('INSERT INTO toolbox_article_inputs VALUES(?,?,?)', (jid, revision, pack(document)))

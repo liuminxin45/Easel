@@ -4,7 +4,7 @@ No model calls on reads, edits, evidence import, export or feedback. Long-term
 changes go through the existing proposal confirmation transaction.
 """
 from __future__ import annotations
-import copy,hashlib,io,json,pathlib,re,zipfile,uuid,tempfile,sqlite3,contextlib
+import copy,hashlib,io,json,pathlib,re,zipfile,uuid,sqlite3
 from easel_workbench.runtime.desk import stamp
 
 CATALOG='规范/创作方案/目录.json'
@@ -152,19 +152,22 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
   refs=[{key:a.get(key) for key in ('path','sha256','available','required','role','label','url')} for a in selected['assets']]
   if refs:fixed.append('## 参考资产（使用前核对真实原件）\n'+packed(refs))
   return {**selected,'fixed_text':'\n\n'.join(fixed),'prompt_sha256':digest(selected['prompt_text']),'note':'这是应用可控指令；不冒充模型供应商不可见的系统指令。'}
- def freeze(self,c,wid,jid,document,request=None,material=None):
+ def freeze(self,c,wid,jid,document,request=None,material=None,*,persist=True,preview_inputs=None):
   creation=document['creation_options'];recipe=creation.get('recipe')
   if recipe is None:return
   context=document.get('studio_context',{});compiled=self.context({**context,'creation_options':creation,'creator_snapshot':document.get('creator_snapshot')},recipe,context.get('format','poster'))
-  job=c.execute('SELECT kind,text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone();work=c.execute('SELECT title,material FROM toolbox_works WHERE id=?',(wid,)).fetchone()
-  article=c.execute('SELECT document FROM toolbox_article_inputs WHERE job_id=?',(jid,)).fetchone()
-  article=json.loads(article['document']) if article else {}
+  pending=preview_inputs or {}
+  job=pending.get('job') or c.execute('SELECT kind,text FROM toolbox_jobs WHERE id=?',(jid,)).fetchone();work=pending.get('work') or c.execute('SELECT title,material FROM toolbox_works WHERE id=?',(wid,)).fetchone()
+  if 'article' in pending:article=pending['article']
+  else:
+   article=c.execute('SELECT document FROM toolbox_article_inputs WHERE job_id=?',(jid,)).fetchone()
+   article=json.loads(article['document']) if article else {}
   actual_request=request if request is not None else job['text'] if job else ''
   actual_material=material if material is not None else article.get('material',work['material'] if work else '')
   creator=document.get('creator_snapshot')
   if creator:
    from easel_workbench.runtime.task_runtime import attach_review_basis
-   frozen_refs=attach_review_basis(self.box,c,document,jid,editable_text=compiled['prompt_text'],assets=compiled['assets'])
+   frozen_refs=attach_review_basis(self.box,c,document,jid,editable_text=compiled['prompt_text'],assets=compiled['assets'],persist=persist)
    if frozen_refs:compiled['fixed_text']+='\n\n## 本轮参考原件的冻结副本（原路径仅作来源索引）\n'+packed(frozen_refs)
   lines=([creator['prompt_text']] if creator else [])+[compiled['prompt_text'],'## 本次任务\n'+str(actual_request),'## 原始素材\n'+str(actual_material),compiled['fixed_text']]
   snapshot=document.get('learning_snapshot') or {}
@@ -172,7 +175,8 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
   if document.get('style_delivery_contract'):lines.append('## 实际交付说明合同\n'+packed(document['style_delivery_contract']))
   if document.get('candidate_artifacts'):lines.append('## 所改版本的真实文件\n'+packed(document['candidate_artifacts']))
   files=[]
-  for row in c.execute('SELECT id,name,path,sha256 FROM toolbox_files WHERE id IN (SELECT value FROM json_each((SELECT files FROM toolbox_jobs WHERE id=?)))',(jid,)):
+  file_rows=c.execute('SELECT id,name,path,sha256 FROM toolbox_files WHERE id IN (SELECT value FROM json_each(?))',(packed(pending['files']),)) if 'files' in pending else c.execute('SELECT id,name,path,sha256 FROM toolbox_files WHERE id IN (SELECT value FROM json_each((SELECT files FROM toolbox_jobs WHERE id=?)))',(jid,))
+  for row in file_rows:
    files.append(dict(row))
   if files:lines.append('## 本轮附件\n'+packed(files))
   if article.get('discussion_context'):lines.append('## 已确认讨论上下文\n'+packed(article['discussion_context']))
@@ -201,10 +205,10 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
     if key in approved:document[key]=approved[key]
    document['execution_prompt']['approved_preview_id']=recipe['preview_id']
   run=self.learning.read_run(c,jid)
-  if run:
+  if run and persist:
    run['execution_prompt']=copy.deepcopy(document['execution_prompt']);run['snapshot']=document.get('learning_snapshot',run['snapshot']);self.learning._put(c,'learning_runs',run)
  def preview(self,value):
-  """Run the real compiler against a disposable DB. Never enqueue live work.
+  """Run the production compiler read-only. Never enqueue or clone live work.
 
   The only persistent write is a preview receipt. Files and business operations
   remain untouched; the accepted command must match the frozen guard.
@@ -215,20 +219,19 @@ CREATE TABLE IF NOT EXISTS creative_prompt_previews(id TEXT PRIMARY KEY,job_id T
   creative=request.get('creative',{})
   if not isinstance(creative.get('recipe'),dict):raise ValueError('请先选择创作方案')
   creative['recipe'].pop('preview_id',None)
-  with tempfile.TemporaryDirectory(prefix='creative-preview-') as folder:
-   database=pathlib.Path(folder)/'preview.sqlite'
-   with self.store.connect() as source,contextlib.closing(sqlite3.connect(database)) as target:source.backup(target)
-   store=copy.copy(self.store);store.path=database
-   box=copy.copy(self.box);box.store=store;box.creative_preview=True
-   box.studio=copy.copy(self.box.studio);box.studio.box=box;box.studio.store=store
-   box.learning=copy.copy(self.learning);box.learning.box=box;box.learning.store=store;box.learning.studio=box.studio
-   if kind=='create':result=box.create(request)
-   elif kind=='change':result=box.action(ident(wid),{**request,'kind':'change'})
-   elif kind=='finalize':
-    from easel_workbench.runtime.article_drafts import finalize
-    result=finalize(box,ident(wid),request)
-   else:raise ValueError('不支持的制作预览')
-   with store.connect() as c:
+  box=copy.copy(self.box);box.creative_preview=True
+  box.studio=copy.copy(self.box.studio);box.studio.box=box
+  box.learning=copy.copy(self.learning);box.learning.box=box;box.learning.studio=box.studio
+  if kind=='create':result=box.create(request,_preview=True)
+  elif kind=='change':result=box.action(ident(wid),{**request,'kind':'change'},_preview=True)
+  elif kind=='finalize':
+   from easel_workbench.runtime.article_drafts import finalize
+   result=finalize(box,ident(wid),request,_preview=True)
+  else:raise ValueError('不支持的制作预览')
+  document=result.get('document')
+  if document is None:
+   with self.store.connect() as c:
+    c.execute('PRAGMA query_only=ON')
     row=c.execute('SELECT document FROM toolbox_review_inputs WHERE job_id=?',(jid,)).fetchone()
     if not row:raise ValueError('未取得本轮制作指令')
     document=json.loads(row['document'])

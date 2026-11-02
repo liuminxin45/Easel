@@ -6,12 +6,15 @@ the supervisor to restart anything. A live process is not a successful cycle.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import math
 from pathlib import Path
 import re
 import sqlite3
 import time
+
+from .features.collection.schedules import TZ, packed, slot, validate_schedule
 
 _FILES = {'worker': 'data/worker-status.json', 'collector': 'data/collection/heartbeat.json',
           'feedback': 'data/news-feedback-worker.json', 'learning': 'data/learning/heartbeat.json',
@@ -89,14 +92,16 @@ def _publisher(root):
         return document
 
 
-def _collection(root):
+def _collection(root, now, grace_seconds):
     """Project latest task outcomes for current enabled source revisions only."""
     config = _json(root / 'data/collection-config.json')
     if type(config.get('enabled', False)) is not bool:
         raise ValueError('invalid_collection_enabled')
     if config.get('enabled') is not True:
         return {'enabled_source_count': 0, 'latest_failed_source_count': 0,
-                'latest_partial_source_count': 0, 'unobserved_source_count': 0}
+                'latest_partial_source_count': 0, 'unobserved_source_count': 0,
+                'late_source_count': 0, 'max_late_seconds': 0,
+                'schedule_unobserved_source_count': 0, 'external_provider': False}
     baseline = root / 'sources.json'
     if not baseline.is_file():
         baseline = Path(__file__).resolve().parent / 'runtime/sources.json'
@@ -116,7 +121,7 @@ def _collection(root):
             entry = json.loads(payload)
             if not isinstance(entry, dict):
                 raise ValueError('invalid_source_version')
-            sources[source] = {key: entry.get(key) for key in ('enabled', 'deleted', 'builtin')}
+            sources[source] = {key: entry.get(key) for key in ('enabled', 'deleted', 'builtin', 'refresh_seconds')}
             sources[source]['revision'] = revision
         enabled = {}
         for source, entry in sources.items():
@@ -125,27 +130,74 @@ def _collection(root):
                 raise ValueError('invalid_source_override')
             active = entry['enabled'] if entry['revision'] else override.get('enabled', True) is True
             if active and not entry.get('deleted') and (not entry.get('builtin') or source in scheduled):
-                enabled[source] = entry['revision']
+                plan = override.get('schedule', scheduled[source]) if entry['builtin'] else {'kind': 'interval', 'seconds': entry['refresh_seconds']}
+                plan = validate_schedule(plan)
+                enabled[source] = {'revision': entry['revision'], 'plan': plan,
+                    'schedule_hash': hashlib.sha256(packed(plan).encode()).hexdigest()}
         counts = {'enabled_source_count': len(enabled), 'latest_failed_source_count': 0,
                   'latest_partial_source_count': 0, 'latest_completed_source_count': 0,
-                  'latest_active_source_count': 0, 'unobserved_source_count': len(enabled)}
-        for source, status, raw in connection.execute('''SELECT t.source_id,t.status,t.source_snapshot FROM collection_tasks t
+                  'latest_active_source_count': 0, 'unobserved_source_count': len(enabled),
+                  'late_source_count': 0, 'max_late_seconds': 0,
+                  'max_success_age_seconds': 0, 'schedule_unobserved_source_count': 0,
+                  'external_provider_source_count': 0, 'external_provider': False,
+                  'execution_grace_seconds': grace_seconds}
+        observed_revisions = set()
+        for source, status, raw, error, warnings in connection.execute('''SELECT t.source_id,t.status,t.source_snapshot,t.error,t.warnings FROM collection_tasks t
                 JOIN (SELECT source_id,MAX(rowid) latest_row FROM collection_tasks GROUP BY source_id) latest ON t.rowid=latest.latest_row'''):
             if source not in enabled:
                 continue
             version = json.loads(raw) if raw else {'revision': 0}
-            if not isinstance(version, dict) or version.get('revision', 0) != enabled[source]:
+            if not isinstance(version, dict) or version.get('revision', 0) != enabled[source]['revision']:
                 continue
+            observed_revisions.add(source)
             counts['unobserved_source_count'] -= 1
             if status == 'failed': counts['latest_failed_source_count'] += 1
             elif status == 'partial': counts['latest_partial_source_count'] += 1
             elif status in ('completed', 'empty'): counts['latest_completed_source_count'] += 1
             elif status in ('queued', 'running'): counts['latest_active_source_count'] += 1
             else: counts['unobserved_source_count'] += 1
+            # Classify only explicit provider HTTP evidence, never arbitrary
+            # process failures or missing raw rows as an external outage.
+            if status in ('failed', 'partial', 'blocked') and re.search(
+                    r'\bHTTPError\b|\bHTTP(?:\s+Error|[_ :])\s*5\d\d\b|\bupstream[_ : -]+5\d\d\b',
+                    str(error or '') + ' ' + str(warnings or ''), re.IGNORECASE):
+                counts['external_provider_source_count'] += 1
+        schedule_states = {row[0]: {'next_run_at': _at(row[1]), 'last_slot': row[2], 'schedule_hash': row[3]}
+            for row in connection.execute('SELECT source_id,next_run_at,last_slot,schedule_hash FROM collection_schedule_state')}
+        # SQL performs timestamp normalization/grouping; raw article bodies and
+        # old task documents never enter this projection or another service.
+        successes = {(source, revision): (value-2440587.5)*86400 for source, revision, value in connection.execute('''
+            SELECT source_id,coalesce(json_extract(source_snapshot,'$.revision'),0),max(julianday(finished_at))
+            FROM collection_tasks WHERE status='completed' AND finished_at IS NOT NULL
+            GROUP BY source_id,coalesce(json_extract(source_snapshot,'$.revision'),0)''') if value is not None}
+        boundary = dt.datetime.fromtimestamp(now-grace_seconds, TZ)
+        for source, entry in enabled.items():
+            state = schedule_states.get(source)
+            if not state or state['schedule_hash'] != entry['schedule_hash'] or state['next_run_at'] is None:
+                counts['schedule_unobserved_source_count'] += 1
+                continue
+            required = slot(entry['plan'], boundary, -1).timestamp()
+            # On first initialization scheduler starts at its future slot. Do
+            # not manufacture obligations before that source was enabled.
+            if state['last_slot'] is None and required < state['next_run_at']:
+                continue
+            # Toggle revisions have no activation timestamp in the legacy
+            # schema. An old slot must not be charged to a new revision until
+            # that revision has a task observation; report unknown instead.
+            if entry['revision'] and source not in observed_revisions and state['last_slot'] is not None:
+                counts['schedule_unobserved_source_count'] += 1
+                continue
+            success = successes.get((source, entry['revision']))
+            if success is not None:
+                counts['max_success_age_seconds'] = max(counts['max_success_age_seconds'], round(max(0, now-success), 2))
+            if success is None or success + 1 < required:
+                counts['late_source_count'] += 1
+                counts['max_late_seconds'] = max(counts['max_late_seconds'], round(max(0, now-required-grace_seconds), 2))
+        counts['external_provider'] = counts['external_provider_source_count'] > 0
         return counts
 
 
-def snapshot(root, *, now=None, max_age=180):
+def snapshot(root, *, now=None, max_age=180, collection_grace=900):
     """Return independent business status; transport ``ok`` remains separate.
 
     Disabled admission/roles are ordinary states. Unknown observations never
@@ -153,7 +205,8 @@ def snapshot(root, *, now=None, max_age=180):
     """
     root = Path(root).resolve()
     now = time.time() if now is None else now
-    if type(now) not in (int, float) or not math.isfinite(now) or not math.isfinite(max_age) or max_age <= 0:
+    if (type(now) not in (int, float) or not math.isfinite(now) or not math.isfinite(max_age) or max_age <= 0
+            or type(collection_grace) not in (int, float) or not math.isfinite(collection_grace) or collection_grace < 0):
         raise ValueError('invalid_health_clock')
     state = root / '.local/workbench-deployment'
     try:
@@ -191,11 +244,13 @@ def snapshot(root, *, now=None, max_age=180):
             results[role] = _signal(document, now, max_age, pids.get('release'))
             if role == 'collector' and results[role]['status'] != 'paused':
                 try:
-                    outcomes = _collection(root)
+                    outcomes = _collection(root, now, collection_grace)
                     results[role].update(outcomes)
-                    if outcomes['latest_failed_source_count'] or outcomes['latest_partial_source_count']:
+                    if outcomes['late_source_count']:
+                        results[role].update(status='degraded', ok=False, reason='scheduled_sources_late')
+                    elif outcomes['latest_failed_source_count'] or outcomes['latest_partial_source_count']:
                         results[role].update(status='degraded', ok=False, reason='latest_source_tasks_need_attention')
-                    elif outcomes['unobserved_source_count'] and results[role]['ok'] is True:
+                    elif (outcomes['unobserved_source_count'] or outcomes['schedule_unobserved_source_count']) and results[role]['ok'] is True:
                         results[role].update(status='unknown', ok=None, reason='current_sources_not_observed')
                 except (OSError, ValueError, TypeError, sqlite3.Error):
                     results[role]['source_tasks_status'] = 'unavailable'
@@ -215,4 +270,5 @@ def snapshot(root, *, now=None, max_age=180):
     unknown = [role for role, result in results.items() if result['ok'] is None]
     return {'status': 'degraded' if degraded else 'unknown' if unknown else 'healthy',
             'ok': False if degraded else None if unknown else True,
+            'external_provider': results.get('collector', {}).get('external_provider', False),
             'degraded_roles': degraded, 'unknown_roles': unknown, 'roles': results}

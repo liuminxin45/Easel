@@ -272,7 +272,7 @@ class ChatBusiness:
                 'turnId':value.get('turnId') or value.get('turn_id') or value.get('id'),
                 'attachments':value.get('attachments') or [],'context':context}
 
-    def plan(self,value):
+    def plan(self,value,*,selection=None):
         value=self._plan_request(value)
         signature=digest(packed(value));turn_id=key(value['turnId']);plan_id='plan-'+turn_id
         with self.store.connect() as c:
@@ -281,7 +281,7 @@ class ChatBusiness:
             if old['signature']!=signature:raise PlanConflict('同一制作方案不能更换输入，请重新核对')
             return self._public_plan(json.loads(old['document']))
         message=text(value.get('message',''),100000)
-        session,action,snapshot=self._selection(value)
+        session,action,snapshot=selection if selection is not None else self._selection(value)
         if not action.get('requires_plan'):raise ValueError('此技能直接在对话调用，无需制作方案')
         attachments=self._attachments(value)
         if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
@@ -330,7 +330,7 @@ class ChatBusiness:
                  'creator_snapshot':snapshot,'revision_token':document['token']}
         return {'plan':preview,'plan_token':document['token'],'session_id':document['session_id'],'turn_id':document['turn_id']}
 
-    def prepare(self,value):
+    def prepare(self,value,*,selection=None):
         previous=self.chat.receipt(value)
         if previous:return {'receipt':previous}
         context=value.get('context') or {}
@@ -350,7 +350,7 @@ class ChatBusiness:
             if self._parent(value)!=plan.get('parent'):raise PlanConflict('父版反馈或素材已有变化，请重新确认修改方案')
             if not plan.get('parent') and self._news_source(value)!=plan.get('source_article'):raise PlanConflict('资讯来源已有变化，请重新确认方案')
             return {'snapshot':plan['snapshot'],'actual_prompt':plan['actual_prompt'],'work':plan['work'],'frozen_instructions':plan['frozen_instructions']}
-        session,action,snapshot=self._selection(value)
+        session,action,snapshot=selection if selection is not None else self._selection(value)
         if action.get('requires_plan'):raise ValueError('请先确认本次制作方案')
         message=text(value.get('message',''),100000)
         attachments=self._attachments(value)

@@ -201,7 +201,8 @@ def test_modification_uses_same_native_session_exact_parent_and_raw_feedback(bus
     adapter=Versions();monkeypatch.setattr(harnesses,'adapter',lambda runtime:adapter)
     async def scenario():
         b=business;v,_=confirmed(b)
-        first=await b.chat.submit(v,**b.prepare(v));await b.chat._tasks[first['id']]
+        first=await b.chat.submit(v,**b.prepare(v))
+        if task:=b.chat._tasks.get(first['id']):await task
         original=b.chat.get_turn(first['id'],private=True);wid=original['work']['work_id']
         discussion=b.prepare({'sessionId':'test-chat','turnId':'only-discuss-parent','message':'只讨论这版的背景关系',
                               'context':{'work_id':wid,'parent_version_id':first['id'],'action_id':'discuss'}})
@@ -212,7 +213,8 @@ def test_modification_uses_same_native_session_exact_parent_and_raw_feedback(bus
         b.box.action(wid,{'id':'record-feedback','kind':'feedback','candidate_id':first['id'],'text':'这一版背景太乱，只记录意见。'})
         change=value('change','version-two');change['context'].update(work_id=wid,parent_version_id=first['id'])
         plan=b.plan(change);change['context']['plan_token']=plan['plan_token']
-        second=await b.chat.submit(change,**b.prepare(change));await b.chat._tasks[second['id']]
+        second=await b.chat.submit(change,**b.prepare(change))
+        if task:=b.chat._tasks.get(second['id']):await task
         final=b.chat.get_turn(second['id'],private=True)
         assert final['hook_status']=='completed'
         assert len(adapter.requests)==2 and adapter.requests[1].native_id=='native-version-session'
@@ -333,7 +335,8 @@ def test_news_source_is_server_frozen_and_selection_is_local(business,monkeypatc
             emit('token','{"production_result":{"schema_version":1,"status":"blocked","message":"TEMP停止于来源验证之后"}}')
     monkeypatch.setattr(harnesses,'adapter',lambda runtime:Blocked())
     async def scenario():
-        result=await b.chat.submit(v,**b.prepare(v));await b.chat._tasks[result['id']]
+        result=await b.chat.submit(v,**b.prepare(v))
+        if task:=b.chat._tasks.get(result['id']):await task
         work=b.chat.get_turn(result['id'])['work']
         with b.store.connect() as c:
             assert c.execute('SELECT article_id FROM toolbox_works WHERE id=?',(work['work_id'],)).fetchone()[0]==aid

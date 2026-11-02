@@ -165,14 +165,14 @@ def direct_send_checks(browser,f,out,report,check,expect):
         for format,label in [('poster','生成贴图'),('article','撰写文章')]:
             raw='本轮一次发送 '+format+' '+profile;choose(label,raw);before=len(f['adapter'].requests);start=len(requests);plan=None
             if format=='poster':
-                held=[];handler=lambda route:held.append(route);page.route('**/api/chat/plan',handler)
+                held=[];handler=lambda route:held.append(route);page.route('**/api/chat/submit',handler)
                 page.get_by_role('button',name='发送',exact=True).evaluate('button=>{button.click();button.click()}')
                 deadline=time.monotonic()+10
                 while not held and time.monotonic()<deadline:page.wait_for_timeout(30)
                 assert len(held)==1 and len(f['adapter'].requests)==before
                 expect(textarea).to_have_value(raw)
-                response=held[0].fetch();assert response.ok,response.text();plan=response.json();held[0].fulfill(response=response);page.unroute('**/api/chat/plan',handler)
-                check(profile,'rapid clicks retain input and share one plan and one production request')
+                response=held[0].fetch();assert response.status==202,response.text();held[0].fulfill(response=response);page.unroute('**/api/chat/submit',handler)
+                check(profile,'rapid clicks retain input until durable ACK and share one production request')
             else:page.get_by_role('button',name='发送',exact=True).click()
             expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
             history=wait_history(page,f['origin'],sid,previous,files=True);turn=history['session']['messages'][-1];previous=turn['turnId']
@@ -182,10 +182,10 @@ def direct_send_checks(browser,f,out,report,check,expect):
                 (out/'delivery-failure.json').write_text(json.dumps({'history':history,'body':page.locator('body').inner_text(),'errors':errors},ensure_ascii=False,indent=2),encoding='utf-8')
                 page.screenshot(path=str(out/'delivery-failure.png'),full_page=True)
                 raise
-            sent=[request for request in requests[start:] if request['path']=='/api/chat/stream' and request['method']=='POST'];planned=[request for request in requests[start:] if request['path']=='/api/chat/plan' and request['method']=='POST']
-            assert len(sent)==len(planned)==1 and len(f['adapter'].requests)==before+1
-            assert sent[0]['body']['turnId']==planned[0]['body']['turnId']==turn['turnId']
-            if plan:assert sent[0]['body']['context']['plan_token']==plan['plan_token']
+            sent=[request for request in requests[start:] if request['path']=='/api/chat/submit' and request['method']=='POST'];planned=[request for request in requests[start:] if request['path']=='/api/chat/plan' and request['method']=='POST']
+            assert len(sent)==1 and not planned and len(f['adapter'].requests)==before+1
+            assert sent[0]['body']['turnId']==turn['turnId']
+            assert not any(request['path']=='/api/chat/stream' and request['method']=='POST' for request in requests[start:])
             if format=='poster':assert not any(request['path'].startswith('/api/creative/prompts/') for request in requests),'parameters should load only on expansion'
             expect(page.locator('.artifact-gallery').last.locator('.artifact-count')).to_have_text('1 / 2')
             turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click()
@@ -213,7 +213,7 @@ def direct_send_checks(browser,f,out,report,check,expect):
         pending=page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)
         expect(page.get_by_role('button',name='核对原请求')).to_have_count(0);page.reload(wait_until='domcontentloaded');expect(status.first).to_be_visible()
         assert page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId",sid)==pending and len(f['adapter'].requests)==before+1
-        assert len([request for request in requests[start:] if request['path']=='/api/chat/stream' and request['method']=='POST'])==1
+        assert len([request for request in requests[start:] if request['path']=='/api/chat/submit' and request['method']=='POST'])==1
         expect(page.get_by_role('button',name='发送',exact=True)).to_be_disabled();expect(page.locator('.chat-turn-outputs').last.get_by_text('制作参数',exact=True)).to_have_count(0)
         check(profile,'unknown production receipt preserves the turn and never resends during automatic recovery or refresh')
         assert not errors,errors;context.close()

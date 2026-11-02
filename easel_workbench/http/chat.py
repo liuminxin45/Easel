@@ -58,12 +58,15 @@ def stream(service, turn_id, after=0, accepted=False,authenticated=None):
         'Cache-Control':'no-store, no-transform','X-Accel-Buffering':'no','Content-Encoding':'identity'})
 
 
-async def handle(service,business,path,request,value=None,*,authenticated=None,serve_file=None):
+async def handle(service,business,path,request,value=None,*,authenticated=None,serve_file=None,admissions=None):
     method=request.method
     get=method in ('GET','HEAD')
     if not (path.startswith('/api/chat/') or path=='/api/skills' or path.startswith('/api/skill/')):
         return None
     try:
+        if path=='/api/chat/submit' and method=='POST':
+            if admissions is None:return response({'error':'接收端口未连接'},503)
+            return response(await admissions.receive(value),202)
         match=re.fullmatch(r'/api/chat/products/([A-Za-z0-9_-]+)(?:/files/([a-f0-9]{64}))?',path)
         if match and get:
             from easel_workbench.features.works.products import ChatProducts
@@ -99,7 +102,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             if action=='archive':return response(await run_sync(service.archive_session,sid,value))
             raise ValueError('不支持的对话操作')
         match=re.fullmatch(r'/api/chat/sessions/([A-Za-z0-9_.-]+)',path)
-        if match and get:return response(await run_sync(business.history,match[1]))
+        if match and get:return response(await run_sync(admissions.history if admissions is not None else business.history,match[1]))
         if path=='/api/chat/plan' and method=='POST':return response(await run_sync(business.plan,value))
         if path=='/api/chat/stream' and method=='POST':
             prepared=await asyncio.to_thread(business.prepare,value)
@@ -108,25 +111,36 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             return stream(service,turn['id'],accepted=True,authenticated=authenticated)
         match=re.fullmatch(r'/api/chat/jobs/([A-Za-z0-9_.-]+)/stream',path)
         if match and get:
-            turn=await run_sync(service.get_turn,match[1])
+            source=service
+            try:turn=await run_sync(service.get_turn,match[1])
+            except ValueError:
+                if admissions is None:raise
+                turn=await run_sync(admissions.get_turn,match[1]);source=admissions
             if request.query_params.get('sessionId',turn['session_id'])!=turn['session_id']:
                 raise ValueError('回合与会话不一致')
             after=int(request.query_params.get('after',request.headers.get('last-event-id','0')))
             if not 0<=after<=100000000:raise ValueError('事件位置无效')
-            return stream(service,match[1],after,True,authenticated)
+            return stream(source,match[1],after,True,authenticated)
         match=re.fullmatch(r'/api/chat/last/([A-Za-z0-9_.-]+)',path)
         if match and get:
             turn=request.query_params.get('turn_id')
             result=await run_sync(service.last,match[1])
             if turn:
-                current=await run_sync(service.get_turn,turn)
+                try:current=await run_sync(service.get_turn,turn)
+                except ValueError:
+                    if admissions is None:raise
+                    current=await run_sync(admissions.get_turn,turn)
                 if current['session_id']!=match[1]:raise ValueError('回合与会话不一致')
                 result={**current,'status':'done' if current['status'] in ('completed','stopped','failed','unknown') else 'running',
                         'execution_status':current['status'],'text':current.get('output',''),'turn_id':current['id'],
                         'clean_end':current['status']=='completed','stop_reason':None if current['status']=='completed' else current['status']}
             return response(result)
         if path=='/api/chat/stop' and method=='POST':
-            return response(await service.stop(identity(value.get('sessionId') or value.get('session_id')),value.get('turnId') or value.get('turn_id')))
+            sid=identity(value.get('sessionId') or value.get('session_id'));tid=value.get('turnId') or value.get('turn_id')
+            if admissions is not None and tid:
+                with service.store.connect() as c:pending=admissions._row(c,tid)
+                if pending:return response(await admissions.stop(sid,tid))
+            return response(await service.stop(sid,tid))
         if path=='/api/chat/question/answer' and method=='POST':
             qid=identity(value.get('id') or value.get('questionId'))
             record=service._questions.get(qid)

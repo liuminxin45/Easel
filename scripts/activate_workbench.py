@@ -67,7 +67,7 @@ def idle(database=None):
         c.row_factory=sqlite3.Row
         with archived_reads(ROOT,OLD,base,automation):
             status=automation.busy_state(HistoricalAuditConnection(c),audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
-        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns'):
+        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns','easel_chat_submissions'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}
             if 'document' in cols:
@@ -76,6 +76,7 @@ def idle(database=None):
                     active=value.get('status') in ('running','dispatching','requested','sending','submitting','accepted')
                     if table=='media_install_jobs':active=value.get('state') in ('queued','running')
                     if table=='media_account_sessions':active=value.get('state') in ('login','checking')
+                    if table=='easel_chat_submissions':active=value.get('status') in ('queued','preparing','admitting')
                     if table=='easel_chat_turns':
                         active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
                     if active:

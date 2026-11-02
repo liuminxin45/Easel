@@ -1,6 +1,6 @@
 """Real mobile browser recovery against TEMP services and a frozen native UI.
 
-Only the TEMP server's stream transport is faulted: one accepted POST ends after
+Only the TEMP server's stream transport is faulted: the first GET subscription ends after
 its actual events, then the GET continuation is held and resumed silently. The
 application modules/DOM are never replaced. Model work is a controlled adapter.
 """
@@ -53,7 +53,8 @@ class StreamFault:
             if first:
                 while not self.started.is_set():
                     await asyncio.sleep(.01)
-                pending = service.read_events(turn_id, after)
+                owner = service if hasattr(service, 'read_events') else service.chat
+                pending = owner.read_events(turn_id, after)
                 assert pending, 'Real initial events must exist before ending transport'
                 self.initial_events = [event['id'] for event in pending]
                 final_id = max(self.initial_events)
@@ -174,8 +175,8 @@ def main():
                     expect(interrupted).to_be_visible()
                     screenshot(page, '390-transport-interrupted.png')
                     turn_id = fault.turn_id
-                    check('one original production POST is accepted by the actual TEMP backend',
-                          len(adapter.requests) == 1 and len([r for r in requests if r['path'] == '/api/chat/stream' and r['method'] == 'POST']) == 1)
+                    check('one original durable submission POST is accepted by the actual TEMP backend',
+                          len(adapter.requests) == 1 and len([r for r in requests if r['path'] == '/api/chat/submit' and r['method'] == 'POST']) == 1)
                     saved = page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))", sid)
                     check('frozen original input and precise turn remain while transport is interrupted',
                           saved['pending']['turnId'] == turn_id and saved['pending']['inputs']['text'] == original and saved['pending']['accepted'] is True)
@@ -193,7 +194,7 @@ def main():
                     saved_after = page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid))", sid)
                     check('transport restoration retains the same frozen turn, original input, and pending identity', saved_after == saved)
                     check('restoration uses GET continuation only and never starts another execution',
-                          len(adapter.requests) == 1 and len([r for r in requests if r['path'] == '/api/chat/stream' and r['method'] == 'POST']) == 1 and fault.calls[turn_id] == 2)
+                          len(adapter.requests) == 1 and len([r for r in requests if r['path'] == '/api/chat/submit' and r['method'] == 'POST']) == 1 and fault.calls[turn_id] == 2)
                     screenshot(page, '390-silent-stream-restored.png')
                     page.locator('button[title="停止生成"]').click()
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending", arg=sid)
@@ -225,7 +226,7 @@ def main():
                     check('unknown receipt survives reload without replay, losing original ID, or claiming success',
                           page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId", second_sid) == unknown_turn
                           and len(adapter.requests) == 2
-                          and len([r for r in requests if r['path'] == '/api/chat/stream' and r['method'] == 'POST']) == 2)
+                          and len([r for r in requests if r['path'] == '/api/chat/submit' and r['method'] == 'POST']) == 2)
                     check('actual mobile page has no JavaScript errors', not errors)
                     report['errors'] = errors
                     report['requests'] = requests

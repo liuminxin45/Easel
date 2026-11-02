@@ -45,7 +45,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   const response=await vm.client.mutate<JsonRecord>('chat:create','/api/chat/sessions',{action:'create',profile_id:wantedProfile}),session=record(response.session||record(response.result).session||response),id=string(session.id);if(!id)throw Error('服务器尚未返回会话标识');
   if((text||command||files.length)&&!vm.client.drafts.set('chat:'+id,{text,files,...(command?{command}:{}),...(articleId?{article_id:articleId}:{}),...(articleMode?{article_mode:articleMode}:{})}))throw Error('本机输入暂未保存，原窗口仍保留，请恢复存储后再带入对话。');created=id;void sessions.reload();
   const target='/chat/'+encodeURIComponent(id)+(p==='/chat'&&q.has('skill')?'?'+q.toString():'');if(ticket&&navigation.finishFlow)navigation.finishFlow(target,ticket);else navigate(target,{intent:'flow'});
-  if(topicTitle){const turn:FrozenTurn={turnId:crypto.randomUUID(),message:text,attachments:[],context:{profile_id:wantedProfile,...(articleId?{article_id:articleId}:{})},inputs:{text,files:[],...(articleId?{article_id:articleId}:{})},state:'connecting',initial_title:generateSessionTitle(topicTitle)};sessionRuntime(vm.client,id).connect(turn,wantedProfile);}
+  if(topicTitle){const turn:FrozenTurn={turnId:crypto.randomUUID(),message:text,attachments:[],context:{profile_id:wantedProfile,...(articleId?{article_id:articleId}:{})},inputs:{text,files:[],...(articleId?{article_id:articleId}:{})},state:'connecting',initial_title:generateSessionTitle(topicTitle)};void sessionRuntime(vm.client,id).submit(turn,wantedProfile);}
 
  });return created};
  const useTopic=(title:string,sourceId?:string,note?:string)=>{if(!title.trim())return;

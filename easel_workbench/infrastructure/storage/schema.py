@@ -1,6 +1,11 @@
 """Original schema fragments; caller owns connection, ordering and transaction."""
 
 
+def initialize_chat_submissions(c):
+    c.execute('CREATE TABLE IF NOT EXISTS easel_chat_submissions(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,signature TEXT NOT NULL,document TEXT NOT NULL)')
+    c.execute('CREATE INDEX IF NOT EXISTS easel_chat_submission_session ON easel_chat_submissions(session_id)')
+
+
 def initialize_collection(c):
     c.executescript('''
 CREATE TABLE IF NOT EXISTS collection_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,run_id TEXT NOT NULL);

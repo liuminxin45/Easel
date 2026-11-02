@@ -15,10 +15,10 @@ const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
 const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
-function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride}={}){
- let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
+function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride}={}){
+ let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
  const react={useMemo:(fn,deps)=>{const index=cursor++,old=hooks[index];if(!old||!deps||!old.deps||deps.length!==old.deps.length||deps.some((value,i)=>!Object.is(value,old.deps[i])))hooks[index]={deps,value:fn()};return hooks[index].value},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
- const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
+ const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{if(path==='/api/chat/submit'){calls.submit.push({path,body,csrf});return submitOverride?submitOverride(path,body,csrf):{id:body.turnId,session_id:body.sessionId,accepted_by_server:true}}calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
  vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/ui/hooks/context.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,useContext:()=>({client:vm.client}),Context:{},useEffect:react.useEffect,interactionFeedback,Error,RequestError});
@@ -191,9 +191,12 @@ test('native commands come from exact server releases and contextual actions rou
  assert.equal(f.lib.nativeSkillDestination(choices.find(c=>c.selection.action_id==='change').selection,'p',true),null);
 });
 test('a native first send retains input until actual acceptance and later recovery never clears retyped input',async()=>{
- const f=fixture(),initial=plain(f.draft);f.render().chat.onSend();await tick();
- assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][2],'session-one');assert.equal(f.calls.stream[0][9],'exact-turn');assert.equal(f.calls.stream[0][10],false);
+ let accept;const f=fixture({submitOverride:()=>new Promise(resolve=>{accept=resolve})}),initial=plain(f.draft);f.render().chat.onSend();await tick();
+ assert.equal(f.calls.submit.length,1);assert.equal(f.calls.stream.length,0);
  assert.equal(f.draft.text,initial.text);assert.equal(f.draft.pending.state,'connecting');
+ accept({id:'exact-turn',session_id:'session-one',accepted_by_server:true});await tick();
+ assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][2],'session-one');assert.equal(f.calls.stream[0][9],'exact-turn');assert.equal(f.calls.stream[0][10],true);
+ assert.equal(f.draft.text,'');assert.equal(f.draft.pending.accepted,true);
  const options=f.calls.stream[0][16];assert.deepEqual(plain(options.headers),{'X-CSRF-Token':'fixture-csrf'});assert.equal(options.basePath,'');
  options.onAccepted();assert.equal(f.draft.text,'');assert.equal(f.draft.pending.accepted,true);
  f.draft={...f.draft,text:initial.text};options.onAccepted();assert.equal(f.draft.text,initial.text,'duplicate acknowledgement must preserve later input');
@@ -239,23 +242,50 @@ test('a known timeout receipt is reported as execution uncertainty until the sam
  assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().error,'');assert.equal(runtime.state.getState().running,false);
  assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
 });
-test('one production send freezes the exact plan and immediately streams without a confirmation dialog',async()=>{
+test('one production send durably submits exact inputs and only GET subscribes while the server prepares its plan',async()=>{
  const command={skill_id:'content-production',version:2,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true,trial:true},f=fixture({draft:{text:'原字贴图',files:[{id:'attached',name:'素材.txt'}],command}});
- f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.text,'原字贴图','input stays until real acceptance');
- const plan=f.calls.post[0];assert.equal(plan.path,'/api/chat/plan');assert.equal(plan.body.context.version,2);assert.equal(plan.body.context.trial,true);assert.deepEqual(plain(plan.body.attachments),[{id:'attached',name:'素材.txt',path:'attached'}]);
- assert.equal(f.calls.stream[0][9],plan.body.turnId);assert.equal(f.calls.stream[0][16].context.plan_token,'exact-plan-token');assert.equal(f.render().plan,undefined,'a read-only plan must not open another confirmation modal');
+ f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.text,'','durable server receipt consumes the input');
+ const received=f.calls.submit[0];assert.equal(received.path,'/api/chat/submit');assert.equal(received.body.context.version,2);assert.equal(received.body.context.trial,true);assert.deepEqual(plain(received.body.attachments),[{id:'attached',name:'素材.txt',path:'attached'}]);
+ assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream[0][9],received.body.turnId);assert.equal(f.calls.stream[0][10],true);assert.equal(f.calls.stream[0][16].context.plan_token,undefined);assert.equal(f.render().plan,undefined);
+ assert.equal(f.render().chat.session.messages.filter(m=>m.role==='user').at(-1).content,'原字贴图');
 });
-test('rapid production sends share one in-flight plan and one native turn',async()=>{
- let releasePlan;const held=new Promise(resolve=>{releasePlan=resolve}),command={skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true},f=fixture({draft:{text:'只发一次原字',files:[],command},postOverride:()=>held});
- const view=f.render();view.chat.onSend();view.chat.onSend();await tick();assert.equal(f.calls.post.length,1);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'只发一次原字');
- releasePlan({plan_token:'same-plan',plan:{}});await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][16].context.plan_token,'same-plan');
+test('rapid production sends share one in-flight durable submission and one GET subscription',async()=>{
+ let release;const held=new Promise(resolve=>{release=resolve}),command={skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true},f=fixture({draft:{text:'只发一次原字',files:[],command},submitOverride:()=>held});
+ const view=f.render();view.chat.onSend();view.chat.onSend();await tick();assert.equal(f.calls.submit.length,1);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'只发一次原字');
+ release({id:'exact-turn',session_id:'session-one'});await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][10],true);assert.equal(f.calls.submit.length,1);assert.equal(f.calls.post.length,0);
 });
-test('a plan failure leaves the production input and attachments intact without streaming',async()=>{
- const initial={text:'保留失败原字',files:[{id:'original',name:'素材.txt'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}},f=fixture({draft:initial,postOverride:async()=>{throw Error('TEMP plan rejected')}});
- f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,initial.text);assert.deepEqual(plain(f.draft.files),initial.files);assert.equal(f.draft.pending,undefined);
+
+test('lost admission acknowledgement only reads the original receipt and never POSTs a second submission',async()=>{
+ const f=fixture({submitOverride:async()=>{throw TypeError('TEMP lost acknowledgement')},receipt:{turn_id:'exact-turn',execution_status:'accepted',delivery_state:'not_started'}});
+ f.render().chat.onSend();await tick();assert.equal(f.draft.pending.state,'unknown');assert.equal(f.calls.submit.length,1);assert.equal(f.calls.stream.length,0);
+ f.draft={...f.draft,text:'后来写的输入'};await f.runRecovery();
+ assert.equal(f.calls.submit.length,1);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][10],true);
+ f.calls.stream[0][16].onAccepted();assert.equal(f.draft.text,'后来写的输入');
+});
+
+test('preparation rejection restores the accepted original input and never overwrites a later draft',async()=>{
+ for(const later of ['', '用户后来输入']){
+  const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'failed',delivery_state:'not_started',admission_failed:true,error:'TEMP prepare failed'}}),original=f.draft.text;
+  f.render().chat.onSend();await tick();assert.equal(f.draft.text,'');f.draft={...f.draft,text:later};
+  f.calls.stream[0][4]();await tick();await tick();
+  assert.equal(f.draft.text,later||original);assert.equal(f.draft.pending,undefined);assert.equal(f.calls.submit.length,1);
+  assert.equal(f.runtime.sessionRuntime(f.vm.client,'session-one').state.getState().error,'TEMP prepare failed');
+ }
+});
+
+test('a fresh view resumes the server preparation reservation with GET and retains its original user message',()=>{
+ const f=fixture();f.resources.session.pendingSubmissionId='server-preparing';
+ f.resources.session.messages=[{id:'server-preparing-user',role:'user',content:'服务器已收原字'}];
+ const view=f.render();for(const effect of [...f.effects])effect();
+ assert.equal(f.calls.submit.length,0);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.stream[0][9],'server-preparing');assert.equal(f.calls.stream[0][10],true);
+ assert.equal(view.chat.session.messages[0].content,'服务器已收原字');
+});
+test('a definite admission rejection leaves input and attachments intact without streaming',async()=>{
+ const initial={text:'保留失败原字',files:[{id:'original',name:'素材.txt'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}},f=fixture({draft:initial,submitOverride:async()=>{throw Object.assign(Error('TEMP rejected'),{status:409})}});
+ f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,initial.text);assert.deepEqual(plain(f.draft.files),initial.files);assert.equal(f.draft.pending.state,'rejected');
 });
 test('a definite unaccepted 403 409 or 422 lets the user correct and send again while unknown stays blocked',async()=>{
- for(const status of [403,409,422]){const f=fixture();f.render().chat.onSend();await tick();const error=Object.assign(Error('TEMP definite rejection'),{status});f.calls.stream[0][5](error);assert.equal(f.draft.pending.state,'rejected');f.render().chat.composer.onTextChange('修正后的原字 '+status);f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,2,'definite '+status+' must release the owner');assert.equal(f.calls.stream[1][0],'修正后的原字 '+status);assert.equal(f.calls.stream[1][10],false)}
+ for(const status of [403,409,422]){let rejected=false;const f=fixture({submitOverride:async(_path,body)=>{if(!rejected){rejected=true;throw Object.assign(Error('TEMP definite rejection'),{status})}return {id:body.turnId,session_id:body.sessionId}}});f.render().chat.onSend();await tick();assert.equal(f.draft.pending.state,'rejected');f.render().chat.composer.onTextChange('修正后的原字 '+status);f.render().chat.onSend();await tick();assert.equal(f.calls.submit.length,2);assert.equal(f.calls.stream.length,1,'definite '+status+' must release the owner');assert.equal(f.calls.stream[0][0],'修正后的原字 '+status);assert.equal(f.calls.stream[0][10],true)}
  const f=fixture({receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}});f.render().chat.onSend();await tick();f.calls.stream[0][16].onAccepted();f.calls.stream[0][4]();await tick();await tick();f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.pending.state,'unknown');
 });
 test('news provenance survives an accepted discussion until explicit production',async()=>{
@@ -266,12 +296,12 @@ test('news provenance survives an accepted discussion until explicit production'
 test('explicit poster acceptance clears only the consumed news binding and keeps the frozen provenance',async()=>{
  const command={skill_id:'content-production',version:3,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true};
  const f=fixture({draft:{text:'新闻原字',files:[],article_id:'exact-news',command}});f.render().chat.onSend();await tick();
- assert.equal(f.calls.post[0].body.context.article_id,'exact-news');f.calls.stream[0][16].onAccepted();
+ assert.equal(f.calls.submit[0].body.context.article_id,'exact-news');f.calls.stream[0][16].onAccepted();
  assert.equal(f.draft.article_id,undefined);assert.equal(f.draft.pending.context.article_id,'exact-news');
 });
 
 test('native change binds the selected parent, while a new format in the same session creates another work',async()=>{
- for(const action of ['change','article']){const command={skill_id:'content-production',version:2,action_id:action,task:action,label:action,requires_plan:true},f=fixture({draft:{text:'请求',files:[],command},search:'work=exact-work&version=exact-parent'});f.render().chat.onSend();await tick();const context=f.calls.post[0].body.context;assert.equal(context.work_id,action==='change'?'exact-work':undefined);assert.equal(context.parent_version_id,action==='change'?'exact-parent':undefined)}
+ for(const action of ['change','article']){const command={skill_id:'content-production',version:2,action_id:action,task:action,label:action,requires_plan:true},f=fixture({draft:{text:'请求',files:[],command},search:'work=exact-work&version=exact-parent'});f.render().chat.onSend();await tick();const context=f.calls.submit[0].body.context;assert.equal(context.work_id,action==='change'?'exact-work':undefined);assert.equal(context.parent_version_id,action==='change'?'exact-parent':undefined)}
  const discussion=fixture({search:'work=exact-work&version=exact-parent'});discussion.render().chat.onSend();await tick();assert.equal(discussion.calls.stream[0][16].context.action_id,'discuss');assert.equal(discussion.calls.stream[0][16].context.parent_version_id,'exact-parent');
 });
 test('business-only skill selection preserves chat input and navigates without creating a model turn',()=>{

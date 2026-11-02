@@ -46,6 +46,7 @@ class ChatService:
         self.on_accept = on_accept
         self.timeout = timeout
         self._tasks = {}
+        self._admissions = set()
         self._ownership_lock = threading.Lock()
         self._owned_turns = set()
         self._ownership_generation = 0
@@ -150,7 +151,7 @@ class ChatService:
                         raise ChatConflict('空对话不自动命名')
                     session.update(title=text(value.get('title'), 200, True), title_source='automatic')
                 else:
-                    if session.get('pendingTurnId'):
+                    if session.get('pendingTurnId') or session.get('pendingSubmissionId'):
                         raise ChatConflict('这份对话尚有运行或待核对回合，不能归档')
                     if type(value.get('archived', True)) is not bool:
                         raise ValueError('归档开关无效')
@@ -274,14 +275,14 @@ class ChatService:
             return self.get_turn(previous['id'])
         return None
 
-    async def submit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None):
+    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None):
         if self._closing:
             raise ChatConflict('服务正在关闭，请保留草稿')
         if not isinstance(value, dict):
             raise ValueError('对话请求格式无效')
         old = self.receipt(value)
         if old is not None:
-            return old
+            return old,None
         session_id = identity(value.get('session_id') or value.get('sessionId'))
         operation = identity(value.get('operation_id') or value.get('id') or value.get('turnId'))
         turn_id = identity(value.get('turn_id') or value.get('turnId') or operation)
@@ -322,10 +323,14 @@ class ChatService:
             if old:
                 if json.loads(old['document'])['request_signature'] != sha(value):
                     raise ChatConflict('同一回合不能更改已经冻结的消息、技能或输入')
-                return self.get_turn(json.loads(old['document'])['id'])
+                return self.get_turn(json.loads(old['document'])['id']),None
             session = self._session(c, session_id)
             if session.get('archived') or session.get('pendingTurnId'):
                 raise ChatConflict('此对话已经归档或仍有回合运行／待核对；没有重复发送')
+            if session.get('pendingSubmissionId') and session['pendingSubmissionId']!=admission_id:
+                raise ChatConflict('此对话的原请求正在准备；没有重复发送')
+            if admission_id is not None and (admission_id!=turn_id or session.get('pendingSubmissionId')!=admission_id):
+                raise ChatConflict('准备回执与受理身份不同，未发送')
             if frozen['profile']['id'] != session['profile_id'] or context.get('profile_id', session['profile_id']) != session['profile_id']:
                 raise ChatConflict('对话、技能和作品必须使用同一画像')
             initial_title = value.get('initial_title')
@@ -357,8 +362,27 @@ class ChatService:
                     turn['accept_receipt'] = accepted
             c.execute('INSERT INTO easel_chat_turns VALUES(?,?,?,?,?)', (turn_id, session_id, operation, signature, packed(turn)))
             session.update(pendingTurnId=turn_id, updated=now(), revision=session['revision'] + 1)
+            if admission_id is not None:session.pop('pendingSubmissionId',None)
             self._put_session(c, session)
             register_owned()
+        return turn,environment
+
+    async def submit(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None):
+        task=asyncio.create_task(self._submit_owned(value,snapshot=snapshot,actual_prompt=actual_prompt,
+            work=work,frozen_instructions=frozen_instructions,admission_id=admission_id))
+        self._admissions.add(task)
+        def finished(done):
+            self._admissions.discard(done)
+            if not done.cancelled():done.exception()
+        task.add_done_callback(finished)
+        return await asyncio.shield(task)
+
+    async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None):
+        from easel.web_services.concurrency import run_sync
+        turn,environment=await run_sync(self._admit,value,snapshot=snapshot,actual_prompt=actual_prompt,
+                                       work=work,frozen_instructions=frozen_instructions,admission_id=admission_id)
+        if environment is None:return turn
+        turn_id,session_id=turn['id'],turn['session_id']
         runner = None
         try:
             started = asyncio.Event()
@@ -511,6 +535,7 @@ class ChatService:
 
     async def close(self):
         self._closing = True
+        if self._admissions:await asyncio.gather(*list(self._admissions),return_exceptions=True)
         tasks = list(self._tasks.values())
         for task in tasks:
             if not task.done() and not task.cancelling():

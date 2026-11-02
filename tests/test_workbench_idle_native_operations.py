@@ -95,6 +95,19 @@ def test_old_database_without_native_receipt_table_keeps_prior_gate(idle_gate):
     assert rows_digest(database)==before
 
 
+@pytest.mark.parametrize('state,busy', [('queued',True),('preparing',True),('admitting',True),('dispatched',False),('failed',False),('stopped',False)])
+def test_durable_chat_preparation_fences_deployment_before_native_execution(idle_gate,state,busy):
+    module,database,_=idle_gate
+    with sqlite3.connect(database) as c:
+        c.execute('CREATE TABLE easel_chat_submissions(id TEXT PRIMARY KEY,document TEXT NOT NULL)')
+        c.execute('INSERT INTO easel_chat_submissions VALUES(?,?)',('received-original',json.dumps({'status':state,'request':{'message':'accurate original'}})))
+    before=rows_digest(database)
+    result=module.idle(database)
+    assert result['busy'] is busy
+    if busy:assert result['additional']==[{'table':'easel_chat_submissions','id':'received-original'}]
+    assert rows_digest(database)==before
+
+
 def test_pending_receipt_cannot_be_hidden_by_a_terminal_one(idle_gate):
     module,database,_=idle_gate
     install(database,[json.dumps({'native_protocol':True,'state':'completed'}),json.dumps({'native_protocol':True,'state':'unavailable'}),json.dumps({'native_protocol':True,'state':'rejected'})])

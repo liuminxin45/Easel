@@ -101,7 +101,10 @@
     "easel_workbench/runtime/distribution_checks.py",
     "easel_workbench/runtime/distribution_check_relay.py",
     "easel_workbench/runtime/toolbox_server.py",
-    "easel_workbench/features/works/versions.py"
+    "easel_workbench/features/works/versions.py",
+    "easel_workbench/application/chat_admission.py",
+    "easel_workbench/features/conversations/service.py",
+    "easel_workbench/http/chat.py"
   ],
   "modules": [
     {
@@ -1726,34 +1729,6 @@
       }
     },
     {
-      "responsibility": "p5 sole implementation: infrastructure/storage",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "a32c9d651cb9cfd97bb665c5400c8a944d0b2ad79f3f5739e6ebe3911a1660c1",
-      "path": "easel_workbench/infrastructure/storage/schema.py",
-      "symbol_groups": [
-        {
-          "area": "infrastructure/storage",
-          "members": [
-            "initialize_collection",
-            "initialize_distribution",
-            "initialize_accounts",
-            "initialize_installations",
-            "initialize_evidence",
-            "initialize_chat_plans",
-            "initialize_creator",
-            "initialize_tasks",
-            "initialize_sources"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
-        "path": "easel_workbench/features/collection/registry.py",
-        "reviewed_sha256": "98d82cb0cfa29cf8c516ccef3d6045b4b5bdb9fa66cafba38c6ff5be6e520a2b"
-      }
-    },
-    {
       "path": "easel_workbench/runtime/distribution_runtime.py",
       "reviewed_sha256": "24f577f2b48f1a1f8f812d3b10549bd944373db53727af83c23271ecf1056c55",
       "area": "compat/distribution",
@@ -2170,27 +2145,6 @@
       }
     },
     {
-      "responsibility": "p5 sole implementation: runtime",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "499b830594af19d26c29cb670638e336aa848805ee064f12c6679cd519b46a60",
-      "path": "easel_workbench/runtime/toolbox_server.py",
-      "symbol_groups": [
-        {
-          "area": "runtime",
-          "members": [
-            "create_app",
-            "main"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
-        "path": "easel_workbench/runtime/toolbox_server.py",
-        "reviewed_sha256": "a4bcae336066ddd2516534404cd0775570239b3ae9e3abb3bdf71fe32432edbe"
-      }
-    },
-    {
       "responsibility": "p5 canonical leaf imports sole implementation: features/works",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
@@ -2216,10 +2170,10 @@
       }
     },
     {
-      "responsibility": "p5 canonical leaf imports sole implementation: application",
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: application",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "f67b89cbb32bb93959c1905917621e0c8cb81108f120ae4c01068a004e648428",
+      "reviewed_sha256": "08f06d6647e29a712e2c541bbe6932aff5d9ee3df3d5e21701e9060882221101",
       "path": "easel_workbench/application/chat.py",
       "symbol_groups": [
         {
@@ -2252,9 +2206,173 @@
         }
       ],
       "prior_review": {
-        "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
         "path": "easel_workbench/application/chat.py",
-        "reviewed_sha256": "c608d64512effc9e438e640b83265618b44c396e547dbe56238f01e626b09e89"
+        "reviewed_sha256": "f67b89cbb32bb93959c1905917621e0c8cb81108f120ae4c01068a004e648428"
+      }
+    },
+    {
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "6e44c259612802bf7ee75ad74bb57019d5ffaf538e1419330f2382585d790063",
+      "path": "easel_workbench/application/chat_admission.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "ChatAdmission",
+            "ChatAdmission.__init__",
+            "ChatAdmission._row",
+            "ChatAdmission._put",
+            "ChatAdmission._anchor",
+            "ChatAdmission._receive",
+            "ChatAdmission.get_turn",
+            "ChatAdmission._kick",
+            "ChatAdmission.receive",
+            "ChatAdmission._stage",
+            "ChatAdmission._prepare",
+            "ChatAdmission._process",
+            "ChatAdmission.start",
+            "ChatAdmission.close",
+            "ChatAdmission.stop",
+            "ChatAdmission.events",
+            "ChatAdmission.history"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
+        "path": "easel_workbench/application/chat.py",
+        "reviewed_sha256": "f67b89cbb32bb93959c1905917621e0c8cb81108f120ae4c01068a004e648428"
+      }
+    },
+    {
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: features/conversations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "3e46939ecdf55db29d05aa91aad40a7b6a80c68d51574887be8e3bb9fa4de77a",
+      "path": "easel_workbench/features/conversations/service.py",
+      "symbol_groups": [
+        {
+          "area": "features/conversations",
+          "members": [
+            "ChatService",
+            "ChatService.__init__",
+            "ChatService._session",
+            "ChatService._turn",
+            "ChatService._put_session",
+            "ChatService._put_turn",
+            "ChatService._metadata_path",
+            "ChatService._save_metadata",
+            "ChatService._save_last",
+            "ChatService._command",
+            "ChatService.create_session",
+            "ChatService.rename_session",
+            "ChatService.archive_session",
+            "ChatService.list_sessions",
+            "ChatService.get_turn",
+            "ChatService._ownership_snapshot",
+            "ChatService._register_owned",
+            "ChatService._release_owned",
+            "ChatService._accepting_connection",
+            "ChatService.history",
+            "ChatService.last",
+            "ChatService.receipt",
+            "ChatService._admit",
+            "ChatService.submit",
+            "ChatService._submit_owned",
+            "ChatService._environment",
+            "ChatService.runner_name",
+            "ChatService.execution_settings",
+            "ChatService._event_path",
+            "ChatService.read_events",
+            "ChatService.events",
+            "ChatService.questions",
+            "ChatService.question_status",
+            "ChatService.answer",
+            "ChatService.stop",
+            "ChatService.close",
+            "ChatService._run"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
+        "path": "easel_workbench/features/conversations/service.py",
+        "reviewed_sha256": "0a591cd3355eceedbeec4be9ef206336abdf079fe6c24eb261509d6c0b91acdc"
+      }
+    },
+    {
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: http",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "b39801e4a40f1652967e5945898c870b3b466874a6adaa2d1d06b866f4b6df83",
+      "path": "easel_workbench/http/chat.py",
+      "symbol_groups": [
+        {
+          "area": "http",
+          "members": [
+            "response",
+            "stream",
+            "handle"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
+        "path": "easel_workbench/http/chat.py",
+        "reviewed_sha256": "30793580e90353cabdf2cd807820a06262fe0db8baa4cf0c745427205dba0f9c"
+      }
+    },
+    {
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: infrastructure/storage",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "0eb7c196bacfbd9a79b1bb3beee8515019425223dc717a8496f2401db9c8090d",
+      "path": "easel_workbench/infrastructure/storage/schema.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/storage",
+          "members": [
+            "initialize_chat_submissions",
+            "initialize_collection",
+            "initialize_distribution",
+            "initialize_accounts",
+            "initialize_installations",
+            "initialize_evidence",
+            "initialize_chat_plans",
+            "initialize_creator",
+            "initialize_tasks",
+            "initialize_sources"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
+        "path": "easel_workbench/infrastructure/storage/schema.py",
+        "reviewed_sha256": "a32c9d651cb9cfd97bb665c5400c8a944d0b2ad79f3f5739e6ebe3911a1660c1"
+      }
+    },
+    {
+      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "92b142a1e98e5641701c7d8ce638fa1420cc1fdf79e2080b5c18d4b5f9c3740c",
+      "path": "easel_workbench/runtime/toolbox_server.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "create_app",
+            "main"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
+        "path": "easel_workbench/runtime/toolbox_server.py",
+        "reviewed_sha256": "499b830594af19d26c29cb670638e336aa848805ee064f12c6679cd519b46a60"
       }
     }
   ],

@@ -466,7 +466,7 @@ def main():
                           project_archive['status'] == 'verified' and project_path.is_relative_to(app.state.studio.project)
                           and sha(project_path / '完成清单.json') == sha(archive / '完成清单.json')
                           and all(sha(project_path / entry['path']) == entry['sha256'] for entry in manifest['files']))
-                    before_refresh = {'calls': len(adapter.requests), 'stream_posts': len(posts('/api/chat/stream')),
+                    before_refresh = {'calls': len(adapter.requests), 'submission_posts': len(posts('/api/chat/submit')),
                                       'action_posts': len(posts('/api/works/' + wid + '/actions')), 'completion_count': len(app.state.completion.get(wid)['items'])}
                     page.reload(wait_until='domcontentloaded')
                     expect(helper.turn_view(page, v2_history).get_by_text('此版本已采纳', exact=True)).to_be_visible()
@@ -476,7 +476,7 @@ def main():
                           work['decision']['id'] == accept_id and work['decision']['candidate_id'] == v2_id
                           and {version['id'] for version in work['versions']} == {v1_id, v2_id}
                           and len(adapter.requests) == before_refresh['calls'] == 3
-                          and len(posts('/api/chat/stream')) == before_refresh['stream_posts'] == 3
+                          and len(posts('/api/chat/submit')) == before_refresh['submission_posts'] == 3
                           and len(posts('/api/works/' + wid + '/actions')) == before_refresh['action_posts'] == 2
                           and len(app.state.completion.get(wid)['items']) == before_refresh['completion_count'] == 1)
                     check(profile, 'all source and version files remain intact and no publication or platform delivery is created',

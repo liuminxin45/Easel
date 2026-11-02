@@ -55,6 +55,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     chat_business=ChatBusiness(box,root=root,store=store,creator=creator)
     chat=ChatService(box,root=root,store=store,settings=settings,on_started=chat_business.started,on_finish=chat_business.finished,on_accept=chat_business.accept)
     chat_business.chat=chat;app.state.chat=chat;app.state.chat_business=chat_business
+    from easel_workbench.application.chat_admission import ChatAdmission
+    admissions=ChatAdmission(chat=chat,business=chat_business);app.state.chat_admissions=admissions
+    app.add_event_handler('startup',admissions.start)
+    app.add_event_handler('shutdown',admissions.close)
     from easel_workbench.native_corrections import NativeCorrections
     corrections=NativeCorrections(chat,chat_business);app.state.native_corrections=corrections
     app.add_event_handler('startup',corrections.start)
@@ -262,7 +266,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if method in ('GET','HEAD'):
             settings_response=await settings_api(settings,path,request)
             if settings_response is not None:return settings_response
-            chat_response=await chat_api(chat,chat_business,path,request,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response)
+            chat_response=await chat_api(chat,chat_business,path,request,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response,admissions=admissions)
             if chat_response is not None:
                 if hasattr(chat_response,'body') and chat_response.status_code==200:
                     return reply(decorate_images(json.loads(chat_response.body),session,cookies(ctx.headers).get(SESSION)))
@@ -280,7 +284,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 return reply(await asyncio.to_thread(collection.registry.update,value))
             settings_response=await settings_api(settings,path,request,value)
             if settings_response is not None:return settings_response
-            chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response)
+            chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response,admissions=admissions)
             if chat_response is not None:return chat_response
             if path=='/api/creative/preview':
                 from easel_workbench.runtime.creative_recipes import service as recipes

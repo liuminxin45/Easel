@@ -15,7 +15,7 @@ import {IconSkills} from './components/icons';
 
 export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;display_name?:string;origin?:string;source_revision?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
 export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
-export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[]}
+export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[];pendingSubmissionId?:string|null}
 export interface NativeSessions {sessions:NativeSession[]}
 export function nativeSkillChoices(skills:NativeSkill[],versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
  const choices=skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
@@ -54,7 +54,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
  const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
- const continuationIdle=!running&&!session?.pendingTurnId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
+ const continuationIdle=!running&&!session?.pendingTurnId&&!session?.pendingSubmissionId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
  const lastAssistant=session?.messages.filter(message=>message.role==='assistant').at(-1),lastTurn=string(record(lastAssistant).turnId||record(lastAssistant).id);
  useEffect(()=>{if(session)vm.navigation.contentReady?.()},[session,vm.navigation.contentReady]);
  const continuationWork=useResource<Work>(search.get('continue')==='1'&&workId?'/api/works/'+encodeURIComponent(workId):null),continuationApplied=useRef('');
@@ -66,7 +66,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  },[catalog.data,id,search.toString()]);
  const confirmedStoppedPath=confirmedContinuation(lastAssistant,id,profileId),historicalError=string(record(lastAssistant).business_error);
  useEffect(()=>{if(confirmedStoppedPath&&!session?.pendingTurnId)runtime.restoreStopped(lastTurn,historicalError)},[runtime,confirmedStoppedPath,session?.pendingTurnId,lastTurn,historicalError]);
- useEffect(()=>{const pendingId=session?.pendingTurnId||draft.pending?.turnId;if(!session||!pendingId||runtime.state.getState().running||runtime.blocked.has(pendingId)||runtime.completed.has(pendingId)||draft.pending?.state==='rejected')return;
+ useEffect(()=>{const pendingId=session?.pendingTurnId||session?.pendingSubmissionId||draft.pending?.turnId;if(!session||!pendingId||runtime.state.getState().running||runtime.blocked.has(pendingId)||runtime.completed.has(pendingId)||draft.pending?.state==='rejected')return;
   const saved=draft.pending?.turnId===pendingId?draft.pending:{turnId:pendingId,message:'',attachments:[],context:{profile_id:profileId},inputs:{text:'',files:[]},state:'accepted' as const};
   runtime.connect(saved,profileId,true);
  },[resource.data,id,runtime]);
@@ -74,12 +74,11 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   repair.current=session.id;void vm.api.post('/api/chat/sessions',{action:'auto-title',session_id:id,operation_id:crypto.randomUUID(),expected_revision:session.revision,title:generateSessionTitle(first.content)},vm.config?.csrf||'').then(()=>vm.client.invalidate(['chat'])).catch(()=>{});
  },[session?.id,session?.revision]);
  const submit=()=>void action.run(async()=>{
-  if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId)throw Error('原任务仍在进行，请先查看原回执');
+  if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId||session.pendingSubmissionId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
   const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.source_revision?{skill_revision:draft.command.source_revision}:{}),...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
-  if(draft.command?.requires_plan){const result=await vm.api.post<JsonRecord>('/api/chat/plan',{message:turn.message,sessionId:id,turnId:turn.turnId,attachments:turn.attachments,context},vm.config?.csrf||'');if(!result.plan_token)throw Error('制作方案未返回冻结凭据，输入仍保留');runtime.connect({...turn,context:{...context,plan_token:result.plan_token}},profileId);}
-  else runtime.connect(turn,profileId);
+  await runtime.submit(turn,profileId);
  });
  const stop=()=>void action.run(()=>runtime.stop());
  const retry=(index:number)=>void action.run(async()=>{
@@ -93,18 +92,19 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:message.content,attachments:message.attachments||[],context,inputs:{text:draft.text,files:draft.files,command:draft.command},state:'connecting'};
   // Retry is an explicit new conversational turn, not an implicit production action.
   if(!['discuss','','native'].includes(string(turn.context.action_id)))throw Error('请在成品页恢复原任务或显式选择制作技能');
-  turn.inputs={text:'',files:[]};runtime.connect(turn,profileId);
+  turn.inputs={text:'',files:[]};await runtime.submit(turn,profileId);
  });
- const activeTurn=draft.pending?.turnId||session?.pendingTurnId;
+ const activeTurn=draft.pending?.turnId||session?.pendingTurnId||session?.pendingSubmissionId;
  // Draft edits and identical polling replies must not retrigger the native
  // ChatPage's new-message scroll effect. API history is plain JSON.
  const historyJson=useMemo(()=>JSON.stringify(session?.messages||[]),[session?.messages]);
  const visibleMessages=useMemo(()=>
-  (JSON.parse(historyJson) as ChatSession['messages']).filter(message=>!((running||!!session?.pendingTurnId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn))),
-  [historyJson,session?.id,running,session?.pendingTurnId,activeTurn]);
+  {const messages=(JSON.parse(historyJson) as ChatSession['messages']).filter(message=>!((running||!!session?.pendingTurnId||!!session?.pendingSubmissionId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)));
+   const pending=draft.pending;if(pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments} as ChatSession['messages'][number]);return messages;},
+  [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label+' · v'+draft.command.version}:undefined;
- const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId;
+ const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId||!!session?.pendingSubmissionId;
  return <div className="ew-chat-layout" ref={element=>{element?.querySelector('.chat-messages')?.setAttribute('data-native-scroll-region','chat-messages')}}><ChatPage apiDirect={session?.runtime==='api'} session={shown} stream={running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} linkifyArtifactPaths={false} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:null}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}

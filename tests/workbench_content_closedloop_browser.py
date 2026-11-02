@@ -212,6 +212,14 @@ def main():
                         assert response.ok, response.text()
                         return response.json()
 
+                    def open_version(history):
+                        if not parse_qs(urlsplit(page.url).query).get('path',[''])[0].startswith('/chat/'):
+                            visit('/chat/'+sid)
+                        helper.turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True).click()
+                        expect(page.locator('.gallery-page')).to_be_visible()
+                        details=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
+                        if not details.evaluate('element=>element.open'):details.locator('summary').first.click()
+
                     def posts(path):
                         return [request for request in scenario['requests'] if request['method'] == 'POST' and request['path'] == path]
 
@@ -309,7 +317,7 @@ def main():
                           and payload1['source_article']['provenance'] == discussion_source['provenance']
                           and v1['message'] == original and v1['snapshot']['profile']['id'] == 'oil-pig' and len(v1['attachments']) == 1)
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending", arg=sid)
-                    helper.turn_view(page, v1_history).get_by_role('button', name='查看产物', exact=True).click()
+                    open_version(v1_history)
                     expect(page.get_by_role('button', name='不采纳', exact=True)).to_be_visible()
                     screenshot(page, profile + '-03-v1-preview.png')
 
@@ -325,7 +333,8 @@ def main():
                     check(profile, 'merely having actual image and copy files cannot bypass the independent adoption gate', len(adapter.requests) == before_guard)
                     before_reject = len(adapter.requests)
                     page.goto(origin + '/native/?' + urlencode({'path': '/chat/' + sid}), wait_until='domcontentloaded')
-                    helper.turn_view(page, v1_history).get_by_role('button', name='不采纳', exact=True).click()
+                    open_version(v1_history)
+                    page.get_by_role('button', name='不采纳', exact=True).click()
                     reject = page.get_by_role('dialog').filter(has=page.get_by_role('button', name='确认不采纳', exact=True))
                     rejection = 'TEMP 不采纳 V1 原话：主体需要更突出；暂不采用本版。'
                     reject.get_by_label('决定说明 · 可不填', exact=True).fill(rejection)
@@ -343,7 +352,7 @@ def main():
                           and reject_job['status'] == 'completed' and work['decision']['id'] == reject_id
                           and len(adapter.requests) == before_reject and all(sha(path) == digest for path, digest in scenario['productions'][0]['files'].items()))
 
-                    helper.turn_view(page, v1_history).get_by_role('button', name='修改这版', exact=True).click()
+                    page.get_by_role('button', name='修改这版', exact=True).click()
                     page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
                     destination = parse_qs(urlsplit(page.url).query)['path'][0]
                     binding = parse_qs(urlsplit(destination).query)
@@ -403,11 +412,12 @@ def main():
                           quality['status'] == 'ready' and not quality['objective_missing'] and queued['status'] == 'completed'
                           and any(call['job_id'] == v2_id for call in scenario['review_calls']))
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending", arg=sid)
-                    helper.turn_view(page, v2_history).get_by_role('button', name='查看产物', exact=True).click()
+                    open_version(v2_history)
                     expect(page.get_by_role('button', name='采纳并完成', exact=True)).to_be_visible()
                     screenshot(page, profile + '-06-v2-reviewed-preview.png')
-                    download_link = page.locator('.ew-preview-image').get_by_role('link', name=re.compile('下载原件$'))
                     image_artifact = next(item for item in v2_message['output_files'] if item['mime'].startswith('image/'))
+                    page.locator('.gallery-grid').first.locator('.gcard').filter(has_text=image_artifact['name']).click()
+                    download_link = page.get_by_role('link', name='下载原图',exact=True)
                     scenario['download_attempt'] = {'href': download_link.get_attribute('href'), 'artifact_id': image_artifact['id']}
                     with page.expect_download() as downloading:
                         download_link.click()
@@ -425,7 +435,8 @@ def main():
                                             'suggested_filename': download.suggested_filename,
                                             'scope': 'Actual Edge download event and bytes; physical WebToApp download manager not tested.'}
                     page.goto(origin + '/native/?' + urlencode({'path': '/chat/' + sid}), wait_until='domcontentloaded')
-                    helper.turn_view(page, v2_history).get_by_role('button', name='采纳此版', exact=True).click()
+                    open_version(v2_history)
+                    page.get_by_role('button', name='采纳并完成', exact=True).click()
                     adopt = page.get_by_role('dialog').filter(has=page.get_by_role('button', name='确认采纳并完成', exact=True))
                     expect(adopt.get_by_role('combobox', name='采纳后', exact=True)).to_have_value('archive')
                     adoption_note = 'TEMP 明确采纳 V2 的图片与配文，仅归档，不授权平台发布。'
@@ -469,7 +480,9 @@ def main():
                     before_refresh = {'calls': len(adapter.requests), 'submission_posts': len(posts('/api/chat/submit')),
                                       'action_posts': len(posts('/api/works/' + wid + '/actions')), 'completion_count': len(app.state.completion.get(wid)['items'])}
                     page.reload(wait_until='domcontentloaded')
-                    expect(helper.turn_view(page, v2_history).get_by_text('此版本已采纳', exact=True)).to_be_visible()
+                    details=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
+                    details.locator('summary').first.click()
+                    expect(page.get_by_text('此版本已采纳', exact=True)).to_be_visible()
                     page.wait_for_timeout(600)
                     work = get('/api/works/' + wid)
                     check(profile, 'refresh preserves final adoption, earlier rejection and both versions without duplicate execution or decision',

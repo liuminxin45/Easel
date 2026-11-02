@@ -1,3 +1,4 @@
+export type OutputPathResolver=(path:string)=>string|undefined;
 import { mediaUrl } from './api';
 
 /**
@@ -38,20 +39,20 @@ const OUT_RE = new RegExp(`(?<![A-Za-z0-9:.\\/])outputs\\/(?:${REST})+`, 'g');
 /** 将代码与已有链接独立分段，避免把链接标签和代码当作裸路径处理。 */
 const PROTECT = /(```[\s\S]*?```|`[^`\n]*`|\[[^\]]*\]\([^)\n]*\))/g;
 
-function toMediaUrl(outputsPath: string): string {
+function toMediaUrl(outputsPath: string, resolve?:OutputPathResolver): string {
   const rel = outputsPath.replace(/^outputs\//, '');
-  return mediaUrl(rel);
+  return resolve?.(outputsPath)||mediaUrl(rel);
 }
 
-function toJumpUrl(outputsPath: string): string {
+function toJumpUrl(outputsPath: string, resolve?:OutputPathResolver): string {
   const rel = outputsPath.replace(/^outputs\//, '').replace(/\/+$/, '');
-  return `#/outputs/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  return resolve?.(outputsPath)||`#/outputs/${rel.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 /** 单个 outputs 路径 token → markdown 链接 / 内联图。
  *  面向用户的文案用产品词汇：目录是「内容库 › 相对位置」，文件只显示文件名，
  *  `outputs/` 这类后端存储术语不再出现在界面上。 */
-function renderPath(token: string): string {
+function renderPath(token: string, resolve?:OutputPathResolver): string {
   const t = token.replace(/\\/g, '/').replace(TRAILING, '');
   if (t === 'outputs/' || t === 'outputs') return token;
   try {
@@ -60,11 +61,11 @@ function renderPath(token: string): string {
     if (isDir) {
       const rel = t.replace(/^outputs\//, '').replace(/\/+$/, '');
       if (!rel) return token;
-      return `[内容库 › ${rel}](${toJumpUrl(t)})`;
+      return `[内容库 › ${rel}](${toJumpUrl(t,resolve)})`;
     }
     const name = t.slice(t.lastIndexOf('/') + 1);
-    if (IMG_RE.test(t)) return `![${name}](${toMediaUrl(t)})`;
-    return `[${name}](${toMediaUrl(t)})`;
+    if (IMG_RE.test(t)) return `![${name}](${toMediaUrl(t,resolve)})`;
+    return `[${name}](${toMediaUrl(t,resolve)})`;
   } catch {
     // encodeURIComponent 对孤立代理项等畸形字符会抛 URIError；这是渲染路径（useMemo
     // 同步执行），抛出去会打断整个消息气泡乃至整个对话页面。一段路径编不出链接，
@@ -73,11 +74,11 @@ function renderPath(token: string): string {
   }
 }
 
-function transformSegment(seg: string): string {
+function transformSegment(seg: string, resolve?:OutputPathResolver): string {
   if (!seg.includes('outputs')) return seg;   // 快速路径
   let s = seg.replace(ABS_PREFIX, 'outputs/');
   s = s.replace(/outputs[\\/]/g, 'outputs/'); // 相对路径里的反斜杠分隔符
-  return s.replace(OUT_RE, renderPath);
+  return s.replace(OUT_RE, token=>renderPath(token,resolve));
 }
 
 /** 整体恰好是一个产物路径（用于判定行内代码能否安全转链） */
@@ -91,7 +92,7 @@ function asWholePath(codeSpan: string): string | null {
 }
 
 /** 已有链接也可能由 agent 写成绝对文件路径，不能作为网站路径直接打开。 */
-function transformLink(seg: string): string {
+function transformLink(seg: string, resolve?:OutputPathResolver): string {
   const match = seg.match(/^(\[[^\]]*\])\((?:<([^>]+)>|([^\s]+))\)$/);
   if (!match) return seg;
   let target = match[2] || match[3];
@@ -105,7 +106,7 @@ function transformLink(seg: string): string {
   // 文件进入内容库预览；图片保留媒体目标，以便已有 ![图片] 正常内联。
   try {
     const previewable = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|html?|mp4|webm|mov|m4v|mp3|wav|ogg|m4a|flac|pdf)$/i.test(target);
-    const url = previewable ? toMediaUrl(target) : toJumpUrl(target);
+    const url = previewable ? toMediaUrl(target,resolve) : toJumpUrl(target,resolve);
     return `${match[1]}(${url})`;
   } catch {
     return seg;
@@ -114,17 +115,17 @@ function transformLink(seg: string): string {
 
 /** 入口：整段 markdown 先按受保护区切开；普通文本段做变换，
  *  行内代码仅在「整体就是产物路径」时整体替换为链接。 */
-export function linkifyOutputs(md: string): string {
+export function linkifyOutputs(md: string, resolve?:OutputPathResolver): string {
   if (!md || !md.includes('outputs')) return md;
   return md
     .split(PROTECT)
     .map((seg, i) => {
-      if (i % 2 === 0) return transformSegment(seg);
+      if (i % 2 === 0) return transformSegment(seg,resolve);
       if (seg.length > 2 && seg.startsWith('`') && !seg.startsWith('```')) {
         const whole = asWholePath(seg);
-        if (whole) return renderPath(whole);
+        if (whole) return renderPath(whole,resolve);
       }
-      return transformLink(seg);
+      return transformLink(seg,resolve);
     })
     .join('');
 }

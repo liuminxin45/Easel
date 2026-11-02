@@ -130,6 +130,12 @@ def turn_view(page,history):
     return page.locator('.chat-thread > div').nth(len(history['session']['messages'])-1)
 
 
+def open_version(page,history):
+    turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True).click()
+    details=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
+    if not details.evaluate('element=>element.open'):details.locator('summary').first.click()
+
+
 def direct_send_checks(browser,f,out,report,check,expect):
     """Only the changed send/parameter surfaces; no unrelated page matrix."""
     for profile,width,mobile in [('desktop',1280,False),('mobile',390,True)]:
@@ -192,23 +198,23 @@ def direct_send_checks(browser,f,out,report,check,expect):
             assert not any(request['path']=='/api/chat/stream' and request['method']=='POST' for request in requests[start:])
             if format=='poster':assert not any(request['path'].startswith('/api/creative/prompts/') for request in requests),'parameters should load only on expansion'
             expect(page.locator('.artifact-gallery').last.locator('.artifact-count')).to_have_text('1 / 2')
-            turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click()
+            open_version(page,history)
             expect(page.get_by_role('button',name='修改这版')).to_be_visible()
-            saved=parameters(page.locator('.ew-work-preview'),turn)
+            saved=parameters(page.locator('.ew-version-operations'),turn)
             assert saved['snapshot']['task']==format and turn['business_status']=='completed'
             report['simulated_executions'].append({'profile':profile,'format':format,'turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
             check(profile,format+' sends directly without a modal and exposes exact frozen parameters by the product')
             page.goto(f['origin']+'/native/chat/'+sid)
             expect(textarea).to_be_enabled()
-        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
-        parameters(page.locator('.ew-work-preview'),turn);check(profile,'work product view shows the same exact version parameters')
+        open_version(page,history);expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        parameters(page.locator('.ew-version-operations'),turn);check(profile,'work product view shows the same exact version parameters')
         page.get_by_role('button',name='修改这版').click();page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.includes('action=change')")
         textarea=page.get_by_role('textbox',name='对话输入');page.wait_for_function("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').command?.action_id==='change'",arg=sid)
         textarea.fill('修改准确版本，一次发送 '+profile);page.get_by_role('button',name='发送',exact=True).click();expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
         history=wait_history(page,f['origin'],sid,previous,files=True);turn=history['session']['messages'][-1];previous=turn['turnId']
         page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(page.locator('.artifact-gallery')).to_have_count(3)
-        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible()
-        saved=parameters(page.locator('.ew-work-preview'),turn);assert saved['snapshot']['task']=='change'
+        open_version(page,history);expect(page.get_by_role('button',name='修改这版')).to_be_visible()
+        saved=parameters(page.locator('.ew-version-operations'),turn);assert saved['snapshot']['task']=='change'
         report['simulated_executions'].append({'profile':profile,'format':'change','turn_id':turn['turnId'],'snapshot_sha256':saved['snapshot']['snapshot_sha256'],'actual_file_ids':[file['id'] for file in turn['output_files']]})
         check(profile,'version modification sends once without a modal and keeps its exact parent')
         page.screenshot(path=str(out/(profile+'-direct-send.png')))
@@ -270,7 +276,7 @@ def main():
                             if format=='poster':page.locator('input[type=file]').set_input_files({'name':'TEMP原始素材.txt','mimeType':'text/plain','buffer':b'Original TEMP evidence bytes'})
                             expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled(timeout=20000);textarea.press('Enter');expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible();expect(textarea).to_have_value('',timeout=20000)
                             history=wait_history(page,f['origin'],sid,prior,files=True);turn=history['session']['messages'][-1]
-                            expect(turn_view(page,history).get_by_role('region',name='对话产物预览')).to_be_visible(timeout=20000);expect(turn_view(page,history).get_by_role('button',name='查看产物',exact=True)).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
+                            expect(turn_view(page,history).get_by_role('region',name='对话产物预览')).to_be_visible(timeout=20000);expect(turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True)).to_be_visible(timeout=20000);page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending",arg=sid);expect(textarea).to_be_enabled(timeout=20000)
                             assert turn['output_files'] and turn['business_status']=='completed',turn
                             with f['box'].store.connect() as c:
                                 saved=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(turn['turnId'],)).fetchone()[0])
@@ -287,22 +293,20 @@ def main():
                         assert len(history['linked_works'])==2
                         page.screenshot(path=str(out/(profile+'-native-products.png')),full_page=True)
                         # Production version details must return to this same native session.
-                        turn_view(page,history).get_by_role('button',name='查看产物',exact=True).click();expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
-                        if mobile:page.locator('.ew-work-tabs').get_by_role('button',name='对话',exact=True).click()
-                        page.get_by_text('本轮操作与技能',exact=True).click();page.get_by_label('发送方式',exact=True).select_option('feedback');feedback='只记录这版原话：背景太乱 '+profile
-                        page.get_by_role('textbox',name='对话输入').fill(feedback);before_feedback=len(f['adapter'].requests)
-                        with page.expect_response(lambda response:'/actions' in response.url and response.request.method=='POST') as recorded:page.get_by_role('button',name='发送',exact=True).click()
+                        open_version(page,history);expect(page.get_by_role('button',name='修改这版')).to_be_visible(timeout=20000)
+                        page.get_by_text('只记录本版反馈',exact=True).click();feedback='只记录这版原话：背景太乱 '+profile
+                        page.get_by_role('textbox',name='反馈原话').fill(feedback);before_feedback=len(f['adapter'].requests)
+                        with page.expect_response(lambda response:'/actions' in response.url and response.request.method=='POST') as recorded:page.get_by_role('button',name='保存反馈，不制作',exact=True).click()
                         assert recorded.value.status==200 and len(f['adapter'].requests)==before_feedback
                         with f['box'].store.connect() as c:row=c.execute('SELECT candidate_id,status FROM toolbox_jobs WHERE kind=? AND text=?',('feedback',feedback)).fetchone()
                         assert row['candidate_id']==turn['turnId'] and row['status']=='completed'
                         check(profile,'native version feedback records exact raw words locally without a model turn')
-                        if mobile:page.locator('.ew-work-tabs').get_by_role('button',name='成品',exact=True).click()
                         page.get_by_role('button',name='修改这版').click();page.wait_for_function("id=>new URLSearchParams(location.search).get('path')?.startsWith('/chat/'+id+'?')",arg=sid,timeout=20000)
                         assert 'action=change' in parse_qs(urlsplit(page.url).query)['path'][0] and 'version=' in parse_qs(urlsplit(page.url).query)['path'][0]
                         textarea=page.get_by_role('textbox',name='对话输入');expect(textarea).to_be_visible();textarea.fill('只改这一版，原版保留 '+profile);textarea.press('Enter')
                         expect(page.get_by_role('dialog',name='确认本次制作方案')).not_to_be_visible()
                         expect(textarea).to_be_enabled(timeout=20000)
-                        page.wait_for_function('()=>document.querySelectorAll(".chat-turn-outputs").length>=3')
+                        page.wait_for_function('()=>document.querySelectorAll(".artifact-gallery").length>=3')
                         changed=wait_history(page,f['origin'],sid,turn['turnId'],files=True);last=changed['session']['messages'][-1]
                         with f['box'].store.connect() as c:saved=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(last['turnId'],)).fetchone()[0])
                         assert saved['snapshot']['task']=='change' and saved['hook_status']=='completed' and last['business_status']=='completed',saved

@@ -83,9 +83,10 @@ interface OutputsPageProps {
   /** Host-owned metadata and lifecycle actions; the native gallery stays shared. */
   renderProjectDetails?: (project: OutputNode) => ReactNode;
   canDelete?: (node: OutputNode) => boolean;
+  registerLayer?: (close:()=>void)=>()=>void;
 }
 
-export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true }: OutputsPageProps) {
+export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true, registerLayer }: OutputsPageProps) {
   const [roots, setRoots] = useState<OutputNode[]>([]);
   const [treeError, setTreeError] = useState('');
   const [treeLoading, setTreeLoading] = useState(true);
@@ -96,6 +97,13 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const reqSeq = useRef(0);
+  useEffect(()=>{
+    if(!selected)return;
+    const close=()=>setSelected(null),release=registerLayer?.(close);
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();close()}};
+    document.addEventListener('keydown',escape);
+    return()=>{release?.();document.removeEventListener('keydown',escape)};
+  },[selected?.path,registerLayer]);
 
   const load = useCallback(() => {
     const seq = ++treeSeq.current;
@@ -132,12 +140,12 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   const atProjectRoot = stack.length === 1;
   // 当前项目的展示头（进入项目后才有），用于「成品/素材」分区
   const projectMeta = useMemo(
-    () => (stack.length >= 1 ? roots.find((r) => r.name === stack[0])?.meta : undefined),
-    [roots, stack]);
+    () => selectedProject?.meta,
+    [selectedProject]);
   const deliverableSet = useMemo(
-    () => new Set(atProjectRoot ? (projectMeta?.deliverablePaths || []) : []),
+    () => new Set(projectMeta?.deliverablePaths || []),
     [projectMeta, atProjectRoot]);
-  const hasSplit = atProjectRoot && deliverableSet.size > 0;
+  const hasSplit = deliverableSet.size > 0;
   const deliverableFiles = useMemo(
     () => (hasSplit ? files.filter((f) => deliverableSet.has(f.path)) : []),
     [files, deliverableSet, hasSplit]);
@@ -356,7 +364,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
                 <div className="skill-detail-title" style={{ fontSize: 16 }}>{selected.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3, fontFamily: "'SF Mono','Consolas',monospace" }}>{selected.path}</div>
               </div>
-              <button className="icon-btn" onClick={() => setSelected(null)}>×</button>
+              <button className="icon-btn" aria-label="关闭预览" onClick={() => setSelected(null)}>×</button>
             </div>
             <div className="drawer-body">{preview()}</div>
             {canDelete(selected) && <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>

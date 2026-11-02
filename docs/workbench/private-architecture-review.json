@@ -104,7 +104,11 @@
     "easel_workbench/features/works/versions.py",
     "easel_workbench/application/chat_admission.py",
     "easel_workbench/features/conversations/service.py",
-    "easel_workbench/http/chat.py"
+    "easel_workbench/http/chat.py",
+    "easel_workbench/application/delivery_reconciliation.py",
+    "easel_workbench/features/works/products.py",
+    "easel_workbench/runtime/bridge.py",
+    "easel_workbench/runtime/native_api.py"
   ],
   "modules": [
     {
@@ -2173,48 +2177,6 @@
       "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: application",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "08f06d6647e29a712e2c541bbe6932aff5d9ee3df3d5e21701e9060882221101",
-      "path": "easel_workbench/application/chat.py",
-      "symbol_groups": [
-        {
-          "area": "application",
-          "members": [
-            "ChatBusiness",
-            "ChatBusiness.__init__",
-            "ChatBusiness.skills",
-            "ChatBusiness.skill",
-            "ChatBusiness.history",
-            "ChatBusiness._session",
-            "ChatBusiness._selection",
-            "ChatBusiness._parent",
-            "ChatBusiness._news_source",
-            "ChatBusiness._attachments",
-            "ChatBusiness._freeze_attachments",
-            "ChatBusiness._instruction",
-            "ChatBusiness._review_document",
-            "ChatBusiness._workspace",
-            "ChatBusiness._bundle",
-            "ChatBusiness._plan_request",
-            "ChatBusiness.plan",
-            "ChatBusiness._public_plan",
-            "ChatBusiness.prepare",
-            "ChatBusiness.accept",
-            "ChatBusiness._accept_work",
-            "ChatBusiness.started",
-            "ChatBusiness.finished"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
-        "path": "easel_workbench/application/chat.py",
-        "reviewed_sha256": "f67b89cbb32bb93959c1905917621e0c8cb81108f120ae4c01068a004e648428"
-      }
-    },
-    {
-      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: application",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
       "reviewed_sha256": "6e44c259612802bf7ee75ad74bb57019d5ffaf538e1419330f2382585d790063",
       "path": "easel_workbench/application/chat_admission.py",
       "symbol_groups": [
@@ -2326,35 +2288,6 @@
       }
     },
     {
-      "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: infrastructure/storage",
-      "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "0eb7c196bacfbd9a79b1bb3beee8515019425223dc717a8496f2401db9c8090d",
-      "path": "easel_workbench/infrastructure/storage/schema.py",
-      "symbol_groups": [
-        {
-          "area": "infrastructure/storage",
-          "members": [
-            "initialize_chat_submissions",
-            "initialize_collection",
-            "initialize_distribution",
-            "initialize_accounts",
-            "initialize_installations",
-            "initialize_evidence",
-            "initialize_chat_plans",
-            "initialize_creator",
-            "initialize_tasks",
-            "initialize_sources"
-          ]
-        }
-      ],
-      "prior_review": {
-        "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
-        "path": "easel_workbench/infrastructure/storage/schema.py",
-        "reviewed_sha256": "a32c9d651cb9cfd97bb665c5400c8a944d0b2ad79f3f5739e6ebe3911a1660c1"
-      }
-    },
-    {
       "responsibility": "Durable chat receipt and server-owned preparation; original native execution contract sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
@@ -2373,6 +2306,211 @@
         "source_commit": "f6638944ba5b636232f25359cbbfa4e632d05c25",
         "path": "easel_workbench/runtime/toolbox_server.py",
         "reviewed_sha256": "499b830594af19d26c29cb670638e336aa848805ee064f12c6679cd519b46a60"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "111bc47c718f001027aa52f148380cb5b2ff31fa3a45d8963dc4f328284cf4c3",
+      "path": "easel_workbench/application/chat.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "ChatBusiness",
+            "ChatBusiness.__init__",
+            "ChatBusiness.skills",
+            "ChatBusiness.skill",
+            "ChatBusiness.history",
+            "ChatBusiness._session",
+            "ChatBusiness._selection",
+            "ChatBusiness._parent",
+            "ChatBusiness._news_source",
+            "ChatBusiness._attachments",
+            "ChatBusiness._freeze_attachments",
+            "ChatBusiness._instruction",
+            "ChatBusiness._review_document",
+            "ChatBusiness._workspace",
+            "ChatBusiness._bundle",
+            "ChatBusiness._plan_request",
+            "ChatBusiness.plan",
+            "ChatBusiness._public_plan",
+            "ChatBusiness.prepare",
+            "ChatBusiness.accept",
+            "ChatBusiness._accept_work",
+            "ChatBusiness.started",
+            "ChatBusiness.finished"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/application/chat.py",
+        "reviewed_sha256": "08f06d6647e29a712e2c541bbe6932aff5d9ee3df3d5e21701e9060882221101"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "ce1cb47f80350b27f7044fc0ee26a1c40a8e41ae207041196e2213ce4ade5d56",
+      "path": "easel_workbench/application/delivery_reconciliation.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "preview",
+            "apply"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/application/chat.py",
+        "reviewed_sha256": "08f06d6647e29a712e2c541bbe6932aff5d9ee3df3d5e21701e9060882221101"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: features/works",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "95c96505c166b2968e592e844811ed47b631f9d8fb537e5afab0197ecfb0617f",
+      "path": "easel_workbench/features/works/products.py",
+      "symbol_groups": [
+        {
+          "area": "features/works",
+          "members": [
+            "fingerprint",
+            "observed_sha",
+            "ChatProducts",
+            "ChatProducts.__init__",
+            "ChatProducts._turn",
+            "ChatProducts._partial",
+            "ChatProducts.describe",
+            "ChatProducts.file"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/features/works/products.py",
+        "reviewed_sha256": "e1dd63b2f7362afb84722f559e1046cdf2b1eaf77b9ba2bca8362aed1769475c"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: infrastructure/storage",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "cb1ba654d4b45e7722b5b15b2eb065f801cbea0ffa42b627dfa8bffc2423a630",
+      "path": "easel_workbench/infrastructure/storage/schema.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/storage",
+          "members": [
+            "initialize_chat_submissions",
+            "initialize_collection",
+            "initialize_distribution",
+            "initialize_accounts",
+            "initialize_installations",
+            "initialize_evidence",
+            "initialize_chat_plans",
+            "initialize_creator",
+            "initialize_tasks",
+            "initialize_sources",
+            "initialize_delivery_reconciliations"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/infrastructure/storage/schema.py",
+        "reviewed_sha256": "0eb7c196bacfbd9a79b1bb3beee8515019425223dc717a8496f2401db9c8090d"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "902c2324a988123f794b7ceb2ff5db1d1e1b5231d86711d8e2a2f5cb72bd300e",
+      "path": "easel_workbench/runtime/bridge.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "events",
+            "event_lines",
+            "lifecycle",
+            "target",
+            "allowed_artifact",
+            "_product_roots",
+            "delivery_paths",
+            "capture_artifacts",
+            "correlate"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/runtime/bridge.py",
+        "reviewed_sha256": "31c11c4de5c4541ee9a30ffcdbe13d53d5a948c4f8a22eeb2370368977bca527"
+      }
+    },
+    {
+      "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "4e30a649f6ce46659bc790eb1e1b27a0a2f37785ee7d0e58ac73bbb139e91d60",
+      "path": "easel_workbench/runtime/native_api.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "_HtmlPreviewFileResponse",
+            "_HtmlPreviewFileResponse.__call__",
+            "is_html_preview_response",
+            "_protect_html_preview",
+            "supports",
+            "_seconds",
+            "NativeApi",
+            "NativeApi.__init__",
+            "NativeApi.receipt",
+            "NativeApi._mutate",
+            "NativeApi._reserve_operation",
+            "NativeApi._save_operation",
+            "NativeApi._require_admission",
+            "NativeApi._upload",
+            "NativeApi._collection",
+            "NativeApi.analytics_context",
+            "NativeApi._invalidate_analytics",
+            "NativeApi._prepare_account_login",
+            "NativeApi._trends",
+            "NativeApi._ideas",
+            "NativeApi._save_ideas",
+            "NativeApi._schedule",
+            "NativeApi._save_schedule",
+            "NativeApi._save_records",
+            "NativeApi._profiles",
+            "NativeApi._profile",
+            "NativeApi._profile_files",
+            "NativeApi._save_profile_file",
+            "NativeApi._work_tree",
+            "NativeApi._outputs_tree",
+            "NativeApi._output_context",
+            "NativeApi._native_tree",
+            "NativeApi._registered_file",
+            "NativeApi._file",
+            "NativeApi._export_package",
+            "NativeApi.dispatch",
+            "NativeApi._accounts",
+            "handle"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+        "path": "easel_workbench/runtime/native_api.py",
+        "reviewed_sha256": "04d2dc6536148f7e8879b3174d4b757a4fcccd9319e046c54b87c0b25e0a2613"
       }
     }
   ],

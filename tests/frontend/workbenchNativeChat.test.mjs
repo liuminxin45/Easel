@@ -115,7 +115,7 @@ test('the latest confirmed interrupted production keeps its unique continuation 
  const products=renderedProducts(ui,ui.chat.session.messages.at(-1)),buttons=continuationButtons(products);
  assert.equal(buttons.length,1,'the exact message owns its unique continuation action');
  const status=nodes(products).find(node=>node.type===f.components.TaskStatus);assert.ok(status);const displayed=status.type(status.props);
- assert.equal(displayed.props.role,'status');assert.equal(displayed.props['aria-label'],'制作中断');assert.equal(status.props.title,'制作未完成');
+ assert.equal(displayed.props.role,'status');assert.equal(displayed.props['aria-label'],'制作中断');assert.equal(status.props.title,'制作中断');
  buttons[0].props.onClick();const destination=new URL(f.calls.navigate[0],'https://example.test');
  assert.equal(destination.pathname,'/chat/session-one');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'interrupted-version',skill:'content-production',skill_version:'2',action:'change',continue:'1'});
  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'  原字材料\n保留  ');
@@ -312,26 +312,27 @@ test('historical turn products use registered file IDs and open the exact busine
  const f=fixture(),message={turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}};
  f.resources.product={work_id:'exact-work',version_id:'exact-version',files:message.output_files,text_blocks:[],can_adopt:false};
  const wrapper=f.lib.NativeTurnOutputs({message}),tree=wrapper.type(wrapper.props);
- assert.equal(f.lib.nativeArtifacts(message)[0].url,'/api/files/registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters),undefined);nodes(tree).find(n=>n.type==='button').props.onClick();assert.equal(f.calls.navigate[0],'/works/exact-work?version=exact-version');
+ assert.equal(f.lib.nativeArtifacts(message)[0].url,'/api/files/registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters),undefined);assert.equal(nodes(tree).filter(n=>n.type==='button').length,0);assert.equal(f.calls.navigate.length,0);
+ f.resources.session.messages=[{...message,role:'assistant',content:'已生成',library_path:'workbench-exact-work/exact-version'}];assert.match(f.render().chat.session.messages[0].content,/#\/outputs\/workbench-exact-work\/exact-version/);
 });
 function productActionsFixture(work,{navigation={},readWork}={}){
  let cursor=0;const state=[],drafts=new Map(),calls={reads:[],actions:[],navigate:[],errors:[],reloads:0,invalidate:[]};
  const react={useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]}};
  const product={work_id:'exact-work',version_id:'completed-v1',can_adopt:true,files:[],text_blocks:[]};
  const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args)}};
- const core={...productionRecovery,array,record,string,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
+ const core={...productionRecovery,array,record,string,statusLabel:value=>value,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
   useWorkbench:()=>vm,useResource:path=>({data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}),
   useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]},
   useAsyncAction:()=>({busy:false,run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}})};
- const common={Notice:()=>{},Modal:'dialog',Field:'label',ActionButton:'button'},presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
- const lib=module('workbench/ui/ChatTurnProducts.tsx',{react,'@workbench/core':core,'../../components/ArtifactGallery':()=>{},'../../components/CopyableText':()=>{},'./common':common,'./WorkCompletion':{Completion:()=>{}},'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core})});
- const render=()=>{cursor=0;return lib.ChatTurnProducts({message:{turnId:'completed-v1',status:'completed'}})};
+ const common={Notice:()=>{},Modal:'dialog',Field:'label',ActionButton:'button',Pending:()=>{},TextRecord:()=>{},Markdown:()=>{}},presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
+ const lib=module('workbench/ui/VersionOperations.tsx',{react,'@workbench/core':core,'../../components/CopyableText':()=>{},'./DraftOperations':{DraftOperations:()=>{}},'./ProductionParameters':{ProductionParameters:()=>{}},'./common':common,'./WorkCompletion':{Completion:()=>{}},'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core})});
+ const render=()=>{cursor=0;return lib.VersionPanel({workId:'exact-work',versionId:'completed-v1'})};
  const button=(tree,label)=>nodes(tree).find(node=>node.type==='button'&&node.props.children===label);
- const rejection=()=>{const adoption=nodes(render()).find(node=>node.type?.name==='ChatAdoption');assert.ok(adoption);const child=nodes(adoption.type(adoption.props)).find(node=>node.type?.name==='ChatRejection');assert.ok(child);return child.type(child.props)};
+ const rejection=()=>{const dialog=nodes(render()).find(node=>node.type==='dialog'&&node.props.open);assert.ok(dialog);return dialog};
  return {calls,product,render,button,rejection,drafts};
 }
-const completedActionWork=()=>({id:'exact-work',latest_version:'newer-v2',native_chat:{session_id:'original-session',version_id:'newer-v2'},versions:[
- {id:'completed-v1',status:'completed',creative:{creator:{skills:[{id:'content-production',version:2}]}}},
+const completedActionWork=()=>({id:'exact-work',title:'准确作品',format:'poster',history:[],pending:[],draft:{},latest_version:'newer-v2',native_chat:{session_id:'original-session',version_id:'newer-v2'},versions:[
+ {id:'completed-v1',label:'v01',artifacts:[],status:'completed',creative:{creator:{skills:[{id:'content-production',version:2}]}}},
  {id:'newer-v2',status:'completed',creative:{creator:{skills:[{id:'content-production',version:9}]}}}
 ]});
 
@@ -341,10 +342,10 @@ test('editing a chat product rereads its exact completed version and navigates w
  const [path,options]=f.calls.navigate[0],destination=new URL(path,'https://example.test');
  assert.equal(destination.pathname,'/chat/original-session');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'completed-v1',action:'change',skill:'content-production',skill_version:'2'});assert.equal(options.intent,'flow');
  assert.equal(f.calls.navigate.length,1);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
- for(const kind of ['missing-version','unfinished-version','missing-session','missing-frozen-skill']){
+ for(const kind of ['missing-version','unfinished-version','missing-frozen-skill']){
   const work=completedActionWork();if(kind==='missing-version')work.versions.shift();if(kind==='unfinished-version')work.versions[0].status='stopped';if(kind==='missing-session')delete work.native_chat;if(kind==='missing-frozen-skill')work.versions[0].creative.creator.skills=[];
-  const blocked=productActionsFixture(work);blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();
-  assert.equal(blocked.calls.navigate.length,0,kind);assert.equal(blocked.calls.actions.length,0,kind);assert.match(blocked.calls.errors[0],/此版本的制作记录尚未核对/,kind);
+  const blocked=productActionsFixture(completedActionWork(),{readWork:async()=>work});blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();
+  assert.equal(blocked.calls.navigate.length,0,kind);assert.equal(blocked.calls.actions.length,0,kind);assert.match(blocked.calls.errors[0],/此版本的制作记录尚未核对|原版制作技能没有准确绑定/,kind);
  }
 });
 
@@ -370,14 +371,14 @@ test('user messages have no product extension or polling owner while assistant m
 
 test('chat rejection opens a version-bound confirmation, preserves its raw reason, and writes only after explicit confirmation',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'不采纳').props.onClick();let dialog=f.rejection();
- assert.equal(dialog.type,'dialog');assert.equal(dialog.props.title,'不采纳此版');assert.equal(f.calls.actions.length,0);assert.equal(f.calls.navigate.length,0);
+ assert.equal(dialog.type,'dialog');assert.equal(dialog.props.title,'不采纳 v01');assert.equal(f.calls.actions.length,0);assert.equal(f.calls.navigate.length,0);
  const reason='  这版色彩不符\n保留我的原话  ';
  nodes(dialog).find(node=>node.type==='textarea').props.onChange({target:{value:reason}});
  dialog.props.onClose();assert.equal(nodes(f.render()).filter(node=>node.type?.name==='ChatAdoption').length,0);assert.equal(f.calls.actions.length,0);
  f.button(f.render(),'不采纳').props.onClick();dialog=f.rejection();assert.equal(nodes(dialog).find(node=>node.type==='textarea').props.value,reason);
  f.button(dialog,'确认不采纳').props.onClick();await tick();await tick();
  assert.deepEqual(plain(f.calls.actions),[['exact-work',{kind:'reject',candidate_id:'completed-v1',text:reason,files:[]}]]);
- assert.equal(f.calls.navigate.length,0);assert.equal(f.calls.errors.length,0);assert.equal(f.calls.reloads,1);assert.deepEqual(plain(f.calls.invalidate),[['works','chat']]);
+ assert.equal(f.calls.navigate.length,0);assert.equal(f.calls.errors.length,0);assert.equal(f.calls.reloads,1);assert.deepEqual(plain(f.calls.invalidate),[['works','chat','studio']]);
  assert.equal(nodes(f.render()).filter(node=>node.type?.name==='ChatAdoption').length,0);
 });
 

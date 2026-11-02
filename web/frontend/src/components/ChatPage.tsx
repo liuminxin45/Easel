@@ -52,7 +52,8 @@ interface ChatPageProps {
   renderMessageExtra?: (message: ChatMessage, index: number) => ReactNode;
   linkifyArtifactPaths?: boolean;
   questionServices?:QuestionServices;
-  messageArtifacts?:(message:ChatMessage)=>Artifact[];
+  messageArtifacts?:(message:ChatMessage)=>Artifact[]|undefined;
+  resolveArtifactPath?:(message:ChatMessage,path:string)=>string|undefined;
 }
 
 // 空态推荐（贴合 Easel 社媒创作场景）
@@ -70,7 +71,7 @@ function greeting(): string {
 }
 
 export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered, onQuestionClosed,
-  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices,messageArtifacts }: ChatPageProps) {
+  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices,messageArtifacts,resolveArtifactPath }: ChatPageProps) {
   const [localInput, setLocalInput] = useState('');
   const [localAttachments, setLocalAttachments] = useState<UploadedFile[]>([]);
   const input = composer?.text ?? localInput;
@@ -364,6 +365,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
                 actions={actions}
                 linkifyArtifactPaths={linkifyArtifactPaths}
                 artifacts={messageArtifacts?.(msg)}
+                resolveArtifactPath={resolveArtifactPath}
               />
               {renderMessageExtra?.(msg, i)}
               {!live && msg.questions && <QuestionCards questions={msg.questions} onDone={onQuestionAnswered} onClosed={onQuestionClosed} services={questionServices} />}

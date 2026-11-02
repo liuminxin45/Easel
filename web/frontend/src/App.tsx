@@ -1,3 +1,4 @@
+import {bindOutputNavigation} from './lib/outputNavigation';
 import type { ReactNode, HTMLAttributes } from 'react';
 import type { SidebarProps } from './components/Sidebar';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -101,20 +102,7 @@ function NativeApp() {
   // `#/outputs/<路径>` 锚点，这里监听 hashchange 切页并带上下文，随后清掉 hash
   // （不污染地址栏与前进/后退历史）。
   const [outputsJump, setOutputsJump] = useState('');
-  useEffect(() => {
-    const onHash = () => {
-      const m = window.location.hash.match(/^#\/outputs\/(.+)$/);
-      if (!m) return;
-      let path = m[1];
-      try { path = decodeURIComponent(path); } catch { /* 保留原样 */ }
-      setOutputsJump(path);
-      setCurrentPage('outputs');
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    };
-    window.addEventListener('hashchange', onHash);
-    onHash();
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  useEffect(() => bindOutputNavigation(path=>{setOutputsJump(path);setCurrentPage('outputs')}), []);
   const clearOutputsJump = useCallback(() => setOutputsJump(''), []);
 
   // 挂载时决定进哪个会话。规则：

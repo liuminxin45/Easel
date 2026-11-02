@@ -106,20 +106,10 @@
   html[data-native-platform] .brush-body { min-block-size: 44px; }
   html[data-native-platform] .composer-hint { min-inline-size: 0; overflow-wrap: anywhere; }
   html[data-native-platform] .chat-product-actions,
-  html[data-native-platform] .chat-task-status,
-  html[data-native-platform] .chat-linked-works { display: flex; flex-wrap: wrap; min-inline-size: 0; gap: 8px; }
+  html[data-native-platform] .chat-task-status { display: flex; flex-wrap: wrap; min-inline-size: 0; gap: 8px; }
   html[data-native-platform] .chat-product-actions > [role="status"] { flex-basis: 100%; overflow-wrap: anywhere; }
-  html[data-native-platform] .ew-work { overflow-y: auto; min-block-size: 0; }
   html[data-native-platform] .ew-grid,
-  html[data-native-platform] .ew-editor-grid,
-  html[data-native-platform] .ew-work-columns { grid-template-columns: minmax(0, 1fr); }
-  html[data-native-platform] .ew-work-preview:not(.ew-selected),
-  html[data-native-platform] .ew-work-chat:not(.ew-selected),
-  html[data-native-platform] .ew-work-records:not(.ew-selected) { display: none; }
-  html[data-native-platform] .ew-work-preview.ew-selected,
-  html[data-native-platform] .ew-work-chat.ew-selected,
-  html[data-native-platform] .ew-work-records.ew-selected { display: block; min-block-size: 0; padding: 0; }
-  html[data-native-platform] .ew-work-chat > .chat-page { min-block-size: 0; }
+  html[data-native-platform] .ew-editor-grid { grid-template-columns: minmax(0, 1fr); }
   html[data-native-platform] .ew-loading { min-block-size: 0; padding: 16px; overflow-y: auto; }
   html[data-native-platform] .ew-loading > .page-scroll { block-size: auto; padding-inline: 0; overflow-y: visible; }
 

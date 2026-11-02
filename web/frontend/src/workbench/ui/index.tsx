@@ -1,3 +1,5 @@
+import {WorkLibrary} from './nativePages';
+import {bindOutputNavigation} from '../../lib/outputNavigation';
 import {ActionButton} from './common';
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import App,{topicPrompt} from '../../App';
@@ -5,18 +7,18 @@ import type {Page} from '../../components/Sidebar';
 import {bindWorkbenchNativeApi} from './nativeApi';
 import {ChatSessionView,nativeSkillChoices,type NativeSkill,type NativeSessions,type NativeSelection} from './ChatSessionView';
 import {NativeSkills} from './NativeSkills';
-import {creationDestination,workPath,statusLabel,string,array,record,type WorkList,type CreatorBootstrap,type JsonRecord,type DraftAttachment} from '@workbench/core';
+import {creationDestination,string,array,record,type CreatorBootstrap,type JsonRecord,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
-import {IconDashboard,IconChat,IconSkills,IconOutputs,IconAccounts,IconProfile,IconPlus,IconFire,IconCalendar,IconPublish,IconChart} from './components/icons';
-import {IconGear} from './components/settingsIcons';
-import SettingsSelect from './components/SettingsSelect';
-import {Notice,Modal} from './common';
+import {IconDashboard,IconChat,IconSkills,IconOutputs,IconAccounts,IconProfile} from './components/icons';
+
+
+import {Notice} from './common';
 import {Dashboard,Library,Research} from './overview';
 import {nativePageRoutes} from '../platform/native-routes';
 import NativeNews from './NativeNews';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
-import {Production,WorkPage} from './production';
+
 import {Skills,Profiles,Accounts} from './management';
 import {Publishing} from './publishing';
 import {Settings,LocalInputs} from './system';
@@ -39,6 +41,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const runtimeStatus=useResource<JsonRecord>(vm.ready?'/api/status':null,{interval:30000});
  useEffect(()=>{const reload=()=>void runtimeStatus.reload();window.addEventListener('workbench:settings-changed',reload);return()=>window.removeEventListener('workbench:settings-changed',reload)},[runtimeStatus.reload]);
  const nativeId=p.startsWith('/chat/')?decodeURIComponent(p.slice(6)):q.get('session')||'',activeSession=sessions.data?.sessions.find(session=>session.id===nativeId),profile=q.get('profile')||activeSession?.profile_id||activeSession?.persona||selected.profile_id;
+ useEffect(()=>bindOutputNavigation(path=>vm.navigate('/works?'+new URLSearchParams({path}),{intent:'object'})),[vm.navigation]);
  const open=(target:string)=>{navigate(target,{intent:'module'})};
  const createChat=async(wantedProfile=profile,command?:NativeSelection,text='',files:DraftAttachment[]=[],articleId?:string,articleMode?:'auto'|'product',topicTitle?:string)=>{let created:string|undefined;const ticket=navigation.ticket?.();await chatAction.run(async()=>{
   if(articleId&&topicTitle){const article=await vm.api.get<JsonRecord>('/api/news/'+encodeURIComponent(articleId));if(string(article.id)!==articleId)throw Error('新闻来源标识不匹配，请重新打开原文');text=[text,string(article.body)].filter(Boolean).join('\n\n');}
@@ -59,7 +62,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId} id={nativeId} search={q}/>:<ChatLanding sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
  else if(p==='/news'||p.startsWith('/news/a/'))page=<NativeNews onUseTopic={useTopic} id={p.startsWith('/news/a/')?decodeURIComponent(p.slice(8)):undefined} search={q}/>;
  else if(['/posters/new','/articles/new','/works/new'].includes(p))page=<NativeNewChat key={shownPath} format={p==='/articles/new'?'article':'poster'} profileId={profile} search={q} onCreate={createChat}/>;
- else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkPage id={decodeURIComponent(p.split('/')[2]!)} search={q}/>;
+ else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
  else if(['/posters','/articles','/works'].includes(p)||p.endsWith('/history'))page=q.get('drafts')==='1'?<LocalInputs/>:<Library format={p==='/articles'?'article':q.get('format')||''} history={p.endsWith('/history')}/>;
  else if(p==='/settings'||p==='/account')page=<Settings/>;
  else if(q.get('section')==='skills')page=<><NativeSkills profileId={profile} onUse={async(command,text)=>{if(!await createChat(profile,command,text))throw Error('会话暂未创建，输入仍保留在这里。')}}/>{(q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item'))&&<Skills profileId={profile} search={q}/>}</>;

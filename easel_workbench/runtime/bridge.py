@@ -73,28 +73,36 @@ def _product_roots(root,product_roots):
     return result
 
 
+def delivery_paths(reply):
+    """Explicit delivered files only; normalize URI spelling before filesystem use."""
+    from urllib.parse import unquote
+    paths=[value.strip('<>') for value in re.findall(r'\]\((<?(?:[A-Za-z]:[/\\]|/)[^)\n]+)\)',reply)]
+    from .delivery_receipts import structured_receipts
+    def collect(value):
+        if isinstance(value,str) and re.match(r'^(?:[A-Za-z]:[/\\]|/)',value):paths.append(value)
+        elif isinstance(value,list):
+            for item in value:collect(item)
+        elif isinstance(value,dict):
+            for key in ('artifacts','deliverables','files','path','file','final_path','output_path'):
+                if key in value:collect(value[key])
+    for candidate in structured_receipts(reply):collect(candidate)
+    result=[]
+    for value in paths:
+        value=unquote(value).replace('\\','/')
+        if re.match(r'^/[A-Za-z]:/',value):value=value[1:]
+        if '\0' in value:continue
+        path=pathlib.Path(value)
+        if any(part in ('.','..') for part in value.split('/')):continue
+        if any(parent.is_symlink() or getattr(parent,'is_junction',lambda:False)() for parent in (path,*path.parents)):continue
+        if path.is_file() and path not in result:result.append(path)
+    return result
+
+
 def capture_artifacts(store,tid,reply,*,product_roots=None,root=None):
     # Only explicit delivered file links or delivered directories, not global newest files.
     destination_root=pathlib.Path(root).resolve() if root is not None else ROOT
     roots=_product_roots(destination_root,product_roots) if product_roots is not None else None
-    paths=[value.strip('<>') for value in re.findall(r'\]\((<?(?:[A-Za-z]:[/\\]|/)[^)\n]+)\)',reply)]
-    from .delivery_receipts import structured_receipts
-    def collect(value):
-        if isinstance(value,str) and re.match(r'^(?:[A-Za-z]:[/\\]|/)',value): paths.append(value.replace('\\\\','/'))
-        elif isinstance(value,list):
-            for x in value: collect(x)
-        elif isinstance(value,dict):
-            for key in ('artifacts','deliverables','files','path','file','final_path','output_path'): 
-                if key in value: collect(value[key])
-    for candidate in structured_receipts(reply):
-        collect(candidate)
-    discovered=[]
-    for value in paths:
-        p=pathlib.Path(value)
-        if p.is_file(): discovered.append(p)
-        # A directory link is not an authorization to expose every neighboring file.
-        # Executor must enumerate exact final products in its delivery Markdown/JSON.
-    for p in dict.fromkeys(discovered):
+    for p in delivery_paths(reply):
         if not allowed_artifact(p,roots): continue
         import hashlib
         content_hash=hashlib.sha256(p.read_bytes()).hexdigest()

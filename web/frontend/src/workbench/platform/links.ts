@@ -10,7 +10,7 @@ export function mobileDocumentLink(href:string,origin:string):boolean {
 export interface ImageLink {url:string;name:string;downloadUrl?:string}
 export function bindNavigationLinks(navigation:NavigationService,openImage?:(image:ImageLink)=>void):()=>void {
  const adapt=()=>{for(const anchor of document.querySelectorAll<HTMLAnchorElement>('#root a[href]')){
-  const raw=anchor.getAttribute('href');delete anchor.dataset.nativePath;if(!raw||anchor.hasAttribute('download'))continue;
+  const raw=anchor.getAttribute('href');delete anchor.dataset.nativePath;if(!raw||raw.startsWith('#/outputs/')||anchor.hasAttribute('download'))continue;
   try{const url=new URL(raw,location.href);if(url.origin!==location.origin)continue;if(url.pathname==='/login'&&navigation.publicUrl('/toolbox').startsWith('/native/')){delete anchor.dataset.nativePath;anchor.setAttribute('href',authenticationUrl(navigation,url.searchParams.get('next')||navigation.snapshot().path));continue}const path=safePath(url.pathname+url.search,location.origin);if(!path)continue;anchor.dataset.nativePath=path;const actual=navigation.publicUrl(path);if(raw!==actual)anchor.setAttribute('href',actual)}catch{/* External and non-HTTP links keep their platform behavior. */}
  }};
  const click=(event:MouseEvent)=>{

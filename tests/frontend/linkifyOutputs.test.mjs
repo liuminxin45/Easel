@@ -18,6 +18,13 @@ function load(name, imports = {}) {
 const api = load('api');
 const { linkifyOutputs } = load('linkifyOutputs', { './api': api });
 
+test('a host resolves native Markdown through the same formatter to its immutable registered file',()=>{
+ const seen=[],resolve=path=>{seen.push(path);return path==='outputs/session/turn/products/成品.png'?'/api/files/exact-registered':undefined};
+ const body=linkifyOutputs('![本图](/D:/Projects/Easel/outputs/session/turn/products/成品.png)\noutputs/other/file.txt',resolve);
+ assert.match(body,/!\[本图\]\(\/api\/files\/exact-registered\)/);
+ assert.match(body,/\/api\/media\/other\/file.txt/);assert.ok(seen.includes('outputs/session/turn/products/成品.png'));
+});
+
 test('absolute Markdown report links retain their label and open the content preview', () => {
   const input = '[查看复盘](/Users/example/Easel/outputs/示例项目/报告.md)';
   const expected = '[查看复盘](#/outputs/示例项目/报告.md)';

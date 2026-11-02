@@ -30,6 +30,27 @@ def products(commands):
 def links(*paths):return '\n'.join('[成品]('+path.as_posix()+')' for path in paths)
 
 
+@pytest.mark.parametrize('spelling',['drive','uri','angled'])
+def test_markdown_windows_uri_spelling_receives_only_explicit_final_files(products,spelling):
+    from urllib.parse import quote
+    box,root=products
+    values=[path.as_posix() for path in (root/'成品.png',root/'标题与配文.txt')]
+    if spelling in ('uri','angled'):values=[quote(path,safe='/:') for path in values]
+    values=['/'+path if len(path)>1 and path[1]==':' else path for path in values]
+    if spelling=='angled':values=['<'+path+'>' for path in values]
+    (root/'未交付.txt').write_text('不是成品',encoding='utf-8')
+    result=record_delivery(box,'delivery','\n'.join('[成品]('+path+')' for path in values),'native-turn',product_roots=[root])
+    assert result['status']=='completed'
+    with box.store.connect() as c:
+        assert {r[0] for r in c.execute("SELECT name FROM artifacts WHERE task_id='delivery'")}=={'成品.png','标题与配文.txt'}
+
+
+def test_directory_link_does_not_receive_neighboring_files(products):
+    box,root=products
+    bridge.capture_artifacts(box.store,'delivery',links(root),product_roots=[root],root=box.root)
+    with box.store.connect() as c:assert c.execute('SELECT count(*) FROM artifacts').fetchone()[0]==0
+
+
 def test_native_delivery_uses_only_exact_turn_products_without_executor(products,monkeypatch):
     box,root=products
     other=box.root/'outputs/session/another/products';other.mkdir(parents=True)

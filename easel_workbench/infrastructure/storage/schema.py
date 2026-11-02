@@ -104,3 +104,5 @@ def initialize_sources(connection):
 CREATE TABLE IF NOT EXISTS collection_source_versions(source_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(source_id,revision));
 CREATE TABLE IF NOT EXISTS collection_source_operations(operation_id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL);
 ''')
+def initialize_delivery_reconciliations(c):
+    c.execute('CREATE TABLE IF NOT EXISTS toolbox_delivery_reconciliations(id TEXT PRIMARY KEY,document TEXT NOT NULL)')

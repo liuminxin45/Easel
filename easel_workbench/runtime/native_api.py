@@ -450,6 +450,8 @@ class NativeApi:
 
     def _work_tree(self):
         result = []
+        with self.store.connect() as c:
+            native_ids={row[0] for row in c.execute("SELECT id FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL")} if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone() else set()
         for work in self.box.works()['items']:
             full = self.box.work(work['id']); versions = []
             for version in full.get('versions', []):
@@ -463,25 +465,43 @@ class NativeApi:
                                      'path': '__workbench__/' + artifact['id'] + '/' + value['name'],
                                      'kind': self.outputs._file_kind(value['name']),
                                      'mtime': int(path.stat().st_mtime), 'size': path.stat().st_size})
-                if children:
+                final_paths=[child['path'] for child in children]
+                if version['id'] in native_ids:
+                    from easel_workbench.features.works.products import ChatProducts
+                    products=ChatProducts(root=self.root,store=self.store,chat=None,work_store=self.box)
+                    with self.store.connect() as c:
+                        origins={row[0] for row in c.execute('SELECT source_path FROM toolbox_product_origins WHERE job_id=?',(version['id'],))} if c.execute("SELECT 1 FROM sqlite_master WHERE name='toolbox_product_origins'").fetchone() else set()
+                    try:partial=[item for item in products._partial(products._turn(version['id'])) if str(item['_path']) not in origins]
+                    except ValueError:partial=[]
+                    materials=[{'type':'file','name':item['name'],'path':'__partial__/'+version['id']+'/'+item['id']+'/'+item['name'],
+                                'kind':self.outputs._file_kind(item['name']),'mtime':int(item['_path'].stat().st_mtime),'size':item['size']} for item in partial]
+                    if materials:children.append({'type':'dir','name':'过程材料' if version['status']=='completed' else '未完成材料','path':'workbench-'+work['id']+'/'+version['id']+'/materials',
+                                            'children':materials,'fileCount':len(materials),'mtime':max(item['mtime'] for item in materials)})
+                if children or version['status']!='completed':
                     versions.append({'type': 'dir', 'name': version.get('label', version['id']),
                                      'path': 'workbench-' + work['id'] + '/' + version['id'],
-                                     'children': children, 'fileCount': len(children),
-                                     'mtime': max(child['mtime'] for child in children),
-                                     'meta': {'work_id': work['id'], 'version_id': version['id']}})
+                                     'children': children, 'fileCount': sum(child.get('fileCount',1) for child in children),
+                                     'mtime': max((child['mtime'] for child in children),default=0),
+                                     'meta': {'work_id': work['id'], 'version_id': version['id'],'deliverablePaths':final_paths}})
+            if not versions:
+                result.append({'type':'dir','name':work['title'],'path':'workbench-'+work['id'],'children':[],
+                               'fileCount':0,'mtime':_seconds(full.get('updated_at')),
+                               'meta':{'title':work['title'],'kind':full.get('format','poster'),'status':'draft','work_id':work['id'],'version_id':''}})
             if versions:
                 latest = versions[-1]
                 files = [child for version in versions for child in version['children']]
-                cover = next((item['path'] for item in reversed(files) if item['kind'] == 'image'), '')
+                cover = next((item['path'] for item in reversed(files) if item.get('kind') == 'image'), '')
                 result.append({'type': 'dir', 'name': work['title'], 'path': 'workbench-' + work['id'],
                                'mtime': max(item['mtime'] for item in versions), 'children': versions,
-                               'fileCount': len(files), 'meta': {'title': work['title'], 'kind': full.get('format', 'poster'),
+                               'fileCount': sum(version['fileCount'] for version in versions), 'meta': {'title': work['title'], 'kind': full.get('format', 'poster'),
                                'work_id': work['id'], 'version_id': latest['meta']['version_id'], 'cover': cover}})
         return result
 
     def _outputs_tree(self, native):
         registered = self._native_tree()
         sessions = {item['meta']['session_id'] for item in registered}
+        with self.store.connect() as c:
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(row[0] for row in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
         native = [item for item in native if item['path'] not in sessions]
         return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
 
@@ -489,7 +509,20 @@ class NativeApi:
         for item in self._work_tree():
             for candidate in (item, *item['children']):
                 if candidate['path'] == wanted:
-                    return {key: candidate['meta'][key] for key in ('work_id', 'version_id')}
+                    return {**{key:candidate['meta'][key] for key in ('work_id','version_id')},'canonical_path':candidate['path']}
+        parts=wanted.rstrip('/').split('/')
+        if len(parts)>=3 and parts[2]=='products':
+            with self.store.connect() as c:row=c.execute('SELECT document FROM easel_chat_turns WHERE id=? AND session_id=?',(parts[1],parts[0])).fetchone()
+            turn=json.loads(row[0]) if row else {};work=turn.get('work') or {}
+            if work:
+                canonical='workbench-'+work['work_id']+'/'+work['version_id']
+                if len(parts)>3:
+                    from easel_workbench.features.works.products import ChatProducts
+                    products=ChatProducts(root=self.root,store=self.store,chat=None,work_store=self.box)
+                    partial=products._partial(turn)
+                    match=next((item for item in partial if item['_path'].relative_to(self.root/'outputs').as_posix()==wanted),None)
+                    canonical='__partial__/'+parts[1]+'/'+match['id']+'/'+match['name'] if match else canonical+'/materials'
+                return {'work_id':work['work_id'],'version_id':work['version_id'],'canonical_path':canonical}
         return {}
 
     def _native_tree(self):
@@ -539,6 +572,15 @@ class NativeApi:
         return value, path
 
     async def _file(self, relative, media=False, *, preview=False):
+        partial=re.fullmatch(r'__partial__/([A-Za-z0-9_.-]+)/([a-f0-9]{64})/([^/]+)',relative)
+        if partial:
+            from easel_workbench.features.works.products import ChatProducts
+            products=ChatProducts(root=self.root,store=self.store,chat=None,work_store=self.box)
+            value,path=await _offload(products.file,partial[1],partial[2])
+            if value['name']!=partial[3]:raise HTTPException(404,'文件不存在')
+            if media:return _protect_html_preview(FileResponse(path,media_type=value['mime'],headers={'Cache-Control':'private, no-store'}),preview=preview)
+            kind=self.outputs._file_kind(value['name'])
+            return {'path':relative,'kind':kind,'isBinary':kind!='text','content':await _offload(lambda:path.read_text(encoding='utf-8')) if kind=='text' else ''}
         registered = await _offload(self._registered_file, relative)
         if registered:
             value, path = registered

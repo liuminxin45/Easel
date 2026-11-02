@@ -22,8 +22,14 @@ class ChatProducts:
         # adapter. The actual query uses only these explicit read dependencies.
         self.root=Path(root if root is not None else business.root).resolve()
         self.store=store if store is not None else business.store
-        self.chat=chat if chat is not None else business.chat
+        self.chat=chat if chat is not None or business is None else business.chat
         self.work_store=work_store if work_store is not None else business.box
+
+    def _turn(self,turn_id):
+        if self.chat is not None:return self.chat.get_turn(turn_id,private=True)
+        with self.store.connect() as c:row=c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(turn_id,)).fetchone()
+        if not row:raise ValueError('原回合不存在')
+        return json.loads(row[0])
 
     def _partial(self,turn):
         folder=owned_output_path(self.root,Path('outputs')/turn['session_id']/turn['id']/'products')
@@ -45,7 +51,7 @@ class ChatProducts:
         return result
 
     def describe(self,turn_id):
-        turn=self.chat.get_turn(turn_id,private=True)
+        turn=self._turn(turn_id)
         with self.store.connect() as c:
             files=[{'id':r['id'],'name':r['name'],'mime':r['mime'],'url':'/api/files/'+r['id']} for r in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=? ORDER BY rowid',(turn_id,))]
         incomplete=turn['status']!='completed';work=turn.get('work') or {};version=None;decision=None
@@ -76,7 +82,7 @@ class ChatProducts:
                 'work_id':work.get('work_id'),'version_id':work.get('version_id')}
 
     def file(self,turn_id,token):
-        turn=self.chat.get_turn(turn_id,private=True)
+        turn=self._turn(turn_id)
         file=next((file for file in self._partial(turn) if file['id']==token),None)
         if not file:raise ValueError('本回合文件不存在或内容已变化，请重新读取')
         path=file.pop('_path')

@@ -1,3 +1,4 @@
+import {VersionOperations} from './VersionOperations';
 import {useCallback,useMemo,useSyncExternalStore} from 'react';
 import DashboardPage from '../../components/DashboardPage';
 import OutputsPage from '../../components/OutputsPage';
@@ -8,7 +9,7 @@ import BreakdownPage from '../../components/BreakdownPage';
 import type {Page} from '../../components/Sidebar';
 import {nativePageRoutes} from '../platform/native-routes';
 import type {OutputNode} from '../../lib/api';
-import {creatorLaunchSelection,workPath,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
+import {creatorLaunchSelection,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft} from './hooks';
 import {Notice} from './common';
 import {SkillTask} from './management';
@@ -33,14 +34,17 @@ export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTo
 }
 
 function ProjectVersion({project}:{project:OutputNode}){
- const vm=useWorkbench(),meta=record(project.meta),workId=string(meta.work_id),versionId=string(meta.version_id);
+ const meta=record(project.meta),workId=string(meta.work_id),versionId=string(meta.version_id);
  if(!workId)return null;
- return <div className="panel"><button className="btn" onClick={()=>vm.navigate(workPath({id:workId},versionId||undefined))}>查看准确版本、采纳与交付</button></div>;
+ return <VersionOperations workId={workId} versionId={versionId}/>;
 }
 
 export function NativeLibrary({jumpPath}:{jumpPath?:string}){
+ const vm=useWorkbench();
+ const context=useResource<JsonRecord>(jumpPath?'/api/output-context?'+new URLSearchParams({path:jumpPath}):null);
+ const resolved=string(context.data?.canonical_path)||jumpPath;
  const renderProject=useCallback((project:OutputNode)=><ProjectVersion project={project}/>,[]);
- return <OutputsPage jumpPath={jumpPath} canDelete={()=>false} renderProjectDetails={renderProject}/>;
+ return <OutputsPage jumpPath={resolved} canDelete={()=>false} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer}/>;
 }
 
 export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
@@ -92,4 +96,10 @@ export function WorkbenchNativePage({page,profileId,onUseTopic,search=new URLSea
   case 'breakdown':return <NativeBreakdown profileId={profileId} search={search}/>;
   default:return null;
  }
+}
+
+export function WorkLibrary({id,versionId}:{id:string;versionId?:string}){
+ const resource=useResource<import('@workbench/core').Work>('/api/works/'+encodeURIComponent(id));
+ const vid=versionId||resource.data?.latest_version||resource.data?.versions.at(-1)?.id;
+ return resource.data?<NativeLibrary jumpPath={'workbench-'+id+(vid?'/'+vid:'')}/>:<Notice sources={[resource]}/>;
 }

@@ -82,7 +82,14 @@ class ChatBusiness:
                     turn=json.loads(native[0])
                     message['work']=copy.deepcopy(turn.get('work'))
                     message['business_receipt']=copy.deepcopy(turn.get('business_receipt'))
+                    if turn.get('work'):message['library_path']='workbench-'+turn['work']['work_id']+'/'+turn['work']['version_id']
                 message['output_files']=[{'id':r['id'],'name':r['name'],'mime':r['mime'],'url':'/api/files/'+r['id']} for r in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=? ORDER BY rowid',(message['turnId'],))]
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name='toolbox_product_origins'").fetchone():
+                    for file in message['output_files']:
+                        origin=c.execute('SELECT source_path FROM toolbox_product_origins WHERE artifact_id=?',(file['id'],)).fetchone()
+                        if origin:
+                            try:file['source_path']=Path(origin[0]).relative_to(self.root/'outputs').as_posix()
+                            except ValueError:pass
                 job=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(message['turnId'],)).fetchone()
                 if job:
                     from easel_workbench.runtime.production_retry import recovery

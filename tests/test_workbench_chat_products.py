@@ -27,7 +27,7 @@ def test_registered_and_interrupted_products_are_read_only_and_exact(business,mo
                 if interrupted:raise HarnessError('TEMP unknown receipt')
                 emit('token',json.dumps({'deliverables':[str(image),str(copy)],'production_result':{'schema_version':1,'status':'completed'}},ensure_ascii=False))
         monkeypatch.setattr(harnesses,'adapter',lambda _:Adapter())
-        value,_=fixtures.confirmed(b);turn=await b.chat.submit(value,**b.prepare(value));await b.chat._tasks[turn['id']]
+        value,_=fixtures.confirmed(b);turn=await b.chat.submit(value,**b.prepare(value));await asyncio.gather(*[task for key,task in b.chat._tasks.items() if key==turn['id']])
         def saved():
             with b.store.connect() as c:return {name:c.execute('SELECT * FROM '+name).fetchall() for name in ('easel_chat_turns','artifacts','creator_skill_versions','toolbox_jobs')}
         before=saved();view=ChatProducts(b).describe(turn['id']);assert saved()==before

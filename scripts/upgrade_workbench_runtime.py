@@ -93,12 +93,27 @@ def needs_builtin_activation(root):
     return any(not value.get('entry','').startswith('skills/builtin/') for value in active.values())
 
 
+def reviewed_delivery_plan(root,acceptance_path,path,expected):
+    if path is None and expected is None:return None
+    if path is None or not expected:raise ValueError('Delivery correction needs exact plan and SHA')
+    path=Path(path).resolve();root=Path(root).resolve()
+    if not path.is_relative_to(root/'.local') or not path.is_file():raise ValueError('Delivery plan must be local reviewed evidence')
+    value=read(path);acceptance=read(acceptance_path)
+    if acceptance.get('evidence',{}).get(path.relative_to(root).as_posix())!=sha(path) or value.get('plan_sha256')!=expected:
+        raise ValueError('Delivery correction is not bound to candidate acceptance')
+    from easel_workbench.application.delivery_reconciliation import preview
+    if preview(root,value['turn_id'])!=value:raise ValueError('Original delivery or bytes changed')
+    return {'path':str(path),'sha256':sha(path),'plan_sha256':expected}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--acceptance',type=Path,default=STATE/'upgrade-acceptance.json')
     parser.add_argument('--candidate',type=Path,help='Exact reviewed pair; leaves the shared candidate selector untouched')
     parser.add_argument('--builtin-plan',type=Path)
     parser.add_argument('--builtin-plan-sha256')
+    parser.add_argument('--delivery-plan',type=Path)
+    parser.add_argument('--delivery-plan-sha256')
     options=parser.parse_args()
     from easel_workbench.runtime.feedback_ledger import locked
     with locked(STATE/'runtime-release.lock',timeout=30),locked(STATE/'frontend-release.lock',timeout=30):
@@ -127,6 +142,7 @@ def start_scheduled_manager(choice):
 def upgrade(options):
     choice,package=validate_candidate(ROOT,STATE,options.acceptance,options.candidate)
     builtin=reviewed_builtin_plan(ROOT,package,options.acceptance,options.builtin_plan,options.builtin_plan_sha256)
+    delivery=reviewed_delivery_plan(ROOT,options.acceptance,getattr(options,'delivery_plan',None),getattr(options,'delivery_plan_sha256',None))
     if builtin is None and needs_builtin_activation(ROOT):
         raise ValueError('Legacy skill defaults require an explicit reviewed builtin migration plan')
     previous=read(ROOT/'data/active-workbench.json');owner=read(ROOT/'data/migration-owner.json')
@@ -155,6 +171,11 @@ def upgrade(options):
             stop_new_profile();stopped=True
             fence.execute('ROLLBACK')
         builtin_activation=activate_builtin_after_stop(ROOT,builtin)
+        delivery_reconciliation=None
+        if delivery:
+            if sha(delivery['path'])!=delivery['sha256']:raise ValueError('Delivery correction plan changed after stop')
+            from easel_workbench.application.delivery_reconciliation import apply as apply_delivery_correction
+            delivery_reconciliation=apply_delivery_correction(ROOT,read(delivery['path']),delivery['plan_sha256'])
         atomic(ROOT/'data/active-workbench.json',{k:choice[k] for k in ('release','manifest_sha256')})
         atomic(ROOT/'data/active-native.json',choice['native'])
         atomic(ROOT/'data/migration-owner.json',{**owner,'release':choice['release'],'manifest_sha256':choice['manifest_sha256']})
@@ -170,7 +191,7 @@ def upgrade(options):
         atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':choice})
         result={'status':'live','candidate':choice,'previous_runtime':previous,'previous_native':previous_native,'data_root':str(ROOT/'data'),
             'database_copied':False,'database_restored':False,'manager':manager_pid,'manager_started_by':'windows-task-scheduler','smoke':ready,'idle':state,
-            'builtin_activation':builtin_activation}
+            'builtin_activation':builtin_activation,'delivery_reconciliation':delivery_reconciliation}
         atomic(STATE/'runtime-upgrade.json',result)
         atomic(STATE/'upgrades'/(choice['release']+'.json'),result)
         original=read(STATE/'deployment.json')

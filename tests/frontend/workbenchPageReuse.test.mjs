@@ -24,7 +24,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
   useWorkbench:()=>host,useResource:path=>({data:data[path]??null,reload:async()=>data[path]??null}),
   useDraft:(_,initial)=>[initial,()=>{}],useAsyncAction:()=>({busy:false,run:async fn=>fn()}),
   creatorAssetInputs:value=>value||[],workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
- runInNewContext(compiled,{exports,matchMedia:()=>({matches:viewport.compact,addEventListener(){},removeEventListener(){}}),require:specifier=>{
+ runInNewContext(compiled,{exports,URLSearchParams,matchMedia:()=>({matches:viewport.compact,addEventListener(){},removeEventListener(){}}),require:specifier=>{
   if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}],useSyncExternalStore:(_,snapshot)=>snapshot()};
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='@workbench/core'||specifier==='./hooks')return core;
@@ -32,6 +32,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
   if(specifier==='./ExtensionDetails')return {ExtensionDetails:function ExtensionDetails(){}};
+  if(specifier==='./VersionOperations')return {VersionOperations:function VersionOperations(){}};
   if(specifier==='./management')return {SkillTask:function SkillTask(){}};
   const component=specifier.split('/').at(-1);
   if(native[component])return native[component];
@@ -59,8 +60,8 @@ test('native gallery retains registered project version actions and forbids dest
  const project={meta:{work_id:'work-a',version_id:'version-3'}};
  const extension=gallery.props.renderProjectDetails(project);
  const rendered=extension.type(extension.props);
- rendered.props.children.props.onClick();
- assert.deepEqual(calls,['/works/work-a?version=version-3']);
+ assert.equal(rendered.type.name,'VersionOperations');assert.equal(rendered.props.workId,'work-a');assert.equal(rendered.props.versionId,'version-3');
+ assert.deepEqual(calls,[]);
 });
 
 test('trends only collect on explicit refresh and preserve the complete source list',async()=>{
@@ -143,7 +144,7 @@ test('native gallery resolves declared virtual file paths independently of displ
   throw Error(specifier);
  }});
  exports.default({jumpPath:file.path,onJumpHandled:()=>{handled++}});
- effects[1]();
+ for(const effect of effects)effect();
  await new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(Array.from(states[3]),['显示标题','v03']);
  assert.equal(states[5],file);

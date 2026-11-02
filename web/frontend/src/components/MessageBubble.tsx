@@ -21,6 +21,7 @@ interface MessageBubbleProps {
   stillWorking?: string;   // 防呆心跳提示（未卡住）；仅流式时的独立提示，不替代思考/活动
   actions?: BubbleActions;
   linkifyArtifactPaths?: boolean;
+  resolveArtifactPath?:(message:ChatMessage,path:string)=>string|undefined;
   artifacts?:Artifact[];
 }
 
@@ -43,17 +44,17 @@ function ActionBar({ actions }: { actions: BubbleActions }) {
   );
 }
 
-export default function MessageBubble({ message, isStreaming, thinking, activity, stillWorking, actions, linkifyArtifactPaths = true,artifacts }: MessageBubbleProps) {
+export default function MessageBubble({ message, isStreaming, thinking, activity, stillWorking, actions, linkifyArtifactPaths = true,resolveArtifactPath,artifacts }: MessageBubbleProps) {
   const rendered = useMemo(() => {
     if (message.role === 'user') return { html: '', artifacts: [], archives: [] };
     // 助手正文里裸露的产物路径先转成前端可用链接（文件直开、图片内联、目录跳内容库）。
     // 流式中不转换：路径/围栏代码块可能被 SSE token 从中间切开（扩展名没收全会被
     // 误判成目录、未闭合的 ``` 会误伤命令示例里的 outputs/），转换只在流式结束后
     // 对完整正文做一次，避免闪烁成错误链接再跳变。
-    const body = isStreaming || !linkifyArtifactPaths ? message.content : linkifyOutputs(message.content);
+    const body = isStreaming || !linkifyArtifactPaths ? message.content : linkifyOutputs(message.content,resolveArtifactPath?path=>resolveArtifactPath(message,path):undefined);
     const html = externalizeMediaLinks(renderMarkdown(body));
     return isStreaming || !linkifyArtifactPaths ? { html, artifacts: [], archives: [] } : extractArtifacts(html);
-  }, [message.content, message.role, isStreaming, linkifyArtifactPaths]);
+  }, [message, message.content, message.role, isStreaming, linkifyArtifactPaths,resolveArtifactPath]);
 
   // ---- 用户消息 ----
   if (message.role === 'user') {

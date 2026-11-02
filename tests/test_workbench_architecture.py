@@ -54,6 +54,11 @@ UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
     'web/frontend/src/components/IdeasView.tsx'})
+# User-approved native product integration: one output formatter with an
+# optional host resolver, and the same directory navigation protocol in both
+# hosts. Neither shared module may import private services (guarded below).
+UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/lib/linkifyOutputs.ts',
+    'web/frontend/src/lib/outputNavigation.ts'})
 # Reviewed single-source services and generic optional host ports. Each file is
 # named: neighboring components and new execution modules remain protected.
 UPSTREAM_PATCH_ALLOWLIST.update({

@@ -58,9 +58,12 @@ def test_external_worker_dry_bootstrap_uses_real_services_only_inside_canary(bus
     from easel_health_control import canary_worker
     prepared(business)
     source=business.root
-    (source/'sources.json').write_bytes((Path(__file__).resolve().parents[1]/'sources.json').read_bytes())
+    registry=source/'easel_workbench/runtime/sources.json'
+    registry.parent.mkdir(parents=True,exist_ok=True)
+    registry.write_bytes((Path(__file__).resolve().parents[1]/'sources.json').read_bytes())
+    assert not (source/'sources.json').exists(), 'fixture must match actual frozen layout'
     files={p.relative_to(source).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for prefix in ['skills','agents'] for p in (source/prefix).rglob('*') if p.is_file()}
-    files['sources.json']=hashlib.sha256((source/'sources.json').read_bytes()).hexdigest()
+    files['easel_workbench/runtime/sources.json']=hashlib.sha256(registry.read_bytes()).hexdigest()
     pointer={'release':'workbench-fixture','manifest_sha256':'a'*64}
     monkeypatch.setattr(canary_worker,'selected_release',lambda app:(source,pointer,{'files':files}))
     workspace=tmp_path/'external-canary'
@@ -71,6 +74,8 @@ def test_external_worker_dry_bootstrap_uses_real_services_only_inside_canary(bus
     try:
         context=canary_worker.prepare(request)
         assert context['store'].path.is_relative_to(workspace)
+        assert (workspace/'import-defaults/sources.json').read_bytes()==registry.read_bytes()
+        assert (workspace/'project/sources.json').read_bytes()==registry.read_bytes()
         assert context['box'].studio.project==workspace/'project/content-project'
         assert context['box'].learning.project==workspace/'project/content-project'
         assert context['chat'].settings.current()['codex_auto_approve'] is False

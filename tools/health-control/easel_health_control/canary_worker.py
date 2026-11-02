@@ -11,6 +11,7 @@ import shutil
 import sqlite3
 import sys
 import time
+import traceback
 
 from .state import StateStore
 
@@ -39,8 +40,15 @@ def prepare(request):
     source,pointer,package=selected_release(application)
     root=workspace/'project';root.mkdir(parents=True,exist_ok=True)
     if root.is_symlink():raise ValueError('linked_canary_workspace')
-    # Import defaults point to immutable source, never to the production data root.
-    os.environ['AI_DESK_PROJECT_ROOT']=str(source);os.environ.pop('AI_DESK_RELEASE',None)
+    # Frozen releases keep the registry inside runtime/, not their top level.
+    # Isolate import-time defaults too: using root here would auto-attach the
+    # default studio; using source would look for a missing top-level registry.
+    defaults=workspace/'import-defaults';defaults.mkdir(exist_ok=True)
+    registry='sources.json' if 'sources.json' in package['files'] else 'easel_workbench/runtime/sources.json'
+    if registry not in package['files']:raise ValueError('frozen_source_registry_missing')
+    shutil.copyfile(source/registry,defaults/'sources.json')
+    shutil.copyfile(source/registry,root/'sources.json')
+    os.environ['AI_DESK_PROJECT_ROOT']=str(defaults);os.environ.pop('AI_DESK_RELEASE',None)
     sys.path.insert(0,str(source))
     from easel_workbench.diagnostics.canary_export import export_seed
     seed=export_seed(application,source)
@@ -247,7 +255,10 @@ def main(argv=None):
         context=prepare(request)
         result=(asyncio.run(execute(request,context)) if request['execute'] else {'status':'prepared','reason':'dry_run_no_collection_or_native_execution'})
         result.update(release=context['pointer'],blob_bytes=context['seed']['blob_bytes'],source_settings_revision=context['seed']['settings_revision'])
-    except Exception as error:result={'status':'unknown' if (workspace/'native-intent.json').exists() else 'blocked','reason':'canary_worker_failed','error_type':type(error).__name__}
+    except Exception as error:
+        result={'status':'unknown' if (workspace/'native-intent.json').exists() else 'blocked','reason':'canary_worker_failed','error_type':type(error).__name__,
+                'error_frames':[{'file':Path(frame.filename).name,'line':frame.lineno,'function':frame.name}
+                                for frame in traceback.extract_tb(error.__traceback__)[-8:]]}
     intent_saved=(workspace/'native-intent.json').exists()
     result.update(operation_id=request['operation_id'],at=time.time(),native_intent_saved=intent_saved,
                   preflight_confirmed_unsent=not intent_saved and result['status'] in ('prepared','blocked'))

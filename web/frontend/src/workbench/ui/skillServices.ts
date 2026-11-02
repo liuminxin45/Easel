@@ -12,7 +12,7 @@ export interface PreparedSkillExecution {
 interface SkillRun {sessionId:string;turnId:string;input:string;selection:NativeSelection;state:'planned'|'submitted'|'finished'}
 const preparedRequests=new WeakMap<PreparedSkillExecution,JsonRecord>();
 interface ExecutionView {sessionId:string;turnId:string;questions:ChatQuestion[]}
-interface ExecutionOwner {store:StoreApi<ExecutionView>;runtime?:ReturnType<typeof sessionRuntime>;release?:()=>void}
+interface ExecutionOwner {store:StoreApi<ExecutionView>;runtime?:ReturnType<typeof sessionRuntime>;release?:()=>void;configurationRevision?:number}
 const executionOwners=new WeakMap<WorkbenchClient,Map<string,ExecutionOwner>>();
 const pause=()=>new Promise<void>(resolve=>setTimeout(resolve,1000));
 const sameSelection=(a:NativeSelection,b:NativeSelection)=>JSON.stringify(a)===JSON.stringify(b);
@@ -31,6 +31,18 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
   const keyFor=(selection:NativeSelection)=>'skill:execution:'+profileId+':'+selection.skill_id+':'+selection.action_id;
   const csrf=()=>client.session.getState().config?.csrf||'';
   const save=(key:string,value:SkillRun)=>{if(!client.drafts.set(key,value))throw Error('本机原请求标识未保存，尚未开始新的制作。');};
+  const finish=(run:SkillRun)=>{
+    const current=client.drafts.get<SkillRun>(keyFor(run.selection));
+    if(current?.sessionId===run.sessionId&&current.turnId===run.turnId)save(keyFor(run.selection),{...run,state:'finished'});
+  };
+  const reconcileOriginal=async(run:SkillRun):Promise<boolean>=>{
+    const receipt=await client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(run.sessionId)+'?turn_id='+encodeURIComponent(run.turnId));
+    if(string(receipt.turn_id)!==run.turnId||string(receipt.session_id)!==run.sessionId)return false;
+    const state=string(receipt.execution_status)||string(receipt.stop_reason);
+    if(!['completed','failed','stopped'].includes(state)||receipt.delivery_state==='unknown'||['pending','failed','unknown'].includes(string(receipt.hook_status)))return false;
+    finish(run);
+    return true;
+  };
   const checkSelection=(selection:NativeSelection)=>{
     if(selection.path)throw Error('请从下方入口选择准确作品或账号后执行此动作。');
     const choice=nativeSkillChoices(skills).find(item=>sameSelection(item.selection,selection));
@@ -38,10 +50,11 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
   };
   const requestFor=async(selection:NativeSelection,input:string):Promise<{run:SkillRun;request:JsonRecord}>=>{
     checkSelection(selection);if(!input.trim())throw Error('请先输入本次目标或素材。');
-    const key=keyFor(selection),saved=client.drafts.get<SkillRun>(key);
+    const key=keyFor(selection);let saved=client.drafts.get<SkillRun>(key);
     if(saved?.state==='submitted'){
-      if(saved.input!==input||!sameSelection(saved.selection,selection))throw Error('原任务尚未核对，请先恢复原输入；不会重新发送。');
-      return {run:saved,request:requestBody(saved)};
+      if(saved.input===input&&sameSelection(saved.selection,selection))return {run:saved,request:requestBody(saved)};
+      if(!await reconcileOriginal(saved))throw Error('原任务尚未核对，请先恢复原输入；不会重新发送。');
+      saved=client.drafts.get<SkillRun>(key);
     }
     if(saved?.state==='planned'&&saved.input===input&&sameSelection(saved.selection,selection))return {run:saved,request:requestBody(saved)};
     const created=await client.mutate<JsonRecord>('skill:session:'+profileId+':'+selection.skill_id,'/api/chat/sessions',{action:'create',profile_id:profileId});
@@ -70,7 +83,7 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
       if(['completed','failed','stopped'].includes(state)){
         if(state==='completed'&&string(receipt.hook_status)==='pending'){await pause();continue;}
         if(['failed','unknown'].includes(string(receipt.hook_status)))throw Object.assign(Error('模型回复已保留，制作登记仍待核对；不会重新制作。'),{uncertain:true});
-        save(keyFor(run.selection),{...run,state:'finished'});void client.invalidate(['chat','works','creator']);
+        finish(run);void client.invalidate(['chat','works','creator']);
         if(state!=='completed')throw Error(string(receipt.error)||'本轮'+(state==='stopped'?'已停止':'未完成')+'，原输入与原文件已保留。');
         return {response:string(receipt.output)||string(receipt.text)};
       }
@@ -87,7 +100,11 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
     preparedRequests.set(prepared,request);return prepared;
   };
   const executeSelection=async(selection:NativeSelection,input:string,options:{prepared?:PreparedSkillExecution}={}):Promise<SkillResponse>=>{
-    const existing=client.drafts.get<SkillRun>(keyFor(selection));
+    let existing=client.drafts.get<SkillRun>(keyFor(selection));
+    if(existing?.state==='submitted'&&(existing.input!==input||!sameSelection(existing.selection,selection))){
+      if(!await reconcileOriginal(existing))throw Error('原任务尚未核对，请先恢复原输入；不会重新发送。');
+      existing=client.drafts.get<SkillRun>(keyFor(selection));
+    }
     if(selection.requires_plan&&existing?.state!=='submitted'){
       const prepared=options.prepared;
       if(!prepared||!preparedRequests.has(prepared)||prepared.input!==input||!sameSelection(prepared.selection,selection))throw Error('请先核对本次准确制作方案，再确认执行。');
@@ -114,19 +131,30 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
       const saved=client.drafts.get<SkillRun>(keyFor(choice.selection));
       if(saved?.state!=='submitted')continue;
       observe(saved);const runtime=executionOwner.runtime!;
-      if(!runtime.state.getState().running&&!runtime.completed.has(saved.turnId)){
-        const pending=runtime.saved();
-        runtime.connect(pending||{turnId:saved.turnId,message:saved.input,attachments:[],context:record(requestBody(saved).context),inputs:{text:saved.input,files:[],command:saved.selection},state:'accepted',accepted:true},profileId,true);
-      }
+      void reconcileOriginal(saved).then(finished=>{
+        const current=execution.getState();
+        if(executionOwner.runtime!==runtime||current.sessionId!==saved.sessionId||current.turnId!==saved.turnId)return;
+        if(finished){execution.setState({questions:[]});return;}
+        if(!runtime.state.getState().running&&!runtime.completed.has(saved.turnId)){
+          const pending=runtime.saved();
+          runtime.connect(pending||{turnId:saved.turnId,message:saved.input,attachments:[],context:record(requestBody(saved).context),inputs:{text:saved.input,files:[],command:saved.selection},state:'accepted',accepted:true},profileId,true);
+        }
+      }).catch(()=>{/* Re-entry only reads this identity; an unavailable read cannot submit it. */});
       break;
     }
   }};
   return {
-    loadDetail:(name:string)=>client.api.get<SkillDetail>('/api/skill/'+encodeURIComponent(name)),
+    loadDetail:async(name:string)=>{
+      const detail=await client.api.get<SkillDetail&{configuration_revision?:number}>('/api/skill/'+encodeURIComponent(name));
+      executionOwner.configurationRevision=typeof detail.configuration_revision==='number'?detail.configuration_revision:undefined;
+      return detail;
+    },
     saveEnv:async(updates:Record<string,string>)=>{
-      const current=await client.api.get<JsonRecord>('/api/settings/harness'),fields={updates,expected_revision:current.revision};
+      if(executionOwner.configurationRevision===undefined)throw Error('请重新打开技能详情核对配置版本；本次尚未保存。');
+      const fields={updates,expected_revision:executionOwner.configurationRevision};
       const requestSignature=await requestFingerprint(fields);
-      const value=await client.mutate<{ok:boolean;skills:Record<string,boolean>}>('settings','/api/env',fields,{metadataOnly:true,requestSignature,receiptPath:id=>'/api/settings/operations/'+encodeURIComponent(id)});
+      const value=await client.mutate<{ok:boolean;skills:Record<string,boolean>;revision?:number}>('settings','/api/env',fields,{metadataOnly:true,requestSignature,receiptPath:id=>'/api/settings/operations/'+encodeURIComponent(id)});
+      if(typeof value.revision==='number')executionOwner.configurationRevision=value.revision;
       void client.invalidate(['creator','easel','settings']);return value;
     },
     execute:async(name:string,input:string,persona?:string)=>{

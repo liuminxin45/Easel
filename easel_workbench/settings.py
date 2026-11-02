@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
         document = self.current(revision)
         return self.vault.get(document['secret_ref'], 'workbench-settings') if document.get('secret_ref') else read_settings(self.root / '.env')
 
+    def skill_configuration(self):
+        """Pair masked skill metadata with the exact immutable settings revision."""
+        state=self.current()
+        return {'revision':state['revision'],'environment':self.environment(state['revision'])}
+
     def capture(self):
         """Persist the initial configuration once, before a session transaction."""
         with self.lock:

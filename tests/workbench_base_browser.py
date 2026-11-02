@@ -130,7 +130,7 @@ def exercise_official_skill_drawer(page, open_catalog, out, label, *, hosted):
                 'launch_actions': [{'id': 'native', 'task': 'native', 'label': '使用技能', 'requires_plan': False}]}]
         elif path == '/api/skill/' + skill and request.method == 'GET':
             value = {'name': skill, 'layer': 'produce', 'description': 'TEMP UI contract only',
-                'body': '# TEMP 原版技能说明\n\n同一技能、同一配置状态。', 'needsApi': True,
+                'body': '# TEMP 原版技能说明\n\n同一技能、同一配置状态。', 'needsApi': True, 'configuration_revision': 8 if state['configured'] else 7,
                 'apiConfigured': state['configured'], 'apiSpec': {'label': 'TEMP provider', 'settings': [],
                     'providers': [{'id': 'temp', 'name': 'TEMP provider', 'keys': [{'env': 'TEMP_UI_KEY',
                         'label': 'TEMP API Key', 'required': True, 'secret': True, 'choices': [],

@@ -20,7 +20,7 @@
 | `web/frontend/src/App.tsx` | `ApplicationFrame` 唯一绘制侧栏、子导航和页面容器；不传 `host` 时运行原 `NativeApp` | `workbench/ui/index.tsx` 组装服务器会话、路由转换和页面内容，不另画应用壳 |
 | `web/frontend/src/lib/api.ts`、`lib/whoami.ts` | 原页面仍调用原 API 函数；无绑定时沿用原 fetch、账号显示缓存和自动核验默认策略 | `workbench/ui/nativeApi.ts` 连接鉴权客户端、操作身份和内存缓存；入口按客户端与认证修订完成绑定后才挂载原页面；缓存代数拒绝旧宿主的迟到响应；私有绑定关闭自动核验，手动及扫码后的明确核验仍走原服务 |
 | 原页面的可选 props | `IdeasPage`、`ProfilePage` 的草稿存储，`DashboardPage` 的缓存/读取策略，预览与发布页的回调均保留默认行为 | `nativePages.tsx`、`nativeProfiles.tsx`、`nativePublishing.ts` 只转换数据、批准输入和业务回调；仍渲染完整原组件 |
-| `easel/web_services/{accounts,settings,planning,outputs,environment,analytics}.py` | 从 `web/app.py` 移出的单一函数实现；原路由继续绑定同一代码 | 工厂接收目录、环境、执行器、存储和检查回调；不得导入 `easel_workbench` |
+| `easel/web_services/{accounts,settings,planning,outputs,environment,analytics,skills,profiles}.py` | 从 `web/app.py` 移出的单一函数实现；原路由继续绑定同一代码；技能七项依赖/脱敏与画像六维基线也只保留一份 | 工厂接收目录、环境、执行器、存储和检查回调；不得导入 `easel_workbench`；私有层只补准确版本与配置修订 |
 | `easel/web_services/binding.py` | 用同一函数代码建立独立上下文；原 `web/app.py` 绑定自身命名空间，保留原测试入口 | 仅工厂组装上下文，不复制源码、不修改进程环境，不把此桥接扩展成通用依赖注入框架 |
 | `easel/web_services/concurrency.py` | 原共享 planning 与私有服务共用同一阻塞 I/O 线程边界 | 通用 helper 不含私有依赖；取消时等待线程真实结束，不提前释放调用者持有的写锁或操作身份。共通规划函数仍只有一份，通用响应性修复可单独维护 |
 | `easel_workbench/runtime/native_api.py` | 保持原页面的 HTTP 协议，调用共享处理函数 | 连接现有作品、画像、选题与排期存储；`_mutate` 包住准入、请求身份、事务与回执；未知结果不重发 |
@@ -73,3 +73,17 @@
 Git rebase 的文本等价不代表原始字节相同。内容寻址提示词必须匹配记录 SHA，
 原有 gitattributes LF 规则与仓库原件测试共同检查；不能修改历史声明 SHA 或运行时归一化放行。
 新基线的准确 SHA、固定标签、验证范围及未部署状态见 UPSTREAM-VERSIONS.md。
+
+## 官方外壳唯一实现
+
+`components/Drawer.tsx` 从原 SkillDrawer 的结构最小提取，原技能与全部私有详情/版本/经验/确认共同调用，
+默认尺寸、header/body和关闭控件沿用原CSS。common.Drawer只负责history、portal所有权与焦点返回，
+不再维护Modal/ew-dialog；原生OnboardingWizard/设置/数据源dialog保持其原实现。
+Skills services只注入数据和执行，禁止canConfigure/onUse/useActions等参数重写官方默认区域。
+`skillServices`复用既有SessionRuntime和准确plan/submit/last回执，原运行区域显示实际结果；
+真实QuestionCards仍在原运行区后按需出现。unknown查询恢复与新回合分开，晚到的旧回执不能清除新回合问题。
+技能详情附加configuration_revision，保存沿用用户实际看到的父修订；409不自动套用新修订。
+原画像向导的六文件构造提为纯profiles服务，原入口写文件，私有入口在既有画像事务保存版本文档和完整原表单。
+Ideas/Trends/Dashboard的JSX仍在原页面，私有限高只通过显式通用几何参数接入。
+基座审计与反例测试检查宿主隐藏默认区域、平行外壳、聊天默认覆盖和公共列表限高。
+完整实现及准确验收/部署范围见 OFFICIAL-UI-REUSE-20261102.md。

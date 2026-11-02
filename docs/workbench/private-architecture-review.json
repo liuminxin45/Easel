@@ -1858,7 +1858,7 @@
       "responsibility": "p5 sole implementation: ",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "56e2cccf581abf2d949588aec1804e1d752620dc21364083ac778f3e44d2e81c",
+      "reviewed_sha256": "51f2ca4d1cde7f6c9e1c5da7c36cdb06763872c9401a106f6be426f3e0ca496e",
       "path": "easel_workbench/settings.py",
       "symbol_groups": [
         {
@@ -1885,7 +1885,8 @@
             "SettingsService.scrub",
             "SettingsService._execute",
             "service",
-            "handle"
+            "handle",
+            "SettingsService.skill_configuration"
           ]
         }
       ],
@@ -1893,7 +1894,14 @@
         "source_commit": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
         "path": "easel_workbench/settings.py",
         "reviewed_sha256": "85e81d0dd40eaeff121560a6c722eb841057d3cbef39bc728256ceb29510c45d"
-      }
+      },
+      "review_history": [
+        {
+          "source_commit": "7a44a81bd285cc9e6c28878d83bff2dddcbc180a",
+          "reviewed_sha256": "56e2cccf581abf2d949588aec1804e1d752620dc21364083ac778f3e44d2e81c"
+        }
+      ],
+      "review_note": "Official skill form captures environment and immutable revision together; stale credential saves cannot adopt a newer unseen parent."
     },
     {
       "responsibility": "p5 sole implementation: application",

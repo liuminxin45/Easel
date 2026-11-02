@@ -40,6 +40,7 @@ class ChatBusiness:
         approved=(source_root/'workbench-release.json').is_file() and selector.is_file() and json.loads(selector.read_text(encoding='utf-8'))['release']==source_root.name
         self.upstream=UpstreamSkills(self.root,self.creator,source_root if approved else None)
         self.upstream.environment=lambda:self.chat.settings.environment() if self.chat and hasattr(self.chat,'settings') else self.chat._environment() if self.chat else {}
+        self.upstream.configuration=lambda:self.chat.settings.skill_configuration() if self.chat and hasattr(self.chat,'settings') else {'revision':None,'environment':self.upstream.environment()}
         from easel_workbench.features.skills.bundles import SkillBundles
         self.bundles=SkillBundles(root=self.root,store=self.store,upstream=self.upstream)
         self.chat=None

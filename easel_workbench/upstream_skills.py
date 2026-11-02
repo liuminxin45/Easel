@@ -112,9 +112,10 @@ class UpstreamSkills:
 
     def detail(self, sid):
         release=self.release(sid);meta,body=parse_skill(release['prompt'].lstrip('\ufeff'))
-        environment=self.environment() if hasattr(self,'environment') else {}
+        configuration=self.configuration() if hasattr(self,'configuration') else {'revision':None,'environment':self.environment() if hasattr(self,'environment') else {}}
+        environment=configuration['environment']
         return {**release,'name':sid,'body':body,'content':body,'meta':meta,'raw':release['prompt'],
-                **skill_status(sid,environment)}
+                **skill_status(sid,environment),'configuration_revision':configuration['revision']}
 
     def snapshot(self, profile, sid, version=None):
         release=self.release(sid,version)

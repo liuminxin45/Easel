@@ -49,3 +49,13 @@ Drawer的header/body/关闭控件采用原结构和原CSS，只有通用ARIA及�
 前端日志位于 `.local/workbench-validation/official-shell-implementation-20261102/`，
 嵌套焦点证据位于 `.local/workbench-validation/official-shell-focus-20261102/`。
 尚待最终准确冻结包的全页/弹窗/闭环/恢复验收以及正式部署；真实AI、平台发布和实体vivo不由模拟验收代填。
+
+## 冻结前恢复与配置交错修复
+
+只读复核发现：unknown后后台已完成的技能槽可能一直submitted并拒绝新输入；关闭重开现先只读核对准确终态，
+收到完成回执才释放原槽，unknown或登记hook未核对仍禁止重发。
+又以确定性交错复现旧resume的慢回执清掉新回合权限问题；现在清题/重连与完成写回都核对准确session/turn所有权。
+原false探针保留，新2项真实store交错回归通过。
+技能详情现从同一不可变配置快照产生脱敏字段和configuration_revision，保存不再静默GET最新父修订；
+R8表单遇到R9更改仍409并保留当前输入。后端原协议/修订/架构相关76项与新增恢复、陈旧保存测试通过，
+与之前216项重叠，不相加冒称独立测试。

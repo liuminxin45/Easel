@@ -107,3 +107,19 @@ def test_official_env_save_uses_same_revision_and_secret_store_without_rewriting
     assert 'new-official-ui-secret' not in json.dumps(result)
     assert (env_file.read_bytes() if env_file.exists() else None)==raw
     with pytest.raises(SettingsConflict):asyncio.run(settings.command('/api/env',{**request,'id':'stale-env'}))
+
+
+def test_skill_detail_captures_the_exact_viewed_configuration_parent(commands,monkeypatch):
+    from easel_workbench.upstream_skills import UpstreamSkills
+    settings=SettingsService(commands,vault=Vault())
+    library=UpstreamSkills(commands.root,commands.creator)
+    monkeypatch.setattr(library,'release',lambda name:{'prompt':'---\nname: ai-image-gen\n---\n# Original skill\n'})
+    library.configuration=settings.skill_configuration
+    original=library.detail('ai-image-gen');assert original['configuration_revision']==0
+    newer={'id':'newer-config','expected_revision':0,'updates':{'IMG_API_KEY':'newer-key','IMG_BASE_URL':'https://example.test/v1'}}
+    asyncio.run(settings.command('/api/env',newer))
+    current=library.detail('ai-image-gen');assert current['configuration_revision']==settings.current()['revision']
+    assert not original['apiConfigured'] and current['apiConfigured']
+    with pytest.raises(SettingsConflict):
+        asyncio.run(settings.command('/api/env',{'id':'stale-view','expected_revision':original['configuration_revision'],'updates':{'IMG_API_KEY':'older-form-key'}}))
+    assert settings.environment()['IMG_API_KEY']=='newer-key'

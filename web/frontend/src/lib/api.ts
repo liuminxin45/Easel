@@ -1,3 +1,5 @@
+import { parsePersonas } from './personas';
+
 function getBasePath(): string {
   const path = window.location.pathname;
   const cleaned = path.replace(/\/index\.html$/, '').replace(/\/$/, '');
@@ -22,7 +24,7 @@ export function bindEaselApiTransport(transport: EaselApiTransport): () => void 
 /** Snapshot subscriptions use the same validators as ordinary page reads. */
 function pageSnapshot<T>(path:string,value:unknown):T {
   const p=new URL(path,'https://easel.invalid').pathname;
-  return (p==='/api/trends'?parseTrends(value):p==='/api/trends/sources'?parseTrendSources(value):value) as T;
+  return (p==='/api/personas'?parsePersonas(value):p==='/api/trends'?parseTrends(value):p==='/api/trends/sources'?parseTrendSources(value):value) as T;
 }
 /** Optional in-memory snapshots supplied by the authenticated host. */
 export function peekApiData<T>(path:string):T|undefined{
@@ -31,11 +33,33 @@ export function peekApiData<T>(path:string):T|undefined{
   try{return pageSnapshot<T>(path,value)}catch{return undefined}
 }
 export function subscribeApiData<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void):()=>void {
-  return hostTransport?.subscribe?.<unknown>(path,value=>{try{onData(pageSnapshot<T>(path,value))}catch(error){onError?.(error instanceof Error?error:new Error('页面数据格式异常'))}},onError)||(()=>{});
+  return hostTransport?.subscribe?.<unknown>(path,value=>{try{onData(pageSnapshot<T>(path,value))}catch(error){onError?.(normalizeApiError(error))}},error=>onError?.(normalizeApiError(error)))||(()=>{});
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+function normalizeApiError(error:unknown):Error {
+  if(error instanceof ApiError)return error;
+  if(error instanceof Error&&typeof (error as {status?:unknown}).status==='number'){
+    const normalized=new ApiError(error.message,(error as Error&{status:number}).status);
+    Object.assign(normalized,error);normalized.name='ApiError';return normalized;
+  }
+  return error instanceof Error?error:new Error('页面数据格式异常');
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  if (hostTransport) return hostTransport.request<T>(url, options);
+  if (hostTransport) {
+    // A host may use its own transport error; retain the official HTTP contract.
+    try{return await hostTransport.request<T>(url, options)}catch(error){throw normalizeApiError(error)}
+  }
   // 全部是动态应用接口（登录态/数据等），禁止浏览器 HTTP 缓存——否则 /api/accounts 等可能被启发式
   // 缓存住旧响应（曾表现为“扫码登录后卡片仍显示未登录”）。调用方可用 options.cache 覆盖。
   const res = await fetch(`${BASE}${url}`, { cache: 'no-store', ...options });
@@ -49,7 +73,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     } catch {
       /* 响应体不是 JSON，忽略 */
     }
-    throw new Error(detail || `请求失败（${res.status} ${res.statusText}）`);
+    throw new ApiError(detail || `请求失败（${res.status} ${res.statusText}）`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -203,7 +227,7 @@ export function fetchStatus(): Promise<StatusResponse> {
 }
 
 export function fetchPersonas(force=false): Promise<PersonaItem[]> {
-  return request<PersonaItem[]>('/api/personas',force?{cache:'reload'}:undefined);
+  return request<unknown>('/api/personas',force?{cache:'reload'}:undefined).then(parsePersonas);
 }
 
 export function fetchPersonaDetail(name: string): Promise<PersonaDetail> {

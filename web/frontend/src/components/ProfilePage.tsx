@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics,peekApiData,subscribeApiData } from '../lib/api';
+import { useState, useEffect, useRef, useCallback, type ReactNode, type SetStateAction } from 'react';
+import { ApiError, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics,peekApiData,subscribeApiData } from '../lib/api';
 import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { PersonaItem, PersonaFile, AccountAnalytics } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
@@ -75,6 +75,7 @@ interface ProfilePageProps {
   draftStore?: ProfilePageDraftStore;
   viewState?:ViewStateStore<{viewedPersona:string}>;
   onContentReady?:()=>void;
+  loadPersonas: (force?:boolean) => Promise<PersonaItem[] | null>;
 }
 
 const DIM_META: Record<string, { label: string; icon: string }> = {
@@ -88,11 +89,20 @@ const DIM_META: Record<string, { label: string; icon: string }> = {
 
 export default function ProfilePage(props: ProfilePageProps) {
   const [view,setView]=useStoredViewState(props.viewState,()=>({viewedPersona:props.persona}));
-  const viewedPersona=view.viewedPersona,setViewedPersona=(viewedPersona:string)=>setView({viewedPersona});
+  const viewedPersona=view.viewedPersona,setViewedPersona=useCallback((value:SetStateAction<string>)=>setView(previous=>({viewedPersona:typeof value==='function'?value(previous.viewedPersona):value})),[setView]);
   const [personas, setPersonas] = useState<PersonaItem[]>(()=>peekApiData<PersonaItem[]>('/api/personas')||[]);
   const [loading, setLoading] = useState(()=>!peekApiData('/api/personas'));
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const [notice, setNotice] = useState('');
+  const { onDeleted, loadPersonas } = props;
+  const handleDeleted = useCallback((name: string, alreadyMissing = false) => {
+    setPersonas((list) => list.filter((p) => p.name !== name));
+    setViewedPersona('');
+    setNotice(alreadyMissing ? `画像「${name}」已不存在，已更新列表。` : `已删除画像「${name}」`);
+    setRevision((n) => n + 1);
+    onDeleted(name);
+  }, [onDeleted,setViewedPersona]);
 
   const priorPersona=useRef(props.persona);
   useEffect(() => {if(priorPersona.current!==props.persona){priorPersona.current=props.persona;setViewedPersona(props.persona)}}, [props.persona]);
@@ -101,25 +111,27 @@ export default function ProfilePage(props: ProfilePageProps) {
     let ignore = false;
     if(!peekApiData('/api/personas'))setLoading(true);
     setError('');
-    fetchPersonas(revision>0).then((list) => {
-      if (!ignore) setPersonas(list);
+    loadPersonas(revision>0).then((list) => {
+      if (!ignore) {
+        if (list === null) {
+          setError('画像列表已更新，请重新加载。');
+          return;
+        }
+        setPersonas(list);
+        setViewedPersona((name) => list.some((p) => p.name === name) ? name : '');
+      }
     }).catch(() => {
       if (!ignore) setError('加载画像列表失败，请重试。');
     }).finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [revision]);
-  useEffect(()=>subscribeApiData<PersonaItem[]>('/api/personas',value=>{setPersonas(value);setLoading(false);setError('')},error=>{setLoading(false);setError(error.message)}),[]);
+  }, [revision, loadPersonas,setViewedPersona]);
+  useEffect(()=>subscribeApiData<PersonaItem[]>('/api/personas',value=>{setPersonas(value);setViewedPersona(name=>value.some(persona=>persona.name===name)?name:'');setLoading(false);setError('')},error=>{setLoading(false);setError(error.message)}),[setViewedPersona]);
 
-  if (viewedPersona) {
+  if (!loading && !error && viewedPersona && personas.some((p) => p.name === viewedPersona)) {
     return <ProfileDetail key={viewedPersona} {...props} persona={viewedPersona}
       inUse={viewedPersona === props.persona}
       onBack={() => { setViewedPersona(''); setRevision((n) => n + 1); }}
-      onDeleted={(name) => {
-        setPersonas((list) => list.filter((p) => p.name !== name));
-        setViewedPersona('');
-        setRevision((n) => n + 1);
-        props.onDeleted(name);
-      }} />;
+      onDeleted={handleDeleted} />;
   }
 
   return (
@@ -135,6 +147,7 @@ export default function ProfilePage(props: ProfilePageProps) {
         <IconProfile size={18} />
         <span>{props.persona ? `当前对话使用「${props.persona}」` : '当前对话为通用模式'}<small>查看和编辑画像不会切换对话身份。</small></span>
       </div>
+      {notice && <p role="status">{notice}</p>}
       {loading ? <div className="loading"><div className="spinner" />加载画像…</div>
         : error ? <div className="empty-state"><p role="alert">{error}</p><button className="btn" onClick={() => setRevision((n) => n + 1)}>重新加载</button></div>
         : personas.length === 0 ? <div className="empty-state profile-empty">
@@ -163,7 +176,8 @@ export default function ProfilePage(props: ProfilePageProps) {
   );
 }
 
-function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, personaLabel, allowAccountImport = true, allowDelete = true, onFileSaved, renderDetailExtension, draftStore,onContentReady }: ProfilePageProps & {
+function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, personaLabel, allowAccountImport = true, allowDelete = true, onFileSaved, renderDetailExtension, draftStore,onContentReady }: Omit<ProfilePageProps, 'onDeleted'> & {
+  onDeleted: (name: string, alreadyMissing?: boolean) => void;
   onBack: () => void;
   inUse: boolean;
 }) {
@@ -177,7 +191,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
   const [fileRevision, setFileRevision] = useState<number | undefined>(undefined);
   const [serverRevision, setServerRevision] = useState<number | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState<{ message: string; kind: 'ok' | 'error' } | null>(null);
   const [fetchingWx, setFetchingWx] = useState(false);
   const changedFields = useRef<Record<string, string>>({});
 
@@ -199,17 +213,21 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
         setFileRevision(saved && Object.keys(saved.fields).length ? saved.revision : d.revision);
         setDrafts({ ...Object.fromEntries(d.files.map((f) => [f.filename, f.content])), ...saved?.fields });
       })
-      .catch(() => { if (!ignore) setError('加载画像失败'); })
+      .catch((e: unknown) => {
+        if (ignore) return;
+        if (e instanceof ApiError && e.status === 404) onDeleted(persona, true);
+        else setError(e instanceof Error ? `加载画像失败：${e.message}` : '加载画像失败，请返回列表后重试。');
+      })
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [persona, draftStore]);
+  }, [persona, draftStore,onDeleted]);
   useEffect(()=>subscribeApiData<Awaited<ReturnType<typeof fetchPersonaFiles>>>('/api/persona/'+encodeURIComponent(persona)+'/files',value=>{
     setFiles(value.files);setServerRevision(value.revision);
     // New server content must not rewrite unsent fields or silently change their captured parent revision.
     setDrafts({...Object.fromEntries(value.files.map(file=>[file.filename,file.content])),...changedFields.current});
     if(!Object.keys(changedFields.current).length)setFileRevision(value.revision);
     setLoading(false);setError('');
-  },error=>{setLoading(false);setError(error.message)}),[persona]);
+  },error=>{setLoading(false);if(error instanceof ApiError&&error.status===404)onDeleted(persona,true);else setError(error.message)}),[persona,onDeleted]);
   useEffect(()=>{if(!loading&&(files.length||error))onContentReady?.()},[loading,files,error,onContentReady]);
 
   const updateDraft = (filename: string, content: string) => {
@@ -222,7 +240,10 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
     else draftStore?.remove(persona);
   };
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
+  const showToast = (message: string, kind: 'ok' | 'error' = 'ok') => {
+    setToast({ message, kind });
+    setTimeout(() => setToast(null), 2500);
+  };
 
   const handleSave = async (filename: string) => {
     if (savingFile) return;
@@ -250,7 +271,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
           setFiles(current.files); setServerRevision(current.revision);
         } catch { /* The draft and its parent remain intact if this read fails. */ }
       }
-      showToast(e instanceof Error ? e.message : '保存失败');
+      showToast(e instanceof Error ? e.message : '保存失败', 'error');
     } finally {
       setSavingFile('');
     }
@@ -274,7 +295,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
     try {
       const a = await fetchAccountAnalytics('wechat-oa');
       if (!a.loggedIn) {
-        showToast('公众号后台未登录：请先到「账号」页扫码登录后再抓取');
+        showToast('公众号后台未登录：请先到「账号」页扫码登录后再抓取', 'error');
         return;
       }
       const base = files.find((f) => f.filename === filename)?.content ?? '';
@@ -286,7 +307,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
       setDrafts((p) => ({ ...p, [filename]: merged }));
       showToast(`已抓取并更新画像（粉丝 ${a.followers ?? 0}，已发表 ${a.posts ?? 0} 篇）✓`);
     } catch (e) {
-      showToast(e instanceof Error ? `抓取失败：${e.message}` : '抓取失败（可能未登录或平台改版）');
+      showToast(e instanceof Error ? `抓取失败：${e.message}` : '抓取失败（可能未登录或平台改版）', 'error');
     } finally {
       setFetchingWx(false);
     }
@@ -299,9 +320,9 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
     try {
       await deletePersona(persona);
       onDeleted(persona);
-      showToast(`已删除画像「${persona}」`);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : '删除失败');
+      if (e instanceof ApiError && e.status === 404) onDeleted(persona, true);
+      else showToast(e instanceof Error ? `删除失败：${e.message}` : '删除失败', 'error');
     } finally {
       setDeleting(false);
     }
@@ -388,7 +409,9 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
 
       {renderDetailExtension?.(persona)}
 
-      {toast && <div className="toast ok"><span className="toast-icon">✓</span>{toast}</div>}
+      {toast && <div className={`toast ${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
+        <span className="toast-icon" aria-hidden="true">{toast.kind === 'ok' ? '✓' : '!'}</span>{toast.message}
+      </div>}
     </div>
   );
 }

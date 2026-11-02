@@ -20,6 +20,11 @@
    Windows/Linux × autocrlf=true/false，重新检出后检查lock，运行准确字节/发布/部署/热点贴图回归。
 4. 冻结前、候选验收与围栏停写后，以只读方式核对真实生产库当前已发布技能，分别验证工作区和
    不可变候选。复用运行时的`matches_source`，不另建能力判定；任何不可调用项阻止切换。
+5. 仓库已配置的`pre-push`也运行同一准确字节检查；远端Actions不可用时，本机推送仍会拒绝漂移。
+
+远端实际状态：专项workflow已经存在且active、仓库API的enabled=true，但GitHub实际dispatch仍返回
+422“Actions has been disabled for this repository.”；不能报告远端CI已运行/通过。现有API启用调用未解除
+该服务端限制，浏览器工具也被当前Work设置禁用。本地检出、推送钩子与部署准入仍执行，不依赖远端CI。
 
 刻意修改技能时，应通过既有发布事务保存新版本并核对原资源，再明确执行
 `python scripts/check_workbench_skill_bytes.py --record`，与源码一同审查提交。

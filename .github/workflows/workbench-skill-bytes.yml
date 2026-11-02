@@ -7,11 +7,13 @@ on:
       - 'skills/**'
       - 'easel_workbench/**'
       - 'scripts/*workbench*'
+      - 'scripts/git-hooks/**'
       - 'docs/workbench/skill-source-bytes.json'
       - 'tests/test_workbench_skill_source_sync.py'
       - 'tests/test_workbench_deployment_controls.py'
       - 'tests/test_workbench_release_source.py'
       - 'tests/test_workbench_skill_bytes.py'
+      - 'tests/test_workbench_git_delivery.py'
       - 'tests/test_workbench_chat_business.py'
       - '.gitattributes'
       - '.github/workflows/workbench-skill-bytes.yml'
@@ -20,6 +22,7 @@ on:
       - 'skills/**'
       - 'easel_workbench/**'
       - 'scripts/*workbench*'
+      - 'scripts/git-hooks/**'
       - 'docs/workbench/skill-source-bytes.json'
       - 'tests/test_workbench*.py'
       - '.gitattributes'
@@ -57,4 +60,4 @@ jobs:
       - name: Verify reviewed raw bytes and Git attributes
         run: python scripts/check_workbench_skill_bytes.py
       - name: Verify publication, exact bytes and deployment rejection
-        run: python -m pytest -q tests/test_workbench_skill_bytes.py tests/test_workbench_skill_source_sync.py tests/test_workbench_deployment_controls.py tests/test_workbench_release_source.py tests/test_workbench_chat_business.py::test_news_poster_rejects_eol_drift_then_plans_exact_published_input_after_restoration
+        run: python -m pytest -q tests/test_workbench_skill_bytes.py tests/test_workbench_skill_source_sync.py tests/test_workbench_deployment_controls.py tests/test_workbench_release_source.py tests/test_workbench_git_delivery.py tests/test_workbench_chat_business.py::test_news_poster_rejects_eol_drift_then_plans_exact_published_input_after_restoration

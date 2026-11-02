@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import shutil
 import subprocess
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,3 +32,14 @@ def test_hook_rejects_official_urls_even_when_remote_is_renamed():
         assert subprocess.run([shell, str(hook), name, url], capture_output=True).returncode == 1
     assert subprocess.run([shell, str(hook), 'origin', 'https://github.com/liuminxin45/Easel.git'],
                           capture_output=True).returncode == 0
+
+
+@pytest.mark.parametrize('status',[0,1])
+def test_push_hook_runs_readonly_skill_guard_and_blocks_failure(tmp_path,status):
+    subprocess.run(['git','init','-q'],cwd=tmp_path,check=True)
+    script=tmp_path/'scripts/check_workbench_skill_bytes.py';script.parent.mkdir()
+    script.write_text('from pathlib import Path\nimport sys\nPath("guard-called").write_text("read-only-check")\nsys.exit('+str(status)+')\n',encoding='utf-8')
+    shell=shutil.which('sh') or str(Path('C:/Program Files/Git/bin/sh.exe'))
+    result=subprocess.run([shell,str(ROOT/'scripts/git-hooks/pre-push'),'origin','https://github.com/liuminxin45/Easel.git'],cwd=tmp_path,capture_output=True)
+    assert result.returncode==status,result.stderr
+    assert (tmp_path/'guard-called').read_text()=='read-only-check'

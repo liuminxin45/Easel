@@ -7,4 +7,20 @@ case "$1:$target" in
     exit 1
     ;;
 esac
+# Also protect direct pushes when hosted Actions is unavailable. This check is
+# read-only: it never refreshes the reviewed source lock or published versions.
+root=$(git rev-parse --show-toplevel) || exit 1
+if [ -f "$root/scripts/check_workbench_skill_bytes.py" ]; then
+  if [ -x "$root/.runtime/workbench-python/Scripts/python.exe" ]; then
+    python="$root/.runtime/workbench-python/Scripts/python.exe"
+  elif command -v python >/dev/null 2>&1; then
+    python=$(command -v python)
+  elif command -v python3 >/dev/null 2>&1; then
+    python=$(command -v python3)
+  else
+    echo 'Rejected: Python is required to verify private skill source bytes.' >&2
+    exit 1
+  fi
+  PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_skill_bytes.py" || exit 1
+fi
 exit 0

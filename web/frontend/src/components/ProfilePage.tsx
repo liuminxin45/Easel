@@ -124,7 +124,7 @@ export default function ProfilePage(props: ProfilePageProps) {
       if (!ignore) setError('加载画像列表失败，请重试。');
     }).finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [revision, loadPersonas,setViewedPersona]);
+  }, [revision, loadPersonas, props.persona,setViewedPersona]);
   useEffect(()=>subscribeApiData<PersonaItem[]>('/api/personas',value=>{setPersonas(value);setViewedPersona(name=>value.some(persona=>persona.name===name)?name:'');setLoading(false);setError('')},error=>{setLoading(false);setError(error.message)}),[setViewedPersona]);
 
   if (!loading && !error && viewedPersona && personas.some((p) => p.name === viewedPersona)) {

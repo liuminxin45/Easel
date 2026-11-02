@@ -8,8 +8,8 @@ import os
 
 
 def create_app(*, root=None, **services):
-    from .runtime.toolbox_server import create_app as workflows
-    root = Path(root or os.environ.get('AI_DESK_PROJECT_ROOT') or Path(__file__).resolve().parents[1])
+    from easel_workbench.runtime.toolbox_server import create_app as workflows
+    root = Path(root or os.environ.get('AI_DESK_PROJECT_ROOT') or Path(__file__).resolve().parents[2])
     app = workflows(root=root, **services)
     app.state.easel_workbench_root = root
     if os.environ.get('EASEL_WORKBENCH_ADMISSION') == '1':
@@ -24,6 +24,6 @@ def create_app(*, root=None, **services):
                 if not ready or (state/'paused').exists():
                     return JSONResponse({'error':'正在完成服务切换，输入草稿已保留，请稍后使用原操作重试。'},status_code=503,headers={'Cache-Control':'no-store','Retry-After':'5'})
             return await call_next(request)
-    from .health_endpoint import install_health
+    from easel_workbench.health_endpoint import install_health
     install_health(app, root)
     return app

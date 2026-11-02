@@ -49,11 +49,11 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     learning=attach_learning(box,studio);app.state.learning=learning
     from easel_workbench.runtime.creator_runtime import CreatorRuntime,CreatorConflict
     creator=CreatorRuntime(box,project=studio.project);box.creator=creator;app.state.creator=creator
-    from easel_workbench.chat import ChatService
-    from easel_workbench.chat_business import ChatBusiness
-    from easel_workbench.chat_api import handle as chat_api
-    chat_business=ChatBusiness(box,root=root)
-    chat=ChatService(box,root=root,on_started=chat_business.started,on_finish=chat_business.finished,on_accept=chat_business.accept)
+    from easel_workbench.features.conversations.service import ChatService
+    from easel_workbench.application.chat import ChatBusiness
+    from easel_workbench.http.chat import handle as chat_api
+    chat_business=ChatBusiness(box,root=root,store=store,creator=creator)
+    chat=ChatService(box,root=root,store=store,settings=settings,on_started=chat_business.started,on_finish=chat_business.finished,on_accept=chat_business.accept)
     chat_business.chat=chat;app.state.chat=chat;app.state.chat_business=chat_business
     from easel_workbench.native_corrections import NativeCorrections
     corrections=NativeCorrections(chat,chat_business);app.state.native_corrections=corrections

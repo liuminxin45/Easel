@@ -28,6 +28,10 @@ def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 class SyntheticAdapter:
+    # Runtime detection reads the adapter descriptor before checking the real
+    # CLI installation. A synthetic executor must keep that native contract.
+    from easel.harnesses.codex import CodexAdapter as _CodexAdapter
+    descriptor = _CodexAdapter.descriptor
     def __init__(self,image):self.image=image;self.requests=[];self.prefix_next=False
     async def run(self,request,emit,ask,bind):
         from easel.harnesses.base import HarnessError

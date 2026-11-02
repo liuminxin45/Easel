@@ -197,6 +197,14 @@ def boundary_errors(record):
         if module == PREFIX + '.runtime.toolbox_store' and edge['symbol'] in PURE_VALUES | {'*'}:
             errors.append({'rule': 'values-import-storage', **edge})
         target = module + '.' + edge['symbol'] if edge['symbol'] else module
+        if record['path'].startswith('easel_workbench/features/'):
+            forbidden = (PREFIX + '.http', PREFIX + '.application',
+                         PREFIX + '.chat', PREFIX + '.chat_api',
+                         PREFIX + '.chat_business', PREFIX + '.chat_products',
+                         PREFIX + '.runtime.native_api', PREFIX + '.runtime.toolbox_server')
+            if any(value == part or value.startswith(part + '.')
+                   for value in (module, target) for part in forbidden):
+                errors.append({'rule': 'feature-import-http-application-or-compat', **edge})
         if record['path'] == 'easel_workbench/runtime/download_delivery.py' and (
             module.startswith(PREFIX + '.http') or any(part in (module, target) for part in (
                 PREFIX + '.runtime.native_api', PREFIX + '.runtime.toolbox_server'))

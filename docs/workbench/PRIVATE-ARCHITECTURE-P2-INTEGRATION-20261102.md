@@ -1,7 +1,7 @@
 # P2 与新官方基线集成
 
 Spec：`private-workbench-architecture`、`upstream-sync-20261102`。
-用户明确要求接到新的官方基线并修复集成差异；本轮未授权生产切换，仍单独记录部署。
+用户明确要求接到新的官方基线并修复集成差异；本轮完成代码集成和组合验证，生产切换单独处理。
 
 ## 实现和保留边界
 
@@ -38,6 +38,30 @@ TEMP 真 Git 源码与真实冻结过程验证默认/独立两种路径，独立
 新增冻结测试首次将原测试尾部误放到新用例内，造成 TEMP source.py 不存在而失败；
 已恢复原用例完整范围，保留 candidate-destination-first.xml，不改产品约束使测试通过。
 
-当前源码已通过验证，下一步冻结准确提交与本轮新前端，复验真实恢复和内容闭环。
+当前源码验证及准确冻结包验证均已完成。
 模型、外部检查仅使用合成执行器，平台写入和真实 AI 为零。
 实体 vivo/WebToApp 与实际用户体验仍待验，不由模拟手机结果代填。
+
+## 准确冻结配对与最终交付
+
+运行源码提交：`874740058d3f0d267e3830e4f92d505bfd7c5b4e`。
+后端候选 `workbench-20261102-015158`，manifest SHA256
+`4f0b758e836199fecf8dd8874fef90fce0975cc19b25288055c68161dec15c89`。
+前端 `native-easel-workbench-20261102014712`，manifest SHA256
+`b320ae42d8fc4f220ad35ca0b8e85e8771848b3b7f1f440d4dd52d6aa22a704d`。
+前端 156 项构建输入、27 个成员与当前源码逐字节核对；本轮未再改官方同步后的前端源码。
+
+1126 个后端成员、391 Python 编译、capabilities/workspace 与官方 SHA、P2 包入口均核对。
+同一冻结包/新前端另跑桌面及模拟手机内容闭环 34 项和移动恢复 9 项通过；
+实际模块均来自冻结包，原成员 SHA 保持，见 frozen-package.json、
+frozen-closedloop/content-closedloop-browser.json、frozen-recovery-r2/chat-recovery-browser.json。
+实际查看移动 V2 和 unknown 截图。首次 unknown 截图抓到 0.24s 淡入的起始帧，
+测试取证改为等待 message-row 实际 opacity 达到 0.99 再截图，未修改 DOM/CSS 或用截图替代状态断言；
+复跑恢复 9 项仍通过，同一原字输入清晰可读。首次截图及报告保留在 frozen-recovery/。
+
+独立候选写入 `.local/workbench-validation/p2-upstream-integration-20261102/candidate.json`。
+共享 candidate 和两个活动指针均与集成前字节相同，936 份保护源码/资源也相同。
+本轮不部署、不恢复数据库、不迁入技能，不重放未知回执。
+新官方提交及原同步交付均为当前分支祖先；旧 P2 两提交和旧分支保持原样。
+本轮提交推送自有 origin 的当前分支 `codex/easel-sync-20261102-082005`，不用 force、
+不向官方推送或创建 PR。最终远端 SHA 和证据哈希记录于本轮 delivery.json。

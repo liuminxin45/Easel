@@ -2,7 +2,7 @@
 
 Spec: private-workbench-architecture
 
-日期：2026-11-02。状态：P2 独立实现已交付；用户进一步要求接到新官方基线，现已接入主工作区 `4e93bcf` 之后，组合回归与冻结包核验进行中。本批不切生产。P3–P6 未实施；实体设备保存仍按用户决定待验。
+日期：2026-11-02。状态：P2 已接到主工作区新官方基线，组合回归和准确冻结新配对验证完成，交付自有 fork 的当前同步分支。本批不切生产。P3–P6 未实施；实体设备保存仍按用户决定待验。
 
 ## 目标与本轮授权
 
@@ -301,3 +301,16 @@ Edge 桌面/模拟手机 34 项真实 TEMP 闭环通过。新增 HTTP SQLite 失
 完成条件为新基线上的 P2 事务/会话/作品、SourceRegistry 与能力原字节、
 两种构建，以及准确冻结新配对的内容和恢复闭环通过，再提交推送自有 fork。
 本轮证据目录：`.local/workbench-validation/p2-upstream-integration-20261102/`。
+
+组合验收完成：84 项 P2、256 项跨域/架构/采集/原字节、376 项前端通过；
+冻结候选位置 3 项通过（含与上一组重叠的源码清洁检查，不相加）。
+check:workbench、build:workbench、官方 build 通过，原打包体积提示保留。
+运行源码 `8747400`，候选 `workbench-20261102-015158`（manifest
+`4f0b758e836199fecf8dd8874fef90fce0975cc19b25288055c68161dec15c89`）
+绑定新前端 `native-easel-workbench-20261102014712`（manifest
+`b320ae42d8fc4f220ad35ca0b8e85e8771848b3b7f1f440d4dd52d6aa22a704d`）。
+1126 包成员和 391 Python 编译通过；准确冻结组合的内容 34 项、恢复 9 项通过。
+新增 --candidate 仅提供独立输出，真实 TEMP 冻结确认默认行为及所有原字节守卫保持。
+共享候选与两个活动指针未变，不部署。原 P2 两提交/分支及官方同步历史均保留，
+当前主工作区分支 codex/easel-sync-20261102-082005 同时包含新官方基线与 P2。
+详见 `docs/workbench/PRIVATE-ARCHITECTURE-P2-INTEGRATION-20261102.md`。

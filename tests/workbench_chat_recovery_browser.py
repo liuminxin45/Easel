@@ -108,6 +108,9 @@ def main():
         assert value, name
 
     def screenshot(page, name):
+        # Capture the settled message row, not the first frame of the shared
+        # fadeIn animation after the final receipt has rendered.
+        page.wait_for_function("()=>Array.from(document.querySelectorAll('.message-row')).every(row=>Number(getComputedStyle(row).opacity)>=0.99)")
         page.screenshot(path=str(out / name), full_page=True)
         report['screenshots'][name] = sha(out / name)
 

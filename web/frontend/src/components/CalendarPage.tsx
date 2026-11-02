@@ -48,16 +48,18 @@ export default function CalendarPage({viewState,draftStore,onContentReady,regist
   const showSuggest=view.showSuggest,setShowSuggest=(showSuggest:boolean)=>setView(previous=>({...previous,showSuggest}));
   const [dayView, setDayView] = useState<string | null>(null);   // 展开查看某天全部（date，null=关闭）
   const [error,setError]=useState(''),[loading,setLoading]=useState(()=>peekApiData('/api/schedule')===undefined),generation=useRef(0);
+  const [readErrors,setReadErrors]=useState<Partial<Record<'schedule'|'context',string>>>({});
+  const readSuccess=useCallback((key:'schedule'|'context')=>setReadErrors(previous=>({...previous,[key]:''})),[]);
+  const readFailure=useCallback((key:'schedule'|'context',error:unknown)=>setReadErrors(previous=>({...previous,[key]:error instanceof Error?error.message:'日历读取失败，请重试。'})),[]);
 
   const load = useCallback((force=false) => {
-    const request=++generation.current;setLoading(peekApiData('/api/schedule')===undefined);setError('');
-    void Promise.all([fetchSchedule(force).then(value=>{if(request===generation.current)setItems(value)}),fetchScheduleContext(14,force).then(value=>{if(request===generation.current)setCtx(value)})])
-      .catch(error=>{if(request===generation.current)setError(error instanceof Error?error.message:'日历读取失败，请重试。')})
+    const request=++generation.current,scheduleCached=peekApiData('/api/schedule')!==undefined,contextCached=peekApiData('/api/schedule/context?days=14')!==undefined;setLoading(!scheduleCached);
+    void Promise.all([fetchSchedule(force).then(value=>{if(request===generation.current){setItems(value);if(force||!scheduleCached)readSuccess('schedule')}}).catch(error=>{if(request===generation.current)readFailure('schedule',error)}),fetchScheduleContext(14,force).then(value=>{if(request===generation.current){setCtx(value);if(force||!contextCached)readSuccess('context')}}).catch(error=>{if(request===generation.current)readFailure('context',error)})])
       .finally(()=>{if(request===generation.current)setLoading(false)});
   }, []);
   useEffect(() => { load();return()=>{generation.current++}; }, [load]);
-  useEffect(()=>subscribeApiData<ScheduleItem[]>('/api/schedule',value=>{setItems(value);setError('');setLoading(false)},error=>setError(error.message)),[]);
-  useEffect(()=>subscribeApiData<ScheduleContext>('/api/schedule/context?days=14',setCtx,error=>setError(error.message)),[]);
+  useEffect(()=>subscribeApiData<ScheduleItem[]>('/api/schedule',value=>{setItems(value);readSuccess('schedule');setLoading(false)},error=>readFailure('schedule',error)),[]);
+  useEffect(()=>subscribeApiData<ScheduleContext>('/api/schedule/context?days=14',value=>{setCtx(value);readSuccess('context')},error=>readFailure('context',error)),[]);
   useEffect(()=>{if(!loading)onContentReady?.()},[loading,items,onContentReady]);
   useEffect(()=>{if(!form&&!dayView)return;return registerLayer?.(()=>{formRef.current=null;setFormState(null);setEditing(null);setDayView(null)})},[!!form,!!dayView,registerLayer]);
 
@@ -128,13 +130,13 @@ export default function CalendarPage({viewState,draftStore,onContentReady,regist
       else await createSchedule(submitted);
       const saved=draftStore?.read(submittedKey,editingId);
       if(saved?.editingId===editingId&&JSON.stringify(saved.form)===JSON.stringify(submitted))draftStore?.remove(saved);
-      if(formRef.current===submitted)close();load(true);
+      setError('');if(formRef.current===submitted)close();load(true);
     } catch(error){setError(error instanceof Error?error.message:'日历保存失败，输入已保留。')}finally { setSaving(false); }
   };
   const remove = async () => {
     if (!editing) return;
     setSaving(true);
-    try { await deleteSchedule(editing.id);const saved=draftStore?.read(draftKey.current,editing.id);if(saved)draftStore?.remove(saved);close();load(true); }catch(error){setError(error instanceof Error?error.message:'删除失败，请核对后重试。')} finally { setSaving(false); }
+    try { await deleteSchedule(editing.id);const saved=draftStore?.read(draftKey.current,editing.id);if(saved)draftStore?.remove(saved);setError('');close();load(true); }catch(error){setError(error instanceof Error?error.message:'删除失败，请核对后重试。')} finally { setSaving(false); }
   };
 
   const monthLabel = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月`;
@@ -158,7 +160,7 @@ export default function CalendarPage({viewState,draftStore,onContentReady,regist
         </div>
       </div>
 
-      {error&&<div className="notice-error" role="alert">{error} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>}
+      {[error,readErrors.schedule,readErrors.context].filter(Boolean).map((message,index)=><div className="notice-error" role="alert" key={index}>{message} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>)}
       {loading&&<div role="status">正在读取日历…</div>}
 
       {showSuggest && suggestions.length > 0 && (

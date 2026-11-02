@@ -46,6 +46,7 @@ interface DashboardProps {
   viewState?:ViewStateStore<DashboardViewState>;
 }
 export interface DashboardViewState {platform:string;window:'last'|'day'|'week'|'month'|'year'}
+type DashboardRead = 'trends'|'schedule'|'ideas'|'accounts'|'analytics';
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
@@ -56,15 +57,31 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const [outputsLoading, setOutputsLoading] = useState(()=>peekApiData('/api/outputs')===undefined);
   const [outputsError, setOutputsError] = useState('');
   const outputsSeq = useRef(0);
-  const loadOutputs = useCallback(() => {
+  const loadOutputs = useCallback((force=false) => {
     const seq = ++outputsSeq.current;
-    setOutputsLoading(peekApiData('/api/outputs')===undefined);setOutputsError('');
-    fetchOutputs().then((data) => { if (seq === outputsSeq.current) setOutputs(data); })
+    const cached=peekApiData('/api/outputs')!==undefined;
+    setOutputsLoading(!cached);
+    fetchOutputs(force).then((data) => { if (seq === outputsSeq.current) {setOutputs(data);if(!cached||force)setOutputsError('');} })
       .catch((error: unknown) => { if (seq === outputsSeq.current) setOutputsError(error instanceof Error ? error.message : '读取失败'); })
       .finally(() => { if (seq === outputsSeq.current) setOutputsLoading(false); });
   }, []);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>(()=>peekApiData<Idea[]>('/api/ideas')??[]);
+  const [readErrors,setReadErrors]=useState<Partial<Record<DashboardRead,string>>>({});
+  const [readReady,setReadReady]=useState<Partial<Record<DashboardRead,boolean>>>(()=>({trends:peekApiData('/api/trends?limit=6')!==undefined,schedule:peekApiData('/api/schedule')!==undefined,ideas:peekApiData('/api/ideas')!==undefined}));
+  const readSuccess=useCallback((key:DashboardRead)=>{setReadReady(previous=>({...previous,[key]:true}));setReadErrors(previous=>({...previous,[key]:''}))},[]);
+  const readFailure=useCallback((key:DashboardRead,error:unknown)=>setReadErrors(previous=>({...previous,[key]:error instanceof Error?error.message:'读取失败，请重试。'})),[]);
+  const loadCommon=useCallback(async(key:Exclude<DashboardRead,'analytics'>,force=false)=>{
+    const path={trends:'/api/trends?limit=6',schedule:'/api/schedule',ideas:'/api/ideas',accounts:'/api/accounts'}[key],cached=peekApiData(path)!==undefined;
+    try{
+      if(key==='trends')setTrends((await fetchTrends(undefined,6,force)).trends);
+      else if(key==='schedule')setSchedule(await fetchSchedule(force));
+      else if(key==='ideas')setIdeas(await fetchIdeas(force));
+      else setAccounts(await fetchAccounts());
+      // A warm snapshot is not a successful background refresh. Its subscription owns that outcome.
+      if(!cached||force)readSuccess(key);else setReadReady(previous=>({...previous,[key]:true}));
+    }catch(error){readFailure(key,error)}
+  },[readSuccess,readFailure]);
   // 归因层：账号创作数据
   const [anaPlats, setAnaPlats] = useState<AnalyticsPlatform[]>([]);
   const [view,setView]=useStoredViewState<DashboardViewState>(viewState,()=>({platform:'',window:'week'}));
@@ -91,20 +108,21 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   }, []);
   useEffect(()=>{
     const stops=[subscribeApiData<OutputNode[]>('/api/outputs',value=>{setOutputs(value);setOutputsError('');setOutputsLoading(false)},error=>setOutputsError(error.message)),
-      subscribeApiData<ScheduleItem[]>('/api/schedule',setSchedule),subscribeApiData<Idea[]>('/api/ideas',setIdeas),
-      subscribeApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6',value=>setTrends(value.trends))];
+      subscribeApiData<ScheduleItem[]>('/api/schedule',value=>{setSchedule(value);readSuccess('schedule')},error=>readFailure('schedule',error)),subscribeApiData<Idea[]>('/api/ideas',value=>{setIdeas(value);readSuccess('ideas')},error=>readFailure('ideas',error)),
+      subscribeApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6',value=>{setTrends(value.trends);readSuccess('trends')},error=>readFailure('trends',error))];
     return()=>stops.forEach(stop=>stop());
   },[]);
   useEffect(()=>{if(!outputsLoading)onContentReady?.()},[outputsLoading,outputs,trends,schedule,onContentReady]);
 
   useEffect(() => {
-    fetchTrends(undefined, 6).then((d) => setTrends(d.trends)).catch(() => {});
-    fetchSchedule().then(setSchedule).catch(() => {});
+    void loadCommon('trends');
+    void loadCommon('schedule');
     loadOutputs();
-    fetchAccounts().then(setAccounts).catch(() => {});
-    fetchIdeas().then(setIdeas).catch(() => {});
+    void loadCommon('accounts');
+    void loadCommon('ideas');
     fetchAnalyticsPlatforms().then((ps) => {
       setAnaPlats(ps);
+      readSuccess('analytics');
       const cache = persistAnalytics ? getWhoamiCache() : {};
       const isLog = (p: AnalyticsPlatform) => p.loggedIn || !!cache[p.platform]?.loggedIn;
       const first = ps.find(isLog);
@@ -119,7 +137,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           if (r.loggedIn) setAnaSel((s) => s || platform);
         },
       });
-    }).catch(() => {});
+    }).catch(error=>readFailure('analytics',error));
   }, []);
 
   const runAna = (platform: string) => {
@@ -159,6 +177,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const recent = outputs.slice(0, 5);
   const pendingIdeas = ideas.filter((i) => i.status === 'pending');
   const loggedIn = accounts.filter((a) => a.loggedIn).length;
+  const count=(key:DashboardRead,value:string)=>readErrors[key]?'—':readReady[key]?value:'…';
+  const readNotice=(key:Exclude<DashboardRead,'analytics'>,label:string)=>readErrors[key]&&<div className="notice-error" role="alert">{label}读取失败：{readErrors[key]} <button className="btn btn-sm" onClick={()=>void loadCommon(key,true)}>重试</button></div>;
 
   const quick: { label: string; page: Page; Icon: typeof IconChat }[] = [
     { label: '开始对话', page: 'chat', Icon: IconChat },
@@ -170,10 +190,10 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   ];
 
   const stats: { label: string; value: string; page: Page; Icon: typeof IconChat }[] = [
-    { label: '待做选题', value: String(pendingIdeas.length), page: 'ideas', Icon: IconIdea },
-    { label: '待发排期', value: String(upcoming.length), page: 'calendar', Icon: IconCalendar },
+    { label: '待做选题', value: count('ideas',String(pendingIdeas.length)), page: 'ideas', Icon: IconIdea },
+    { label: '待发排期', value: count('schedule',String(upcoming.length)), page: 'calendar', Icon: IconCalendar },
       { label: '内容项目', value: outputsLoading && outputs.length === 0 ? '…' : outputsError && outputs.length === 0 ? '—' : String(outputs.length), page: 'outputs', Icon: IconOutputs },
-    { label: '已登录账号', value: `${loggedIn}/${accounts.length}`, page: 'accounts', Icon: IconAccounts },
+    { label: '已登录账号', value: count('accounts',`${loggedIn}/${accounts.length}`), page: 'accounts', Icon: IconAccounts },
   ];
 
   return (
@@ -198,6 +218,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
         </div>
       </div>
 
+      {readNotice('accounts','账号')}
+
       {/* 概览数字 */}
       <div className="dash-stats">
         {stats.map((s) => (
@@ -217,10 +239,11 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <button className="dash-more" onClick={() => onNavigate('trends')}>热点雷达 →</button>
           </div>
           {board('news','今日热点列表',<>
-          {trends.length === 0 && <div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>}
+          {readNotice('trends','热点')}
+          {readReady.trends && !readErrors.trends && trends.length === 0 && <div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>}
           {trends.map((g) => (
             <div key={g.platform} className="dash-trend-group">
-              <div className="dash-trend-plat">{g.label}{g.stale ? ' · 过期缓存' : ''}</div>
+              <div className="dash-trend-plat">{g.label}{g.fetched_at&&` · ${new Date(g.fetched_at).toLocaleDateString('zh-CN')}采集`}{g.stale ? ' · 过期缓存' : ''}</div>
               {g.error && <div className="dash-empty">{g.error.message}</div>}
               {g.ok && g.items.length === 0 && <div className="dash-empty">采集成功，暂无热点</div>}
               {g.items.slice(0, 3).map((it) => (
@@ -240,7 +263,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <button className="dash-more" onClick={() => onNavigate('ideas')}>全部 →</button>
           </div>
           {board('ideas','待做选题列表',<>
-          {pendingIdeas.length === 0 && <div className="dash-empty">还没攒选题，去热点雷达收藏几个吧</div>}
+          {readNotice('ideas','选题')}
+          {readReady.ideas && !readErrors.ideas && pendingIdeas.length === 0 && <div className="dash-empty">还没攒选题，去热点雷达收藏几个吧</div>}
           {pendingIdeas.slice(0, 5).map((it) => (
             <div key={it.id} className="dash-idea" onClick={() => onUseTopic(it.title,it.source_id,it.note)} title="点击做成内容">
               <span className="dash-idea-title">{it.title}</span>
@@ -257,7 +281,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <button className="dash-more" onClick={() => onNavigate('calendar')}>日历 →</button>
           </div>
           {board('schedule','近期排期列表',<>
-          {upcoming.length === 0 && <div className="dash-empty">暂无排期，去日历安排一条吧</div>}
+          {readNotice('schedule','排期')}
+          {readReady.schedule && !readErrors.schedule && upcoming.length === 0 && <div className="dash-empty">暂无排期，去日历安排一条吧</div>}
           {upcoming.map((s) => (
             <div key={s.id} className="dash-sched" onClick={() => onNavigate('calendar')}>
               <span className="dash-sched-date">{s.date.slice(5)}</span>
@@ -276,7 +301,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           </div>
           {board('outputs','最近产物列表',<>
             {outputsLoading && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
-            {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={loadOutputs}>重试</button></div>}
+            {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={()=>loadOutputs(true)}>重试</button></div>}
             {!outputsLoading && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
           {recent.map((g) => (
             <div key={g.name} className="dash-output" onClick={() => onNavigate('outputs')}>
@@ -297,7 +322,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           </div>
           {(() => {
             const logged = anaPlats.filter((p) => p.loggedIn || whoamiMap[p.platform]?.loggedIn);
-            if (anaPlats.length === 0) return <div className="dash-empty">加载中 / 需配置代理</div>;
+            if (readErrors.analytics) return <div className="notice-error" role="alert">归因平台读取失败：{readErrors.analytics}</div>;
+            if (anaPlats.length === 0) return <div className="dash-empty">{readReady.analytics?'暂无可用归因平台，请到账号页配置。':'正在读取归因平台…'}</div>;
             if (logged.length === 0) {
               return (
                 <div className="dash-empty" onClick={() => onNavigate('accounts')} style={{ cursor: 'pointer' }}>

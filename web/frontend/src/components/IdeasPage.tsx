@@ -94,7 +94,7 @@ export default function IdeasPage({ onUseTopic, draftStore,onContentReady }: Ide
     } catch (caught) { reportError(caught); }
   };
 
-  const notice = error ? <div className="notice-error" role="alert">{error}<button className="btn btn-sm" onClick={()=>void load()}>重新读取选题</button></div> : undefined;
+  const notice = error ? <div className="notice-error" role="alert">{error}<button className="btn btn-sm" onClick={()=>void load(true)}>重新读取选题</button></div> : undefined;
   return (
     <div className="page-scroll ideas-page">
       <div className="page-head">

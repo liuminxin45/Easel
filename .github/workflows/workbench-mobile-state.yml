@@ -11,10 +11,7 @@ on:
       - 'skills/shared/workbench/**'
       - 'agents/workspace/**'
       - 'tests/frontend/**'
-      - 'tests/test_workbench_chat_history_windows.py'
-      - 'tests/test_workbench_architecture.py'
-      - 'tests/test_workbench_skill_policy.py'
-      - 'tests/test_workbench_skill_commands.py'
+      - 'tests/test_workbench*.py'
       - 'tests/conftest.py'
       - 'pyproject.toml'
       - 'scripts/audit_easel_base.mjs'
@@ -33,10 +30,7 @@ on:
       - 'skills/shared/workbench/**'
       - 'agents/workspace/**'
       - 'tests/frontend/**'
-      - 'tests/test_workbench_chat_history_windows.py'
-      - 'tests/test_workbench_architecture.py'
-      - 'tests/test_workbench_skill_policy.py'
-      - 'tests/test_workbench_skill_commands.py'
+      - 'tests/test_workbench*.py'
       - 'tests/conftest.py'
       - 'pyproject.toml'
       - 'scripts/audit_easel_base.mjs'
@@ -83,8 +77,8 @@ jobs:
       - name: Verify mobile state and all frontend regressions
         working-directory: web/frontend
         run: node --test --test-concurrency=2 ../../tests/frontend/*.test.mjs
-      - name: Verify bounded history and business boundaries using TEMP data
-        run: python -m pytest -q tests/test_workbench_chat_history_windows.py tests/test_workbench_architecture.py tests/test_workbench_skill_policy.py tests/test_workbench_skill_commands.py
+      - name: Verify business concurrency, health and state using TEMP data
+        run: python -m pytest -q tests/test_workbench_chat_history_windows.py tests/test_workbench_architecture.py tests/test_workbench_skill_policy.py tests/test_workbench_skill_commands.py tests/test_workbench_local_locking.py tests/test_workbench_worker_progress.py tests/test_workbench_delivery_projection.py tests/test_workbench_collection_freshness.py tests/test_workbench_business_health.py tests/test_workbench_health_watchdog.py
       - name: Verify host types, interactions and official ancestry
         working-directory: web/frontend
         run: npm run check:workbench

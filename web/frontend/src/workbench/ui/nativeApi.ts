@@ -4,7 +4,7 @@ import {bindWhoamiStorage} from '../../lib/whoami';
 import type {WorkbenchClient} from '../core/client';
 import {requestFingerprint} from '../../lib/interaction';
 import {record, type JsonRecord} from '../core/models';
-import {nativeResourceCacheable} from '../core/resource-cache';
+import {nativeResourceCacheable,RESOURCE_FRESH_MS} from '../core/resource-cache';
 import {RequestError} from '../core/transport';
 
 /** Cancellation belongs to this reader, never the shared in-flight request. */
@@ -23,7 +23,7 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
   peek<T>(path:string){return nativeResourceCacheable(path)?client.peek<T>(path):undefined},
   subscribe<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void){
    if(!nativeResourceCacheable(path))return()=>{};
-   const state=client.resource(path),unwatch=client.watch(path);let previous=state.getState().data,error='';
+   const state=client.resource(path),unwatch=client.watch(path,new URL(path,'https://workbench.invalid').pathname==='/api/trends'?RESOURCE_FRESH_MS:undefined);let previous=state.getState().data,error='';
    if(state.getState().error){error=state.getState().error;onError?.(new Error(error))}
    const unsubscribe=state.subscribe(value=>{
     if(value.data!==null&&(value.data!==previous||error&&!value.error)){previous=value.data;onData(value.data as T)}

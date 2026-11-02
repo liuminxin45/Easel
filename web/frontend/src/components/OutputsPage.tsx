@@ -104,6 +104,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
   const setFilter=(filter:string)=>setView(previous=>({...previous,filter}));
   const [selected, setSelected] = useState<OutputNode | null>(null);
   const [content, setContent] = useState('');
+  const [contentError,setContentError]=useState('');
   const [loading, setLoading] = useState(false);
   const reqSeq = useRef(0);
   useEffect(()=>{
@@ -179,17 +180,22 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     }
   }, [load, canDelete]);
 
-  const open = useCallback(async (f: OutputNode) => {
+  const open = useCallback(async (f: OutputNode,force=false) => {
     const seq = ++reqSeq.current;
-    setSelected(f); setContent('');
+    setSelected(f); setContent('');setContentError('');
     if (f.kind === 'text' && !isHtml(f.name)) {
       setLoading(true);
       try {
-        const res = await fetchOutputContent(f.path);
+        const res = await fetchOutputContent(f.path,force);
         if (seq === reqSeq.current) setContent(res.isBinary ? '' : res.content);
-      } finally { if (seq === reqSeq.current) setLoading(false); }
+      } catch(error){if(seq===reqSeq.current)setContentError(error instanceof Error?error.message:'正文读取失败，请重试。')}finally { if (seq === reqSeq.current) setLoading(false); }
     }
   }, []);
+  useEffect(()=>{
+    if(!selected||selected.kind!=='text'||isHtml(selected.name))return;
+    const path='/api/output/'+selected.path.split('/').map(encodeURIComponent).join('/');
+    return subscribeApiData<Awaited<ReturnType<typeof fetchOutputContent>>>(path,value=>{setContent(value.isBinary?'':value.content);setContentError('');setLoading(false)},error=>{setContentError(error.message);setLoading(false)});
+  },[selected?.path]);
 
   // Resolve the declared path, which may differ from a virtual node's display name.
   useEffect(() => {
@@ -233,7 +239,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     );
     if (selected.kind === 'text') {
       if (loading) return <div className="loading"><div className="spinner" />加载中…</div>;
-      return <><div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
+      return <>{contentError&&<div className="notice-error" role="alert">{contentError} <button className="btn btn-sm" onClick={()=>open(selected,true)}>重试预览</button></div>}<div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
     }
     return <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>无法预览。<DownloadLink href={url} download={selected.name} style={{ color: 'var(--accent-start)' }}>下载 {selected.name}</DownloadLink></div>;
   };

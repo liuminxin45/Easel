@@ -202,8 +202,8 @@ export function fetchStatus(): Promise<StatusResponse> {
   return request<StatusResponse>('/api/status');
 }
 
-export function fetchPersonas(): Promise<PersonaItem[]> {
-  return request<PersonaItem[]>('/api/personas');
+export function fetchPersonas(force=false): Promise<PersonaItem[]> {
+  return request<PersonaItem[]>('/api/personas',force?{cache:'reload'}:undefined);
 }
 
 export function fetchPersonaDetail(name: string): Promise<PersonaDetail> {
@@ -215,8 +215,8 @@ export interface PersonaFile {
   content: string;
 }
 
-export function fetchPersonaFiles(name: string): Promise<{ name: string; files: PersonaFile[]; revision?:number }> {
-  return request(`/api/persona/${encodeURIComponent(name)}/files`);
+export function fetchPersonaFiles(name: string,force=false): Promise<{ name: string; files: PersonaFile[]; revision?:number }> {
+  return request(`/api/persona/${encodeURIComponent(name)}/files`,force?{cache:'reload'}:undefined);
 }
 
 export function savePersonaFile(name: string, filename: string, content: string, expectedRevision?:number): Promise<{ ok: boolean; revision?:number }> {
@@ -421,8 +421,8 @@ export function fetchArtifactArchive(path: string, signal?: AbortSignal): Promis
   return request<{ paths: string[] }>(`/api/artifacts/archive?path=${encodeURIComponent(path)}`, { signal });
 }
 
-export function fetchOutputContent(path: string): Promise<OutputContent> {
-  return request<OutputContent>(`/api/output/${path.split('/').map(encodeURIComponent).join('/')}`);
+export function fetchOutputContent(path: string,force=false): Promise<OutputContent> {
+  return request<OutputContent>(`/api/output/${path.split('/').map(encodeURIComponent).join('/')}`,force?{cache:'reload'}:undefined);
 }
 
 /** 媒体文件（图片/视频/音频/HTML/PDF）的原样 URL，用于 <img>/<video>/iframe/下载。 */

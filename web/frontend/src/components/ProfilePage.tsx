@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics,peekApiData } from '../lib/api';
+import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics,peekApiData,subscribeApiData } from '../lib/api';
 import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { PersonaItem, PersonaFile, AccountAnalytics } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
@@ -101,13 +101,14 @@ export default function ProfilePage(props: ProfilePageProps) {
     let ignore = false;
     if(!peekApiData('/api/personas'))setLoading(true);
     setError('');
-    fetchPersonas().then((list) => {
+    fetchPersonas(revision>0).then((list) => {
       if (!ignore) setPersonas(list);
     }).catch(() => {
       if (!ignore) setError('加载画像列表失败，请重试。');
     }).finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
   }, [revision]);
+  useEffect(()=>subscribeApiData<PersonaItem[]>('/api/personas',value=>{setPersonas(value);setLoading(false);setError('')},error=>{setLoading(false);setError(error.message)}),[]);
 
   if (viewedPersona) {
     return <ProfileDetail key={viewedPersona} {...props} persona={viewedPersona}
@@ -202,6 +203,13 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
   }, [persona, draftStore]);
+  useEffect(()=>subscribeApiData<Awaited<ReturnType<typeof fetchPersonaFiles>>>('/api/persona/'+encodeURIComponent(persona)+'/files',value=>{
+    setFiles(value.files);setServerRevision(value.revision);
+    // New server content must not rewrite unsent fields or silently change their captured parent revision.
+    setDrafts({...Object.fromEntries(value.files.map(file=>[file.filename,file.content])),...changedFields.current});
+    if(!Object.keys(changedFields.current).length)setFileRevision(value.revision);
+    setLoading(false);setError('');
+  },error=>{setLoading(false);setError(error.message)}),[persona]);
   useEffect(()=>{if(!loading&&(files.length||error))onContentReady?.()},[loading,files,error,onContentReady]);
 
   const updateDraft = (filename: string, content: string) => {
@@ -238,7 +246,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
         // Refresh only the read view. The user's draft keeps its captured parent
         // until they explicitly review the current server version below.
         try {
-          const current = await fetchPersonaFiles(persona);
+          const current = await fetchPersonaFiles(persona,true);
           setFiles(current.files); setServerRevision(current.revision);
         } catch { /* The draft and its parent remain intact if this read fails. */ }
       }

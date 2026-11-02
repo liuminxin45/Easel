@@ -18,10 +18,11 @@ export default function BreakdownPage({ persona, onAnalyze, inputState, resultCo
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
+  const [error,setError]=useState('');
 
   const run = async () => {
     if (!input.trim() || analysisBusy) return;
-    setLoading(true); setResult('');
+    setLoading(true); setResult('');setError('');
     const prompt =
       `你是爆款内容拆解专家。拆解下面这条内容，用中文分点输出：\n` +
       `1. **一句话概括**\n` +
@@ -35,16 +36,18 @@ export default function BreakdownPage({ persona, onAnalyze, inputState, resultCo
       if (onAnalyze) setResult(await onAnalyze(input, persona));
       else { const res = await runAgent(prompt, persona); setResult(res.response); }
     } catch (e) {
-      setResult(e instanceof Error ? e.message : '拆解失败，请重试');
+      setError(e instanceof Error ? e.message : '拆解失败，请重试');
     } finally { setLoading(false); }
   };
 
   const saveToIdeas = async () => {
     if (!result) return;
     const firstLine = input.trim().split('\n')[0].slice(0, 24);
-    await createIdea({ title: `拆解模板：${firstLine}`, note: result, source: '爆款拆解', status: 'pending' });
-    setToast('已存入选题库');
-    setTimeout(() => setToast(''), 2200);
+    try{
+      await createIdea({ title: `拆解模板：${firstLine}`, note: result, source: '爆款拆解', status: 'pending' });
+      setError('');setToast('已存入选题库');
+      setTimeout(() => setToast(''), 2200);
+    }catch(error){setError(error instanceof Error?error.message:'选题保存失败，请重试。')}
   };
 
   return (
@@ -68,6 +71,7 @@ export default function BreakdownPage({ persona, onAnalyze, inputState, resultCo
           {result && <button className="btn btn-ghost" onClick={() => { setResult(''); setInput(''); }}>清空</button>}
         </div>
 
+        {error&&<div className="notice-error" role="alert">{error}</div>}
         {loading && <div className="loading" style={{ padding: 40 }}><div className="spinner" />AI 正在拆解…</div>}
         {result && !loading && (
           <div className="panel" style={{ marginTop: 18 }}>

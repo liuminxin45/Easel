@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { buildProfile, profileBuildStatus } from '../lib/api';
 
 const PLATFORMS = ['小红书', '抖音', 'B站', '视频号', '公众号', '微博', '知乎'];
@@ -7,9 +7,10 @@ const TONES = ['专业严谨', '轻松幽默', '亲切日常', '犀利吐槽', '
 interface OnboardingWizardProps {
   onClose: () => void;
   onCreated: (name: string) => void;
+  draftStore?: OnboardingDraftStore;
 }
 
-interface FormState {
+export interface OnboardingForm {
   name: string;
   platforms: string[];
   accountStage: string;
@@ -23,21 +24,33 @@ interface FormState {
   avoid: string;
 }
 
-const EMPTY: FormState = {
+export interface OnboardingDraft { form: OnboardingForm; step: number }
+export interface OnboardingDraftStore {
+  read: () => OnboardingDraft | null;
+  write: (draft: OnboardingDraft) => void;
+  remove: () => void;
+}
+
+const EMPTY: OnboardingForm = {
   name: '', platforms: [], accountStage: '全新起号', links: {},
   direction: '', reason: '', goal: '', formats: '', likes: '', tone: '', avoid: '',
 };
 
 const STEPS = ['基础信息', '社媒链接', '运营意图', '偏好与红线'];
 
-export default function OnboardingWizard({ onClose, onCreated }: OnboardingWizardProps) {
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>(EMPTY);
+export default function OnboardingWizard({ onClose, onCreated, draftStore }: OnboardingWizardProps) {
+  const saved = useRef(draftStore?.read());
+  const [step, setStep] = useState(Math.max(0, Math.min(STEPS.length - 1, saved.current?.step || 0)));
+  const [form, setForm] = useState<OnboardingForm>(saved.current?.form || EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [phase, setPhase] = useState<'form' | 'enhancing'>('form');
   const [error, setError] = useState('');
+  const [createdName, setCreatedName] = useState('');
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+  useEffect(() => { if (phase === 'form') draftStore?.write({ form, step }); }, [form, step, phase, draftStore]);
+  const enter = (name: string) => { draftStore?.remove(); onCreated(name); };
+
+  const set = <K extends keyof OnboardingForm>(k: K, v: OnboardingForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const togglePlatform = (p: string) =>
@@ -60,8 +73,11 @@ export default function OnboardingWizard({ onClose, onCreated }: OnboardingWizar
       // 后端异步：立即返回（基线已写、画像可用），不再长阻塞被代理超时掐断
       const res = await buildProfile(form.name.trim(), form as unknown as Record<string, unknown>);
       if (res.created) {
+        const name = res.name || form.name.trim();
+        setCreatedName(name);
         setSubmitting(false);
-        setPhase('enhancing'); // 进入后台增强等待（可跳过）
+        if (res.async === false) enter(name);
+        else setPhase('enhancing'); // 进入后台增强等待（可跳过）
       } else {
         setError('画像创建失败，请重试');
         setSubmitting(false);
@@ -76,13 +92,13 @@ export default function OnboardingWizard({ onClose, onCreated }: OnboardingWizar
   useEffect(() => {
     if (phase !== 'enhancing') return;
     let alive = true;
-    const name = form.name.trim();
+    const name = createdName || form.name.trim();
     const tick = async () => {
       try {
         const st = await profileBuildStatus(name);
         if (!alive) return;
         if (st.state === 'done' || st.state === 'failed' || st.state === 'unknown') {
-          onCreated(name);
+          enter(name);
           return;
         }
       } catch {
@@ -92,7 +108,7 @@ export default function OnboardingWizard({ onClose, onCreated }: OnboardingWizar
     };
     const t = setTimeout(tick, 4000);
     return () => { alive = false; clearTimeout(t); };
-  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, createdName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const box: React.CSSProperties = {
     width: '100%', padding: '10px 12px', marginTop: 6, borderRadius: 'var(--radius)',
@@ -140,7 +156,7 @@ export default function OnboardingWizard({ onClose, onCreated }: OnboardingWizar
               也可以现在就进去用，增强会在后台继续。
             </span>
             <div style={{ marginTop: 20 }}>
-              <button className="btn btn-primary" onClick={() => onCreated(form.name.trim())}>先进去用</button>
+              <button className="btn btn-primary" onClick={() => enter(createdName || form.name.trim())}>先进去用</button>
             </div>
           </div>
         ) : (

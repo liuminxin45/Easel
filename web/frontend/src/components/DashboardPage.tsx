@@ -1,4 +1,3 @@
-import {DashboardTrends} from './TrendsView';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
@@ -204,7 +203,21 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconFire size={16} /> 今日热点</span>
             <button className="dash-more" onClick={() => onNavigate('trends')}>热点雷达 →</button>
           </div>
-          {board('news','今日热点列表',<DashboardTrends groups={trends} onRead={(_,it)=>onUseTopic(it.title,it.id)}/>)}
+          {board('news','今日热点列表',<>
+          {trends.length === 0 && <div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>}
+          {trends.map((g) => (
+            <div key={g.platform} className="dash-trend-group">
+              <div className="dash-trend-plat">{g.label}{g.stale ? ' · 过期缓存' : ''}</div>
+              {g.error && <div className="dash-empty">{g.error.message}</div>}
+              {g.ok && g.items.length === 0 && <div className="dash-empty">采集成功，暂无热点</div>}
+              {g.items.slice(0, 3).map((it) => (
+                <div key={it.id} className="dash-trend-item" title={`${it.title}（点击做成内容）`}>
+                  <button className="dash-trend-title" onClick={() => onUseTopic(it.title,it.id)}>{it.title}</button>
+                </div>
+              ))}
+            </div>
+          ))}
+          </>)}
         </div>
 
         {/* 选题库 */}

@@ -25,7 +25,7 @@ def run(args):
                     context.route('**/*',lambda route:route.continue_() if route.request.url.startswith(origin+'/') or route.request.url.startswith(('data:','blob:')) else route.abort())
                     page=context.new_page();page.set_default_timeout(20000);page.on('pageerror',lambda e:errors.append(e.stack or str(e)))
                     def go(path):
-                        if page.url.startswith(origin):page.wait_for_function("()=>!document.querySelector('dialog[open]')&&!history.state?.nativeLayer")
+                        if page.url.startswith(origin):page.wait_for_function("()=>!document.querySelector('dialog[open],.drawer[role=dialog][aria-modal=true]')&&!history.state?.nativeLayer")
                         h.ready(page,origin,path)
                     def creation_details():
                         if not page.get_by_label('主题',exact=True).is_visible():page.get_by_text('画像、制作要求与草稿',exact=True).click()

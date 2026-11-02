@@ -107,6 +107,109 @@ def styles(page, selectors, *, mobile=False):
     return result
 
 
+def exercise_official_skill_drawer(page, open_catalog, out, label, *, hosted):
+    """Run both real compiled views through the same explicit synthetic API states.
+
+    This verifies the complete configuration/run/result UI, not the model or
+    persistence implementation. Execution/credential requests are intercepted;
+    the normal TEMP server and adapter must see no such actions.
+    """
+    from playwright.sync_api import expect
+    skill = 'ai-image-gen'
+    fake_key = 'TEMP-UI-ONLY-NOT-A-CREDENTIAL'
+    input_text, result_text = 'TEMP 原始技能输入', 'TEMP 官方运行结果，保留在原抽屉。'
+    state = {'configured': False, 'calls': [], 'turn_id': '', 'session_id': 'temp-ui-skill-session'}
+    def wire(route):
+        request = route.request
+        path = urlsplit(request.url).path.removeprefix('/canonical')
+        value, status, content_type = None, 200, 'application/json'
+        if path == '/api/skills' and request.method == 'GET':
+            value = [{'id': skill, 'skill_id': skill, 'name': skill, 'origin': 'easel', 'version': 1,
+                'source_revision': 'a' * 64, 'layer': 'produce', 'description': 'TEMP UI contract only',
+                'needsApi': True, 'apiConfigured': state['configured'], 'available': True,
+                'launch_actions': [{'id': 'native', 'task': 'native', 'label': '使用技能', 'requires_plan': False}]}]
+        elif path == '/api/skill/' + skill and request.method == 'GET':
+            value = {'name': skill, 'layer': 'produce', 'description': 'TEMP UI contract only',
+                'body': '# TEMP 原版技能说明\n\n同一技能、同一配置状态。', 'needsApi': True,
+                'apiConfigured': state['configured'], 'apiSpec': {'label': 'TEMP provider', 'settings': [],
+                    'providers': [{'id': 'temp', 'name': 'TEMP provider', 'keys': [{'env': 'TEMP_UI_KEY',
+                        'label': 'TEMP API Key', 'required': True, 'secret': True, 'choices': [],
+                        'configured': state['configured'], 'masked': 'TEMP***' if state['configured'] else ''}]}]}}
+        elif path == '/api/env' and request.method == 'POST':
+            payload = request.post_data_json
+            assert payload['updates'] == {'TEMP_UI_KEY': fake_key}, payload
+            state['configured'] = True;state['calls'].append({'path': path, 'updates_exact': True})
+            value = {'ok': True, 'skills': {skill: True}}
+        elif path == '/api/settings/harness' and request.method == 'GET':
+            value = {'revision': 7}
+        elif path == '/api/skill' and request.method == 'POST':
+            payload = request.post_data_json
+            assert payload['skill'] == skill and payload['input'] == input_text, payload
+            state['calls'].append({'path': path, 'input_exact': True});value = {'response': result_text}
+        elif path == '/api/chat/sessions' and request.method == 'POST':
+            state['calls'].append({'path': path, 'action': 'create-session-only'})
+            value = {'session': {'id': state['session_id'], 'runtime': 'codex', 'profile_id': 'oil-pig'}}
+        elif path == '/api/chat/submit' and request.method == 'POST':
+            payload = request.post_data_json
+            assert payload['sessionId'] == state['session_id'] and payload['message'] == input_text, payload
+            assert payload['context']['skill_id'] == skill and payload['context']['version'] == 1, payload
+            state['turn_id'] = payload['turnId'];state['calls'].append({'path': path, 'input_exact': True, 'version_exact': True})
+            value, status = {'id': state['turn_id'], 'session_id': state['session_id'], 'status': 'accepted'}, 202
+        elif path.startswith('/api/chat/jobs/') and path.endswith('/stream'):
+            assert state['turn_id'] in path, path
+            content_type = 'text/event-stream'
+            value = 'event: accepted\ndata: ' + json.dumps({'sessionId': state['session_id']}) + '\n\nevent: done\ndata: {}\n\n'
+        elif path.startswith('/api/chat/last/'):
+            value = {'turn_id': state['turn_id'], 'session_id': state['session_id'],
+                'execution_status': 'completed', 'hook_status': 'completed', 'output': result_text}
+        else:
+            route.continue_();return
+        route.fulfill(status=status, content_type=content_type,
+            body=value if content_type == 'text/event-stream' else json.dumps(value, ensure_ascii=False))
+    page.route('**/api/**', wire)
+    try:
+        open_catalog()
+        card = page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname', has_text=skill))
+        expect(card).to_have_count(1);card.click()
+        drawer = page.locator('.drawer-overlay .drawer')
+        expect(drawer.locator('.skill-body-md')).to_contain_text('TEMP 原版技能说明')
+        expect(drawer.get_by_text('TEMP provider · API 配置', exact=False)).to_be_visible()
+        expect(drawer.get_by_role('button', name='执行', exact=True)).to_be_disabled()
+        assert drawer.get_by_role('button', name='带入对话', exact=True).count() == 0
+        assert drawer.get_by_role('combobox', name='技能动作', exact=True).count() == 0
+        initial = {'panel_titles': drawer.locator('.panel-title').all_text_contents(),
+            'labels': drawer.locator('.field-label').all_text_contents(),
+            'run_label': drawer.get_by_role('button', name='执行', exact=True).inner_text(),
+            'missing_dependency_blocks_execution': True, 'visible_api_configuration': True}
+        page.screenshot(path=str(out / (label + '-skill-unconfigured.png')))
+        drawer.locator('input[type=password]').fill(fake_key)
+        drawer.get_by_role('button', name='保存到 .env', exact=True).click()
+        expect(drawer.get_by_text('✓ 已配置', exact=True)).to_be_visible()
+        expect(drawer.locator('input[type=password]')).to_have_value('')
+        drawer.locator('textarea').fill(input_text)
+        execute = drawer.get_by_role('button', name='执行', exact=True)
+        expect(execute).to_be_enabled();execute.click()
+        expect(drawer.locator('.skill-result')).to_contain_text(result_text)
+        expect(drawer.locator('textarea')).to_have_value(input_text)
+        expect(execute).to_be_enabled()
+        assert sum(row['path'] == '/api/env' for row in state['calls']) == 1
+        assert sum(row['path'] in ('/api/skill', '/api/chat/submit') for row in state['calls']) == 1, state
+        assert page.locator('.chat-page').count() == 0, 'Skill execution forced navigation away from the original result area'
+        page.screenshot(path=str(out / (label + '-skill-result.png')))
+        initial.update(result_retained_in_drawer=True, saved_once=True, executed_once=True, wire_calls=state['calls'],
+                       protocol_fixture_only=True, actual_model_calls=0, actual_credentials_saved=0)
+        drawer.get_by_role('button', name='关闭', exact=True).click();expect(drawer).to_have_count(0)
+        card.click();expect(drawer.locator('.skill-body-md')).to_be_visible()
+        if hosted:
+            page.go_back();expect(drawer).to_have_count(0)
+            initial['browser_back_closes_only_drawer'] = True
+        else:
+            drawer.get_by_role('button', name='关闭', exact=True).click()
+        return initial
+    finally:
+        page.unroute('**/api/**', wire)
+
+
 def legacy_account_caches(page):
     return page.evaluate("""()=>Object.keys(localStorage).filter(key=>
       /^(?:easel|postcraft)_(?:whoami|analytics)(?:_|$)/.test(key))""")
@@ -286,14 +389,32 @@ def main():
                                 expect(reference.locator('.settings-close')).to_be_visible()
                                 reference.locator('.settings-close').click()
                             assert styles(reference, list(dashboard_styles), mobile=mobile) == dashboard_styles, {'native': dashboard_styles, 'reference': styles(reference, list(dashboard_styles), mobile=mobile)}
-                            if mobile:
-                                reference.get_by_role('button', name='打开导航', exact=True).click()
+                            toggle = reference.get_by_role('button', name='打开导航', exact=True)
+                            if toggle.count() and toggle.is_visible():
+                                toggle.click()
                             reference.locator('.sidebar-nav .nav-item').filter(has_text='账号').click()
                             expect(reference.locator('.accounts-page')).to_be_visible()
                             expect(reference.locator('.account-card').first).to_be_visible()
                             assert styles(reference, list(account_styles), mobile=mobile) == account_styles, {'native': account_styles, 'reference': styles(reference, list(account_styles), mobile=mobile)}
                             reference.screenshot(path=str(out / (label + '-canonical-accounts.png')), full_page=True)
+                            def reference_skills():
+                                toggle = reference.get_by_role('button', name='打开导航', exact=True)
+                                if toggle.count() and toggle.is_visible():
+                                    toggle.click()
+                                reference.locator('.sidebar-nav .nav-item').filter(has_text='技能库').click()
+                            hosted_skill = exercise_official_skill_drawer(page,
+                                lambda: visit('/toolbox?section=skills'), out, label + '-hosted', hosted=True)
+                            canonical_skill = exercise_official_skill_drawer(reference,
+                                reference_skills, out, label + '-canonical', hosted=False)
+                            for key in ('panel_titles', 'labels', 'run_label', 'missing_dependency_blocks_execution',
+                                        'visible_api_configuration', 'result_retained_in_drawer', 'saved_once', 'executed_once'):
+                                assert hosted_skill[key] == canonical_skill[key], (key, hosted_skill, canonical_skill)
+                            check(label + ': full official skill configuration, execution and result area match in both entries',
+                                  hosted=hosted_skill, canonical=canonical_skill,
+                                  scope='Compiled real views with synthetic HTTP receipts, not backend/model execution')
                             reference_context.close()
+                            visit('/toolbox?section=distribution&pane=connections')
+                            expect(card).to_be_visible()
                             check(label + ': default-app and hosted shared controls have equal computed styles')
                         if args.comparison_only:
                             context.close()

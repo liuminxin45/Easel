@@ -14,7 +14,7 @@ test('quiet trend retries keep layout and prior errors until success; native def
   const changes=[];let slot=0,loadRead,release;
   const react={Component:class {},useState:initial=>{const index=slot++,value=index===5?'上次读取失败':initial;return [value,next=>changes.push([index,next])]},useEffect(){},useCallback:fn=>{loadRead??=fn;return fn},useRef:value=>({current:value})};
   const api={fetchTrends:()=>new Promise(resolve=>release=resolve)};
-  const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./TrendsView':()=>null,'./TrendSourcesDialog':()=>null});
+  const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./icons':{},'./TrendSourcesDialog':()=>null});
   const panel=Page({onUseTopic(){},quietBackgroundRefresh:quiet}).props.children;panel.type(panel.props);
   loadRead(['source'],true);
   assert.equal(changes.some(([index,value])=>index===4&&value===true),!quiet);
@@ -38,27 +38,37 @@ test('multi-source return context survives old deep links and shell validation',
  assert.equal(Object.keys(context.newsWindows('[]')).length,0);
  assert.equal(Object.keys(context.newsWindows('{"bad/id":{"day":"x"}}')).length,0);
 });
-test('shared radar exposes independent source toggles, internal reading and row actions',()=>{
+function radar(overrides={},api={}){
+ const defaults=[[],[],false,[],false,'',false,0,new Set(),false,[],''];
+ const state=defaults.map((value,i)=>Object.hasOwn(overrides,i)?overrides[i]:value);let slot=0;
  const icons=Object.fromEntries(['IconFire','IconRefresh','IconBookmark','IconCheck'].map(key=>[key,()=>null]));
- const view=load('components/TrendsView.tsx',{'./icons':icons}),calls=[];
- const group={platform:'s',label:'TEMP',ok:true,items:[{id:'one',title:'第一条',hot:'真实热度'}]};
- const props={sources:[{id:'s',label:'TEMP'}],selected:['s'],groups:[group],ready:true,loading:false,saved:new Set(),onToggle:id=>calls.push(['toggle',id]),onManage:()=>{},onRefresh:()=>calls.push(['refresh']),onSave:(g,it)=>calls.push(['save',g.platform,it.id]),onUse:(g,it)=>calls.push(['use',g.platform,it.id]),onRead:(g,it)=>calls.push(['read',g.platform,it.id]),itemHref:()=>'/native/?path=exact'};
- const tree=nodes(view.default(props)),chip=tree.find(n=>n.props?.className==='chip active'),link=tree.find(n=>n.props?.className==='trend-title');
- assert.equal(chip.props['aria-pressed'],true);chip.props.onClick();
- assert.equal(link.props.href,'/native/?path=exact');assert.equal(link.props.target,undefined);
+ const react={Component:class {},useState:()=>{const index=slot++;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]},useEffect(){},useCallback:fn=>fn,useRef:value=>({current:value})};
+ const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./icons':icons,'./TrendSourcesDialog':()=>null});
+ return {state,render(props){slot=0;const panel=Page(props).props.children;return nodes(panel.type(panel.props))}};
+}
+
+test('original radar exposes source toggles, internal reading and accurate row actions',async()=>{
+ const calls=[],group={platform:'s',label:'TEMP',ok:true,items:[{id:'one',title:'第一条',hot:'真实热度',url:'https://source.invalid/item/one'}]};
+ const view=radar({0:[{id:'s',label:'TEMP'}],1:['s'],2:true,3:[group]}, {createIdea:async input=>calls.push(['save',input.source,input.source_id])});
+ const props={onRead:id=>calls.push(['read',id]),onUseTopic:(title,id)=>calls.push(['use',title,id])};
+ let tree=view.render(props),chip=tree.find(n=>n.props?.className==='chip active'),link=tree.find(n=>n.props?.className==='trend-title');
+ assert.equal(chip.props['aria-pressed'],true);chip.props.onClick();assert.equal(view.state[1].length,0);
+ assert.equal(link.props.href,'https://source.invalid/item/one');assert.equal(link.props.target,undefined);
  let prevented=0;link.props.onClick({button:0,preventDefault:()=>prevented++});assert.equal(prevented,1);
  link.props.onClick({button:0,ctrlKey:true,preventDefault:()=>assert.fail('modified click must remain a browser link')});
- tree.find(n=>n.props?.className==='trend-save').props.onClick();tree.find(n=>n.props?.className==='trend-use').props.onClick();
- assert.deepEqual(calls,[['toggle','s'],['read','s','one'],['save','s','one'],['use','s','one']]);
- const external=nodes(view.default({...props,onRead:undefined,itemHref:undefined})).find(n=>n.props?.className==='trend-title');assert.equal(external.props.target,'_blank');
- assert.ok(nodes(view.default({...props,selected:[],groups:[]})).some(n=>n.props?.children==='请选择上方的数据源查看热点。'));
+ await tree.find(n=>n.props?.className==='trend-save').props.onClick();tree.find(n=>n.props?.className==='trend-use').props.onClick();
+ assert.deepEqual(calls,[['read','one'],['save','TEMP','one'],['use','第一条','one']]);
+ const external=view.render({...props,onRead:undefined}).find(n=>n.props?.className==='trend-title');assert.equal(external.props.target,'_blank');
+ assert.ok(view.render(props).some(n=>n.props?.children==='请选择上方的数据源查看热点。'));
 });
 
-test('reading stored results leaves the manual collector enabled',()=>{
- const icons=Object.fromEntries(['IconFire','IconRefresh','IconBookmark','IconCheck'].map(key=>[key,()=>null]));
- const view=load('components/TrendsView.tsx',{'./icons':icons});let requests=0;
- const base={sources:[],selected:[],groups:[],ready:true,loading:true,refreshing:false,saved:new Set(),onToggle:()=>{},onManage:()=>{},onSave:()=>{},onUse:()=>{},onRefresh:()=>requests++};
- const refresh=nodes(view.default(base)).find(n=>n.type==='button'&&n.props.onClick===base.onRefresh);
- assert.equal(refresh.props.disabled,false);refresh.props.onClick();assert.equal(requests,1);
- assert.equal(nodes(view.default({...base,loading:false,refreshing:true})).find(n=>n.type==='button'&&n.props.onClick===base.onRefresh).props.disabled,true);
+test('reading stored results leaves the explicit collector enabled while native defaults retain read progress',async()=>{
+ let requests=0;const api={fetchTrendSources:async()=>({sources:[],warnings:[]})};
+ const view=radar({2:true,4:true},api),props={onUseTopic(){},refreshAll:async()=>requests++};
+ let refresh=view.render(props).find(n=>n.type==='button'&&n.props.children?.some?.(part=>part==='刷新'));
+ assert.equal(refresh.props.disabled,false);refresh.props.onClick();await Promise.resolve();assert.equal(requests,1);
+ refresh=view.render(props).find(n=>n.type==='button'&&n.props.children?.some?.(part=>part==='刷新中…'));
+ assert.equal(refresh.props.disabled,true);
+ const native=radar({2:true,4:true},api).render({onUseTopic(){}}).find(n=>n.type==='button'&&n.props.children?.some?.(part=>part==='刷新中…'));
+ assert.equal(native.props.disabled,true);
 });

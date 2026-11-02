@@ -1,25 +1,29 @@
 import SettingsSelect from './SettingsSelect';
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import Drawer from './Drawer';
 import { fetchSkillDetail, executeSkill, saveEnv } from '../lib/api';
 import type { SkillDetail } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { displayName } from '../lib/skillDisplayNames';
+
+export interface SkillDrawerServices {
+  loadDetail: typeof fetchSkillDetail;
+  saveEnv: typeof saveEnv;
+  execute: typeof executeSkill;
+}
 
 interface SkillDrawerProps {
   skillName: string;
   persona: string;
   onClose: () => void;
   onConfigured: () => void;   // 保存 API 后通知父组件刷新卡片状态
-  loadDetail?: (name:string)=>Promise<SkillDetail>;
-  onUse?: (name:string,input:string,actionId?:string)=>void|Promise<void>;
-  canConfigure?:boolean;
-  useActions?:{id:string;label:string}[];
-  useDisabled?:boolean;
-  useNotice?:string;
-  footer?:ReactNode;
+  services?: Partial<SkillDrawerServices>;
+  extension?: ReactNode;
+  onInputChange?: (value: string) => void;
 }
 
-export default function SkillDrawer({ skillName, persona, onClose, onConfigured,loadDetail:detailLoader,onUse,canConfigure=true,useActions,useDisabled,useNotice,footer }: SkillDrawerProps) {
+export default function SkillDrawer({ skillName, persona, onClose, onConfigured, services, extension, onInputChange }: SkillDrawerProps) {
+  const readDetail = services?.loadDetail || fetchSkillDetail;
   const [detail, setDetail] = useState<SkillDetail | null>(null);
   const [loadErr, setLoadErr] = useState('');
 
@@ -33,12 +37,11 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
   const [result, setResult] = useState('');
   const [running, setRunning] = useState(false);
   const [runErr, setRunErr] = useState('');
-  const [actionId,setActionId]=useState('');
   const reqSeq = useRef(0);
 
   const loadDetail = () => {
     let ignore = false;
-    (detailLoader||fetchSkillDetail)(skillName)
+    readDetail(skillName)
       .then((d) => { if (!ignore) { setDetail(d); setLoadErr(''); } })
       .catch(() => { if (!ignore) setLoadErr('加载 SKILL 详情失败'); });
     return () => { ignore = true; };
@@ -57,10 +60,10 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
     setSaving(true);
     setSavedMsg('');
     try {
-      await saveEnv(updates);
+      await (services?.saveEnv || saveEnv)(updates);
       setEnvInputs({});
       const seq = ++reqSeq.current;
-      const fresh = await fetchSkillDetail(skillName);
+      const fresh = await readDetail(skillName);
       if (seq === reqSeq.current) setDetail(fresh);
       setSavedMsg('已保存 ✓');
       onConfigured();
@@ -73,15 +76,14 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
   };
 
   const handleRun = async () => {
-    if (!onUse&&!input.trim()) return;
+    if (!input.trim()) return;
     const seq = ++reqSeq.current;
     setRunning(true);
     setRunErr('');
     setResult('');
     try {
-      if(onUse)await onUse(skillName,input,actionId||useActions?.[0]?.id);
-      else {const res = await executeSkill(skillName, input.trim(), persona || undefined);
-        if (seq === reqSeq.current) setResult(res.response);}
+      const res = await (services?.execute || executeSkill)(skillName, input.trim(), persona || undefined);
+      if (seq === reqSeq.current) setResult(res.response);
     } catch (e) {
       if (seq === reqSeq.current) setRunErr(e instanceof Error ? e.message : '执行失败');
     } finally {
@@ -92,10 +94,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
   const blocked = detail?.needsApi && !detail.apiConfigured;
 
   return (
-    <div className="drawer-overlay" onClick={onClose}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+    <Drawer label={displayName(skillName)} onClose={onClose} header={
             <div>
               <div className="skill-detail-title">{displayName(skillName)}</div>
               <div className="skill-detail-rawname">{skillName}</div>
@@ -108,15 +107,11 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
                 )}
               </div>
             </div>
-            <button className="icon-btn" onClick={onClose} title="关闭">×</button>
-          </div>
-        </div>
-
-        <div className="drawer-body">
+        }>
           {loadErr && <div style={{ color: 'var(--red)', fontSize: 14 }}>{loadErr}</div>}
 
           {/* API 配置 */}
-          {canConfigure&&detail?.needsApi && detail.apiSpec && (
+          {detail?.needsApi && detail.apiSpec && (
             <div className="panel">
               <div className="panel-title">🔑 {detail.apiSpec.label} · API 配置
                 <span style={{ fontWeight: 400, color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -200,26 +195,24 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
 
           {/* 执行 */}
           <div className="panel">
-            <div className="panel-title">{onUse?'在对话中使用':'▶ 运行'}</div>
-            {useNotice&&<p>{useNotice}</p>}
-            {!!useActions?.length&&<select className="field" aria-label="技能动作" value={actionId||useActions[0]!.id} onChange={event=>setActionId(event.target.value)}>{useActions.map(action=><option key={action.id} value={action.id}>{action.label}</option>)}</select>}
+            <div className="panel-title">▶ 运行</div>
             {blocked && (
               <div style={{ fontSize: 13, color: 'var(--amber)', marginBottom: 10 }}>
-                {canConfigure?'该 SKILL 需要先配置上面的 API 才能运行。':'此技能的依赖或连接尚未核验，请先在账号或设置中配置。'}
+                该 SKILL 需要先配置上面的 API 才能运行。
               </div>
             )}
             <textarea
               className="field"
               placeholder="输入内容，例如主题 / 素材 / 要求…"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); onInputChange?.(e.target.value); }}
               style={{ minHeight: 100 }}
             />
             <div style={{ marginTop: 10 }}>
-              <button className="btn btn-primary" onClick={handleRun} disabled={running || (!onUse&&!input.trim()) || blocked || useDisabled}>
+              <button className="btn btn-primary" onClick={handleRun} disabled={running || !input.trim() || blocked}>
                 {running
                   ? <><span className="spinner" style={{ width: 14, height: 14, margin: 0 }} />执行中…</>
-                  : onUse?'带入对话':'执行'}
+                  : '执行'}
               </button>
             </div>
             {runErr && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 10 }}>{runErr}</div>}
@@ -228,7 +221,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
             )}
           </div>
 
-          {footer}
+          {extension}
 
           {/* 描述 */}
           <div className="panel">
@@ -237,8 +230,6 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
               ? <div className="skill-body-md" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
               : !loadErr && <div className="loading"><div className="spinner" />加载中…</div>}
           </div>
-        </div>
-      </div>
-    </div>
+    </Drawer>
   );
 }

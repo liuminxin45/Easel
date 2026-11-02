@@ -54,7 +54,14 @@ def main():
                         link=helper.turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True);expect(link).to_be_visible()
                         check(label,'only a native output hyperlink connects chat to the exact version','workbench-'+wid+'/'+tid in link.get_attribute('href'))
                         if width<600:
-                            check(label,'navigation occupies space above messages rather than covering them',page.evaluate("()=>document.querySelector('.mobile-nav-bar').getBoundingClientRect().bottom<=document.querySelector('.chat-messages').getBoundingClientRect().top+1"))
+                            # The old check required the very top bar the user rejected.
+                            # The actual floating opener must stay reachable without reserving a row.
+                            opener=page.get_by_role('button',name='打开导航',exact=True)
+                            expect(opener).to_be_visible()
+                            check(label,'mobile uses no reserved top bar and retains a reachable floating drawer opener',
+                                page.locator('.mobile-nav-bar').count()==0 and opener.evaluate("el=>{const r=el.getBoundingClientRect();return getComputedStyle(el).position==='fixed'&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))}"))
+                            check(label,'messages and original send control remain reachable with the floating opener',
+                                page.locator('.chat-messages').bounding_box()['height']>0 and page.get_by_role('button',name='发送',exact=True).is_visible())
                         copy_link=helper.turn_view(page,history).get_by_role('link',name='标题与配文',exact=True)
                         check(label,'the shared formatter opens text in the native registered-file preview',copy_link.get_attribute('href').startswith('#/outputs/__workbench__/'))
                         copy_link.click();expect(page.locator('.drawer-body')).to_contain_text('TEMP 分开的准确配文。')

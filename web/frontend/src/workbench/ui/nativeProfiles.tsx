@@ -1,6 +1,7 @@
 import {ExtensionDetails} from './ExtensionDetails';
 import {useMemo,useState} from 'react';
 import ProfilePage,{type ProfilePageDraft} from '../../components/ProfilePage';
+import OnboardingWizard,{type OnboardingDraft} from '../../components/OnboardingWizard';
 import {creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {ActionButton,Field,Panel,Notice,Pending,resultDocument} from './common';
@@ -27,17 +28,13 @@ export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;pro
 }
 
 function CreateProfile(){
- const vm=useWorkbench(),action=useAsyncAction(),[draft,patch]=useDraft('creator:profile:new',{name:'',identity:'',audience:'',voice:'',boundaries:''});
- const save=()=>void action.run(async()=>{
-  const result=await vm.service.creatorCommand('profile-save',{base_revision:0,document:{...draft,asset_refs:[]}});
-  const profile=record(resultDocument(result).profile);vm.replace('/toolbox?section=profiles&item='+encodeURIComponent(string(profile.id)));
- });
- return <div className="profile-page"><div className="profile-head"><h1 className="page-title">新建画像</h1></div>
-  <section className="panel workbench-extension">{[['name','名称'],['identity','身份定位'],['audience','目标受众'],['voice','内容风格'],['boundaries','偏好与红线']].map(([key,label])=><Field key={key} label={label!}>
-   {key==='name'?<input className="field" value={draft.name} onChange={event=>patch({name:event.target.value})}/>:<textarea className="field" rows={4} value={draft[key as 'identity']} onChange={event=>patch({[key!]:event.target.value})}/>}
-  </Field>)}<ActionButton action={action} className="btn btn-primary" disabled={action.busy||!draft.name.trim()} onClick={save}>创建画像</ActionButton>
-   <Notice sources={[action]}/><Pending scope="creator:profile-save:"/>
-  </section></div>;
+ const vm=useWorkbench(),draftStore=useMemo(()=>({
+  read:()=>vm.client.drafts.get<OnboardingDraft>('creator:profile:wizard'),
+  write:(draft:OnboardingDraft)=>{vm.client.drafts.set('creator:profile:wizard',draft)},
+  remove:()=>vm.client.drafts.remove('creator:profile:wizard'),
+ }),[vm.client]);
+ return <OnboardingWizard draftStore={draftStore} onClose={()=>vm.replace('/toolbox?section=profiles')}
+  onCreated={id=>{void vm.client.invalidate(['creator']);vm.replace('/toolbox?section=profiles&item='+encodeURIComponent(id))}}/>;
 }
 
 function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:CreatorBootstrap;reload:()=>Promise<CreatorBootstrap|null>}){

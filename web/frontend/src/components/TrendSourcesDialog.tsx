@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { fetchTrendManagement, updateTrendSource } from '../lib/api';
 import type { TrendManagedSource } from '../lib/api';
 import SettingsSelect from './SettingsSelect';
-import {InteractionNotice,useFeedbackChannel} from './InteractionNotice';
+import {useFeedbackChannel} from './InteractionNotice';
 import {refreshViews,type InteractionSource} from '../lib/interaction';
 
 export interface SourceUpdateResult {id:string;revision?:number;source?:TrendManagedSource|null;deleted?:boolean}
@@ -109,9 +109,9 @@ export default function TrendSourcesDialog({ onClose, onChanged, management }: {
   return <dialog ref={dialog} className="trend-manager" aria-labelledby="trend-manager-title" onCancel={event => { event.preventDefault(); onClose(); }}>
     <div className="trend-manager-head"><div><h2 id="trend-manager-title">数据源</h2><p>订阅你关心的内容，或接入自己的采集服务。</p></div><button className="btn btn-sm" onClick={onClose}>关闭</button></div>
     {error && <div ref={errorBox} tabIndex={-1} className="trend-manager-error" role="alert">{error}</div>}
-    <InteractionNotice sources={[management?.operationSource||{busy},{feedback:feedback.feedback?.kind==='status'&&(!management?.operationSource||!feedback.feedback.operationScope)?feedback.feedback:undefined}]}/>
+    {(management?.operationSource?.feedback?.kind==='status'||feedback.feedback?.kind==='status')&&<div className="trend-manager-notice" role="status">{management?.operationSource?.feedback?.message||feedback.feedback?.message}</div>}
     {notice && <div className="trend-manager-notice" role="status">{notice}</div>}
-    {warnings.map((warning,i)=><InteractionNotice key={i} sources={[{feedback:{kind:'status',message:warning}}]}/>)}
+    {warnings.map((warning,i)=><p className="trend-manager-error" key={i}>{warning}</p>)}
     {loading ? <p role="status">正在加载数据源…</p> : <>
       <section className="trend-manager-list" aria-label="已配置来源">
         {sources.map(source => <div key={source.id} className="trend-manager-row">

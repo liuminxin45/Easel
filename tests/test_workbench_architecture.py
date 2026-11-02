@@ -49,11 +49,12 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     # real 844x390 clipping required it. No private services or execution I/O.
     'web/frontend/src/components/useBrushPopover.ts'}
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
-    'web/frontend/src/components/TrendsView.tsx','web/frontend/src/components/TrendSourcesDialog.tsx',
+    'web/frontend/src/components/TrendSourcesDialog.tsx',
     'web/frontend/src/components/DashboardPage.tsx','web/frontend/src/styles/index.css'})
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
-    'web/frontend/src/components/IdeasView.tsx'})
+    # Original shell/flow shared by both hosts; no private service dependency.
+    'web/frontend/src/components/Drawer.tsx','web/frontend/src/components/OnboardingWizard.tsx'})
 # User-approved native product integration: one output formatter with an
 # optional host resolver, and the same directory navigation protocol in both
 # hosts. Neither shared module may import private services (guarded below).
@@ -65,6 +66,7 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'web/app.py', 'web/frontend/src/App.tsx',
     'easel/web_services/__init__.py', 'easel/web_services/binding.py',
     'easel/web_services/concurrency.py',
+    'easel/web_services/skills.py','easel/web_services/profiles.py',
     'easel/web_services/accounts.py', 'easel/web_services/settings.py',
     'easel/web_services/planning.py', 'easel/web_services/outputs.py',
     'easel/web_services/environment.py',

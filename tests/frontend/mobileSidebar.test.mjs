@@ -34,7 +34,7 @@ function setup(narrow=true){
  function render(){cursor=0;refCursor=0;return exports.default(props)}
  const children=tree=>tree.props.children;
  const panel=tree=>children(tree).find(node=>node.props?.className?.startsWith('sidebar-panel'));
- const trigger=tree=>children(tree).find(node=>node.props?.className==='mobile-nav-bar').props.children;
+ const trigger=tree=>children(tree).find(node=>node.props?.className==='sidebar-toggle');
  const native=tree=>panel(tree).props.children;
  const open=()=>{trigger(render()).props.onClick();return render()};
  return {render,panel,trigger,native,open,props,calls,Element};
@@ -67,6 +67,7 @@ test('drawer directly renders the original sidebar without an added header or cl
  assert.equal(typeof view.native(opened).type,'function');
  assert.equal(view.trigger(opened).type,'button');
  assert.equal(view.trigger(opened).props['aria-label'],'打开导航');
+ assert.equal(opened.props.children.some(node=>node.props?.className==='mobile-nav-bar'),false);
 });
 
 test('backdrop dismisses the same mounted original sidebar',()=>{

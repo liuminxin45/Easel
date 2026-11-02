@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
         if path == '/api/env/install':
             native = self.installation_api(operation_id)
             return await native.api_env_install(native.EnvInstallRequest(id=request.get('tool_id', '')))
-        writing = path in ('/api/settings/harness', '/api/settings/models/save', '/api/settings/local-agents/enable')
+        writing = path in ('/api/settings/harness', '/api/settings/models/save', '/api/settings/local-agents/enable', '/api/env')
         if writing and (type(request.get('expected_revision')) is not int or request['expected_revision'] != state['revision']):
             raise SettingsConflict('配置已有新版本，请重新读取后保存')
         if path.startswith('/api/settings/harness/models/'):
@@ -253,6 +253,25 @@ CREATE TABLE IF NOT EXISTS workbench_settings_operations(id TEXT PRIMARY KEY,sig
                 c.execute('INSERT INTO workbench_settings_versions VALUES(?,?)', (state['revision'], pack(state)))
             return self.public()
         environment = self.environment()
+        if path == '/api/env':
+            from easel.web_services.skills import _ENV_ALLOWLIST, SKILL_API_REQUIREMENTS, skill_status
+            from easel.web_services.settings import _guard_env_values
+            updates=request.get('updates')
+            if not isinstance(updates,dict) or any(not isinstance(key,str) or not isinstance(value,str) for key,value in updates.items()):
+                raise ValueError('API 配置格式无效')
+            if set(updates)-_ENV_ALLOWLIST:
+                raise ValueError('配置项不在官方技能注册表内')
+            _guard_env_values(updates)
+            for key,value in updates.items():
+                if value.strip():environment[key]=value
+                else:environment.pop(key,None)
+            if not state['revision']:
+                self.capture();state=self.current()
+            state['secret_ref']=self.vault.put('workbench-settings',environment)
+            state['revision']+=1
+            with self.store.connect() as c:
+                c.execute('INSERT INTO workbench_settings_versions VALUES(?,?)',(state['revision'],pack(state)))
+            return {'ok':True,'revision':state['revision'],'skills':{name:skill_status(name,environment)['apiConfigured'] for name in SKILL_API_REQUIREMENTS}}
         with tempfile.TemporaryDirectory(prefix='easel-settings-operation-') as directory:
             module, config = self._module(directory, environment, state)
             handlers = {
@@ -289,7 +308,7 @@ def service(box):
 
 async def handle(settings, path, request, value=None):
     from .chat_api import response
-    if not (path in ('/api/status',) or path.startswith(('/api/settings/', '/api/env/'))):
+    if not (path in ('/api/status', '/api/env') or path.startswith(('/api/settings/', '/api/env/'))):
         return None
     try:
         if request.method in ('GET', 'HEAD'):

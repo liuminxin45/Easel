@@ -1,4 +1,5 @@
 import {WorkLibrary} from './nativePages';
+import {nativeAsset} from './lib/nativeAsset';
 import {bindOutputNavigation} from '../../lib/outputNavigation';
 import {ActionButton} from './common';
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
@@ -65,7 +66,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
  else if(['/posters','/articles','/works'].includes(p)||p.endsWith('/history'))page=q.get('drafts')==='1'?<LocalInputs/>:<Library format={p==='/articles'?'article':q.get('format')||''} history={p.endsWith('/history')}/>;
  else if(p==='/settings'||p==='/account')page=<Settings/>;
- else if(q.get('section')==='skills')page=<><NativeSkills profileId={profile} onUse={async(command,text)=>{if(!await createChat(profile,command,text))throw Error('会话暂未创建，输入仍保留在这里。')}}/>{(q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item'))&&<Skills profileId={profile} search={q}/>}</>;
+ else if(q.get('section')==='skills')page=<><NativeSkills profileId={profile}/>{(q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item'))&&<Skills profileId={profile} search={q}/>}</>;
  else if(q.get('section')==='profiles')page=<Profiles profileId={profile} search={q}/>;
  else if(q.get('section')==='distribution'&&q.get('pane')==='connections')page=<Accounts/>;
  else if(['distribution','publications','insights','calendar'].includes(q.get('section')||''))page=<Publishing profileId={profile} section={q.get('section')||''} search={q}/>;
@@ -81,7 +82,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   gatewayStatus:runtimeStatus.data?.gateway===true?'connected':runtimeStatus.loading?'connecting':'disconnected',apiDirect:runtimeStatus.data?.runtime==='api',agentRuntime:string(runtimeStatus.data?.runtime)||'codex',
   statusText:vm.reachable===false?'暂时离线':runtimeStatus.error?'运行环境检测失败':runtimeStatus.data?.error?string(runtimeStatus.data.error):undefined,
   onOpenSettings:()=>open('/settings'),theme,onThemeChange,
-  assetUrl:name=>'/native-assets/'+document.querySelector<HTMLMetaElement>('meta[name="native-release"]')?.content+'/'+name,
+  assetUrl:nativeAsset,
   rootRef:sidebar,rootLabel:'工作导航',navigationLabel:'工作台导航',
   personaOptions:[...(creators.data?.profiles.map(value=>({value:value.id,label:value.name}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
   navigation:config?.tools.map(tool=>({id:tool.id,label:tool.name,icon:icons[tool.id]||<IconDashboard size={18}/>,active:active(tool.id,shownPath),onSelect:()=>open(tool.path)}))||[],

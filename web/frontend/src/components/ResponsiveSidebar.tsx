@@ -80,14 +80,12 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
   };
 
   return <>
-    <div className="mobile-nav-bar">
-      <button ref={triggerRef} type="button" className="sidebar-toggle" aria-label="打开导航"
+    <button ref={triggerRef} type="button" className="sidebar-toggle" aria-label="打开导航"
         aria-expanded={narrow && open} aria-controls={panelId} onClick={() => setOpen(true)}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
-      </button>
-    </div>
+    </button>
     <div ref={backdropRef} className={`sidebar-backdrop${narrow && open ? ' is-open' : ''}`}
       aria-hidden="true" onClick={dismiss} />
     <div ref={panelRef} id={panelId} className={`sidebar-panel${narrow && open ? ' is-open' : ''}`}

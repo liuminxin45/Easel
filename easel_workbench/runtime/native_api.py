@@ -103,6 +103,7 @@ def supports(path, method=None):
         r'/api/native/operations/[A-Za-z0-9_-]+', r'/api/upload',
         r'/api/outputs', r'/api/output-context', r'/api/(?:output|media)/.+',
         r'/api/artifacts/archive', r'/api/personas', r'/api/persona/[^/]+(?:/(?:files|file))?',
+        r'/api/profile/build', r'/api/profile/build/status/[^/]+',
         r'/api/ideas(?:/[A-Za-z0-9_-]+)?', r'/api/schedule(?:/(?:context|[A-Za-z0-9_-]+))?',
         r'/api/trends(?:/(?:sources|manage))?', r'/api/publishing-policy',
         r'/api/manual-publish/[a-z-]+/export',
@@ -432,6 +433,37 @@ class NativeApi:
                 files.append({'filename': filename, 'content': row['content'] if row else ''})
         return {'name': profile['id'], 'display_name': profile['name'], 'revision': profile['revision'], 'files': files}
 
+    def _build_profile(self, fields):
+        from easel.persona import valid_persona_name
+        from easel.web_services.profiles import baseline_profile_files
+        name=fields.get('name');form=fields.get('form')
+        if not isinstance(name,str) or not valid_persona_name(name.strip()) or not isinstance(form,dict):
+            raise HTTPException(400,'画像名称或表单无效')
+        name=name.strip()
+        if any(profile['name']==name for profile in self._profiles()):
+            raise HTTPException(409,'同名画像已存在，请核对后使用其他名称')
+        for key,value in form.items():
+            if not isinstance(key,str) or len(json.dumps(value,ensure_ascii=False))>12000:
+                raise HTTPException(400,'画像表单字段过长')
+        if not isinstance(form.get('platforms',[]),list) or not all(isinstance(p,str) for p in form.get('platforms',[])):
+            raise HTTPException(400,'平台选择无效')
+        if not isinstance(form.get('links',{}),dict) or not all(isinstance(k,str) and isinstance(v,str) for k,v in form.get('links',{}).items()):
+            raise HTTPException(400,'平台链接格式无效')
+        files=baseline_profile_files(name,form)
+        document={'name':name,**{field:files[filename] for filename,field in PROFILE_FILES.items()}}
+        def documents(c,result):
+            profile=result['profile']
+            for filename in EXTRA_PROFILE_FILES:
+                c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)',
+                          (profile['id'],filename,profile['revision'],files[filename]))
+            c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)',
+                      (profile['id'],'onboarding.json',profile['revision'],pack(form)))
+        result=self.box.creator.command({'id':'native-profile-'+self._operation,'action':'profile-save',
+                                         'base_revision':0,'document':document},before_commit=documents)
+        profile=result['result']['profile']
+        return {'created':True,'name':profile['id'],'display_name':profile['name'],
+                'files':list(files),'async':False,'revision':profile['revision']}
+
     def _save_profile_file(self, name, fields):
         profile = self._profile(name)
         filename, content = fields.get('filename'), fields.get('content')
@@ -697,6 +729,11 @@ class NativeApi:
             profiles = await _offload(self._profiles)
             return [{'name': item['id'], 'display_name': item['name'], 'description': item['identity']}
                     for item in profiles if item.get('active', True)]
+        if path == '/api/profile/build' and method == 'POST':
+            return await self._mutate(request,body,self._build_profile)
+        if path.startswith('/api/profile/build/status/') and method == 'GET':
+            profile=await _offload(self._profile,unquote(path.rsplit('/',1)[-1]))
+            return {'state':'done','name':profile['id'],'log':'六维画像基线已保存；未请求额外 AI 增强。'}
         persona = re.fullmatch(r'/api/persona/([^/]+)(?:/(files|file))?', path)
         if persona:
             name = unquote(persona[1])

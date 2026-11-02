@@ -39,7 +39,10 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
       onChange(value.runtime);
       onSelect(value.runtime);
     }).catch((error) => {
-      if (alive) reportNote(error);
+      if (alive) {
+        if(hostManaged)reportNote(error);
+        else setNote(`读取失败：${error instanceof Error ? error.message : String(error)}`,'error');
+      }
     }).finally(() => {
       if (alive) setSettingsLoading(false);
     });
@@ -60,7 +63,8 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
       if (!result.models.length) setModelNote('原生 CLI 没有返回模型，可使用默认模型或手动填写。');
     } catch (error) {
       if (modelRequest.current === sequence) {
-        reportModelNote(error);
+        if(hostManaged)reportModelNote(error);
+        else setModelNote(`读取失败：${error instanceof Error ? error.message : String(error)}`,'error');
       }
     } finally {
       if (modelRequest.current === sequence) setModelLoading(false);
@@ -75,7 +79,8 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
       onChange(value.runtime);
       setNote('已保存，请新建对话；旧对话仍保留在原底座，不迁移历史。');
     } catch (error) {
-      reportNote(error);
+      if(hostManaged)reportNote(error);
+      else setNote(`保存失败：${error instanceof Error ? error.message : String(error)}`,'error');
     } finally {
       setBusy(false);
     }
@@ -156,7 +161,9 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
               placeholder={runtime === 'codex' ? '留空使用 Codex 原生配置' : 'provider/model；留空使用原生配置'} />
               <p className="desc">可从原生 CLI 列表选择，也可手动填写；留空沿用原生默认模型，不修改其它底座的供应商配置。
                 模型是否可用仍取决于当前账号、供应商和原生 CLI 支持。</p>
-              {(!hostManaged||!modelNote?.operationScope)&&<InteractionNotice sources={[{feedback:modelNote}]}/>}
+              {hostManaged
+                ? !modelNote?.operationScope&&<InteractionNotice sources={[{feedback:modelNote}]}/>
+                : modelNote&&<p className="desc" role="status">{modelNote.message}</p>}
             </div>
           </div>
           {runtime === 'codex' && (
@@ -198,7 +205,9 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
         </>
       )}
       {settings?.locked && <p className="desc">启动环境 EASEL_AGENT_RUNTIME 已固定底座，请修改启动环境后重启。</p>}
-      {(!hostManaged||!note?.operationScope)&&<InteractionNotice sources={[{feedback:note}]}/>}
+      {hostManaged
+        ? !note?.operationScope&&<InteractionNotice sources={[{feedback:note}]}/>
+        : note&&<div className={`save-note${note.kind==='error'?' err':''}`} role="status">{note.message}</div>}
     </section>
   );
 }

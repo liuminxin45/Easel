@@ -298,7 +298,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
             : '从选题到发布，一站式帮你把想法做成能发的内容。')}</p>
           {inputBox(true)}
           <div className="suggestions">
-            {(emptyState?.suggestions || SUGGESTIONS).filter((s) => !!composer || !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
+            {(emptyState?.suggestions || SUGGESTIONS).filter((s) => !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
               <button key={s.title} className="card card-hover suggestion-card"
                 onClick={() => { if (!isStreaming) onSend(s.prompt); }}>
                 <span className="suggestion-icon">{s.icon}</span>

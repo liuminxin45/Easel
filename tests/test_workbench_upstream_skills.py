@@ -65,7 +65,8 @@ def test_actual_native_turn_registers_version_blob_files_and_gallery_once(librar
         monkeypatch.setattr(harnesses,'adapter',lambda name:FakeNative())
         value={'sessionId':'test-chat','turnId':'native-one','message':'做金句卡','attachments':[],
                'context':{'profile_id':'oil-pig','skill_id':'card-quote','version':1,'action_id':'native','skill_revision':b.upstream.release('card-quote')['source_revision']}}
-        turn=await b.chat.submit(value,**b.prepare(value));await b.chat._tasks[turn['id']]
+        turn=await b.chat.submit(value,**b.prepare(value))
+        async for _ in b.chat.events(turn['id']):pass
         assert len(requests)==1 and b.chat.get_turn(turn['id'])['status']=='completed'
         with b.store.connect() as c:
             assert c.execute("SELECT count(*) FROM creator_skill_versions WHERE skill_id='card-quote'").fetchone()[0]==1

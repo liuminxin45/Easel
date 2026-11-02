@@ -4,31 +4,31 @@ import React,{useEffect,useRef,useState} from 'react';
 import {creatorAssetInputs,creatorLaunchPath,creatorLaunchSelection,creatorSkillLabels,creatorCommandResult,array,record,string,number,formatTime,type CreatorBootstrap,type CreatorProfile,type CreatorSkillDetail,type JsonRecord,type DraftAttachment,type WorkList} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {IconSkills,IconSearch,IconProfile,IconPlus,IconAccounts,IconImage,IconText} from './components/icons';
-import {Field,Panel,Modal,Notice,PageHead,Markdown,Pending,TextRecord,JsonDetails,resultDocument} from './common';
+import {Field,Panel,Drawer,Notice,PageHead,Markdown,Pending,TextRecord,JsonDetails,resultDocument} from './common';
 
 /** Private version/experience overlays; the native SkillPage remains the catalog. */
 export function Skills({profileId,search}:{profileId:string;search:URLSearchParams}){
  const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap'),item=search.get('item')||'',experience=search.get('pane')==='experience';
- if(experience)return <Modal open title="整理经验" onClose={()=>vm.replace('/toolbox?section=skills')}><Notice sources={[resource]}/><Experience profileId={profileId} data={resource.data} search={search}/></Modal>;
+ if(experience)return <Drawer open title="整理经验" onClose={()=>vm.replace('/toolbox?section=skills')}><Notice sources={[resource]}/><Experience profileId={profileId} data={resource.data} search={search}/></Drawer>;
  return <><Notice sources={[resource]}/>{item&&resource.data&&<SkillDetail id={item} version={search.get('version')||''} data={resource.data} profileId={profileId}/>}</>;
 }
 
-function SkillDetail({id,version,data,profileId}:{id:string;version:string;data:CreatorBootstrap;profileId:string}){
+export function SkillDetail({id,version,data,profileId,onClose}:{id:string;version:string;data:CreatorBootstrap;profileId:string;onClose?:()=>void}){
  const vm=useWorkbench(),r=useResource<CreatorSkillDetail>('/api/creator/skills/'+encodeURIComponent(id)+(version?'?version='+version:'')),[visible,setVisible]=useState(true),[editing,setEditing]=useState(false),[publishing,setPublishing]=useState(false),action=useAsyncAction(),s=r.data;
  const [draft,patch]=useDraft('creator:skill:'+id+':'+(version||'current'),{prompt:'',reason:'',conditions:''}),[apply,setApply]=useState(false),[tasks,setTasks]=useState<string[]>([]),profile=data.profiles.find(p=>p.id===profileId);
  const publishTrigger=useRef<HTMLButtonElement>(null),publishBack=useRef<HTMLButtonElement>(null),detailScroll=useRef(0),returning=useRef(false);
  useEffect(()=>{setVisible(true);setPublishing(false)},[id,version]);
  useEffect(()=>{if(s&&!draft.prompt)patch({prompt:s.prompt})},[s?.version]);
  useEffect(()=>{
-  if(publishing){const body=publishBack.current?.closest('.drawer-body');if(body)body.scrollTop=0;publishBack.current?.focus({preventScroll:true})}
-  else if(returning.current){returning.current=false;const body=publishTrigger.current?.closest('.drawer-body');if(body)body.scrollTop=detailScroll.current;publishTrigger.current?.focus({preventScroll:true})}
+  if(publishing){const body=publishBack.current?.closest('.drawer');if(body)body.scrollTop=0;publishBack.current?.focus({preventScroll:true})}
+  else if(returning.current){returning.current=false;const body=publishTrigger.current?.closest('.drawer');if(body)body.scrollTop=detailScroll.current;publishTrigger.current?.focus({preventScroll:true})}
  },[publishing]);
- const showPublishing=()=>{detailScroll.current=publishTrigger.current?.closest('.drawer-body')?.scrollTop||0;setPublishing(true)};
+ const showPublishing=()=>{detailScroll.current=publishTrigger.current?.closest('.drawer')?.scrollTop||0;setPublishing(true)};
  const returnToDetail=()=>{returning.current=true;setPublishing(false)};
- const close=()=>{if(publishing)returnToDetail();else vm.replace('/toolbox?section=skills')};
+ const close=()=>{if(publishing)returnToDetail();else if(onClose)onClose();else vm.replace('/toolbox?section=skills')};
  // A Back press returns from confirmation without popping the detail's layer.
- const dismiss=()=>{if(publishing){returnToDetail();return false}setVisible(false)};
- return <Modal open={visible} title={publishing?'发布技能版本':s?.name||'读取技能'} onClose={close} onDismiss={dismiss}>
+ const dismiss=()=>{if(publishing){returnToDetail();return false}setVisible(false);onClose?.()};
+ return <Drawer open={visible} title={publishing?'发布技能版本':s?.name||'读取技能'} onClose={close} onDismiss={dismiss}>
   <Notice sources={[r,action]}/>
   {s&&(publishing?<>
    <button ref={publishBack} className="btn btn-ghost" onClick={returnToDetail}>返回技能详情</button>
@@ -54,7 +54,7 @@ function SkillDetail({id,version,data,profileId}:{id:string;version:string;data:
    <TextRecord title="与前版的差异" value={s.diff}/>
    <ExtensionDetails title="资源与使用记录">{s.resources.map((r,i)=><p key={i}>{string(r.path)} · {r.available?'原件已冻结':'原件待补'} {!!r.available&&<a href={'/api/creator/skills/'+id+'/resources/'+s.version+'/'+i}>查看</a>}</p>)}<JsonDetails title="实际使用与反馈" value={s.uses}/></ExtensionDetails>
   </>)}
- </Modal>;
+ </Drawer>;
 }
 
 function Experience({profileId,data,search}:{profileId:string;data:CreatorBootstrap|null;search:URLSearchParams}){const vm=useWorkbench(),[input,patch]=useDraft('creator:experience',{profile_id:profileId,goal:'',skill_id:'content-writing',task_id:'',work_ids:[] as string[]}),works=useResource<WorkList>('/api/works'),action=useAsyncAction(),creator=data?creatorLaunchSelection(data,input.profile_id,'learning',search):undefined;useEffect(()=>{if(search.has('profile')&&input.profile_id!==profileId)patch({profile_id:profileId,work_ids:[]})},[profileId,search.toString()]);return <Panel><p>按需整理原始反馈，分别提出画像和技能候选，确认后才生效。</p><Field label="画像"><select className="field" value={input.profile_id} onChange={e=>patch({profile_id:e.target.value,work_ids:[]})}>{data?.profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="改进技能"><select className="field" value={input.skill_id} onChange={e=>patch({skill_id:e.target.value})}>{data?.skills.filter(s=>s.execution_kind!=='workflow').map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field><Field label="希望改善什么 · 可不填"><textarea className="field" rows={4} value={input.goal} onChange={e=>patch({goal:e.target.value})}/></Field><ExtensionDetails title="限定作品 · 可选">{works.data?.items.filter(w=>(w.creator?.id||'oil-pig')===input.profile_id).map(w=><label className="ew-check" key={w.id}><input type="checkbox" checked={input.work_ids.includes(w.id)} onChange={e=>patch({work_ids:e.target.checked?[...input.work_ids,w.id]:input.work_ids.filter(id=>id!==w.id)})}/>{w.title}</label>)}</ExtensionDetails><p className="ew-muted">执行技能：{creatorSkillLabels(data,creator).join('、')}{creator?.trial?' · 本次明确试用':''}</p><ActionButton action={action} className="btn btn-primary" disabled={action.busy||!creator} onClick={()=>void action.run(async()=>{const r=await vm.service.creatorCommand('experience-organize',{profile_id:input.profile_id,skill_id:input.skill_id,goal:input.goal,work_ids:input.work_ids,creator});patch({task_id:string(resultDocument(r).task_id)})})}>整理经验</ActionButton><Pending scope={'creator:experience-organize:'+input.profile_id}/><Notice sources={[action]}/>{input.task_id&&<SkillTask id={input.task_id}/>}</Panel>}

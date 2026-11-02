@@ -10,12 +10,17 @@ const react={useState:value=>[value,()=>{}],useRef:value=>({current:value}),useL
 function load(file,imports={},globals={}){
  const source=readFileSync(new URL(file,root),'utf8'),exports={};
  const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
- runInNewContext(output,{exports,URL,URLSearchParams,requestAnimationFrame:fn=>fn(),document:{addEventListener:()=>{},removeEventListener:()=>{}},...globals,
-  require:id=>{if(id==='react')return react;if(id==='react/jsx-runtime')return jsx;if(id==='./useBrushPopover')return {useBrushPopover:()=>{}};if(id==='./hooks')return imports['@workbench/core'];if(id in imports)return imports[id];throw Error('Unexpected runtime dependency: '+id)}});
+ runInNewContext(output,{exports,URL,URLSearchParams,requestAnimationFrame:fn=>fn(),document:{addEventListener:()=>{},removeEventListener:()=>{},querySelector:()=>null},...globals,
+  require:id=>{if(id==='react')return react;if(id==='react/jsx-runtime')return jsx;if(id==='./useBrushPopover')return {useBrushPopover:()=>{}};if(id==='./lib/nativeAsset')return load('workbench/ui/lib/nativeAsset.ts',{},globals);if(id==='./hooks')return imports['@workbench/core'];if(id in imports)return imports[id];throw Error('Unexpected runtime dependency: '+id)}});
  return exports;
 }
 function nodes(value){return Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[]}
 const plain=value=>JSON.parse(JSON.stringify(value));
+test('the restored Easel image resolves through this exact immutable frontend',()=>{
+ const {nativeAsset}=load('workbench/ui/lib/nativeAsset.ts',{}, {document:{querySelector:selector=>{assert.equal(selector,'meta[name="native-release"]');return {content:'native-exact-build'}}}});
+ assert.equal(nativeAsset('static/easel-icon-transparent.png'),'/native-assets/native-exact-build/static/easel-icon-transparent.png');
+ assert.equal(load('workbench/ui/lib/nativeAsset.ts').nativeAsset('static/easel-icon-transparent.png'),'./static/easel-icon-transparent.png');
+});
 function chat(composer,callbacks={}){
  const calls={send:[],draft:[],upload:[],api:[],commands:[]};
  const bindings={text:'  原始输入\n完整保留  ',attachments:[],onTextChange:value=>calls.draft.push(value),onUpload:async files=>calls.upload.push(files),onRemoveAttachment:()=>{},label:'创作输入',...composer};

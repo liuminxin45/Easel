@@ -97,7 +97,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
         void pollJob(job.id,job.jobId).then(()=>refreshEnv(true));
       }
     } catch (e) {
-      setEnvError(feedback.report(e));
+      setEnvError(hostManaged?feedback.report(e):e instanceof Error ? `环境体检失败：${e.message}` : '环境体检失败');
     } finally {
       setEnvLoading(false);
     }
@@ -283,7 +283,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
       if (!r.results.length) setSelftestNote('没有可自测的通道（未配置 key）');
       void refreshEnv();
     } catch (e) {
-      setSelftestNote(feedback.report(e));
+      setSelftestNote(hostManaged?feedback.report(e):e instanceof Error ? `自测失败：${e.message}` : '自测失败');
     } finally {
       setTesting(false);
     }
@@ -332,7 +332,8 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
       setSavedNote(d.note ? `✓ 已保存（${d.note}）` : '✓ 已保存');
       void refreshEnv();
     } catch (e) {
-      reportSavedNote(e);
+      if(hostManaged)reportSavedNote(e);
+      else setSavedNote(e instanceof Error ? `保存失败：${e.message}` : '保存失败','error');
     } finally {
       setSaving(false);
       setTimeout(() => setSavedNote(''), 6000);
@@ -730,7 +731,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
           </div>
         )}
 
-        <InteractionNotice sources={[operationSource||{},{feedback:feedback.feedback?.kind==='status'&&(!operationSource||!feedback.feedback.operationScope)?feedback.feedback:undefined}]}/>
+        {hostManaged&&<InteractionNotice sources={[operationSource||{},{feedback:feedback.feedback?.kind==='status'&&(!operationSource||!feedback.feedback.operationScope)?feedback.feedback:undefined}]}/>}
         <div className="settings-body">
           <nav className="settings-nav">
             <button className={`snav${sec === 'model' ? ' active' : ''}`} onClick={() => setSec('model')}>
@@ -754,7 +755,9 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
                     </button>
                   ))}
                 </div>
-                {(!operationSource||!savedNote?.operationScope)&&<InteractionNotice sources={[{feedback:savedNote}]}/>}
+                {hostManaged
+                  ? (!operationSource||!savedNote?.operationScope)&&<InteractionNotice sources={[{feedback:savedNote}]}/>
+                  : savedNote&&<div className={`save-note${savedNote.kind==='error'||savedNote.message.startsWith('没有')?' err':''}`}>{savedNote.message}</div>}
 
                 {chan === 'chat' && <HarnessSettings api={api} hostManaged={hostManaged} onChange={setHarness} onSelect={setSelectedHarness} />}
                 {chan === 'chat' && (selectedHarness === 'api' || selectedHarness === 'openclaw') && (
@@ -829,7 +832,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
                       <button className="btn btn-sm" onClick={() => void doSelftest('transcribe')} disabled={testing}>自测本通道</button>
                     </div>
                     {renderBoard([...transRows, localRow], { onRow: (i, p) => updateRow(setTransRows, i, p) }, 'transcribe')}
-                    <div className="foot-note">有字幕优先读字幕；API 转写与本地 whisper 在「环境安装」和本通道分别配置。{hostManaged ? '保存到服务器版本配置，后续新对话使用。' : '保存即写入 .env 生效。'}</div>
+                    <div className="foot-note">{hostManaged ? '有字幕优先读字幕；API 转写与本地 whisper 在「环境安装」和本通道分别配置。保存到服务器版本配置，后续新对话使用。' : '有字幕不下模型；API 通道缺 key 自动落到本地 whisper（本地组件在「环境安装」页装）。保存即写入 .env 生效。'}</div>
                   </section>
                 )}
 

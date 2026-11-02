@@ -37,6 +37,16 @@ async def save(settings,runtime='codex',**changes):
         'runtime':runtime,'model':'fixture-model','sandbox':'workspace-write','expected_revision':settings.current()['revision'],**changes})
 
 
+async def completed_turn(chat,turn_id):
+    # Fast runners can finish and release their in-memory task before submit
+    # returns. The same public event tail works before and after that cleanup.
+    async def tail():
+        async for _ in chat.events(turn_id):
+            pass
+    await asyncio.wait_for(tail(),20)
+    assert chat.get_turn(turn_id)['status']=='completed'
+
+
 def test_provider_catalog_all_six_channels_and_no_secret_response(settings):
     async def scenario():
         data=await settings.channels();assert set(data['channels'])=={'chat','transcribe','speech','image','video','music'}
@@ -97,7 +107,7 @@ def test_saved_defaults_only_change_new_sessions_and_freeze_real_dispatch(settin
         for sid,engine in [('old','codex'),('new','opencode')]:
             value={'id':'turn-'+sid,'sessionId':sid,'message':'TEMP'}
             turn=await chat.submit(value,snapshot=settings.box.creator.resolve(task='discuss'),actual_prompt='exact input')
-            await chat._tasks[turn['id']]
+            await completed_turn(chat,turn['id'])
             assert chat.get_turn(turn['id'])['runtime']==engine
             assert calls[-1].env['EASEL_AGENT_RUNTIME']==engine
             assert 'initial-private-secret' in calls[-1].env.values()
@@ -139,7 +149,7 @@ def test_codex_full_access_is_frozen_per_session_and_overrides_readonly_producti
         snapshot = settings.box.creator.resolve(task='discuss')
         turn = await chat.submit({'id': 'full-turn', 'sessionId': 'full', 'message': 'TEMP'},
             snapshot=snapshot, actual_prompt='TEMP frozen', work={'work_id': 'temp-work'})
-        await chat._tasks[turn['id']]
+        await completed_turn(chat,turn['id'])
         assert calls[-1].codex_auto_approve is True
         assert '权限范围：danger-full-access' in calls[-1].frozen_instructions
         with pytest.raises(ChatConflict, match='只读'):
@@ -165,7 +175,7 @@ def test_api_mode_runs_original_stream_but_rejects_tools_before_acceptance(setti
         assert not calls and not chat.history('api')['session']['messages']
         value={'id':'allowed','sessionId':'api','message':'TEMP'}
         turn=await chat.submit(value,snapshot=settings.box.creator.resolve(task='discuss'),actual_prompt='TEMP')
-        await chat._tasks[turn['id']]
+        await completed_turn(chat,turn['id'])
         assert len(calls)==1 and chat.get_turn(turn['id'])['status']=='completed'
         assert not chat.get_turn(turn['id']).get('native_turn_id')
         await chat.close()

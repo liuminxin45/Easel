@@ -12,6 +12,7 @@ import json
 import mimetypes
 from pathlib import Path
 import shutil
+from easel.web_services.skills import skill_status
 
 from .skill_catalog import parse_skill
 from .runtime.creator_runtime import packed, digest
@@ -93,12 +94,6 @@ class UpstreamSkills:
         # explicit invocation, in the same transaction as its native turn.
         result=[]
         environment=self.environment() if hasattr(self,'environment') else {}
-        registry_path=self.source/'skills/shared/scripts/model_registry.py'
-        registry=None
-        if registry_path.is_file():
-            spec=importlib.util.spec_from_file_location('easel_native_model_registry',registry_path)
-            registry=importlib.util.module_from_spec(spec);spec.loader.exec_module(registry)
-        channels={'ai-image-gen':'image','ecom-details-image':'image','ai-video-gen':'video','ai-music':'music','voice-clone':'voice','short-drama':'image'}
         entries=self.entries();common=self._common(entries)
         fingerprints={name:digest(raw) for name,raw in sorted(common.items())};revision=digest(packed(fingerprints))
         with self.store.connect() as c:
@@ -107,17 +102,19 @@ class UpstreamSkills:
                 history.setdefault(row[0],[]).append(json.loads(row[1]))
         for item in entries:
             release=self.release(item['id'],entries=entries,common=common,rows=history.get(item['id'],[]),fingerprints=fingerprints,revision=revision)
-            channel=channels.get(item['id']);configured=bool(registry and registry.configured_providers(channel,environment)) if channel else True
+            status=skill_status(item['id'],environment);configured=status['apiConfigured']
             result.append({**{k:item[k] for k in ('id','description','layer','entry')},'skill_id':item['id'],'name':item['id'],
                 'origin':'easel','version':release['version'],'sha256':release['sha256'],'source_revision':release['source_revision'],
-                'available':True,'needsApi':bool(channel),'apiConfigured':configured,'validation_state':'not_tested',
+                'available':True,'needsApi':status['needsApi'],'apiConfigured':configured,'validation_state':'not_tested',
                 'reason':'Easel 原生技能；依赖与外部服务在执行前核对' if configured else '需要先在设置中配置对应媒体通道','execution_kind':'agent',
                 'launch_actions':[{'id':'native','task':'native','label':'使用技能','requires_plan':False}]})
         return result
 
     def detail(self, sid):
         release=self.release(sid);meta,body=parse_skill(release['prompt'].lstrip('\ufeff'))
-        return {**release,'name':sid,'body':body,'content':body,'meta':meta,'raw':release['prompt']}
+        environment=self.environment() if hasattr(self,'environment') else {}
+        return {**release,'name':sid,'body':body,'content':body,'meta':meta,'raw':release['prompt'],
+                **skill_status(sid,environment)}
 
     def snapshot(self, profile, sid, version=None):
         release=self.release(sid,version)

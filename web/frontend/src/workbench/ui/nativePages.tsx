@@ -59,7 +59,7 @@ export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:st
 export function NativeTrends({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){
  const vm=useWorkbench();
  const refreshAll=useCallback(()=>vm.service.collectAll(),[vm.service]);
- return <TrendsPage onUseTopic={onUseTopic} onRead={id=>vm.navigate('/news/a/'+encodeURIComponent(id))} refreshAll={refreshAll} listLimit={1000} quietBackgroundRefresh/>;
+ return <TrendsPage onUseTopic={onUseTopic} onRead={id=>vm.navigate('/news/a/'+encodeURIComponent(id))} refreshAll={refreshAll} listLimit={1000} listMaxHeight={540} quietBackgroundRefresh/>;
 }
 
 export function NativeCalendar(){return <CalendarPage/>}

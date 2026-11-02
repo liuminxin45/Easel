@@ -305,7 +305,7 @@ def browser_tests(native,out,only_entries=False):
                         page.on('response',lambda response:network.append({'method':response.request.method,'path':response.url.removeprefix(f['origin']),'status':response.status,'at':time.time()}))
                         def go(path):
                             if page.url.startswith(f['origin']):
-                                page.wait_for_function("()=>!document.querySelector('dialog[open]')&&!history.state?.nativeLayer")
+                                page.wait_for_function("()=>!document.querySelector('dialog[open],.drawer[role=dialog][aria-modal=true]')&&!history.state?.nativeLayer")
                             h.ready(page,f['origin'],path)
                         def creation_details():
                             if not page.get_by_label('主题',exact=True).is_visible():page.get_by_text('画像、制作要求与草稿',exact=True).click()

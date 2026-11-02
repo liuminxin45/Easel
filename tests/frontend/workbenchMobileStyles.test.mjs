@@ -46,7 +46,7 @@ test('bounded feed lists hand boundary touch back to the page while modal bodies
   assert.equal(value(selector,'max-block-size'),undefined);
   assert.equal(value(selector,'max-height'),undefined);
  }
- for(const selector of ['.ew-dialog[open] > .drawer-body','.overlay > .modal','.drawer','.settings-main'])assert.equal(value(selector,'overscroll-behavior-y'),'contain');
+ for(const selector of ['.overlay > .modal','.drawer','.settings-main'])assert.equal(value(selector,'overscroll-behavior-y'),'contain');
 });
 
 test('fixed publishing, library and settings columns actually reflow instead of clipping',()=>{
@@ -60,11 +60,15 @@ test('fixed publishing, library and settings columns actually reflow instead of 
  assert.equal(value('.page-host:has(> .publishing-workspace) > .workbench-extension','flex'),'0 0 auto');
 });
 
-test('nested private dialogs have the same constrained width and one scrollable body',()=>{
- assert.equal(value('.ew-dialog .ew-dialog[open]','inline-size'),'calc(100vw - 16px)');
- assert.equal(value('.ew-dialog[open] > .drawer-body','max-block-size'),'none');
- assert.equal(value('.ew-dialog[open] > .drawer-body','min-block-size'),'0');
- assert.equal(value('.ew-dialog[open] > .drawer-body','overflow-y'),'auto');
+test('business details retain the official drawer scroll owner and full title row',()=>{
+ const nativeCss=readFileSync(new URL('../../web/frontend/src/styles/index.css',import.meta.url),'utf8');
+ const extensionCss=readFileSync(new URL('../../web/frontend/src/workbench/ui/styles/workbench.css',import.meta.url),'utf8');
+ assert.ok(!css.includes('.ew-dialog')&&!extensionCss.includes('.ew-dialog'));
+ assert.equal(value('.drawer','max-block-size'),'var(--native-height, 100dvh)');
+ assert.equal(value('.drawer-body','overflow-y'),undefined,'do not add a second body scroller');
+ assert.match(nativeCss,/\.drawer\s*\{[^}]*overflow-y:\s*auto/s);
+ assert.equal(value('.drawer-header','display'),undefined,'the official inner flex row must keep the full header width');
+ assert.equal(value('.drawer-header > div > .icon-btn','flex-shrink'),'0');
 });
 
 test('short landscape and persistence notices keep navigation/footer and fallback reachable',()=>{

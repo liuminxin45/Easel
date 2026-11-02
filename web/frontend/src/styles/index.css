@@ -86,24 +86,18 @@ body {
 .app-layout { display: flex; height: 100%; width: 100%; }
 
 .sidebar-panel { flex-shrink: 0; height: 100%; }
-.mobile-nav-bar, .sidebar-mobile-header, .sidebar-backdrop { display: none; }
+.sidebar-toggle, .sidebar-backdrop { display: none; }
 
 @media (max-width: 760px) {
-  .mobile-nav-bar {
-    display: flex; flex: 0 0 auto; align-items: center;
-    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
-    min-height: 60px; background: var(--bg);
-  }
-  .mobile-nav-bar > span { display: none; }
-  .app-layout { flex-direction: column; }
-  .app-layout > .main-content { flex: 1 1 0%; min-height: 0; }
-  .sidebar-toggle, .sidebar-close {
+  .sidebar-toggle {
+    position: fixed; left: max(8px, env(safe-area-inset-left)); top: 50%; z-index: 30;
+    transform: translateY(-50%);
     width: 44px; height: 44px; flex-shrink: 0;
     display: inline-flex; align-items: center; justify-content: center;
     border: 1px solid var(--border); border-radius: var(--radius);
     background: var(--surface); color: var(--text); cursor: pointer;
   }
-  .sidebar-toggle:focus-visible, .sidebar-close:focus-visible {
+  .sidebar-toggle:focus-visible {
     outline: 2px solid var(--accent-start); outline-offset: 2px;
   }
   .sidebar-panel {
@@ -119,12 +113,6 @@ body {
   .sidebar-panel > .sidebar {
     width: 100%; min-width: 0; height: auto; flex: 1; min-height: 0;
     padding-bottom: env(safe-area-inset-bottom);
-  }
-  .sidebar-mobile-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: calc(6px + env(safe-area-inset-top)) 12px 6px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-secondary); font-size: 13px;
   }
   .sidebar-backdrop {
     position: fixed; inset: 0; z-index: 40;
@@ -1581,9 +1569,6 @@ textarea.field { resize: vertical; min-height: 90px; }
 }
 
 .trend-manager .btn { line-height: normal; }
-/* Explicit list limits retain all rows through internal scrolling. */
-.trend-list {max-height:540px;overflow-y:auto;overscroll-behavior:contain}
-.dash-card-list {max-height:360px;overflow-y:auto;overscroll-behavior:contain}
 
 .persona-control .settings-select { min-height: 36px; border-radius: var(--radius); }
 

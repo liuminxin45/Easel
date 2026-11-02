@@ -34,7 +34,7 @@ export interface SidebarProps {
   navigation?: {id:string;label:string;icon:ReactNode;active:boolean;onSelect:()=>void}[];
   hasMessages?: (session:ChatSession)=>boolean;
   canDeleteSession?:boolean;
-  brand?:string;logo?:ReactNode;themeControl?:ReactNode;rootRef?:Ref<HTMLDivElement>;
+  rootRef?:Ref<HTMLDivElement>;
   navigationLabel?:string;rootLabel?:string;personaOptions?:{value:string;label:string}[];
   statusText?:string;settingsTitle?:string;
   theme?:'light'|'dark';onThemeChange?:(theme:'light'|'dark')=>void;assetUrl?:(path:string)=>string;
@@ -68,7 +68,7 @@ export default function Sidebar({
   apiDirect,
   agentRuntime,
   onOpenSettings,
-  navigation,hasMessages,canDeleteSession=true,brand,logo,themeControl,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,theme,onThemeChange,assetUrl,
+  navigation,hasMessages,canDeleteSession=true,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,theme,onThemeChange,assetUrl,
 }: SidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -127,9 +127,9 @@ export default function Sidebar({
     <div className="sidebar" ref={rootRef} role={rootLabel?'complementary':undefined} aria-label={rootLabel}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          {logo||<img className="sidebar-logo-icon" src={assetUrl?.('static/easel-icon-transparent.png')||'./static/easel-icon-transparent.png'} alt="" />}
-          <h1>{brand||'Easel'}</h1>
-          {themeControl||<ThemeToggle theme={theme} onChange={onThemeChange} />}
+          <img className="sidebar-logo-icon" src={assetUrl?.('static/easel-icon-transparent.png')||'./static/easel-icon-transparent.png'} alt="" />
+          <h1>Easel</h1>
+          <ThemeToggle theme={theme} onChange={onThemeChange} />
         </div>
         <SettingsSelect className="persona-control" label="选择用户画像"
           title="选择用户画像（一个对话对应一个画像：切换会新建一个对话）"

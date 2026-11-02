@@ -125,15 +125,10 @@
   html[data-native-platform] .overlay > .modal input[type="time"] { inline-size: 100%; max-inline-size: 100%; }
   html[data-native-platform] .drawer-overlay { block-size: var(--native-height, 100dvh); overscroll-behavior-y: contain; }
   html[data-native-platform] .drawer { inline-size: min(560px, 100%); max-inline-size: 100%; max-block-size: var(--native-height, 100dvh); overscroll-behavior-y: contain; }
-  html[data-native-platform] .drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; }
-  html[data-native-platform] .drawer-header > h2 { min-inline-size: 0; overflow-wrap: anywhere; }
-  html[data-native-platform] .drawer-header > button { flex-shrink: 0; }
+  html[data-native-platform] .drawer-header { padding: 16px; }
+  html[data-native-platform] .drawer-header > div > div { min-inline-size: 0; overflow-wrap: anywhere; }
+  html[data-native-platform] .drawer-header > div > .icon-btn { flex-shrink: 0; }
   html[data-native-platform] .drawer-body { padding-inline: 16px; }
-  html[data-native-platform] .ew-dialog[open],
-  html[data-native-platform] .ew-dialog .ew-dialog[open] { display: flex; flex-direction: column; inline-size: calc(100vw - 16px); max-inline-size: calc(100vw - 16px); max-block-size: min(94dvh, calc(var(--native-height, 100dvh) - 16px)); overflow: visible; }
-  html[data-native-platform] .ew-dialog[open] > .drawer-header { flex: 0 0 auto; position: relative; }
-  html[data-native-platform] .ew-dialog[open] > .drawer-body { flex: 1 1 auto; min-block-size: 0; min-inline-size: 0; max-block-size: none; padding: 16px; overflow-y: auto; overscroll-behavior-y: contain; }
-  html[data-native-platform] .ew-dialog fieldset { min-inline-size: 0; }
   html[data-native-platform] .trend-manager { inline-size: calc(100vw - 24px); max-inline-size: calc(100vw - 24px); max-block-size: calc(var(--native-height, 100dvh) - 24px); padding: 16px; overscroll-behavior-y: contain; }
   html[data-native-platform] .trend-manager-fields { grid-template-columns: minmax(0, 1fr); }
   html[data-native-platform] .trend-manager-head,

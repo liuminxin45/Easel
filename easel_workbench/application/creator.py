@@ -415,7 +415,7 @@ class CreatorRuntime:
             result['profile'] = profile
         return result
 
-    def command(self, value):
+    def command(self, value, *, before_commit=None):
         if not isinstance(value, dict):
             raise ValueError('操作格式无效')
         value = copy.deepcopy(value)
@@ -456,6 +456,8 @@ class CreatorRuntime:
                 result = enqueue_reference(self.box, value, c)
             else:
                 raise ValueError('不支持的画像或技能操作')
+            if before_commit is not None:
+                before_commit(c, result)
             response = {'id': operation, 'status': 'completed', 'execution': 'script', 'result': result}
             c.execute('INSERT INTO creator_operations VALUES(?,?,?,?)', (operation, signature, packed(response), stamp()))
             from easel_workbench.project_skill_sync import finish_response

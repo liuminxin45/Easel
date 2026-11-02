@@ -997,7 +997,21 @@ async def api_models_selftest(req: SelftestRequest):
     return {"channel": channel, "results": results, "testedAt": int(time.time())}
 
 
-EXPORTS = ('_k', '_PLACEHOLDER_RE', '_is_set', '_ENV_VALUE_OK', '_is_local_gateway_base', '_SLOT_ENV_KEYS', '_valid_base_url', '_ssrf_safe', '_direct_api_enabled', '_model_target_allowed', '_mask_key', '_model_channels', 'RESERVED_PROVIDER_KEYS', 'THINKING_FORMATS', 'THINKING_COMPAT_KEYS', '_openclaw_provider_creds', '_sync_openclaw_chat', '_sync_anthropic_provider', 'ModelSaveRow', 'ModelSaveRequest', 'api_settings_models_save', 'LocalAgentEnableRequest', 'api_local_agents', 'api_local_agent_enable', '_set_openclaw_primary', '_declare_anthropic_provider', 'SelftestRequest', 'ModelsFetchRequest', '_FETCH_KEY_BY_SLOT', 'api_models_available', 'api_models_selftest')
+def _guard_env_values(updates: dict[str, str]) -> None:
+    """集中拦截 .env 值注入：值里带换行能往 .env 追加任意行，带 `$(…)` 能直接执行命令
+    —— 两者都等于任何能调到写 .env 接口的人都能拿到命令执行。键名同理。两个写入口都必须先过这道。"""
+    for k, v in updates.items():
+        if any(c in (k or '') for c in '\r\n=') or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k or ''):
+            raise HTTPException(400, f'非法的配置键名：{(k or "")[:40]!r}')
+        v = v or ''
+        if any(c in v for c in '\r\n\x00'):
+            raise HTTPException(400, f'配置值不能包含换行符：{k}')
+        if not _ENV_VALUE_OK.fullmatch(v):
+            bad = ''.join(sorted({c for c in v if not _ENV_VALUE_OK.fullmatch(c)}))
+            raise HTTPException(400, f'配置值含不允许的字符（{bad!r}）：{k}')
+
+
+EXPORTS = ('_guard_env_values', '_k', '_PLACEHOLDER_RE', '_is_set', '_ENV_VALUE_OK', '_is_local_gateway_base', '_SLOT_ENV_KEYS', '_valid_base_url', '_ssrf_safe', '_direct_api_enabled', '_model_target_allowed', '_mask_key', '_model_channels', 'RESERVED_PROVIDER_KEYS', 'THINKING_FORMATS', 'THINKING_COMPAT_KEYS', '_openclaw_provider_creds', '_sync_openclaw_chat', '_sync_anthropic_provider', 'ModelSaveRow', 'ModelSaveRequest', 'api_settings_models_save', 'LocalAgentEnableRequest', 'api_local_agents', 'api_local_agent_enable', '_set_openclaw_primary', '_declare_anthropic_provider', 'SelftestRequest', 'ModelsFetchRequest', '_FETCH_KEY_BY_SLOT', 'api_models_available', 'api_models_selftest')
 
 def bind(context=None, *, into=None):
     return bind_functions(sys.modules[__name__], EXPORTS, context, into=into)

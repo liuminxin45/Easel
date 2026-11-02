@@ -1,4 +1,5 @@
 import DownloadLink from '../../components/DownloadLink';
+import EaselDrawer from '../../components/Drawer';
 import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import {fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
 import {useWorkbench,useOperation,useSessionMediaImage} from './hooks';
@@ -20,10 +21,38 @@ export function Markdown({text}:{text:string}){return <div className="markdown-b
 export function Panel({title,children}:{title?:string;children:ReactNode}){return <section className="card ew-panel">{title&&<h2>{title}</h2>}{children}</section>}
 export function Field({label,children}:{label:string;children:ReactNode}){return <label className="ew-field"><span>{label}</span>{children}</label>}
 export function Pending({scope,reload}:{scope:string;reload?:()=>void}){const p=useOperation(scope),previous=useRef(p.pending?.uncertain?p.pending.id:undefined);useEffect(()=>{if(previous.current&&!p.pending)reload?.();previous.current=p.pending?.uncertain?p.pending.id:undefined},[p.pending?.id,p.pending?.uncertain,reload]);return p.pending?.uncertain&&!p.busy?<p className="ew-muted" role="status">{p.feedback?.message||p.error||'连接中断，正在恢复操作状态。输入已保留。'}</p>:null}
-export function Modal({open,title,onClose,onDismiss,children,presentation='dialog'}:{open:boolean;title:string;onClose:()=>void;onDismiss?:()=>void|boolean;children:ReactNode;presentation?:'dialog'|'sheet'}){const ref=useRef<HTMLDialogElement>(null),{navigation}=useWorkbench(),close=useRef(onDismiss||onClose);close.current=onDismiss||onClose;useEffect(()=>{if(!open)return;const previous=document.activeElement as HTMLElement|null,el=ref.current;if(el&&!el.open)el.showModal();const release=navigation.registerLayer?.(()=>close.current());return()=>{release?.();el?.close();previous?.focus({preventScroll:true})}},[open,navigation.registerLayer]);return open?<dialog ref={ref} className={'ew-dialog'+(presentation==='sheet'?' ew-dialog-sheet':'')} onCancel={e=>{e.preventDefault();onClose()}} aria-label={title}><div className="drawer-header"><h2>{title}</h2><button className="btn btn-ghost" aria-label="关闭" onClick={onClose}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div className="drawer-body">{children}</div></dialog>:null}
+/** Only host history/focus is adapted; the visible shell is the original drawer. */
+type HostDrawerProps={open:boolean;title:string;onClose:()=>void;onDismiss?:()=>void|boolean;children:ReactNode};
+export function Drawer(props:HostDrawerProps){return props.open?<MountedDrawer {...props}/>:null}
+function MountedDrawer({title,onClose,onDismiss,children}:HostDrawerProps){
+ const panel=useRef<HTMLDivElement>(null),{navigation}=useWorkbench(),dismiss=useRef(onDismiss||onClose),close=useRef(onClose);
+ dismiss.current=onDismiss||onClose;close.current=onClose;
+ const previous=useRef(typeof document!=='undefined'&&document.activeElement instanceof HTMLElement?document.activeElement:null);
+ // Keep nested drawers inside their existing overlay's stacking context.
+ // Capture the caller once per opening so focus inside this drawer cannot
+ // accidentally make a later render portal the drawer into itself.
+ const container=useRef(typeof document==='undefined'?null:previous.current?.closest('.drawer-overlay,.settings-overlay,.sidebar-panel')||document.querySelector('.native-host'));
+ useEffect(()=>{
+  const release=navigation.registerLayer?.(()=>dismiss.current());
+  const focus=requestAnimationFrame(()=>panel.current?.querySelector<HTMLElement>('button:not(:disabled),[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')?.focus({preventScroll:true}));
+  const key=(event:KeyboardEvent)=>{
+   if(event.key!=='Escape'||event.defaultPrevented||event.isComposing||document.querySelector('dialog[open]'))return;
+   const overlays=[...document.querySelectorAll<HTMLElement>('.drawer-overlay')].filter(element=>element.getClientRects().length&&getComputedStyle(element).visibility!=='hidden');
+   if(overlays.at(-1)!==panel.current?.parentElement)return;
+   event.preventDefault();event.stopPropagation();close.current();
+  };
+  document.addEventListener('keydown',key);
+  return()=>{cancelAnimationFrame(focus);release?.();document.removeEventListener('keydown',key);
+   // The overlay observer first restores the parent's inert state. Returning
+   // focus in that same cleanup would otherwise target a still-inert control.
+   queueMicrotask(()=>requestAnimationFrame(()=>{if(previous.current?.isConnected)previous.current.focus({preventScroll:true})}));
+  };
+ },[navigation.registerLayer]);
+ return <EaselDrawer title={title} onClose={onClose} panelRef={panel} container={container.current}>{children}</EaselDrawer>;
+}
 export function ArtifactView({file}:{file:Artifact}){const image=useSessionMediaImage(file);return <figure className="ew-artifact">{file.mime.startsWith('image/')?<img src={image.src||fileUrl(file)} alt={file.name}/>:file.mime.startsWith('video/')?<video src={fileUrl(file)} controls preload="metadata"/>:file.mime.startsWith('audio/')?<audio src={fileUrl(file)} controls preload="metadata"/>:<p>{file.name}</p>}<figcaption><DownloadLink href={fileDownload(file)} download={file.name}>{file.name} · 下载原件</DownloadLink></figcaption></figure>}
-function RecordDetails({title,children}:{title:string;children:ReactNode}){const [open,setOpen]=useState(false);return <><button className="ew-record-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><span>{title}</span><DetailChevron/></button><Modal open={open} title={title} onClose={()=>setOpen(false)} presentation="sheet">{children}</Modal></>}
-export function JsonDetails({value,title='详细记录'}:{value:unknown;title?:string}){return <RecordDetails title={title}><pre className="ew-json">{JSON.stringify(value,null,2)}</pre></RecordDetails>}
+function RecordDetails({title,children}:{title:string;children:ReactNode}){const [open,setOpen]=useState(false);return <><button className="ew-record-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><span>{title}</span><DetailChevron/></button><Drawer open={open} title={title} onClose={()=>setOpen(false)}>{children}</Drawer></>}
+export function JsonDetails({value,title='详细记录'}:{value:unknown;title?:string}){return <RecordDetails title={title}><pre className="ew-preserve">{JSON.stringify(value,null,2)}</pre></RecordDetails>}
 export const resultDocument=(v:unknown)=>record(record(v).result??v);
 export function PageHead({title,children}:{title:string;children?:ReactNode}){const {back}=useWorkbench();return <header className="ew-page-head"><div className="ew-row"><button className="btn btn-ghost" aria-label="返回" onClick={back}>←</button><h1 className="page-title">{title}</h1></div><div className="ew-row">{children}</div></header>}
 export function TextRecord({title,value}:{title:string;value:unknown}){return <RecordDetails title={title}><pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre></RecordDetails>}

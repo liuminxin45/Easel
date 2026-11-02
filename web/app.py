@@ -350,77 +350,11 @@ from easel.web_services.settings import bind as _bind_shared_settings
 _bind_shared_settings(into=globals())
 
 
-def _model_spec(group: str, label: str | None = None) -> dict:
-    spec = model_group(group)
-    return {
-        "label": label or spec["label"],
-        "settings": spec.get("settings", []),
-        "providers": spec["providers"],
-    }
+from easel.web_services.skills import bind as _bind_shared_skills
+_bind_shared_skills(into=globals())
 
 
-def _short_drama_spec() -> dict:
-    """Image is required; video and cloud voice settings remain optional enhancements."""
-    image = model_group("image")
-    optional = []
-    for group_name in ("video", "voice"):
-        group = model_group(group_name)
-        optional.extend({**key, "required": False} for key in group.get("settings", []))
-        for provider in group["providers"]:
-            optional.extend({**key, "required": False} for key in provider["keys"])
-    seen = set()
-    optional = [key for key in optional if not (key["env"] in seen or seen.add(key["env"]))]
-    return {
-        "label": "AI 短剧（生图必需 + 生视频/云配音可选）",
-        "settings": [],
-        "providers": [{
-            "id": "drama",
-            "name": "关键帧生图（必需）+ 视频生成与闭源配音（可选）",
-            "keys": [*image["providers"][0]["keys"], *optional],
-        }],
-    }
 
-SKILL_API_REQUIREMENTS: dict[str, dict] = {
-    "ai-image-gen": _model_spec("image"),
-    "ecom-details-image": _model_spec("image", "电商配图（AI 生图）"),
-    "ai-video-gen": _model_spec("video"),
-    "ai-music": _model_spec("music"),
-    "voice-clone": _model_spec("voice", "声音克隆 / 云端 TTS"),
-    # AI 短剧：编排 ai-image-gen(关键帧,必需) + ai-video-gen(生视频,可选,缺则退化图片短剧)。
-    # 以生图为「已配置」基线（缺生图无法出关键帧）；生视频 key 同框可选填，也可在 ai-video-gen 卡片配。
-    "short-drama": _short_drama_spec(),
-    # 论文解读：MinerU 与生图均为可选（缺 MinerU 用 pdfplumber 兜底、缺生图用信息图/图表）。
-    # 全 key 可选 → 不误报感叹号；但仍进注册表以便就地填 MINERU_API_TOKEN（无其它叶子 skill 承载它）。
-    "paper-explainer": {
-        "label": "论文解读（MinerU / 生图 均可选）",
-        "providers": [
-            {
-                "id": "paper",
-                "name": "MinerU 解析(可选, 缺则 pdfplumber) + 封面/概念生图(可选)",
-                "keys": [
-                    _k("MINERU_API_TOKEN", "MinerU API Token（可选，缺则用 pdfplumber 兜底）",
-                       required=False),
-                    _k("IMG_API_KEY", "生图 API Key（可选，用于封面/概念图）", required=False,
-                       aliases=["OPENAI_API_KEY", "API_KEY"]),
-                    _k("IMG_BASE_URL", "生图 API 根地址（可选）", required=False, secret=False,
-                       aliases=["OPENAI_BASE_URL", "OPENAI_API_BASE", "BASE_URL"]),
-                ],
-            },
-        ],
-    },
-}
-
-_ENV_ALLOWLIST: set[str] = {
-    "EASEL_DIRECT_API_BASE_URL", "EASEL_DIRECT_API_KEY", "EASEL_DIRECT_API_MODEL",
-}
-for _spec in SKILL_API_REQUIREMENTS.values():
-    for _key in _spec.get("settings", []):
-        _ENV_ALLOWLIST.add(_key["env"])
-        _ENV_ALLOWLIST.update(_key.get("aliases", []))
-    for _prov in _spec["providers"]:
-        for _key in _prov["keys"]:
-            _ENV_ALLOWLIST.add(_key["env"])
-            _ENV_ALLOWLIST.update(_key.get("aliases", []))
 
 ENV_FILE = PROJECT_ROOT / ".env"
 _HARNESS_LOOP = None
@@ -559,52 +493,6 @@ def find_skill(name: str) -> str | None:
     return None
 
 
-def _parse_skill_md(path: Path) -> tuple[str, str, str]:
-    """解析 SKILL.md → (description, layer, body)。body 为去掉 frontmatter 的正文。
-    正确处理 YAML 块标量 description（`>-` / `>` / `|` 后跟缩进多行）。"""
-    text = path.read_text(encoding='utf-8')
-    desc, layer, body = '', '', text
-    lines = text.splitlines()
-    if not (lines and lines[0].strip() == '---'):
-        return desc, layer, body
-    end = None
-    for i in range(1, len(lines)):
-        if lines[i].strip() == '---':
-            end = i
-            break
-    if end is None:
-        return desc, layer, body
-    body = '\n'.join(lines[end + 1:]).strip()
-    fm = lines[1:end]
-    i = 0
-    while i < len(fm):
-        st = fm[i].strip()
-        if st.startswith('layer:'):
-            layer = st.split(':', 1)[1].strip().strip('"').strip("'")
-            i += 1
-        elif st.startswith('description:'):
-            val = st.split(':', 1)[1].strip()
-            if val and val[0] in '|>':
-                block = []
-                j = i + 1
-                while j < len(fm):
-                    if fm[j].strip() == '':
-                        block.append('')
-                        j += 1
-                        continue
-                    indent = len(fm[j]) - len(fm[j].lstrip())
-                    if indent == 0:
-                        break
-                    block.append(fm[j].strip())
-                    j += 1
-                desc = ' '.join(x for x in block if x).strip()
-                i = j
-            else:
-                desc = val.strip('"').strip("'")
-                i += 1
-        else:
-            i += 1
-    return desc, layer, body
 
 
 def get_skills() -> list[dict]:
@@ -702,12 +590,6 @@ def _read_env() -> dict[str, str]:
     return result
 
 
-def _mask(val: str) -> str:
-    """脱敏：只留尾 4 位（短值全遮）。"""
-    v = val.strip()
-    if len(v) <= 4:
-        return '••••'
-    return '••••' + v[-4:]
 
 
 # 要从回显文本里抹掉的 .env 键：命中这些词的一律当机密处理
@@ -729,23 +611,8 @@ def _scrub_secrets(text: str) -> str:
     return out
 
 
-def _key_configured(key: dict, env: dict[str, str]) -> bool:
-    '某个 key（含别名）是否已配置。'
-    if _is_set(env.get(key['env'])):
-        return True
-    return any(_is_set(env.get(a)) for a in key.get('aliases', []))
 
 
-def _skill_api_configured(skill: str, env: dict[str, str] | None = None) -> bool:
-    'SKILL 是否已具备可用配置：任一 provider 的全部 required key 齐全。'
-    spec = SKILL_API_REQUIREMENTS.get(skill)
-    if not spec:
-        return True
-    env = _read_env() if env is None else env
-    for prov in spec['providers']:
-        if all(_key_configured(k, env) for k in prov['keys'] if k['required']):
-            return True
-    return False
 
 
 # .env 的值是裸写 `KEY=value` 的，而 setup.sh:310/450 会 `source .env`。bash 在赋值右侧
@@ -755,18 +622,6 @@ def _skill_api_configured(skill: str, env: dict[str, str] | None = None) -> bool
 # 这里能写的全是 API Key / Base URL / 模型 id / 端口，没有一个需要空格或上面那些字符。
 
 
-def _guard_env_values(updates: dict[str, str]) -> None:
-    """集中拦截 .env 值注入：值里带换行能往 .env 追加任意行，带 `$(…)` 能直接执行命令
-    —— 两者都等于任何能调到写 .env 接口的人都能拿到命令执行。键名同理。两个写入口都必须先过这道。"""
-    for k, v in updates.items():
-        if any(c in (k or '') for c in '\r\n=') or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k or ''):
-            raise HTTPException(400, f'非法的配置键名：{(k or "")[:40]!r}')
-        v = v or ''
-        if any(c in v for c in '\r\n\x00'):
-            raise HTTPException(400, f'配置值不能包含换行符：{k}')
-        if not _ENV_VALUE_OK.fullmatch(v):
-            bad = ''.join(sorted({c for c in v if not _ENV_VALUE_OK.fullmatch(c)}))
-            raise HTTPException(400, f'配置值含不允许的字符（{bad!r}）：{k}')
 
 
 # 设置面板里「改了 Base URL 就必须重填 Key」要比对的 .env 键位（槽位 → (base 键, key 键)）。
@@ -838,31 +693,6 @@ def _write_env(updates: dict[str, str]) -> None:
     tmp.replace(ENV_FILE)
 
 
-def _api_spec_status(skill: str, env: dict[str, str]) -> dict:
-    '返回注册表项 + 每个 key 当前配置状态与脱敏值（不回传明文）。'
-    spec = SKILL_API_REQUIREMENTS[skill]
-
-    def key_status(k: dict) -> dict:
-        raw = env.get(k['env'], '')
-        return {
-            'env': k['env'],
-            'label': k['label'],
-            'required': k['required'],
-            'secret': k['secret'],
-            'choices': list(k.get('choices', [])),
-            'configured': _key_configured(k, env),
-            'masked': _mask(raw) if k['secret'] and _is_set(raw) else (raw if not k['secret'] else ''),
-        }
-
-    providers = []
-    for prov in spec['providers']:
-        keys = [key_status(k) for k in prov['keys']]
-        providers.append({'id': prov['id'], 'name': prov['name'], 'keys': keys})
-    return {
-        'label': spec['label'],
-        'settings': [key_status(k) for k in spec.get('settings', [])],
-        'providers': providers,
-    }
 
 
 def _agent_thinking_level() -> str:
@@ -3348,48 +3178,11 @@ def _form_to_instruction(name: str, form: dict) -> str:
 
 
 def _write_baseline_profile(name: str, form: dict) -> None:
-    """从表单确定性生成六维基线文件。链接派生字段标 [待 AI 分析]。"""
-    pd = PROFILES_DIR / name
-    pd.mkdir(parents=True, exist_ok=True)
-
-    def g(k: str, default: str = '') -> str:
-        v = form.get(k)
-        if isinstance(v, list):
-            return '、'.join(str(x) for x in v)
-        return str(v).strip() if v not in (None, '') else default
-    direction = g('direction') or '[待补充]'
-    reason = g('reason') or '[待补充]'
-    goal = g('goal')
-    formats = g('formats')
-    tone = g('tone') or '[待分析]'
-    likes = g('likes')
-    avoid = g('avoid')
-    platforms = form.get('platforms') or []
-    links = form.get('links') or {}
-    (pd / 'identity.md').write_text(
-        f"# 身份定位\n\n## 我是谁\n\n{direction}\n\n## 差异化\n\n{reason}\n\n## 内容方向\n\n{direction}"
-        f"{'（形式：' + formats + '）' if formats else ''}\n"
-        f"{'运营目标：' + goal if goal else ''}\n",
-        encoding='utf-8')
-    (pd / 'style.md').write_text(
-        f"# 内容风格\n\n## 语气\n\n{tone}\n\n## 开头结构\n\n[待 AI 分析已发内容]\n\n## 视觉风格\n\n[待 AI 分析]\n\n## 内容节奏\n\n{formats or '[待补充]'}\n\n## 标志性元素\n\n[待 AI 分析]\n",
-        encoding='utf-8')
-    (pd / 'audience.md').write_text(
-        '# 目标受众\n\n## 核心人群\n\n[待 AI 分析/待补充]\n\n## 兴趣标签\n\n[待补充]\n\n## 痛点\n\n[待补充]\n\n## 互动特征\n\n[待 AI 分析已发内容]\n',
-        encoding='utf-8')
-    plat_lines = []
-    for p in platforms:
-        url = links.get(p, '')
-        plat_lines.append(f"## {p}\n\n主页：{url or '[待补充]'}\n粉丝量级 / 内容形式：[待补充]\n")
-    (pd / 'platforms.md').write_text(
-        '# 平台运营\n\n' + ('\n'.join(plat_lines) if plat_lines else '[待补充]\n'),
-        encoding='utf-8')
-    (pd / 'preferences.md').write_text(
-        f"# 偏好与红线\n\n## 要做的\n\n{direction}\n\n## 不做的\n\n{avoid or '[待补充]'}\n\n## 合规底线\n\n{avoid or '[待补充]'}\n",
-        encoding='utf-8')
-    (pd / 'memory.md').write_text(
-        f"# 经验沉淀\n\n## 内容洞察\n\n{'喜欢的内容/对标：' + likes if likes else '[待 AI 分析已收藏/点赞]'}\n\n## 踩过的坑\n\n[待积累]\n",
-        encoding='utf-8')
+    from easel.web_services.profiles import baseline_profile_files
+    directory = PROFILES_DIR / name
+    directory.mkdir(parents=True, exist_ok=True)
+    for filename, content in baseline_profile_files(name, form).items():
+        (directory / filename).write_text(content, encoding='utf-8')
 
 
 @app.delete("/api/session/{session_key}")

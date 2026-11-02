@@ -13,7 +13,7 @@ interface SkillPageProps {
   persona: string;
   catalog?:{items:SkillItem[];error?:string;loading?:boolean;reload?:()=>void};
   renderDrawer?:(name:string,onClose:()=>void)=>ReactNode;
-  headerActions?:ReactNode;subtitle?:ReactNode;
+  headerActions?:ReactNode;
 }
 
 type IconC = ComponentType<{ size?: number }>;
@@ -56,7 +56,7 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona,catalog,renderDrawer,headerActions,subtitle }: SkillPageProps) {
+export default function SkillPage({ persona,catalog,renderDrawer,headerActions }: SkillPageProps) {
   const [localSkills, setSkills] = useState<SkillItem[]>([]);
   const [localError, setError] = useState('');
   const [localLoading, setLoading] = useState(true);
@@ -97,9 +97,9 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions,s
       <div className="skills-page-head">
         <h1 className="page-title">技能库</h1>{headerActions}
         <p className="page-subtitle">
-          {subtitle||(waiting?'按流水线层分区浏览技能。':<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
+          {waiting?'按流水线层分区浏览技能。':<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
           标 <span className="badge badge-warn" style={{ padding: '1px 7px' }}>需 API</span> 的需先配置密钥
-          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。</>)}
+          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。</>}
         </p>
         <div className="skill-search">
           <span className="skill-search-ic"><IconSearch size={16} /></span>

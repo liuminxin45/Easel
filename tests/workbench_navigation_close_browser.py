@@ -209,9 +209,15 @@ def main():
                                 if kind == 'profile-proposal':
                                     expect(dialog.get_by_text('画像候选修改', exact=True)).to_be_visible()
                                     dialog.get_by_text('表达方式', exact=True).click()
-                                    dialog.locator('summary').filter(has_text=re.compile('^候选$')).click()
-                                    expect(dialog.get_by_text('TEMP 画像候选原文', exact=True)).to_be_visible()
-                                    mark(profile, scenario, 'actual inline profile proposal is rendered in its owning dialog', True)
+                                    candidate_trigger = dialog.get_by_role('button', name='候选', exact=True)
+                                    candidate_trigger.click()
+                                    candidate = page.get_by_role('dialog', name='候选', exact=True)
+                                    expect(candidate).to_be_visible()
+                                    expect(candidate.get_by_text('TEMP 画像候选原文', exact=True)).to_be_visible()
+                                    page.keyboard.press('Escape')
+                                    expect(candidate).to_have_count(0)
+                                    expect(dialog).to_be_visible();expect(candidate_trigger).to_be_focused()
+                                    mark(profile, scenario, 'profile proposal opens the same official drawer and returns to its exact parent trigger', True)
                                 shot(page, profile, scenario, 'open')
                                 expected = '/toolbox?section=skills'
                                 if mode == 'button': dialog.get_by_role('button', name='关闭', exact=True).click()
@@ -219,8 +225,8 @@ def main():
                                 elif mode == 'back': page.go_back()
                                 else:
                                     expected = '/works'
-                                    link('/works', 'dialog.ew-dialog .drawer-body')
-                                wait_closed('dialog.ew-dialog', expected)
+                                    link('/works', '.drawer[role="dialog"][aria-label="整理经验"] .drawer-body')
+                                wait_closed('.drawer[role="dialog"][aria-label="整理经验"]', expected)
                                 raw = page.evaluate('JSON.parse(localStorage.getItem("toolbox:draft:creator:experience")||"{}").goal')
                                 mark(profile, scenario, 'closing never clears raw experience input', raw == GOAL)
                             shot(page, profile, scenario, 'closed')

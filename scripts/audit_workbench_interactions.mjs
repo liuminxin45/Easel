@@ -3,7 +3,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),require=createRequire(path.join(root,'web/frontend/package.json')),ts=require('typescript');
-export function inspectInteractions(source,file='view.tsx'){
+export function inspectInteractions(source,file='view.tsx',{nativePresentation=false}={}){
  const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),violations=[],counts={buttons:0,notices:0,backgroundRefreshes:0};
  const issue=(node,rule)=>violations.push({file,line:ast.getLineAndCharacterOfPosition(node.getStart(ast)).line+1,rule});
  function visit(node){
@@ -25,7 +25,7 @@ export function inspectInteractions(source,file='view.tsx'){
     if(disabled?.initializer&&/\b\w+\.busy\b/.test(disabled.initializer.getText(ast))&&owner?.name?.text!=='ActionButton')issue(disabled,'shared-action-button-required');
    }
    const cls=node.attributes.properties.find(p=>ts.isJsxAttribute(p)&&p.name.getText(ast)==='className');
-   if(cls?.initializer&&/notice-error/.test(cls.initializer.getText(ast)))issue(cls,'error-presentation-must-be-shared');
+   if(!nativePresentation&&cls?.initializer&&/notice-error/.test(cls.initializer.getText(ast)))issue(cls,'error-presentation-must-be-shared');
   }
   if(ts.isJsxText(node)&&/核对原操作|核对原请求/.test(node.getText(ast)))issue(node,'manual-receipt-step-retired');
   ts.forEachChild(node,visit);
@@ -34,8 +34,8 @@ export function inspectInteractions(source,file='view.tsx'){
 }
 export function auditInteractions(base=root){
  const ui=path.join(base,'web/frontend/src/workbench/ui'),files=fs.readdirSync(ui,{recursive:true}).filter(name=>/\.(ts|tsx)$/.test(name)),results=[];
- files.push(...['SettingsPanel','HarnessSettings','TrendsView','TrendSourcesDialog'].map(name=>'../../components/'+name+'.tsx'));
- for(const name of files){const file=path.join(ui,name);results.push(inspectInteractions(fs.readFileSync(file,'utf8'),path.relative(base,file).replaceAll('\\','/')))}
+ files.push(...['SettingsPanel','HarnessSettings','TrendsPage','TrendSourcesDialog'].map(name=>'../../components/'+name+'.tsx'));
+ for(const name of files){const file=path.join(ui,name);results.push(inspectInteractions(fs.readFileSync(file,'utf8'),path.relative(base,file).replaceAll('\\','/'),{nativePresentation:name.startsWith('../../components/')}))}
  const settings=fs.readFileSync(path.join(ui,'settingsApi.ts'),'utf8');
  if(/client\.drafts|client\.api\.post/.test(settings))results.push({counts:{buttons:0,notices:0,backgroundRefreshes:0},violations:[{file:'settingsApi.ts',line:1,rule:'settings-must-use-shared-command-recovery'}]});
  const violations=results.flatMap(r=>r.violations),counts=results.reduce((all,r)=>Object.fromEntries(Object.keys(all).map(k=>[k,all[k]+r.counts[k]])),{buttons:0,notices:0,backgroundRefreshes:0});

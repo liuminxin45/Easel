@@ -49,13 +49,19 @@ export function bindNativeModalFocus():()=>void {
  const reconcile=()=>{
   frame=0;if(stopped)return;
   try{
-   const otherOwner=[...document.querySelectorAll<HTMLElement>('.native-host .settings-panel[aria-modal="true"],.native-host .sidebar-panel[aria-modal="true"]')].some(visible);
-   const candidates=!otherOwner?[...document.querySelectorAll<HTMLElement>(OVERLAYS)].filter(element=>!element.closest('dialog[open]')&&element.querySelector(':scope > .modal, :scope > .drawer')&&visible(element)):[];
+   const owners=[...document.querySelectorAll<HTMLElement>('.native-host .settings-panel[aria-modal="true"],.native-host .sidebar-panel[aria-modal="true"]')].filter(visible);
+   const otherOwner=owners.length>0;
+   const candidates=[...document.querySelectorAll<HTMLElement>(OVERLAYS)].filter(element=>
+    !element.closest('dialog[open]')&&element.querySelector(':scope > .modal, :scope > .drawer')&&visible(element)
+    &&(!otherOwner||owners.some(owner=>{
+     const context=owner.closest('.settings-overlay,.sidebar-panel');
+     return context!==element&&!!context?.contains(element);
+    })));
    candidates.sort((a,b)=>(Number(getComputedStyle(a).zIndex)||0)-(Number(getComputedStyle(b).zIndex)||0));
    const overlay=candidates.at(-1)||null;
    if(overlay!==current?.overlay){
     const previous=current;
-    release(!overlay&&!otherOwner);
+    release(!overlay&&(!otherOwner||!!previous?.returnTo&&owners.some(owner=>owner.contains(previous.returnTo))));
     if(overlay){
      const panel=overlay.querySelector<HTMLElement>(':scope > .modal, :scope > .drawer')!;
      if(!origins.has(overlay))origins.set(overlay,document.activeElement instanceof HTMLElement&&!overlay.contains(document.activeElement)?document.activeElement:previous?.returnTo||lastOutside);
@@ -82,8 +88,8 @@ export function bindNativeModalFocus():()=>void {
  });
  const onFocus=(event:FocusEvent)=>{
   const target=event.target;if(!(target instanceof HTMLElement))return;
-  if(target.closest('.native-host .settings-panel[aria-modal="true"],.native-host .sidebar-panel[aria-modal="true"]')){schedule();return}
   if(!target.closest('.overlay,.drawer-overlay,.model-dd,[popover]'))lastOutside=target;
+  if(target.closest('.native-host .settings-panel[aria-modal="true"],.native-host .sidebar-panel[aria-modal="true"]')){schedule();return}
   if(!current||nativeDialog()||inside(target))return;
   // OptionsDropdown may portal to body without an id. It can only be opened
   // from the active modal because every background control is inert.

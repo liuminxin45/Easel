@@ -159,7 +159,7 @@ def main():
                             if args.baseline:
                                 item = {'case': label, 'images': measurements, 'text': wrap, 'copy_exact': copy_ok,
                                         'image_opened_new_page': len(context.pages) > count,
-                                        'preview_with_close': page.locator('dialog[open]').count() > 0,
+                                        'preview_with_close': page.get_by_role('dialog', name='查看图片', exact=True).count() > 0,
                                         'screenshot': str(screenshot), 'sha256': sha(screenshot)}
                                 report['checks'].append(item)
                                 context.close()

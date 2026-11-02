@@ -2426,7 +2426,7 @@
       "responsibility": "Native library projection and SHA-bound original delivery receipt correction sole implementation: runtime",
       "lifecycle": "current canonical implementation with original state contracts",
       "state_contract": "existing durable identities and transactions",
-      "reviewed_sha256": "4e30a649f6ce46659bc790eb1e1b27a0a2f37785ee7d0e58ac73bbb139e91d60",
+      "reviewed_sha256": "d117ae7bc9caab68be03e9dab12ed582cf2572c10f59e6d568fa79c04f36bd81",
       "path": "easel_workbench/runtime/native_api.py",
       "symbol_groups": [
         {
@@ -2469,7 +2469,9 @@
             "NativeApi._export_package",
             "NativeApi.dispatch",
             "NativeApi._accounts",
-            "handle"
+            "handle",
+            "NativeApi._build_profile",
+            "NativeApi._build_profile.documents"
           ]
         }
       ],
@@ -2477,7 +2479,19 @@
         "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
         "path": "easel_workbench/runtime/native_api.py",
         "reviewed_sha256": "04d2dc6536148f7e8879b3174d4b757a4fcccd9319e046c54b87c0b25e0a2613"
-      }
+      },
+      "review_history": [
+        {
+          "source_commit": "d19d60a11a5cb2175b262b74d83265d575704fb4",
+          "reviewed_sha256": "4e30a649f6ce46659bc790eb1e1b27a0a2f37785ee7d0e58ac73bbb139e91d60",
+          "prior_review": {
+            "source_commit": "8861bd16a10712d2cbff74d6a5a8219b907ba33b",
+            "path": "easel_workbench/runtime/native_api.py",
+            "reviewed_sha256": "04d2dc6536148f7e8879b3174d4b757a4fcccd9319e046c54b87c0b25e0a2613"
+          }
+        }
+      ],
+      "review_note": "Original four-step onboarding protocol maps official six-file baseline into the existing profile transaction; native documents and original form are saved by before_commit and roll back together. No model enhancement or new writer."
     },
     {
       "responsibility": "Explicit receipt maintenance preserves execution times and never replays review/correction sole implementation: application",

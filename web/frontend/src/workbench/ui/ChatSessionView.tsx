@@ -11,7 +11,7 @@ import {nativeContinuationPath,workProductionRecovery,type Work,array,record,str
 import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
-import {IconSkills} from './components/icons';
+import {nativeAsset} from './lib/nativeAsset';
 
 export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;display_name?:string;origin?:string;source_revision?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
 export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
@@ -112,7 +112,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
   composer={{text:draft.text,attachments:draft.files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:text=>patch({text}),onUpload:async files=>patch({files:await vm.service.attach(files,draft.files)}),onRemoveAttachment:fileId=>patch({files:draft.files.filter(file=>file.id!==fileId)}),commands:choices,selectedCommand:selected,
    onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
-  emptyState={{brand:'创作工作台',icon:<IconSkills size={32}/>,subtitle:'先聊创作目标，或用 / 或画笔选择技能。制作、采纳和发布各自核对授权。',suggestions:[]}}
+  emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
   notice={<Notice sources={[resource,catalog,action,{error,feedback}]}/>}
   footer={<>
    {(draft.article_id||versionContext)&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':versionContext?'已选作品版本':'已选新闻素材'}>

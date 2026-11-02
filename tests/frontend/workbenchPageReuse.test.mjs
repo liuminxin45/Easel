@@ -7,7 +7,7 @@ import {test} from 'node:test';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
 const ts=require('typescript');
 const native={};
-for(const name of ['DashboardPage','OutputsPage','IdeasPage','TrendsPage','CalendarPage','BreakdownPage','ProfilePage'])native[name]=function NativePage(){};
+for(const name of ['DashboardPage','OutputsPage','IdeasPage','TrendsPage','CalendarPage','BreakdownPage','ProfilePage','OnboardingWizard'])native[name]=function NativePage(){};
 const element=(type,props)=>({type,props});
 const record=value=>value&&typeof value==='object'?value:{};
 const routeSource=readFileSync(new URL('../../web/frontend/src/workbench/platform/native-routes.ts',import.meta.url),'utf8');
@@ -102,6 +102,16 @@ test('native profile editor keeps stable identity and makes account imports and 
  assert.equal(page.props.personaLabel('creator-a'),'Display A');
  assert.equal(page.props.allowAccountImport,false);
  assert.equal(page.props.allowDelete,false);
+});
+
+test('creating a profile composes the original onboarding wizard and preserves the server stable ID',()=>{
+ const navigation=[],drafts=[],invalidated=[];
+ const pages=load('nativeProfiles.tsx',{vm:{replace:path=>navigation.push(path),client:{invalidate:async tags=>invalidated.push(tags),drafts:{get:()=>null,set:(...args)=>{drafts.push(args);return true},remove:()=>{}}}}});
+ const route=pages.NativeProfiles({search:new URLSearchParams('item=new')}),wizard=route.type(route.props);
+ assert.equal(wizard.type,native.OnboardingWizard);
+ const input={form:{name:'显示名',direction:'原始方向'},step:2};wizard.props.draftStore.write(input);
+ assert.deepEqual(drafts,[['creator:profile:wizard',input]]);
+ wizard.props.onCreated('stable-profile-id');assert.deepEqual(navigation,['/toolbox?section=profiles&item=stable-profile-id']);assert.deepEqual(JSON.parse(JSON.stringify(invalidated)),[['creator']]);
 });
 
 test('publishing AI action opens the same server session composer with the selected exact skill',async()=>{

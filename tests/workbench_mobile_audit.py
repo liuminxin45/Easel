@@ -35,6 +35,7 @@ MARK = 'MOBILE_AUDIT'
 LONG = MARK + ' 窄屏已有数据：保留准确版本、原始反馈和未发送输入。' * 5
 RECORD_GUIDANCE = (LONG + '\n') * 48
 NEWS_END = MARK + '_NEWS_END'
+DRAWER = '.drawer[role="dialog"][aria-modal="true"]'
 NEWS_BODY = '\n\n'.join('第 ' + str(index) + ' 段\n' + LONG + LONG for index in range(1, 13)) + '\n\n' + NEWS_END
 
 
@@ -150,6 +151,8 @@ def synthetic_reads(f, ids):
         {'role': 'user', 'content': LONG, 'timestamp': 1793380000},
         {'id': 'mobile-audit-turn', 'turnId': 'mobile-audit-turn', 'role': 'assistant', 'content': LONG,
          'timestamp': 1793380000, 'status': 'completed', 'thinking': LONG, 'activity': LONG,
+         'work': {'work_id': ids['work'], 'version_id': ids['version']},
+         'library_path': 'workbench-' + ids['work'] + '/' + ids['version'],
          'output_files': [artifact, {'id': 'mobile-audit-copy', 'name': '标题与配文.txt', 'mime': 'text/plain', 'url': '/api/files/mobile-audit-copy'},
                           {'id': 'mobile-audit-video', 'name': '合成视频.webm', 'mime': 'video/webm', 'url': '/api/files/mobile-audit-video'},
                           {'id': 'mobile-audit-audio', 'name': '合成音频.wav', 'mime': 'audio/wav', 'url': '/api/files/mobile-audit-audio'}],
@@ -212,7 +215,7 @@ MEASURE = """element=>{
  }
  const controls=[...element.querySelectorAll('button,input,select,textarea,a[href],summary,[role=button]')].filter(visible),fieldOverflow=[];
  const touchCandidates=controls.map(e=>{const r=e.getBoundingClientRect(),inViewport=r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1,hit=inViewport?document.elementFromPoint(r.left+r.width/2,r.top+r.height/2):null,label=e.matches('input')?e.closest('label'):null,l=label?.getBoundingClientRect();return {selector:name(e),tag:e.tagName,role:e.getAttribute('role'),label:(e.getAttribute('aria-label')||e.getAttribute('title')||e.innerText||'').slice(0,100),box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height},disabled:e.matches(':disabled'),tabIndex:e.tabIndex,pointerEvents:getComputedStyle(e).pointerEvents,inViewport,centerHit:!!hit&&(hit===e||e.contains(hit)),hitTarget:hit?name(hit):null,enclosingLabel:l?{width:l.width,height:l.height}:null,shortCandidate:r.width<43.5||r.height<43.5};});
- for(const input of element.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]),select,textarea')){if(!visible(input))continue;const r=input.getBoundingClientRect(),p=input.parentElement.getBoundingClientRect(),modal=input.closest('.modal,.ew-dialog,.drawer,.settings-panel'),m=modal?.getBoundingClientRect();if(r.right>p.right+2||r.left<p.left-2||m&&(r.right>m.right+1||r.left<m.left-1))fieldOverflow.push({selector:name(input),type:input.type,left:r.left,right:r.right,width:r.width,parentLeft:p.left,parentRight:p.right,modalRight:m?.right,clientWidth:input.clientWidth,scrollWidth:input.scrollWidth})}
+ for(const input of element.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]),select,textarea')){if(!visible(input))continue;const r=input.getBoundingClientRect(),p=input.parentElement.getBoundingClientRect(),modal=input.closest('.modal,.drawer,.settings-panel'),m=modal?.getBoundingClientRect();if(r.right>p.right+2||r.left<p.left-2||m&&(r.right>m.right+1||r.left<m.left-1))fieldOverflow.push({selector:name(input),type:input.type,left:r.left,right:r.right,width:r.width,parentLeft:p.left,parentRight:p.right,modalRight:m?.right,clientWidth:input.clientWidth,scrollWidth:input.scrollWidth})}
  return {viewport:{width:innerWidth,height:innerHeight},rootWidth:document.documentElement.scrollWidth,rootOverflow:document.documentElement.scrollWidth>innerWidth+1,
   surface:{left:box.left,right:box.right,top:box.top,bottom:box.bottom,width:box.width,height:box.height,clientWidth:element.clientWidth,scrollWidth:element.scrollWidth,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight,overflowX:style.overflowX,overflowY:style.overflowY},
   overflow:overflow.slice(0,25),overflowCount:overflow.length,fieldOverflow,controlCount:controls.length,
@@ -693,13 +696,13 @@ def main():
                                                 'kind': 'reverse_tab_leaves_overlay', 'selector': selector, 'screenshot': str(bottom)})
                                         if not reachable:
                                             item['passed'] = False
-                                        escape_supported = focus['native_modal'] or surface in ('skills.drawer', 'chat.brush', 'settings.panel') or target.evaluate("el=>el.matches('.sidebar-panel')&&el.getAttribute('aria-modal')==='true'")
+                                        escape_supported = focus['native_modal'] or surface in ('skills.drawer', 'chat.brush', 'settings.panel') or target.evaluate("el=>el.matches('.drawer[role=dialog][aria-modal=true]')") or target.evaluate("el=>el.matches('.sidebar-panel')&&el.getAttribute('aria-modal')==='true'")
                                         item['keyboard_scroll']['escape_supported'] = escape_supported
                                         if focus['required_modal'] and escape_supported:
                                             page.keyboard.press('Escape')
                                             try:
                                                 if surface == 'skills.publish':
-                                                    detail = page.locator('dialog.ew-dialog[open]')
+                                                    detail = page.locator(DRAWER)
                                                     expect(detail).to_have_count(1)
                                                     expect(detail).not_to_have_attribute('aria-label', '发布技能版本')
                                                     trigger = detail.get_by_role('button', name='确认适用范围并发布', exact=True)
@@ -736,11 +739,21 @@ def main():
                                     report['findings'].append({'surface_id': surface, 'case': label, 'kind': 'horizontal_overflow_or_clipping' if layout_failed else 'keyboard_or_control_reachability', 'screenshot': str(file), 'metrics': metrics, 'keyboard_scroll': item.get('keyboard_scroll')})
                                 print(('PASS ' if item['passed'] else 'REFLOW ') + label + ' ' + surface + ' ' + state, flush=True)
                                 return target
+                            def open_version_operations():
+                                region = page.locator('details.ew-disclosure:has(> summary:text-is("版本与操作"))').first
+                                expect(region).to_be_visible()
+                                if not region.evaluate('element=>element.open'):
+                                    region.locator(':scope > summary').click()
+                                expect(region.locator('.ew-version-operations')).to_be_visible()
                             def run(surface, path, selector, state='populated', marker=None, before=None):
                                 if not selected(surface):
                                     return
                                 try:
                                     go(path)
+                                    # Former standalone work pages now extend the same
+                                    # native OutputsPage. Open its real lifecycle region.
+                                    if surface.startswith('work.') and path.startswith('/works/'):
+                                        open_version_operations()
                                     if before:
                                         before()
                                     capture(surface, selector, state, marker)
@@ -751,7 +764,7 @@ def main():
                                                              'rendered': False, 'error': str(error), 'screenshot': str(file), 'screenshot_sha256': sha(file)})
                                     print('ERROR ' + label + ' ' + surface + ' ' + str(error)[:160], flush=True)
                             if args.preflight_only:
-                                run('work.preview', '/works/' + ids['work'] + '?version=' + ids['version'], '.ew-work', 'poster_resources', marker=MARK)
+                                run('work.preview', '/works/' + ids['work'] + '?version=' + ids['version'], '.gallery-page', 'poster_resources', marker=MARK)
                                 run('library.preview', '/works?' + urlencode({'path': 'MOBILE_AUDIT 已有素材与长文件名/排版.html'}), '.drawer-overlay .drawer', 'html_iframe',
                                     before=lambda: expect(page.frame_locator('.drawer iframe').locator('body')).to_contain_text(MARK))
                                 run('library.preview', '/works?' + urlencode({'path': 'MOBILE_AUDIT 已有素材与长文件名/合成视频.webm'}), '.drawer-overlay .drawer', 'video')
@@ -803,24 +816,24 @@ def main():
                             run('library.preview', '/works?' + urlencode({'path': 'MOBILE_AUDIT 已有素材与长文件名/合成视频.webm'}), '.drawer-overlay .drawer', 'video')
                             run('library.preview', '/works?' + urlencode({'path': 'MOBILE_AUDIT 已有素材与长文件名/合成音频.wav'}), '.drawer-overlay .drawer', 'audio')
                             work_path = '/works/' + ids['work'] + '?version=' + ids['version']
-                            run('work.preview', work_path, '.ew-work', marker=MARK)
-                            run('work.preview', '/works/' + ids['article'] + '?version=' + ids['article'], '.ew-work', 'article', marker=MARK)
-                            run('work.manual-text', work_path, 'dialog.ew-dialog', 'existing_text_edit',
+                            run('work.preview', work_path, '.gallery-page', marker=MARK)
+                            run('work.preview', '/works/' + ids['article'] + '?version=' + ids['article'], '.gallery-page', 'article', marker=MARK)
+                            run('work.manual-text', work_path, '.drawer[role="dialog"][aria-label="保存自写文案为新版本"]', 'existing_text_edit',
                                 before=lambda: page.get_by_role('button', name='使用自写文案', exact=True).click())
-                            run('work.reject', work_path, 'dialog.ew-dialog', before=lambda: page.get_by_role('button', name='不采纳', exact=True).click())
-                            run('work.completion', work_path, 'dialog.ew-dialog', 'archive_scope',
+                            run('work.reject', work_path, '.drawer[role="dialog"][aria-label^="不采纳 "]', before=lambda: page.get_by_role('button', name='不采纳', exact=True).click())
+                            run('work.completion', work_path, '.drawer[role="dialog"][aria-label^="采纳 "]', 'archive_scope',
                                 before=lambda: page.get_by_role('button', name='采纳并完成', exact=True).click())
                             def completion_mode(mode):
                                 page.get_by_role('button', name='采纳并完成', exact=True).click()
-                                mode_select = page.locator('dialog .ew-field').filter(has_text='采纳后').locator('select')
+                                mode_select = page.locator('.drawer[role="dialog"] .ew-field').filter(has_text='采纳后').locator('select')
                                 mode_select.select_option(mode)
                                 if mode == 'manual_published':
                                     for _ in range(3):
                                         page.get_by_role('button', name='添加已发布记录', exact=True).click()
                                 else:
-                                    expect(page.locator('dialog .ew-field').filter(has_text=LONG[:70]).locator('select')).to_be_visible()
-                            run('work.completion', work_path, 'dialog.ew-dialog', 'delivery_targets', before=lambda: completion_mode('distribute'))
-                            run('work.completion', work_path, 'dialog.ew-dialog', 'manual_publication', before=lambda: completion_mode('manual_published'))
+                                    expect(page.locator('.drawer[role="dialog"] .ew-field').filter(has_text=LONG[:70]).locator('select')).to_be_visible()
+                            run('work.completion', work_path, '.drawer[role="dialog"][aria-label^="采纳 "]', 'delivery_targets', before=lambda: completion_mode('distribute'))
+                            run('work.completion', work_path, '.drawer[role="dialog"][aria-label^="采纳 "]', 'manual_publication', before=lambda: completion_mode('manual_published'))
                             run('skills.catalog', '/toolbox?section=skills', '.skills-page')
                             def catalog_diagnostic(state):
                                 held = []
@@ -846,7 +859,7 @@ def main():
                                     if selected('skills.catalog'):
                                         catalog_diagnostic(catalog_state)
                             run('profiles.main', '/toolbox?section=profiles', '.profile-page')
-                            run('profiles.create', '/toolbox?section=profiles&item=new', '.profile-page')
+                            run('profiles.create', '/toolbox?section=profiles&item=new', '.overlay .modal')
                             run('accounts.main', '/toolbox?section=distribution&pane=connections', '.accounts-page', marker='微信公众号')
                             run('publishing.main', '/toolbox?section=publications', '.publishing-workspace', marker=MARK)
                             if not args.skip_settings:
@@ -855,10 +868,10 @@ def main():
                                         before=lambda tab=tab: page.get_by_role('dialog', name='设置', exact=True).get_by_role('button', name=tab, exact=True).click())
                                 run('settings.environment', '/settings?panel=env', '.settings-panel', marker='环境安装')
                                 run('settings.usage', '/settings?panel=more', '.settings-panel', marker='使用与路径')
-                                run('settings.clear-usage', '/settings?panel=more', 'dialog.ew-dialog', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
+                                run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
                             else:
                                 run('settings.panel', '/settings?panel=model', '.settings-panel', 'model_section', marker='设置')
-                                run('settings.clear-usage', '/settings?panel=more', 'dialog.ew-dialog', 'confirm_text', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
+                                run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', 'confirm_text', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
                             if args.phase == 'full':
                                 chat_path = '/chat/' + ids['session']
                                 run('chat.composer', chat_path, '.chat-page', 'raw_multiline_draft', marker=MARK)
@@ -1004,23 +1017,31 @@ def main():
                                         'records_expanded': 2, 'record_text_verified': True, 'model_execution_is_synthetic': True})
                                 run('chat.execution-details', chat_path, '.message-bubble.assistant .live-panel',
                                     'native_activity_and_thinking_expanded', marker=MARK, before=native_execution_details)
-                                run('chat.artifacts', chat_path, '.chat-turn-outputs', 'version_actions_and_saved_products', marker=MARK)
+                                def native_product_link():
+                                    link = page.get_by_role('link', name='内容库 › 本版产物', exact=True)
+                                    expect(link).to_be_visible()
+                                    assert 'workbench-' + ids['work'] + '/' + ids['version'] in link.get_attribute('href')
+                                    expect(page.locator('.chat-turn-outputs')).to_have_count(0)
+                                run('chat.artifacts', chat_path, '.message-bubble.assistant', 'registered_files_and_native_library_link', marker=MARK, before=native_product_link)
 
                                 # Former title-only detail alias is replaced by the actual news.reading route above.
                                 run('calendar.day', '/toolbox?section=calendar', '.overlay .modal', 'day_list_many_items', marker=MARK,
                                     before=lambda: page.locator('.cal-more').first.click())
-                                run('work.draft', '/works/mobile-audit-draft', '.ew-work', 'existing_draft_edit', marker=MARK)
-                                run('work.discussion', work_path + '&discuss=1', '.ew-work-chat', 'raw_draft',
-                                    before=lambda: page.get_by_role('textbox', name='对话输入', exact=True).fill(LONG))
+                                run('work.draft', '/works/mobile-audit-draft', '.ew-version-operations', 'existing_draft_edit', marker=MARK)
+                                def discuss_version():
+                                    page.get_by_role('button', name='讨论这版', exact=True).click()
+                                    expect(page.locator('.chat-page')).to_be_visible()
+                                    page.get_by_role('textbox', name='对话输入', exact=True).fill(LONG)
+                                run('work.discussion', work_path, '.chat-page', 'raw_draft', before=discuss_version)
                                 def records():
-                                    page.get_by_role('button', name='版本与记录', exact=True).click()
-                                    page.locator('.ew-work-records details summary').first.click()
-                                run('work.records', work_path, '.ew-work-records', 'history_expanded', marker=MARK, before=records)
+                                    page.locator('details.ew-disclosure > summary').filter(has_text=re.compile('^版本与记录$')).click()
+                                    page.locator('details.ew-disclosure:has(> summary:text-is("版本与记录")) details > summary').first.click()
+                                run('work.records', work_path, 'details.ew-disclosure:has(> summary:text-is("版本与记录"))', 'history_expanded', marker=MARK, before=records)
                                 def record_sheet():
-                                    page.get_by_role('button', name='版本与记录', exact=True).click()
-                                    page.locator('.ew-work-records details summary').first.click()
+                                    page.locator('details.ew-disclosure > summary').filter(has_text=re.compile('^版本与记录$')).click()
+                                    page.locator('details.ew-disclosure:has(> summary:text-is("版本与记录")) details > summary').first.click()
                                     trigger = page.get_by_role('button', name='本版制作设置', exact=True)
-                                    sheet = page.locator('dialog.ew-dialog-sheet[aria-label="本版制作设置"]')
+                                    sheet = page.locator('.drawer[role="dialog"][aria-label="本版制作设置"]')
                                     observations = []
                                     for close_kind in ('escape', 'close_button'):
                                         trigger.scroll_into_view_if_needed()
@@ -1036,10 +1057,10 @@ def main():
                                         assert metrics['clientWidth'] <= metrics['bodyWidth'] + 1, ('Long record escaped its sheet', metrics)
                                         assert metrics['whiteSpace'] in ('pre-wrap', 'break-spaces'), ('Long record no longer wraps readably', metrics)
                                         if close_kind == 'escape':
-                                            body = sheet.locator('.drawer-body')
+                                            body = sheet
                                             initial = body.evaluate('el=>({top:el.scrollTop,height:el.clientHeight,scrollHeight:el.scrollHeight})')
                                             assert initial['scrollHeight'] > initial['height'] + 1, ('Long frozen record did not create a real scroll range', initial)
-                                            background = """()=>{const dialog=document.querySelector('dialog.ew-dialog-sheet[open]');return Array.from(document.querySelectorAll('.native-host,.native-host *')).filter(el=>el!==dialog&&!dialog?.contains(el)&&el.scrollHeight>el.clientHeight+1&&el.clientHeight>0).map(el=>({tag:el.tagName,class:el.className,top:el.scrollTop,left:el.scrollLeft,range:el.scrollHeight-el.clientHeight}));}"""
+                                            background = """()=>{const dialog=document.querySelector('.drawer[role=dialog][aria-label=\"本版制作设置\"]');return Array.from(document.querySelectorAll('.native-host,.native-host *')).filter(el=>el!==dialog&&!dialog?.contains(el)&&el.scrollHeight>el.clientHeight+1&&el.clientHeight>0).map(el=>({tag:el.tagName,class:el.className,top:el.scrollTop,left:el.scrollLeft,range:el.scrollHeight-el.clientHeight}));}"""
                                             background_before = page.evaluate(background)
                                             session = context.new_cdp_session(page) if touch_input else None
                                             steps = []
@@ -1086,25 +1107,26 @@ def main():
                                     report.setdefault('record_sheet_interactions', []).append({'case': label, 'surface_id': 'work.records', 'state': 'long_record_sheet', 'cycles': observations, 'application_source_injected': False})
                                     trigger.click()
                                     expect(sheet).to_be_visible()
-                                run('work.records', work_path, 'dialog.ew-dialog-sheet', 'long_record_sheet', before=record_sheet)
+                                run('work.records', work_path, '.drawer[role="dialog"][aria-label="本版制作设置"]', 'long_record_sheet', before=record_sheet)
                                 def annotate():
-                                    expect(page.locator('.ew-work-copy')).to_be_visible()
-                                    page.locator('.ew-work-copy').evaluate("el=>{const range=document.createRange();range.selectNodeContents(el);const selection=getSelection();selection.removeAllRanges();selection.addRange(range)}")
-                                    page.locator('.ew-work-copy').dispatch_event('mouseup')
+                                    copy = page.locator('.ew-version-operations .copyable-text').first
+                                    expect(copy).to_be_visible()
+                                    copy.locator('code').evaluate("el=>{const range=document.createRange();range.selectNodeContents(el);const selection=getSelection();selection.removeAllRanges();selection.addRange(range)}")
+                                    copy.dispatch_event('mouseup')
                                     page.get_by_role('textbox', name='批注意见', exact=True).fill(LONG)
-                                run('work.annotation', work_path, '.ew-annotation', 'long_annotation_input', marker=MARK, before=annotate)
+                                run('work.annotation', work_path, '.ew-version-operations > div:has(> blockquote)', 'long_annotation_input', marker=MARK, before=annotate)
                                 run('drafts.local', '/posters?drafts=1', '.page-scroll', 'nonempty_local_inputs', marker=MARK)
                                 skill_path = '/toolbox?section=skills&item=' + ids['skill'] + '&version=' + str(ids['skill_version'])
                                 def open_skill():
                                     page.locator('.skill-card').first.click()
                                     expect(page.locator('.drawer .skill-body-md')).to_be_visible()
                                 run('skills.drawer', '/toolbox?section=skills', '.drawer-overlay .drawer', 'official_skill', before=open_skill)
-                                run('skills.version', skill_path, 'dialog.ew-dialog', 'candidate_edit', marker=MARK,
+                                run('skills.version', skill_path, DRAWER, 'candidate_edit', marker=MARK,
                                     before=lambda: page.get_by_role('button', name='编辑方法，另存候选', exact=True).click())
                                 def skill_publish_navigation():
                                     trigger = page.get_by_role('button', name='确认适用范围并发布', exact=True)
                                     expect(trigger).to_be_visible()
-                                    detail = page.locator('dialog.ew-dialog[open]')
+                                    detail = page.locator(DRAWER)
                                     expect(detail).to_have_count(1)
                                     title = detail.get_attribute('aria-label')
                                     before_requests = business_request_count()
@@ -1112,12 +1134,12 @@ def main():
                                     for close_kind in ('close_button', 'browser_back', 'return_button'):
                                         trigger.scroll_into_view_if_needed()
                                         trigger.focus()
-                                        body = detail.locator('.drawer-body')
+                                        body = detail
                                         scroll_before = body.evaluate('el=>el.scrollTop')
                                         trigger.click()
                                         publish = page.get_by_role('dialog', name='发布技能版本', exact=True)
                                         expect(publish).to_be_visible()
-                                        expect(page.locator('dialog.ew-dialog[open]')).to_have_count(1)
+                                        expect(page.locator(DRAWER)).to_have_count(1)
                                         if close_kind == 'close_button':
                                             publish.get_by_role('button', name='关闭', exact=True).click()
                                         elif close_kind == 'browser_back':
@@ -1125,13 +1147,13 @@ def main():
                                         else:
                                             publish.get_by_role('button', name='返回技能详情', exact=True).click()
                                         expect(detail).to_have_attribute('aria-label', title)
-                                        expect(page.locator('dialog.ew-dialog[open]')).to_have_count(1)
+                                        expect(page.locator(DRAWER)).to_have_count(1)
                                         expect(trigger).to_be_focused()
                                         scroll_after = body.evaluate('el=>el.scrollTop')
                                         assert abs(scroll_after - scroll_before) <= 2, ('Returning from skill publishing lost the detail reading position', scroll_before, scroll_after)
                                         cycles.append({'close': close_kind, 'single_dialog': True, 'focus_restored': True, 'scroll_before': scroll_before, 'scroll_after': scroll_after})
                                     page.go_back()
-                                    expect(page.locator('dialog.ew-dialog[open]')).to_have_count(0)
+                                    expect(page.locator(DRAWER)).to_have_count(0)
                                     expect(page.locator('.skills-page')).to_be_visible()
                                     page.wait_for_timeout(100)
                                     assert business_request_count() == before_requests, 'Skill publish navigation unexpectedly wrote or submitted data'
@@ -1139,12 +1161,12 @@ def main():
                                     go(skill_path)
                                     page.get_by_role('button', name='确认适用范围并发布', exact=True).click()
                                     expect(page.get_by_role('dialog', name='发布技能版本', exact=True)).to_be_visible()
-                                run('skills.publish', skill_path, 'dialog[aria-label="发布技能版本"]', 'publish_scope', before=skill_publish_navigation)
-                                run('skills.experience', '/toolbox?section=skills&pane=experience', 'dialog.ew-dialog', 'completed_task', marker=MARK)
+                                run('skills.publish', skill_path, '.drawer[role="dialog"][aria-label="发布技能版本"]', 'publish_scope', before=skill_publish_navigation)
+                                run('skills.experience', '/toolbox?section=skills&pane=experience', '.drawer[role="dialog"][aria-label="整理经验"]', 'completed_task', marker=MARK)
                                 def proposal():
                                     page.get_by_text('作者身份', exact=True).click()
                                     expect(page.get_by_text('确认此字段', exact=True)).to_be_visible()
-                                run('skills.profile-proposal', '/toolbox?section=skills&pane=experience', 'dialog.ew-dialog', 'candidate_before_after', marker=MARK, before=proposal)
+                                run('skills.profile-proposal', '/toolbox?section=skills&pane=experience', '.drawer[role="dialog"][aria-label="整理经验"]', 'candidate_before_after', marker=MARK, before=proposal)
                                 def bindings():
                                     page.get_by_text('素材、技能与账号', exact=True).click()
                                 run('profiles.bindings', '/toolbox?section=profiles&item=oil-pig', 'details.workbench-extension', 'default_tasks_expanded', before=bindings)
@@ -1171,10 +1193,10 @@ def main():
                                     delivery()
                                     page.get_by_role('button', name='冻结并核对渠道稿', exact=True).click()
                                     page.get_by_role('button', name='核对并批准这份渠道稿', exact=True).click()
-                                run('publishing.approve', publish_path, 'dialog.ew-dialog', 'draft_action', marker=MARK, before=approve)
+                                run('publishing.approve', publish_path, '.drawer[role="dialog"][aria-label="批准本次交付"]', 'draft_action', marker=MARK, before=approve)
                                 insight_path = '/toolbox?section=insights&publication=mobile-audit-publication'
                                 run('insights.main', insight_path, '.page-scroll', 'publication_selected', marker=MARK)
-                                run('insights.publication-edit', insight_path, 'dialog.ew-dialog', 'existing_link_time',
+                                run('insights.publication-edit', insight_path, '.drawer[role="dialog"][aria-label="补充真实发布信息"]', 'existing_link_time',
                                     before=lambda: page.get_by_role('button', name='补充真实发布链接与时间', exact=True).click())
                                 # High-risk non-data surfaces use genuine fixture UI events.
                                 deep_surfaces = {'accounts.login', 'accounts.logout-confirm', 'host.route-errors', 'nav.sidebar', 'nav.selectors', 'host.boot', 'host.session-notices', 'host.offline-shell', 'host.login'}
@@ -1220,7 +1242,7 @@ def main():
                                             capture('accounts.logout-confirm', '.accounts-page', 'cancel_preserves_connection', '微信公众号')
                                         except Exception as error:
                                             report['checks'].append({'case': label, 'surface_id': 'accounts.logout-confirm', 'state': 'cancel_preserves_connection', 'passed': False, 'rendered': False, 'error': str(error)})
-                                    run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.page-scroll', 'missing_work_retry', marker='读取作品')
+                                    run('host.route-errors', '/works/MOBILE_AUDIT_MISSING', '.notice-error', 'missing_work_retry', marker='作品')
                                     def open_nav():
                                         expect(page.locator('.sidebar .nav-item')).to_have_count(6)
                                         opener = page.get_by_role('button', name='打开导航', exact=True)
@@ -1295,7 +1317,7 @@ def main():
         report['covered_surfaces'] = sorted({item['surface_id'] for item in report['checks'] if item.get('rendered')})
         inventory = read(ROOT / 'docs/workbench/MOBILE-COVERAGE-20261031.json')
         report['not_yet_covered_surfaces'] = sorted(((set(inventory['acceptance']['required_private_surface_ids']) - {'trends.detail-alias'}) | {'news.reading'}) - set(report['covered_surfaces']))
-        report['retired_surface_mappings'] = {'trends.detail-alias': 'news.reading'}
+        report['retired_surface_mappings'] = {'trends.detail-alias': 'news.reading', 'legacy .ew-work standalone page': 'library.main + work.preview/draft/records/annotation/manual-text/reject/completion in native OutputsPage lifecycle region', 'legacy .ew-work-chat': 'work.discussion through the real native ChatPage', 'legacy .chat-turn-outputs action block': 'chat.artifacts registered files/native library link + work.* exact-version lifecycle controls', 'legacy dialog.ew-dialog/ew-dialog-sheet': 'same native role=dialog Drawer with preserved confirmation, Back, focus and scroll checks', 'legacy private profile create form': 'profiles.create official OnboardingWizard'}
         report['all_required_private_surfaces_covered'] = not report['not_yet_covered_surfaces']
         report['keyboard_scope'] = {'overlay_cycles_observed': True, 'all_observed_cycles_retained': not report.get('keyboard_observations'),
                                     'observations_are_not_layout_passes': True}

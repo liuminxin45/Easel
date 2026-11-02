@@ -2,7 +2,7 @@ import { Component, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { fetchTrendSources, fetchTrends, createIdea } from '../lib/api';
 import type { TrendGroup, TrendSource } from '../lib/api';
-import TrendsView from './TrendsView';
+import {IconFire,IconRefresh,IconBookmark,IconCheck} from './icons';
 import TrendSourcesDialog from './TrendSourcesDialog';
 
 interface TrendsPageProps {
@@ -11,6 +11,7 @@ interface TrendsPageProps {
   onRead?: (sourceId: string) => void;
   listLimit?: number;
   quietBackgroundRefresh?: boolean;
+  listMaxHeight?: number;
 }
 
 class TrendBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -25,7 +26,7 @@ export default function TrendsPage(props: TrendsPageProps) {
   return <TrendBoundary><TrendsPanel {...props} /></TrendBoundary>;
 }
 
-function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBackgroundRefresh = false }: TrendsPageProps) {
+function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBackgroundRefresh = false, listMaxHeight }: TrendsPageProps) {
   const [sources, setSources] = useState<TrendSource[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
@@ -108,11 +109,78 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
   const toggle = (k: string) =>
     setSelected((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
 
-  return <><TrendsView sources={sources} selected={selected} groups={groups} ready={ready} loading={loading} refreshing={refreshing||loading||groups.some(group=>group.error?.code==='busy')}
-    updated={updated} error={error||saveError} warnings={warnings} saved={saved}
-    onRead={onRead?(_,it)=>onRead(it.id):undefined} onToggle={toggle} onRefresh={()=>{void refresh()}} onManage={()=>setManagerOpen(true)}
-    onSave={(g,it)=>{void save(`${g.platform}:${it.id}`,it.title,g.label,it.id)}} onUse={(_,it)=>onUseTopic(it.title,it.id)}/>
-    {managerOpen&&<TrendSourcesDialog onClose={()=>setManagerOpen(false)} onChanged={addedId=>{
-      void discover().then(()=>{if(addedId)setSelected(prev=>[...new Set([...prev,addedId])])});
-    }}/>}</>;
+  const refreshBusy = refreshing || (!refreshAll && loading);
+
+  return (
+    <div className="page-scroll trends-page" aria-busy={loading}>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title"><IconFire size={22} /> 热点雷达</h1>
+          <p className="page-subtitle">
+            汇集平台热搜与自定义数据源，挑选题，一键交给 AI 做成你的内容。
+            {updated > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {new Date(updated * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 查询</span>}
+          </p>
+        </div>
+        <div className="trend-actions"><button className="btn btn-sm" onClick={() => setManagerOpen(true)}>数据源</button>
+        <button className="btn btn-sm" onClick={() => { void refresh(); }} disabled={refreshBusy}>
+          <IconRefresh size={14} /> {refreshBusy ? '刷新中…' : '刷新'}
+        </button></div>
+      </div>
+
+      <div className="trend-platforms">
+        {sources.map((p) => (
+          <button key={p.id} className={`chip ${selected.includes(p.id) ? 'active' : ''}`}
+            aria-pressed={selected.includes(p.id)} onClick={() => toggle(p.id)}>{p.label}</button>
+        ))}
+      </div>
+
+      {error && <div className="notice-error" role="alert">{error}</div>}
+      {saveError && <div className="notice-error" role="alert">{saveError}</div>}
+      {warnings.map((warning, i) => <div className="notice-error" role="status" key={i}>{warning}</div>)}
+      {!ready && !error && <div className="trend-platforms" role="status">正在加载数据源…</div>}
+      {ready && sources.length === 0 && <div className="trend-platforms">尚未启用数据源，请在本地热点数据源配置中添加或启用。</div>}
+      {ready && sources.length > 0 && selected.length === 0 && <div className="trend-platforms">请选择上方的数据源查看热点。</div>}
+      {loading && <div className="trend-platforms" role="status">正在获取热点…</div>}
+
+      <div className="trend-grid">
+        {groups.map((g) => (
+          <div key={g.platform} className="card trend-col">
+            <div className="trend-col-head">{g.label}<span className="trend-count">{g.items.length}</span></div>
+            <div className="trend-source-status">
+              {g.fetched_at && <span>采集于 {new Date(g.fetched_at).toLocaleString('zh-CN')}</span>}
+              {g.stale && <span> · 缓存已过期</span>}
+              {g.error && <div role="status">{g.error.message}{g.stale ? '，暂用上次结果' : ''}</div>}
+            </div>
+            <div className="trend-list" role="region" aria-label={g.label+'热点列表'} tabIndex={g.items.length>15?0:undefined} data-native-scroll-region={'news:'+g.platform} style={listMaxHeight===undefined?undefined:{maxHeight:listMaxHeight,overflowY:'auto',overscrollBehavior:'contain'}}>
+              {g.items.length === 0 && !loading && (
+                <div className="trend-empty">
+                  {!g.ok ? '该数据源暂时不可用' : '采集成功，暂无热点'}
+                </div>
+              )}
+              {g.items.map((it, i) => (
+                <div key={it.id} className="trend-item" data-native-anchor={'news:'+it.id}>
+                  <span className={`trend-rank ${i < 3 ? 'top' : ''}`}>{i + 1}</span>
+                  <div className="trend-main">
+                    <a className="trend-title" href={it.url || undefined} target={onRead?undefined:'_blank'} rel="noreferrer"
+                      onClick={event=>{if(onRead&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey&&event.button===0){event.preventDefault();onRead(it.id)}}} title={it.title}>{it.title}</a>
+                    {it.hot && <span className="trend-hot">{it.hot}</span>}
+                  </div>
+                  <button className="trend-save" title={saved.has(`${g.platform}:${it.id}`) ? '已收藏到选题库' : '收藏到选题库'}
+                    aria-label={`收藏选题：${it.title}`}
+                    onClick={() => save(`${g.platform}:${it.id}`, it.title, g.label, it.id)}>
+                    {saved.has(`${g.platform}:${it.id}`) ? <IconCheck size={14} /> : <IconBookmark size={14} />}
+                  </button>
+                  <button className="trend-use" title="做成内容"
+                    onClick={() => onUseTopic(it.title,it.id)}>做内容</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {managerOpen && <TrendSourcesDialog onClose={() => setManagerOpen(false)} onChanged={addedId => {
+        void discover().then(() => { if (addedId) setSelected(prev => [...new Set([...prev, addedId])]); });
+      }} />}
+    </div>
+  );
 }

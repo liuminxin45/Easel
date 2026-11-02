@@ -383,7 +383,7 @@ def main():
                         page.get_by_role('button', name='清空统计', exact=True).click()
                         confirm = page.get_by_role('dialog', name='清空操作统计？', exact=True)
                         expect(confirm).to_be_visible()
-                        inspect(page, profile, 'settings.clear-usage', 'confirm_text', 'dialog.ew-dialog')
+                        inspect(page, profile, 'settings.clear-usage', 'confirm_text', '.drawer[role="dialog"][aria-label="清空操作统计？"]')
                         reach(page, profile, 'nested_focus', confirm.get_by_role('button', name='确认清空统计', exact=True), 'settings.clear-usage')
                         page.keyboard.press('Tab'); page.keyboard.press('Shift+Tab')
                         mark(profile, 'settings.clear-usage', 'nested_focus', 'focus remains inside native confirmation', confirm.evaluate('element=>element.contains(document.activeElement)'))

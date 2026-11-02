@@ -7,6 +7,8 @@
 feedback日志为SQLITE_BUSY。进程与HTTP在线不能代替业务成功。
 TEMP对照确认local_operations将目录扫描/哈希放在BEGIN IMMEDIATE内：原实现阻塞独立writer，
 新实现应让慢扫描期间collector/feedback仍可写，并按准确快照CAS校验，不自动猜测关联。
+真实来源协议还确认collector_worker直接脚本路径使私有http包遮蔽stdlib http.client；
+新增真实子进程bootstrap回归，修复不改上游runner或采集协议。
 
 并行责任：根负责采集/新鲜度/API健康接缝及交付；runtime负责归档锁与业务loop心跳；
 page_state负责热点订阅及首页/拆解/画像/日历/内容库真实失败反馈；boundaries负责集中只读业务健康。

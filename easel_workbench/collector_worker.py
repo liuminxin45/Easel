@@ -1,10 +1,15 @@
 """Trusted server-installed Python collector. stdout is one protocol document."""
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+# A direct script starts with its package directory on sys.path. The private
+# HTTP adapter is named ``http`` too, and must never shadow Python's stdlib.
+_package = Path(__file__).resolve().parent
+sys.path[:] = [entry for entry in sys.path if Path(entry or os.getcwd()).resolve() != _package]
+sys.path.insert(0,str(_package.parent))
 from easel_workbench.collectors import produce,source_preview
 
 

@@ -71,7 +71,7 @@ def committed_source(root=None):
     return subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
 
 
-def freeze(native):
+def freeze(native, *, candidate_path=None):
     revision=committed_source()
     native=ROOT/'native-releases'/native
     n=json.loads((native/'native-manifest.json').read_text(encoding='utf-8'))
@@ -116,9 +116,12 @@ main()
         raise ValueError('Source commit changed while freezing; candidate was not selected')
     atomic(target/'workbench-release.json',value)
     selection={'release':name,'manifest_sha256':sha(target/'workbench-release.json'),'native':value['native']}
-    atomic(ROOT/'.local/workbench-deployment/candidate.json',selection)
+    candidate=Path(candidate_path) if candidate_path is not None else Path('.local/workbench-deployment/candidate.json')
+    atomic(ROOT/candidate,selection)
     print(json.dumps(selection));return selection
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--native',required=True);a=p.parse_args();freeze(a.native)
+    p=argparse.ArgumentParser();p.add_argument('--native',required=True)
+    p.add_argument('--candidate',type=Path,help='Write the frozen candidate to this path; default keeps the shared deployment candidate')
+    a=p.parse_args();freeze(a.native,candidate_path=a.candidate)

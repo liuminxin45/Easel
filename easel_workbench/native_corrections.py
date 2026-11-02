@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import time
 
-from .chat import ChatConflict
+from .features.conversations.receipts import ChatConflict
 from .paths import owned_output_path
 from .runtime.desk import stamp
 

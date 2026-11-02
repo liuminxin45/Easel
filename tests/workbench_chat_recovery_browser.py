@@ -95,7 +95,7 @@ def main():
     spec.loader.exec_module(helper)
     from playwright.sync_api import sync_playwright, expect
     from easel.harnesses.base import HarnessError
-    import easel_workbench.chat_api as chat_api
+    import easel_workbench.http.chat as chat_api
 
     report = {'passed': False, 'native': {'release': manifest['release'], 'manifest_sha256': sha(native / 'native-manifest.json')},
               'backend': {'directory': str(backend), 'manifest_sha256': sha(backend / 'workbench-release.json')},

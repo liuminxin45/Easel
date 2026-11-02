@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics } from '../lib/api';
+import { fetchPersonas, fetchPersonaFiles, savePersonaFile, deletePersona, fetchAccountAnalytics,peekApiData } from '../lib/api';
+import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { PersonaItem, PersonaFile, AccountAnalytics } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { IconProfile, IconPlus } from './icons';
@@ -72,6 +73,8 @@ interface ProfilePageProps {
   onFileSaved?: () => void;
   renderDetailExtension?: (name: string) => ReactNode;
   draftStore?: ProfilePageDraftStore;
+  viewState?:ViewStateStore<{viewedPersona:string}>;
+  onContentReady?:()=>void;
 }
 
 const DIM_META: Record<string, { label: string; icon: string }> = {
@@ -84,16 +87,19 @@ const DIM_META: Record<string, { label: string; icon: string }> = {
 };
 
 export default function ProfilePage(props: ProfilePageProps) {
-  const [viewedPersona, setViewedPersona] = useState(props.persona);
-  const [personas, setPersonas] = useState<PersonaItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [view,setView]=useStoredViewState(props.viewState,()=>({viewedPersona:props.persona}));
+  const viewedPersona=view.viewedPersona,setViewedPersona=(viewedPersona:string)=>setView({viewedPersona});
+  const [personas, setPersonas] = useState<PersonaItem[]>(()=>peekApiData<PersonaItem[]>('/api/personas')||[]);
+  const [loading, setLoading] = useState(()=>!peekApiData('/api/personas'));
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
 
-  useEffect(() => { setViewedPersona(props.persona); }, [props.persona]);
+  const priorPersona=useRef(props.persona);
+  useEffect(() => {if(priorPersona.current!==props.persona){priorPersona.current=props.persona;setViewedPersona(props.persona)}}, [props.persona]);
+  useEffect(()=>{if(!viewedPersona&&!loading)props.onContentReady?.()},[viewedPersona,loading,personas,props.onContentReady]);
   useEffect(() => {
     let ignore = false;
-    setLoading(true);
+    if(!peekApiData('/api/personas'))setLoading(true);
     setError('');
     fetchPersonas().then((list) => {
       if (!ignore) setPersonas(list);
@@ -156,14 +162,15 @@ export default function ProfilePage(props: ProfilePageProps) {
   );
 }
 
-function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, personaLabel, allowAccountImport = true, allowDelete = true, onFileSaved, renderDetailExtension, draftStore }: ProfilePageProps & {
+function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, personaLabel, allowAccountImport = true, allowDelete = true, onFileSaved, renderDetailExtension, draftStore,onContentReady }: ProfilePageProps & {
   onBack: () => void;
   inUse: boolean;
 }) {
-  const [files, setFiles] = useState<PersonaFile[]>([]);
+  const snapshot=peekApiData<{files:PersonaFile[];revision?:number}>('/api/persona/'+encodeURIComponent(persona)+'/files');
+  const [files, setFiles] = useState<PersonaFile[]>(()=>snapshot?.files||[]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(()=>!snapshot);
   const [error, setError] = useState('');
   const [savingFile, setSavingFile] = useState('');
   const [fileRevision, setFileRevision] = useState<number | undefined>(undefined);
@@ -176,7 +183,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
   useEffect(() => {
     if (!persona) { setFiles([]); return; }
     let ignore = false;   // 切 persona 丢弃旧请求（F2）
-    setLoading(true);
+    if(!peekApiData('/api/persona/'+encodeURIComponent(persona)+'/files'))setLoading(true);
     setError('');
     const saved = draftStore?.read(persona);
     changedFields.current = { ...saved?.fields };
@@ -195,6 +202,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
   }, [persona, draftStore]);
+  useEffect(()=>{if(!loading&&(files.length||error))onContentReady?.()},[loading,files,error,onContentReady]);
 
   const updateDraft = (filename: string, content: string) => {
     const fields = { ...changedFields.current };

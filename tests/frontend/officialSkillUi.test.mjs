@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
@@ -14,10 +15,10 @@ function fixture(file,api){
  const react={
   useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],next=>{slots[i]=typeof next==='function'?next(slots[i]):next}]},
   useRef:initial=>{const i=cursor++;if(!(i in slots))slots[i]={current:initial};return slots[i]},
-  useMemo:fn=>{cursor++;return fn()},
+  useMemo:fn=>{cursor++;return fn()},useCallback:fn=>{cursor++;return fn},
   useEffect:(fn,next)=>{const i=cursor++,old=deps[i];if(!old||!next||old.length!==next.length||next.some((value,j)=>value!==old[j])){deps[i]=next;effects.push(fn)}},
  };
- const imports={react,'react/jsx-runtime':jsx,'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect','../lib/api':api,'../lib/sanitize':{renderMarkdown:value=>'<p>'+value+'</p>'},'../lib/skillDisplayNames':{displayName:value=>value}};
+ const imports={react,'react/jsx-runtime':jsx,'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect','../lib/api':api,'../lib/viewState':viewStateModule(react),'../lib/sanitize':{renderMarkdown:value=>'<p>'+value+'</p>'},'../lib/skillDisplayNames':{displayName:value=>value}};
  const source=readFileSync(new URL('../../web/frontend/src/components/'+file,import.meta.url),'utf8'),exports={};
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>imports[name]??assert.fail('Unexpected import '+name),setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout:()=>{}});
  return {render(props){cursor=0;const tree=exports.default(props);effects.splice(0).forEach(fn=>fn());return tree},timers};

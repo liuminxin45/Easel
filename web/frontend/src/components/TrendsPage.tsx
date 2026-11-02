@@ -1,6 +1,7 @@
 import { Component, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { fetchTrendSources, fetchTrends, createIdea } from '../lib/api';
+import { fetchTrendSources, fetchTrends, createIdea,peekApiData,subscribeApiData } from '../lib/api';
+import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { TrendGroup, TrendSource } from '../lib/api';
 import {IconFire,IconRefresh,IconBookmark,IconCheck} from './icons';
 import TrendSourcesDialog from './TrendSourcesDialog';
@@ -12,7 +13,10 @@ interface TrendsPageProps {
   listLimit?: number;
   quietBackgroundRefresh?: boolean;
   listMaxHeight?: number;
+  viewState?:ViewStateStore<TrendsViewState>;
+  onContentReady?:()=>void;
 }
+export interface TrendsViewState {selected:string[];initialized?:boolean}
 
 class TrendBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -26,22 +30,28 @@ export default function TrendsPage(props: TrendsPageProps) {
   return <TrendBoundary><TrendsPanel {...props} /></TrendBoundary>;
 }
 
-function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBackgroundRefresh = false, listMaxHeight }: TrendsPageProps) {
-  const [sources, setSources] = useState<TrendSource[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [ready, setReady] = useState(false);
-  const [groups, setGroups] = useState<TrendGroup[]>([]);
+function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBackgroundRefresh = false, listMaxHeight,viewState,onContentReady }: TrendsPageProps) {
+  const sourceSnapshot=peekApiData<Awaited<ReturnType<typeof fetchTrendSources>>>('/api/trends/sources');
+  const [view,setView]=useStoredViewState<TrendsViewState>(viewState,()=>({selected:sourceSnapshot?.sources.filter(source=>source.default).map(source=>source.id)??[]}));
+  const selected=view.selected;
+  const setSelected=(value:string[]|((previous:string[])=>string[]))=>setView(previous=>({...previous,initialized:true,selected:typeof value==='function'?value(previous.selected):value}));
+  const trendPath='/api/trends?limit='+listLimit+'&platforms='+encodeURIComponent(selected.join(','));
+  const snapshot=peekApiData<Awaited<ReturnType<typeof fetchTrends>>>(trendPath);
+  const [sources, setSources] = useState<TrendSource[]>(()=>sourceSnapshot?.sources??[]);
+  const [ready, setReady] = useState(!!sourceSnapshot);
+  const [groups, setGroups] = useState<TrendGroup[]>(()=>snapshot?.trends??[]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [updated, setUpdated] = useState(0);
+  const [updated, setUpdated] = useState(()=>snapshot?.updated??0);
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [managerOpen, setManagerOpen] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [saveError, setSaveError] = useState('');
   const requestId = useRef(0);
   const discoveryId = useRef(0);
-  const initialized = useRef(false);
+  const initialized = useRef(view.initialized??!!sourceSnapshot);
+  const selectedRef=useRef(selected);selectedRef.current=selected;
 
   const save = async (key: string, title: string, source: string, sourceId: string) => {
     if (saved.has(key)) return;
@@ -51,12 +61,12 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
     } catch { setSaveError('收藏失败，请稍后重试。'); }
   };
 
-  const load = useCallback((pfs: string[], background = false) => {
+  const load = useCallback((pfs: string[], background = false,force=false) => {
     const id = ++requestId.current;
     if (pfs.length === 0) { setGroups([]); setLoading(false); setError(''); return; }
     setGroups((prev) => prev.filter((g) => pfs.includes(g.platform)));
     if (!quietBackgroundRefresh || !background) { setLoading(true); setError(''); }
-    fetchTrends(pfs.join(','), listLimit)
+    fetchTrends(pfs.join(','), listLimit,force)
       .then((d) => { if (requestId.current === id) { setGroups(d.trends); setUpdated(d.updated); setWarnings(d.warnings); if (quietBackgroundRefresh && background) setError(''); } })
       .catch((e: unknown) => {
         if (requestId.current === id) setError(e instanceof Error ? e.message : '热点拉取失败，请稍后重试。');
@@ -64,26 +74,24 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
       .finally(() => { if (requestId.current === id) setLoading(false); });
   }, [listLimit, quietBackgroundRefresh]);
 
-  const discover = useCallback(() => {
+  const discover = useCallback((force=false) => {
     const id = ++discoveryId.current;
     requestId.current++;
-    setReady(false);
+    if(!peekApiData('/api/trends/sources'))setReady(false);
     setLoading(false);
     setError('');
-    return fetchTrendSources().then((d) => {
+    return fetchTrendSources(force).then((d) => {
       if (discoveryId.current !== id) return;
       setSources(d.sources);
       setWarnings(d.warnings);
       const first = !initialized.current;
       initialized.current = true;
-      setSelected((prev) => first ? d.sources.filter((s) => s.default).map((s) => s.id)
-        : d.sources.filter((s) => prev.includes(s.id)).map((s) => s.id));
+      setSelected(first ? d.sources.filter((s) => s.default).map((s) => s.id)
+        : d.sources.filter((s) => selectedRef.current.includes(s.id)).map((s) => s.id));
       setGroups((prev) => prev.filter((g) => d.sources.some((s) => s.id === g.platform)));
       setReady(true);
     }).catch((e: unknown) => {
       if (discoveryId.current === id) {
-        setGroups([]);
-        setSources([]);
         setError(e instanceof Error ? e.message : '无法加载热点数据源。');
       }
     });
@@ -91,7 +99,10 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
 
   const invalidate = useCallback(() => { requestId.current++; discoveryId.current++; }, []);
   useEffect(() => { void discover(); return invalidate; }, [discover, invalidate]);
-  useEffect(() => { if (ready) load(selected); }, [load, selected, ready]);
+  useEffect(() => { if (ready) load(selected,!!peekApiData(trendPath)); }, [load, selected, ready]);
+  useEffect(()=>subscribeApiData<Awaited<ReturnType<typeof fetchTrends>>>(trendPath,data=>{setGroups(data.trends);setUpdated(data.updated);setWarnings(data.warnings);setError('');setLoading(false)},error=>setError(error.message)),[trendPath]);
+  useEffect(()=>subscribeApiData<Awaited<ReturnType<typeof fetchTrendSources>>>('/api/trends/sources',data=>{setSources(data.sources);setWarnings(data.warnings);setSelected(data.sources.filter(source=>selectedRef.current.includes(source.id)).map(source=>source.id));setReady(true)},error=>setError(error.message)),[]);
+  useEffect(()=>{if((ready||error)&&!loading)onContentReady?.()},[ready,error,loading,groups,onContentReady]);
   useEffect(() => {
     if (!groups.some(group => group.error?.code === 'busy')) return;
     const timer = window.setTimeout(() => load(selected, true), 1500);
@@ -101,7 +112,7 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
-    try { if (refreshAll) await refreshAll(); await discover(); }
+    try { if (refreshAll) await refreshAll(); await discover(true); load(selectedRef.current,true,true); }
     catch (caught) { setError(caught instanceof Error ? caught.message : '刷新失败，请重试。'); }
     finally { setRefreshing(false); }
   };

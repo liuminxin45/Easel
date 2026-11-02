@@ -5,6 +5,7 @@ import { fetchSkillDetail, executeSkill, saveEnv } from '../lib/api';
 import type { SkillDetail } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { displayName } from '../lib/skillDisplayNames';
+import {useStoredViewState,type DraftStore} from '../lib/viewState';
 
 export interface SkillDrawerServices {
   loadDetail: typeof fetchSkillDetail;
@@ -20,9 +21,10 @@ interface SkillDrawerProps {
   services?: Partial<SkillDrawerServices>;
   extension?: ReactNode;
   onInputChange?: (value: string) => void;
+  draftStore?:DraftStore<string>;
 }
 
-export default function SkillDrawer({ skillName, persona, onClose, onConfigured, services, extension, onInputChange }: SkillDrawerProps) {
+export default function SkillDrawer({ skillName, persona, onClose, onConfigured, services, extension, onInputChange,draftStore }: SkillDrawerProps) {
   const readDetail = services?.loadDetail || fetchSkillDetail;
   const [detail, setDetail] = useState<SkillDetail | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -33,7 +35,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
   const [savedMsg, setSavedMsg] = useState('');
 
   // 执行区
-  const [input, setInput] = useState('');
+  const [input, setInput] = useStoredViewState(draftStore,()=> '');
   const [result, setResult] = useState('');
   const [running, setRunning] = useState(false);
   const [runErr, setRunErr] = useState('');

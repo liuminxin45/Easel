@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
 const ts=require('typescript');
@@ -26,7 +27,8 @@ function component(name,api){
  runInNewContext(compiled,{exports,Error,JSON,Object,setTimeout:()=>0,window:{confirm:()=>true},require:specifier=>{
   if(specifier==='react')return react;
   if(specifier==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
-  if(specifier==='../lib/api')return api;
+  if(specifier==='../lib/api')return {peekApiData:()=>undefined,subscribeApiData:()=>()=>{},...api};
+  if(specifier==='../lib/viewState')return viewStateModule(react);
   if(specifier==='../lib/sanitize')return {renderMarkdown:value=>value};
   if(specifier==='./InteractionNotice')return {InteractionNotice:'InteractionNotice'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});

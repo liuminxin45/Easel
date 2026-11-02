@@ -97,7 +97,18 @@ test('failed account verification preserves the last verified nickname and avata
   assert.equal(identity['weixin-channels'], cached);
 });
 
+test('closing unsaved account credentials can be vetoed and confirmed close clears only live input',()=>{
+  const declaration=component.body.statements.find(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(variable=>variable.name.getText(parsed)==='closeCred'));
+  const compiled=ts.transpileModule(declaration.getText(parsed)+'\ncloseCred;',{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  let accepted=false,form={appId:'wx-test',appSecret:'PRIVATE_LIVE_SECRET',author:''},closed=0,loads=0;
+  const close=runInNewContext(compiled,{useCallback:callback=>callback,credBusy:false,credForm:form,
+    window:{confirm:()=>accepted},setCred:value=>{assert.equal(value,null);closed++},setCredForm:value=>{form=value},setCredBusy(){},load:()=>loads++});
+  assert.equal(close(),false);assert.equal(form.appSecret,'PRIVATE_LIVE_SECRET');assert.equal(closed,0);
+  accepted=true;assert.equal(close(),true);assert.equal(form.appSecret,'');assert.equal(closed,1);assert.equal(loads,1);
+});
+
 function setup() {
+  let now=0;
   const state = { qr: null, busy: '', err: '', intervals: [], verifies: [], accounts: [] };
   const pending = [];
   const qrRequest = { current: 0 };
@@ -111,6 +122,7 @@ function setup() {
   };
   const handlers = runInNewContext(outputText, {
     Error,
+    Date:{now:()=>now},
     useCallback: callback => callback,
     qrRequest, aliveRef, pollRef,
     whoamiRequests: { current: {} }, qrPlatformRef: { current: '' },
@@ -123,17 +135,24 @@ function setup() {
     stopPoll: () => { pollRef.current = null; },
     startLogin: start, startMpLogin: start,
     loginStatus: () => statusRequest(), mpLoginStatus: () => statusRequest(),
-    setInterval: (callback, delay) => {
-      const interval = { callback, delay };
+    visiblePoll: (read, options) => {
+      const interval = { callback:async()=>{try{return await read()}catch{/* The shared poller applies the retry policy. */}}, delay:options.interval,stop(){} };
       state.intervals.push(interval);
       return interval;
     },
   });
   return { handlers, state, pending, aliveRef, setStatus: value => { status = value; },
+    elapse:ms=>{now+=ms},
     setStatusRequest: callback => { statusRequest = callback; } };
 }
 
 for (const handler of ['handleLogin', 'handleMpLogin']) {
+  test(`${handler} reads the original server status after a long hidden wait before declaring expiry`,async()=>{
+    const view=setup(),operation=view.handlers[handler]({platform:'xiaohongshu',name:'小红书',supported:true});
+    view.pending[0].resolve({mode:'qr',state:'starting'});await operation;
+    view.elapse(7*60000);view.setStatus({state:'success',message:'已由服务器确认',qr:''});
+    await view.state.intervals[0].callback();assert.equal(view.state.qr.state,'success');assert.deepEqual(view.state.verifies,['xiaohongshu']);
+  });
   test(`${handler} serializes polling and never overwrites terminal success`, async () => {
     const view = setup();
     const operation = view.handlers[handler]({ platform: 'weixin-channels', name: '视频号', supported: true });

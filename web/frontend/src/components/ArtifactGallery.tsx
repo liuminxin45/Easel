@@ -6,6 +6,11 @@ import type { Artifact } from '../lib/artifacts';
 import { IconChevron, IconOutputs } from './icons';
 import TextArtifact from './TextArtifact';
 
+/** Explicit document previews stay on authenticated local file routes. */
+export function canPreviewDocument(value:string,origin=typeof location==='undefined'?'':location.origin):boolean {
+  try{const url=new URL(value,origin);return /^https?:$/.test(url.protocol)&&url.origin===origin&&!url.username&&!url.password&&/^\/(?:api\/(?:files|media|outputs|chat\/products)(?:\/|$)|media\/)/.test(url.pathname)}catch{return false}
+}
+
 function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -72,7 +77,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
-export function ArtifactPreview({ artifact, expanded = false }: { artifact: Artifact; expanded?: boolean }) {
+export function ArtifactPreview({ artifact, expanded = false, previewDocument = false }: { artifact: Artifact; expanded?: boolean; previewDocument?: boolean }) {
   const [error, setError] = useState(false);
   if (error) return <div className="artifact-hint">预览加载失败，可打开或下载原文件</div>;
   if (artifact.kind === 'html') return <HtmlArtifact artifact={artifact} />;
@@ -83,7 +88,9 @@ export function ArtifactPreview({ artifact, expanded = false }: { artifact: Arti
   if (artifact.kind === 'text') return <div className="artifact-text"><TextArtifact url={artifact.url} name={artifact.name}/></div>;
   if (artifact.kind === 'video') return <video src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
   if (artifact.kind === 'audio') return <audio src={artifact.url} controls preload="metadata" onError={() => setError(true)} />;
-  if (artifact.kind === 'file') return <div className="artifact-hint">{artifact.name} · 可打开或下载原文件</div>;
+  if (artifact.kind === 'file') return previewDocument&&canPreviewDocument(artifact.url)
+    ? <iframe src={artifact.url} title={artifact.name} sandbox="" />
+    : <div className="artifact-hint">{artifact.name} · 可打开或下载原文件</div>;
   return <iframe src={artifact.url} title={artifact.name} sandbox="" />;
 }
 

@@ -6,6 +6,7 @@ import {
 } from '../lib/api';
 import type { AccountItem, AccountWhoami } from '../lib/api';
 import { getWhoamiCache, setWhoamiCache, verifyStale } from '../lib/whoami';
+import {visiblePoll,type VisiblePoll} from '../lib/visiblePoll';
 
 type QRState = {
   platform: string;
@@ -39,7 +40,7 @@ function Avatar({ url, name }: { url?: string; name: string }) {
   return <div className="account-avatar account-avatar-fallback">{initial}</div>;
 }
 
-export default function AccountsPage() {
+export default function AccountsPage({registerLayer,onContentReady}:{registerLayer?:(dismiss:()=>void|boolean)=>()=>void;onContentReady?:()=>void}={}) {
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [err, setErr] = useState('');
   const [qr, setQr] = useState<QRState | null>(null);
@@ -58,15 +59,16 @@ export default function AccountsPage() {
   const [credBusy, setCredBusy] = useState(false);
   const [credMsg, setCredMsg] = useState('');
   const [credErr, setCredErr] = useState('');
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<VisiblePoll | null>(null);
   const aliveRef = useRef(true);
   const qrPlatformRef = useRef('');   // 当前登录中的平台，供 submitSms 稳定引用
   const whoamiRequests = useRef<Record<string, number>>({});
   const qrRequest = useRef(0);
+  const readSequence=useRef(0),readyCallback=useRef(onContentReady);readyCallback.current=onContentReady;
 
   useEffect(() => {
     aliveRef.current = true;
-    return () => { aliveRef.current = false; qrRequest.current += 1; };
+    return () => { aliveRef.current = false; qrRequest.current += 1;readSequence.current++; };
   }, []);
 
   // 真校验某平台登录态 + 拉昵称/头像（后端起浏览器，数秒）；手动「校验账号」或登录成功后调
@@ -99,11 +101,13 @@ export default function AccountsPage() {
   // 打开页面：拉「快」状态（读 status.json，不起浏览器），随后后台自愈——对缓存缺失/过期的
   // 浏览器平台逐个真校验（whoami），结果到了刷新 UI，并令陈旧的假阴性缓存被真值覆盖。
   const load = useCallback(() => {
+    const sequence=++readSequence.current,ready=readyCallback.current;
     setErr('');
     fetchAccounts()
       .then((list) => {
-        if (!aliveRef.current) return;
+        if (!aliveRef.current||sequence!==readSequence.current) return;
         setAccounts(list);
+        ready?.();
         const targets = list
           .filter((a) => a.supported && a.backend !== 'biliup')
           .map((a) => a.platform);
@@ -127,7 +131,7 @@ export default function AccountsPage() {
           },
         });
       })
-      .catch(() => setErr('加载账号状态失败'));
+      .catch(() => {if(aliveRef.current&&sequence===readSequence.current){setErr('加载账号状态失败');ready?.()}});
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -145,7 +149,7 @@ export default function AccountsPage() {
   }, [load]);
 
   const stopPoll = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (pollRef.current) { pollRef.current.stop(); pollRef.current = null; }
   }, []);
 
   useEffect(() => () => stopPoll(), [stopPoll]);
@@ -186,7 +190,19 @@ export default function AccountsPage() {
       .catch(() => { /* 未配置，忽略 */ });
   }, []);
 
-  const closeCred = useCallback(() => { setCred(null); setCredBusy(false); load(); }, [load]);
+  const closeCred = useCallback((saved=false) => {
+    if(!saved&&credBusy)return false;
+    if(!saved&&Object.values(credForm).some(value=>value.trim())&&!window.confirm('凭据尚未保存，确定关闭并丢弃当前输入？'))return false;
+    setCred(null);setCredForm({appId:'',appSecret:'',author:''});setCredBusy(false);load();return true;
+  }, [load,credForm,credBusy]);
+  const dismiss=useRef<()=>void|boolean>(()=>{});
+  dismiss.current=cred?()=>closeCred():closeQr;
+  useEffect(()=>{if(!qr&&!cred)return;return registerLayer?.(()=>dismiss.current())},[!!qr,!!cred,registerLayer]);
+  useEffect(()=>{
+    if(!cred||!Object.values(credForm).some(value=>value.trim()))return;
+    const before=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue=''};
+    window.addEventListener('beforeunload',before);return()=>window.removeEventListener('beforeunload',before);
+  },[cred,credForm]);
 
   const submitCred = useCallback(async () => {
     if (!cred) return;
@@ -198,7 +214,7 @@ export default function AccountsPage() {
       const r = await saveCredentials(cred.platform, { appId, appSecret, name: cred.name, author: credForm.author.trim() });
       if (r.ok) {
         runWhoami(cred.platform);
-        closeCred();
+        closeCred(true);
       } else {
         setCredErr(r.message || '验证未通过');
       }
@@ -240,15 +256,8 @@ export default function AccountsPage() {
       let finished = false;
       let failures = 0;
       const startedAt = Date.now();
-      pollRef.current = setInterval(async () => {
+      pollRef.current = visiblePoll(async () => {
         if (!aliveRef.current || qrRequest.current !== sequence || polling || finished) return;
-        if (Date.now() - startedAt > 360000) {
-          finished = true;
-          stopPoll();
-          setQr((previous) => previous && ({ ...previous, state: 'expired',
-            message: '登录等待超时，请关闭后重新登录', qr: '' }));
-          return;
-        }
         polling = true;
         try {
           const s = await loginStatus(a.platform);
@@ -264,8 +273,11 @@ export default function AccountsPage() {
               setWhoamiCache(a.platform, null);
               runWhoami(a.platform);
             }
+          } else if (Date.now() - startedAt > 360000) {
+            finished = true;stopPoll();
+            setQr(previous=>previous&&({...previous,state:'expired',message:'登录等待超时，请关闭后重新登录',qr:''}));
           }
-        } catch {
+        } catch (error) {
           if (!aliveRef.current || qrRequest.current !== sequence) return;
           failures += 1;
           if (failures >= 5) {
@@ -274,10 +286,11 @@ export default function AccountsPage() {
             setQr((previous) => previous && ({ ...previous, state: 'error',
               message: '登录状态连接中断，请检查网络后重新登录', qr: '' }));
           }
+          else throw error;
         } finally {
           polling = false;
         }
-      }, 1000);
+      }, {interval:1000});
     } catch (e) {
       if (!aliveRef.current || qrRequest.current !== sequence) return;
       const message = e instanceof Error ? e.message : '启动登录失败';
@@ -307,15 +320,8 @@ export default function AccountsPage() {
       let finished = false;
       let failures = 0;
       const startedAt = Date.now();
-      pollRef.current = setInterval(async () => {
+      pollRef.current = visiblePoll(async () => {
         if (!aliveRef.current || qrRequest.current !== sequence || polling || finished) return;
-        if (Date.now() - startedAt > 360000) {
-          finished = true;
-          stopPoll();
-          setQr((previous) => previous && ({ ...previous, state: 'expired',
-            message: '登录等待超时，请关闭后重新登录', qr: '' }));
-          return;
-        }
         polling = true;
         try {
           const s = await mpLoginStatus(a.platform);
@@ -334,8 +340,11 @@ export default function AccountsPage() {
               runWhoami(a.platform);
               load();
             }
+          } else if (Date.now() - startedAt > 360000) {
+            finished = true;stopPoll();
+            setQr(previous=>previous&&({...previous,state:'expired',message:'登录等待超时，请关闭后重新登录',qr:''}));
           }
-        } catch {
+        } catch (error) {
           if (!aliveRef.current || qrRequest.current !== sequence) return;
           failures += 1;
           if (failures >= 5) {
@@ -344,10 +353,11 @@ export default function AccountsPage() {
             setQr((previous) => previous && ({ ...previous, state: 'error',
               message: '登录状态连接中断，请检查网络后重新登录', qr: '' }));
           }
+          else throw error;
         } finally {
           polling = false;
         }
-      }, 1000);
+      }, {interval:1000});
     } catch (e) {
       if (!aliveRef.current || qrRequest.current !== sequence) return;
       const message = e instanceof Error ? e.message : '启动后台登录失败';
@@ -513,8 +523,8 @@ export default function AccountsPage() {
       )}
 
       {cred && (
-        <div className="overlay" onClick={closeCred}>
-          <div className="modal" style={{ width: 420, maxWidth: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay" onClick={()=>closeCred()}>
+          <div className="modal" data-native-dirty={Object.values(credForm).some(value=>value.trim())||undefined} style={{ width: 420, maxWidth: '100%' }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 4px' }}>配置 {cred.name}</h3>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.6 }}>
               公众号用官方接口发布，需填开发者凭证（公众平台 → 设置与开发 → 开发接口管理）。<br />
@@ -541,7 +551,7 @@ export default function AccountsPage() {
               <button className="btn btn-primary" style={{ flex: 1 }} disabled={credBusy} onClick={submitCred}>
                 {credBusy ? '验证中…' : '保存并验证'}
               </button>
-              <button className="btn" onClick={closeCred}>关闭</button>
+              <button className="btn" onClick={()=>closeCred()}>关闭</button>
             </div>
           </div>
         </div>

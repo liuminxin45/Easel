@@ -9,12 +9,29 @@ const BASE = getBasePath();
 /** Optional authenticated host transport. The ordinary Easel app keeps fetch. */
 export interface EaselApiTransport {
   request<T>(path: string, options?: RequestInit): Promise<T>;
+  peek?<T>(path: string): T | undefined;
+  subscribe?<T>(path: string, onData:(value:T)=>void, onError?:(error:Error)=>void):()=>void;
   mediaUrl?(path: string): string;
 }
 let hostTransport: EaselApiTransport | undefined;
 export function bindEaselApiTransport(transport: EaselApiTransport): () => void {
   hostTransport = transport;
   return () => { if (hostTransport === transport) hostTransport = undefined; };
+}
+
+/** Snapshot subscriptions use the same validators as ordinary page reads. */
+function pageSnapshot<T>(path:string,value:unknown):T {
+  const p=new URL(path,'https://easel.invalid').pathname;
+  return (p==='/api/trends'?parseTrends(value):p==='/api/trends/sources'?parseTrendSources(value):value) as T;
+}
+/** Optional in-memory snapshots supplied by the authenticated host. */
+export function peekApiData<T>(path:string):T|undefined{
+  const value=hostTransport?.peek?.<unknown>(path);
+  if(value===undefined)return;
+  try{return pageSnapshot<T>(path,value)}catch{return undefined}
+}
+export function subscribeApiData<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void):()=>void {
+  return hostTransport?.subscribe?.<unknown>(path,value=>{try{onData(pageSnapshot<T>(path,value))}catch(error){onError?.(error instanceof Error?error:new Error('页面数据格式异常'))}},onError)||(()=>{});
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -274,11 +291,11 @@ export interface TrendGroup {
 export interface TrendSource {
   id: string; label: string; type: 'python' | 'http' | 'rss'; default: boolean; refresh_seconds: number;
 }
-export function fetchTrendSources() {
-  return trendRequest('/api/trends/sources').then(parseTrendSources);
+export function fetchTrendSources(force=false) {
+  return trendRequest('/api/trends/sources',force?{cache:'reload'}:{}).then(parseTrendSources);
 }
-export function fetchTrends(platforms?: string, limit = 12) {
-  return trendRequest(`/api/trends?limit=${limit}${platforms === undefined ? '' : `&platforms=${encodeURIComponent(platforms)}`}`, {}, 130000).then(parseTrends);
+export function fetchTrends(platforms?: string, limit = 12,force=false) {
+  return trendRequest(`/api/trends?limit=${limit}${platforms === undefined ? '' : `&platforms=${encodeURIComponent(platforms)}`}`, force?{cache:'reload'}:{}, 130000).then(parseTrends);
 }
 export interface TrendManagedSource {
   id: string; label: string; type: TrendSource['type'] | 'unknown'; enabled: boolean; default: boolean; builtin: boolean;
@@ -312,11 +329,11 @@ export interface ScheduleContext {
   upcoming_events?: ScheduleItem[];
   suggestions?: string[];
 }
-export function fetchSchedule(): Promise<ScheduleItem[]> {
-  return request('/api/schedule');
+export function fetchSchedule(force=false): Promise<ScheduleItem[]> {
+  return request('/api/schedule',force?{cache:'reload'}:undefined);
 }
-export function fetchScheduleContext(days = 14): Promise<ScheduleContext> {
-  return request(`/api/schedule/context?days=${days}`);
+export function fetchScheduleContext(days = 14,force=false): Promise<ScheduleContext> {
+  return request(`/api/schedule/context?days=${days}`,force?{cache:'reload'}:undefined);
 }
 export function createSchedule(item: ScheduleInput): Promise<ScheduleItem> {
   return request('/api/schedule', {
@@ -337,7 +354,7 @@ export interface Idea {
   id: string; title: string; note: string; source: string; status: string; created: number; source_id?: string;
 }
 export type IdeaInput = { title: string; note?: string; source?: string; status?: string; source_id?: string };
-export function fetchIdeas(): Promise<Idea[]> { return request('/api/ideas'); }
+export function fetchIdeas(force=false): Promise<Idea[]> { return request('/api/ideas',force?{cache:'reload'}:undefined); }
 export function createIdea(item: IdeaInput): Promise<Idea> {
   return request('/api/ideas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
 }
@@ -396,8 +413,8 @@ export function profileBuildStatus(name: string): Promise<ProfileBuildStatus> {
   return request<ProfileBuildStatus>(`/api/profile/build/status/${encodeURIComponent(name)}`);
 }
 
-export function fetchOutputs(): Promise<OutputNode[]> {
-  return request<OutputNode[]>('/api/outputs');
+export function fetchOutputs(force=false): Promise<OutputNode[]> {
+  return request<OutputNode[]>('/api/outputs',force?{cache:'reload'}:undefined);
 }
 
 export function fetchArtifactArchive(path: string, signal?: AbortSignal): Promise<{ paths: string[] }> {

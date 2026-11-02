@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchIdeas, createIdea, updateIdea, deleteIdea, createSchedule } from '../lib/api';
+import { fetchIdeas, createIdea, updateIdea, deleteIdea, createSchedule,peekApiData,subscribeApiData } from '../lib/api';
 import type { Idea, IdeaInput } from '../lib/api';
 import {IconIdea,IconEdit,IconTrash,IconChat,IconCalendar,IconChevron} from './icons';
 
 interface IdeasPageProps {
   onUseTopic: (title: string, sourceId?: string, note?: string) => void;
   draftStore?: IdeasPageDraftStore;
+  onContentReady?:()=>void;
 }
 
 export interface IdeasPageDraft { form: IdeaInput | null; editId: string | null; revision?: number }
@@ -24,10 +25,10 @@ const NEXT: Record<string, string> = { pending: 'doing', doing: 'done', done: 'p
 
 const EMPTY: IdeaInput = { title: '', note: '', source: '', status: 'pending' };
 
-export default function IdeasPage({ onUseTopic, draftStore }: IdeasPageProps) {
+export default function IdeasPage({ onUseTopic, draftStore,onContentReady }: IdeasPageProps) {
   const initialDraft = useRef(draftStore?.read());
   const currentDraft = useRef<IdeasPageDraft>(initialDraft.current?.form ? initialDraft.current : { form: null, editId: null });
-  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>(()=>peekApiData<Idea[]>('/api/ideas')??[]);
   const [form, setFormState] = useState<IdeaInput | null>(currentDraft.current.form);
   const [editId, setEditId] = useState<string | null>(currentDraft.current.editId);
   const [toast, setToast] = useState('');
@@ -36,12 +37,13 @@ export default function IdeasPage({ onUseTopic, draftStore }: IdeasPageProps) {
   const errorRevision = useRef(0), readRevision = useRef(0);
   const reportError = useCallback((caught: unknown) => { errorRevision.current++; setError(caught instanceof Error ? caught.message : '选题操作失败，请重新读取后重试。'); }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force=false) => {
     const request = ++readRevision.current, revision = errorRevision.current;
-    try { const items = await fetchIdeas(); if (request !== readRevision.current) return; setIdeas(items); if (revision === errorRevision.current) setError(''); }
+    try { const items = await fetchIdeas(force); if (request !== readRevision.current) return; setIdeas(items); if (revision === errorRevision.current) setError('');onContentReady?.(); }
     catch (caught) { if (request === readRevision.current) reportError(caught); }
-  }, [reportError]);
+  }, [reportError,onContentReady]);
   useEffect(() => { load(); }, [load]);
+  useEffect(()=>subscribeApiData<Idea[]>('/api/ideas',items=>{setIdeas(items);onContentReady?.()},reportError),[onContentReady,reportError]);
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2200); };
   const byStatus = useMemo(() => {

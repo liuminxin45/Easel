@@ -4,11 +4,12 @@ import SettingsSelect from './SettingsSelect';
 import {defaultSettingsApi, type SettingsApi} from './SettingsApi';
 import {InteractionNotice,useFeedbackMessage} from './InteractionNotice';
 
-export default function HarnessSettings({ onChange, onSelect, api = defaultSettingsApi, hostManaged = false }: {
+export default function HarnessSettings({ onChange, onSelect, api = defaultSettingsApi, hostManaged = false,onDirtyChange }: {
   api?: SettingsApi;
   hostManaged?: boolean;
   onChange: (runtime: string) => void;
-  onSelect: (runtime: string) => void;
+  onSelect: (runtime: string) => void|boolean;
+  onDirtyChange?:(dirty:boolean)=>void;
 }) {
   const {fetchHarnessModels, fetchHarnessSettings, saveHarnessSettings} = api;
   const [settings, setSettings] = useState<HarnessSettingsResponse | null>(null);
@@ -50,6 +51,10 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
   }, [onChange, onSelect, refresh]);
 
   const selected = settings?.agents.find((agent) => agent.id === runtime);
+  useEffect(()=>{
+    onDirtyChange?.(!!settings&&(runtime!==settings.runtime||model!==(settings.models[runtime]||'')||sandbox!==settings.sandbox||autoApprove!==(settings.codex_auto_approve??false)));
+  },[settings,runtime,model,sandbox,autoApprove,onDirtyChange]);
+  useEffect(()=>()=>onDirtyChange?.(false),[onDirtyChange]);
   const nativeModels = catalogs[runtime] || [];
   const pullModels = async () => {
     const requested = runtime;
@@ -108,13 +113,13 @@ export default function HarnessSettings({ onChange, onSelect, api = defaultSetti
                 label: `${agent.label}${agent.installed ? '' : '（未安装 / 未配置）'}`,
               }))}
               onChange={(value) => {
+                if(onSelect(value)===false)return;
                 setRuntime(value);
                 setModel(settings?.models[value] || '');
                 modelRequest.current += 1;
                 setModelLoading(false);
                 setModelNote('');
                 setNote('');
-                onSelect(value);
               }} />
             <span className="settings-help">
               <button type="button" className="settings-help-trigger" aria-label="仅聊天模式说明"

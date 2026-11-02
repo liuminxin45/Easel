@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchSchedule, createSchedule, updateSchedule, deleteSchedule, fetchScheduleContext } from '../lib/api';
+import { useState, useEffect, useCallback, useMemo,useRef } from 'react';
+import { fetchSchedule, createSchedule, updateSchedule, deleteSchedule, fetchScheduleContext,peekApiData,subscribeApiData } from '../lib/api';
 import type { ScheduleItem, ScheduleInput, ScheduleContext } from '../lib/api';
+import {useStoredViewState,type ViewStateStore,type DraftStore} from '../lib/viewState';
 import { IconCalendar, IconTrash, IconChevron } from './icons';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -28,23 +29,37 @@ const EMPTY: ScheduleInput = {
   kind: 'content', url: '', source: 'manual', event_type: '', end_date: '',
 };
 
-export default function CalendarPage() {
+export interface CalendarViewState {month:number;filter:Filter;showSuggest:boolean}
+export interface CalendarDraft {form:ScheduleInput;editingId:string|null;key?:string}
+export interface CalendarDraftStore extends Omit<DraftStore<CalendarDraft>,'read'|'remove'> {read(key?:string,editingId?:string|null):CalendarDraft|null;remove(draft?:CalendarDraft):void}
+interface CalendarPageProps {viewState?:ViewStateStore<CalendarViewState>;draftStore?:CalendarDraftStore;onContentReady?:()=>void;registerLayer?:(close:()=>void)=>(()=>void)|undefined}
+export default function CalendarPage({viewState,draftStore,onContentReady,registerLayer}:CalendarPageProps={}) {
   const today = useMemo(() => new Date(), []);
-  const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [view,setView]=useStoredViewState(viewState,()=>({month:new Date(today.getFullYear(),today.getMonth(),1).getTime(),filter:'all' as Filter,showSuggest:true}));
+  const cursor=new Date(view.month),setCursor=(value:Date|((previous:Date)=>Date))=>setView(previous=>({...previous,month:(typeof value==='function'?value(new Date(previous.month)):value).getTime()}));
+  const [items, setItems] = useState<ScheduleItem[]>(()=>peekApiData<ScheduleItem[]>('/api/schedule')??[]);
   const [editing, setEditing] = useState<ScheduleItem | null>(null);   // 现有项
-  const [form, setForm] = useState<ScheduleInput | null>(null);        // 弹窗表单（null=关闭）
+  const [form, setFormState] = useState<ScheduleInput | null>(null);        // 弹窗表单（null=关闭）
+  const editingRef=useRef<string|null>(null),formRef=useRef<ScheduleInput|null>(null),draftKey=useRef('');
+  const setForm=(next:ScheduleInput|null)=>{formRef.current=next;setFormState(next);if(next)draftStore?.write({form:next,editingId:editingRef.current,key:draftKey.current})};
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState<Filter>('all');
-  const [ctx, setCtx] = useState<ScheduleContext | null>(null);
-  const [showSuggest, setShowSuggest] = useState(true);
+  const filter=view.filter,setFilter=(filter:Filter)=>setView(previous=>({...previous,filter}));
+  const [ctx, setCtx] = useState<ScheduleContext | null>(()=>peekApiData<ScheduleContext>('/api/schedule/context?days=14')??null);
+  const showSuggest=view.showSuggest,setShowSuggest=(showSuggest:boolean)=>setView(previous=>({...previous,showSuggest}));
   const [dayView, setDayView] = useState<string | null>(null);   // 展开查看某天全部（date，null=关闭）
+  const [error,setError]=useState(''),[loading,setLoading]=useState(()=>peekApiData('/api/schedule')===undefined),generation=useRef(0);
 
-  const load = useCallback(() => {
-    fetchSchedule().then(setItems).catch(() => {});
-    fetchScheduleContext(14).then(setCtx).catch(() => {});
+  const load = useCallback((force=false) => {
+    const request=++generation.current;setLoading(peekApiData('/api/schedule')===undefined);setError('');
+    void Promise.all([fetchSchedule(force).then(value=>{if(request===generation.current)setItems(value)}),fetchScheduleContext(14,force).then(value=>{if(request===generation.current)setCtx(value)})])
+      .catch(error=>{if(request===generation.current)setError(error instanceof Error?error.message:'日历读取失败，请重试。')})
+      .finally(()=>{if(request===generation.current)setLoading(false)});
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load();return()=>{generation.current++}; }, [load]);
+  useEffect(()=>subscribeApiData<ScheduleItem[]>('/api/schedule',value=>{setItems(value);setError('');setLoading(false)},error=>setError(error.message)),[]);
+  useEffect(()=>subscribeApiData<ScheduleContext>('/api/schedule/context?days=14',setCtx,error=>setError(error.message)),[]);
+  useEffect(()=>{if(!loading)onContentReady?.()},[loading,items,onContentReady]);
+  useEffect(()=>{if(!form&&!dayView)return;return registerLayer?.(()=>{formRef.current=null;setFormState(null);setEditing(null);setDayView(null)})},[!!form,!!dayView,registerLayer]);
 
   const visible = useMemo(
     () => (filter === 'all' ? items : items.filter((it) => kindOf(it) === filter)),
@@ -72,11 +87,12 @@ export default function CalendarPage() {
 
   const openNew = (date: string) => {
     setDayView(null);
-    setEditing(null);
-    setForm({ ...EMPTY, date, kind: filter === 'event' ? 'event' : 'content' });
+    const saved=draftStore?.read(date,null);draftKey.current=date;
+    editingRef.current=null;setEditing(null);
+    const next=saved&&!saved.editingId?saved.form:{ ...EMPTY, date, kind: filter === 'event' ? 'event' : 'content' };formRef.current=next;setFormState(next);
   };
-  const openEdit = (it: ScheduleItem) => { setDayView(null); setEditing(it); setForm({ ...EMPTY, ...it }); };
-  const close = () => { setForm(null); setEditing(null); };
+  const openEdit = (it: ScheduleItem) => {const saved=draftStore?.read(it.date,it.id);draftKey.current=it.date;setDayView(null);editingRef.current=it.id;setEditing(it);const next=saved?.editingId===it.id?saved.form:{...EMPTY,...it};formRef.current=next;setFormState(next);};
+  const close = () => {formRef.current=null;setFormState(null);setEditing(null);editingRef.current=null;};
 
   // 单条 chip（活动=色条，内容=按状态上色的圆点），日历格与当天详情共用
   const renderChip = (it: ScheduleItem) => {
@@ -105,17 +121,20 @@ export default function CalendarPage() {
 
   const save = async () => {
     if (!form || !form.title.trim() || !form.date) return;
+    const submitted=form,editingId=editing?.id??null,submittedKey=draftKey.current;
     setSaving(true);
     try {
-      if (editing) await updateSchedule(editing.id, form);
-      else await createSchedule(form);
-      close(); load();
-    } finally { setSaving(false); }
+      if (editingId) await updateSchedule(editingId, submitted);
+      else await createSchedule(submitted);
+      const saved=draftStore?.read(submittedKey,editingId);
+      if(saved?.editingId===editingId&&JSON.stringify(saved.form)===JSON.stringify(submitted))draftStore?.remove(saved);
+      if(formRef.current===submitted)close();load(true);
+    } catch(error){setError(error instanceof Error?error.message:'日历保存失败，输入已保留。')}finally { setSaving(false); }
   };
   const remove = async () => {
     if (!editing) return;
     setSaving(true);
-    try { await deleteSchedule(editing.id); close(); load(); } finally { setSaving(false); }
+    try { await deleteSchedule(editing.id);const saved=draftStore?.read(draftKey.current,editing.id);if(saved)draftStore?.remove(saved);close();load(true); }catch(error){setError(error instanceof Error?error.message:'删除失败，请核对后重试。')} finally { setSaving(false); }
   };
 
   const monthLabel = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月`;
@@ -138,6 +157,9 @@ export default function CalendarPage() {
           <button className="btn btn-sm" onClick={() => shift(1)}><IconChevron size={14} /></button>
         </div>
       </div>
+
+      {error&&<div className="notice-error" role="alert">{error} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>}
+      {loading&&<div role="status">正在读取日历…</div>}
 
       {showSuggest && suggestions.length > 0 && (
         <div className="cal-suggest">

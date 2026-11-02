@@ -4,6 +4,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import { fetchOutputs, fetchOutputContent, mediaUrl, deleteOutput } from '../lib/api';
 import type { OutputNode, OutputMeta } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
+import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
+import {peekApiData,subscribeApiData} from '../lib/api';
 import { IconOutputs, IconImage, IconVideo, IconMusic, IconFile, IconFolder, IconRefresh, IconChevron, IconTrash } from './icons';
 
 const FILTERS: { key: string; label: string }[] = [
@@ -78,6 +80,7 @@ function Thumb({ f, big }: { f: OutputNode | null; big?: boolean }) {
   return <div className="gcard-ph">{kindIcon(f?.kind, big ? 34 : 30)}</div>;
 }
 
+export interface OutputsViewState {stack:string[];filter:string;jumpPath?:string}
 interface OutputsPageProps {
   /** 从对话跳转进来的目录（outputs 相对路径，不含 outputs/ 前缀）；消费后由父层清空 */
   jumpPath?: string;
@@ -86,15 +89,19 @@ interface OutputsPageProps {
   renderProjectDetails?: (project: OutputNode) => ReactNode;
   canDelete?: (node: OutputNode) => boolean;
   registerLayer?: (close:()=>void)=>()=>void;
+  viewState?:ViewStateStore<OutputsViewState>;
+  onContentReady?:()=>void;
 }
 
-export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true, registerLayer }: OutputsPageProps) {
-  const [roots, setRoots] = useState<OutputNode[]>([]);
+export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true, registerLayer,viewState,onContentReady }: OutputsPageProps) {
+  const [roots, setRoots] = useState<OutputNode[]>(()=>peekApiData<OutputNode[]>('/api/outputs')??[]);
   const [treeError, setTreeError] = useState('');
-  const [treeLoading, setTreeLoading] = useState(true);
+  const [treeLoading, setTreeLoading] = useState(()=>peekApiData('/api/outputs')===undefined);
   const treeSeq = useRef(0);
-  const [stack, setStack] = useState<string[]>([]);   // 当前所在目录链的节点路径
-  const [filter, setFilter] = useState('all');
+  const [view,setView]=useStoredViewState<OutputsViewState>(viewState,()=>({stack:[] as string[],filter:'all'}));
+  const stack=view.stack,filter=view.filter;
+  const setStack:React.Dispatch<React.SetStateAction<string[]>>=value=>setView(previous=>({...previous,stack:typeof value==='function'?value(previous.stack):value}));
+  const setFilter=(filter:string)=>setView(previous=>({...previous,filter}));
   const [selected, setSelected] = useState<OutputNode | null>(null);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -107,15 +114,17 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     return()=>{release?.();document.removeEventListener('keydown',escape)};
   },[selected?.path,registerLayer]);
 
-  const load = useCallback(() => {
+  const load = useCallback((force=false) => {
     const seq = ++treeSeq.current;
     setTreeError('');
-    setTreeLoading(true);
-    fetchOutputs().then((data) => { if (seq === treeSeq.current) setRoots(data); })
+    setTreeLoading(peekApiData('/api/outputs')===undefined);
+    fetchOutputs(force).then((data) => { if (seq === treeSeq.current) setRoots(data); })
       .catch((error: unknown) => { if (seq === treeSeq.current) setTreeError(error instanceof Error ? error.message : '加载产物列表失败'); })
       .finally(() => { if (seq === treeSeq.current) setTreeLoading(false); });
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(()=>subscribeApiData<OutputNode[]>('/api/outputs',value=>{setRoots(value);setTreeError('');setTreeLoading(false)},error=>setTreeError(error.message)),[]);
+  useEffect(()=>{if(!treeLoading&&!treeError)onContentReady?.()},[treeLoading,treeError,roots,onContentReady]);
 
   const directories = useMemo(() => resolvePath(roots, stack), [roots, stack]);
   const currentNodes = directories.length ? directories[directories.length - 1].children || [] : roots;
@@ -164,7 +173,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     try {
       await deleteOutput(node.path);
       setSelected((cur) => (cur?.path === node.path ? null : cur));
-      load();
+      load(true);
     } catch (err) {
       alert((err as Error).message || '删除失败');
     }
@@ -184,7 +193,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
 
   // Resolve the declared path, which may differ from a virtual node's display name.
   useEffect(() => {
-    if (!jumpPath || roots.length === 0) return;
+    if (!jumpPath || view.jumpPath===jumpPath || roots.length === 0) return;
     const wanted = jumpPath.split('/').filter(Boolean).join('/');
     const find = (nodes: OutputNode[], parents: string[]): {node: OutputNode; parents: string[]} | undefined => {
       for (const node of nodes) {
@@ -199,13 +208,12 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     };
     const found = find(roots, []);
     if (found) {
-      setStack(found.parents);
-      setFilter('all');
+      setView(previous=>({...previous,stack:found.parents,filter:'all',jumpPath}));
       if (found.node.type === 'file') void open(found.node);
       else setSelected(null);
     }
     onJumpHandled?.();
-  }, [jumpPath, roots, open, onJumpHandled]);
+  }, [jumpPath, roots, open, onJumpHandled,view.jumpPath,setView]);
 
   const preview = () => {
     if (!selected) return null;
@@ -292,12 +300,12 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
               : `${dirs.length} 个文件夹 · ${files.length} 个文件（可继续点开子文件夹）`}
           </p>
         </div>
-        <button className="btn btn-sm" onClick={load} disabled={treeLoading}><IconRefresh size={14} /> {treeLoading ? '读取中…' : '刷新'}</button>
+        <button className="btn btn-sm" onClick={()=>load(true)} disabled={treeLoading}><IconRefresh size={14} /> {treeLoading ? '读取中…' : '刷新'}</button>
       </div>
 
       {selectedProject && renderProjectDetails?.(selectedProject)}
 
-      {treeError && <div className="notice-error" role="alert">内容读取失败：{treeError} <button className="btn btn-sm" onClick={load}>重试</button></div>}
+      {treeError && <div className="notice-error" role="alert">内容读取失败：{treeError} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>}
       {treeLoading && roots.length === 0 && <div className="loading" role="status">正在读取内容库…</div>}
 
       {/* 项目主题标签（进入项目根时展示） */}

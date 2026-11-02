@@ -7,6 +7,7 @@ import SettingsSelect, { OptionsDropdown } from './SettingsSelect';
 import type { JobView } from './EnvBoard';
 import {InteractionNotice,useFeedbackChannel,useFeedbackMessage} from './InteractionNotice';
 import type {InteractionSource} from '../lib/interaction';
+import {visiblePoll,type VisiblePoll} from '../lib/visiblePoll';
 
 import type { EnvTool, ModelRow, SelftestResult, LocalAgentInfo } from '../lib/api';
 import { IconSlidersHorizontal, IconPackage, IconEllipsis } from './settingsIcons';
@@ -18,6 +19,7 @@ interface Props {
   initialSection?: 'model' | 'env' | 'more';
   onSectionChange?: (section: 'model' | 'env' | 'more') => void;
   hostManaged?: boolean;
+  registerLeaveGuard?:(guard:()=>boolean)=>()=>void;
   operationSource?: InteractionSource;
   /** 非空时在面板顶部显示一条提示条。首开未配置模型时由 App 传入。 */
   banner?: string;
@@ -64,7 +66,7 @@ const hhmm = (ts: number) => {
 };
 
 /** 设置（统一入口）：竖＝功能分类（模型配置 / 环境安装 / 更多设置），横＝模型六通道。 */
-export default function SettingsPanel({ onClose, banner = '', api = defaultSettingsApi, moreContent, initialSection = 'model', onSectionChange, hostManaged = false, operationSource }: Props) {
+export default function SettingsPanel({ onClose:onRequestClose, banner = '', api = defaultSettingsApi, moreContent, initialSection = 'model', onSectionChange, hostManaged = false, operationSource,registerLeaveGuard }: Props) {
   const {fetchEnvTools, startEnvInstall, fetchEnvJob, fetchModelChannels, runChannelSelftest, saveModelConfig, fetchLocalAgents, enableLocalAgent, fetchAvailableModels} = api;
   const [sec, setSection] = useState<Sec>(initialSection);
   const setSec = (section: Sec) => { setSection(section); onSectionChange?.(section); };
@@ -73,6 +75,17 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
   const [harness, setHarness] = useState('');
   const feedback=useFeedbackChannel();
   const [selectedHarness, setSelectedHarness] = useState('');
+  const alive=useRef(true),lifeEpoch=useRef(0),polls=useRef(new Map<string,VisiblePoll>());
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;lifeEpoch.current++;for(const poll of polls.current.values())poll.stop();polls.current.clear()}},[]);
+  const dirty=useRef<()=>boolean>(()=>false),discardApproved=useRef(false);
+  const checkLeave=useCallback(()=>{
+    if(discardApproved.current||!dirty.current())return true;
+    if(!window.confirm('设置中有尚未保存的修改，确定离开并丢弃这些输入？'))return false;
+    discardApproved.current=true;return true;
+  },[]);
+  const onClose=useCallback(()=>{if(checkLeave())onRequestClose()},[checkLeave,onRequestClose]);
+  useEffect(()=>registerLeaveGuard?.(checkLeave),[registerLeaveGuard,checkLeave]);
+  useEffect(()=>{const before=(event:BeforeUnloadEvent)=>{if(dirty.current()&&!discardApproved.current){event.preventDefault();event.returnValue=''}};window.addEventListener('beforeunload',before);return()=>window.removeEventListener('beforeunload',before)},[]);
 
   // ── 环境安装（引擎真实数据） ──────────────────────────────
   const [tools, setTools] = useState<EnvTool[]>([]);
@@ -84,10 +97,13 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
   const resumedJobs = useRef(new Set<string>());
 
   const refreshEnv = useCallback(async (force = false) => {
+    if(!alive.current)return;
+    const epoch=lifeEpoch.current;
     feedback.clear();setEnvLoading(true);
     setEnvError('');
     try {
       const d = await fetchWithRetry(() => fetchEnvTools(force));
+      if(!alive.current||epoch!==lifeEpoch.current)return;
       setTools(d.tools || []);
       setPython(d.python || '');
       for(const job of d.activeJobs || []) {
@@ -97,9 +113,10 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
         void pollJob(job.id,job.jobId).then(()=>refreshEnv(true));
       }
     } catch (e) {
+      if(!alive.current||epoch!==lifeEpoch.current)return;
       setEnvError(hostManaged?feedback.report(e):e instanceof Error ? `环境体检失败：${e.message}` : '环境体检失败');
     } finally {
-      setEnvLoading(false);
+      if(alive.current&&epoch===lifeEpoch.current)setEnvLoading(false);
     }
   }, []);
 
@@ -112,6 +129,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
   // 装完统一收尾：刷新体检（期间卡片显示「校验中」），然后清掉成功的 job 记录、保留失败（带原因）
   const settleJobs = useCallback(async () => {
     await refreshEnv(true);
+    if(!alive.current)return;
     setJobs((j) => {
       const n: Record<string, JobView> = {};
       Object.entries(j).forEach(([k, v]) => { if (v.state === 'fail') n[k] = v; });
@@ -119,34 +137,37 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
     });
   }, [refreshEnv]);
 
-  const pollJob = useCallback((id: string, jobId: string) => new Promise<void>((resolve) => {
-    let fails = 0;
-    const timer = setInterval(async () => {
-      try {
-        const st = await fetchEnvJob(jobId);
+  const pollJob = useCallback((id: string, jobId: string) => {
+    const existing=polls.current.get(jobId);if(existing)return existing.done;
+    if(!alive.current)return Promise.resolve();
+    const epoch=lifeEpoch.current;
+    const poll=visiblePoll(async () => {
+        const st=await fetchEnvJob(jobId);
+        if(!alive.current||epoch!==lifeEpoch.current)return false;
         const last = (st.lines || [])[st.lines.length - 1] || '';
         setJobs((j) => ({
           ...j,
           [id]: { state: st.state, line: last.trim().slice(0, 140), detail: st.result?.detail || null },
         }));
-        if (st.state !== 'running') { clearInterval(timer); resolve(); }
-      } catch {
-        fails += 1;
-        if (fails >= 3) { clearInterval(timer); resolve(); }   // 服务重启/任务丢失：放弃轮询
-      }
-    }, 1500);
-  }), []);
+        return st.state==='running';
+    },{interval:1500,onError:(_error,failures)=>failures<3});
+    polls.current.set(jobId,poll);
+    void poll.done.then(()=>{if(polls.current.get(jobId)===poll)polls.current.delete(jobId)});
+    return poll.done;
+  }, []);
 
   const installOne = useCallback(async (id: string) => {
     setJobs((j) => ({ ...j, [id]: { state: 'running', line: '启动中…' } }));
     try {
       const { jobId } = await startEnvInstall(id);
+      if(!alive.current)return;
       await pollJob(id, jobId);
     } catch (e) {
+      if(!alive.current)return;
       const error=feedback.report(e);
       setJobs((j) => ({ ...j, [id]: error?{state:'fail',line:'',detail:error}:{state:'running',line:'正在恢复安装状态…'} }));
     }
-    if (!batchMode.current) await settleJobs();   // 单卡装完立即收尾刷新
+    if (alive.current&&!batchMode.current) await settleJobs();   // 单卡装完立即收尾刷新
   }, [pollJob, settleJobs]);
 
   const installMany = useCallback(async (ids: string[]) => {
@@ -158,12 +179,13 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
       return n;
     });
     for (const id of ids) {
+      if(!alive.current)break;
       // eslint-disable-next-line no-await-in-loop
       await installOne(id);
     }
     batchMode.current = false;
     runningRef.current = false;
-    await settleJobs();
+    if(alive.current)await settleJobs();
   }, [installOne, settleJobs]);
 
   const anyRunning = runningRef.current || Object.values(jobs).some((j) => j.state === 'running');
@@ -174,6 +196,15 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
   const [chatRows, setChatRows] = useState<ModelRow[]>([]);
   const [transRows, setTransRows] = useState<ModelRow[]>([]);
   const [mediaRows, setMediaRows] = useState<Record<string, ModelRow[]>>({});
+  const [harnessDirty,setHarnessDirty]=useState(false);
+  const baseline=useRef<Record<string,string>>({}),rowSnapshot={chat:chatRows,transcribe:transRows,...mediaRows};
+  const rowsDirty=()=>Object.entries(rowSnapshot).some(([channel,rows])=>baseline.current[channel]!==undefined&&JSON.stringify(rows)!==baseline.current[channel]);
+  dirty.current=()=>harnessDirty||rowsDirty();
+  const selectHarnessRef=useRef(selectedHarness);selectHarnessRef.current=selectedHarness;
+  const selectHarness=useCallback((value:string)=>{
+    if(value!==selectHarnessRef.current&&!checkLeave())return false;
+    discardApproved.current=false;setSelectedHarness(value);return true;
+  },[checkLeave]);
   const [modelLoading, setModelLoading] = useState(true);
   const [modelErr, setModelErr] = useState('');
   const [selftest, setSelftest] = useState<{ testedAt: number; byBase: Record<string, SelftestResult> } | null>(null);
@@ -265,6 +296,8 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
           music: d.channels.music?.rows || [],
           speech: d.channels.speech?.rows || [],
         });
+        baseline.current=Object.fromEntries(Object.entries(d.channels).map(([channel,value])=>[channel,JSON.stringify(value.rows||[])]));
+        discardApproved.current=false;
         setModelErr('');
       })
       .catch((e) => { if (alive) setModelErr(feedback.report(e)); })
@@ -295,6 +328,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
 
   const saveCurrent = useCallback(async () => {
     const rows = chan === 'chat' ? chatRows : chan === 'transcribe' ? transRows : (mediaRows[chan] || []);
+    const submittedRows=JSON.stringify(rows);
     const payload = rows
       .filter((r) => r.slot)
       .map((r) => ({
@@ -321,14 +355,12 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
     setSavedNote('');
     try {
       const d = await saveModelConfig(chan, payload);
-      setChatRows(d.channels.chat.rows || []);
-      setTransRows(d.channels.transcribe.rows || []);
-      setMediaRows({
-        image: d.channels.image?.rows || [],
-        video: d.channels.video?.rows || [],
-        music: d.channels.music?.rows || [],
-        speech: d.channels.speech?.rows || [],
-      });
+      // Saving one channel must not discard unsaved fields in another channel.
+      const saved=d.channels[chan]?.rows||[];
+      const acknowledged=(current:ModelRow[])=>JSON.stringify(current)===submittedRows?saved:current;
+      if(chan==='chat')setChatRows(acknowledged);else if(chan==='transcribe')setTransRows(acknowledged);
+      else setMediaRows(previous=>({...previous,[chan]:acknowledged(previous[chan]||[])}));
+      baseline.current[chan]=JSON.stringify(saved);discardApproved.current=false;
       setSavedNote(d.note ? `✓ 已保存（${d.note}）` : '✓ 已保存');
       void refreshEnv();
     } catch (e) {
@@ -691,7 +723,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
       className="settings-overlay"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
+      <div className="settings-panel" role="dialog" aria-modal="true" aria-label="设置" data-native-dirty={hostManaged&&dirty.current()||undefined} onChangeCapture={()=>{discardApproved.current=false}}>
         <div className="settings-head">
           <div>
             <h2 className="settings-title">设置</h2>
@@ -750,7 +782,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
               <section className="st-sec active">
                 <div className="tabbar">
                   {CHANNELS.map((c) => (
-                    <button key={c.id} className={`tab${chan === c.id ? ' active' : ''}`} onClick={() => setChan(c.id)}>
+                    <button key={c.id} className={`tab${chan === c.id ? ' active' : ''}`} onClick={() => {if(c.id!==chan&&chan==='chat'&&harnessDirty&&!checkLeave())return;discardApproved.current=false;setChan(c.id)}}>
                       <span className="cdot" />{c.label}
                     </button>
                   ))}
@@ -759,7 +791,7 @@ export default function SettingsPanel({ onClose, banner = '', api = defaultSetti
                   ? (!operationSource||!savedNote?.operationScope)&&<InteractionNotice sources={[{feedback:savedNote}]}/>
                   : savedNote&&<div className={`save-note${savedNote.kind==='error'||savedNote.message.startsWith('没有')?' err':''}`}>{savedNote.message}</div>}
 
-                {chan === 'chat' && <HarnessSettings api={api} hostManaged={hostManaged} onChange={setHarness} onSelect={setSelectedHarness} />}
+                {chan === 'chat' && <HarnessSettings api={api} hostManaged={hostManaged} onChange={setHarness} onSelect={selectHarness} onDirtyChange={setHarnessDirty}/>}
                 {chan === 'chat' && (selectedHarness === 'api' || selectedHarness === 'openclaw') && (
                   <section className="st-panel active">
                     <div className="panel-top">

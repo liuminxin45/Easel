@@ -9,6 +9,8 @@ import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
 import { IconArrowUp, IconStop, IconPlus, IconFile } from './icons';
+import type {ViewStateStore} from '../lib/viewState';
+export interface ChatViewState {top:number;following:boolean}
 
 export interface ChatCommand { id: string; label: string; description?: string; disabled?: boolean; group?:string;tab?:string;tabLabel?:string;status?:string;prompt?:string; }
 export interface ChatComposerBindings {
@@ -54,6 +56,8 @@ interface ChatPageProps {
   questionServices?:QuestionServices;
   messageArtifacts?:(message:ChatMessage)=>Artifact[]|undefined;
   resolveArtifactPath?:(message:ChatMessage,path:string,kind:'media'|'library')=>string|undefined;
+  viewState?:ViewStateStore<ChatViewState>;
+  onContentReady?:()=>void;
 }
 
 // 空态推荐（贴合 Easel 社媒创作场景）
@@ -71,7 +75,7 @@ function greeting(): string {
 }
 
 export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered, onQuestionClosed,
-  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices,messageArtifacts,resolveArtifactPath }: ChatPageProps) {
+  composer, header, footer, notice, emptyState, canResend, renderMessageExtra, linkifyArtifactPaths,questionServices,messageArtifacts,resolveArtifactPath,viewState,onContentReady }: ChatPageProps) {
   const [localInput, setLocalInput] = useState('');
   const [localAttachments, setLocalAttachments] = useState<UploadedFile[]>([]);
   const input = composer?.text ?? localInput;
@@ -85,6 +89,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const [dragOver, setDragOver] = useState(false);
   const [maxMb, setMaxMb] = useState(50);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef=useRef<HTMLDivElement>(null),following=useRef(viewState?.read()?.following??true),restored=useRef(false),viewOwner=useRef(viewState);
   const composerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,9 +181,13 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const removeAttachment = (file: UploadedFile) => composer ? composer.onRemoveAttachment(file.id)
     : setLocalAttachments(a => a.filter(x => x.path !== file.path));
 
-  useEffect(() => {
-    if (!isEmpty) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [session.messages, stream?.content, stream?.thinking, stream?.activity, stream?.stillWorking, isEmpty]);
+  useLayoutEffect(() => {
+    if(viewOwner.current!==viewState){viewOwner.current=viewState;following.current=viewState?.read()?.following??true;restored.current=false}
+    const element=messagesRef.current;if(!element||isEmpty)return;
+    if(!restored.current){restored.current=true;const saved=viewState?.read();if(saved&&!saved.following){following.current=false;element.scrollTop=saved.top;onContentReady?.();return}}
+    if(following.current)element.scrollTo({top:element.scrollHeight,behavior:stream?'instant':'smooth'});
+    onContentReady?.();
+  }, [session.messages, stream?.content, stream?.thinking, stream?.activity, stream?.stillWorking, isEmpty,onContentReady,viewState]);
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -192,6 +201,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     const trimmed = input.trim();
     if ((!trimmed && attachments.length === 0 && composer?.canSend !== true) || busy || uploading || composer?.disabled || composer?.canSend === false) return;
     // 附件通过结构化字段发送；用户消息气泡只显示用户实际输入的文字。
+    following.current=true;
     onSend(trimmed, attachments);
     // A controlled host clears its draft only after an authoritative receipt.
     if (!composer) { setLocalInput(''); setLocalAttachments([]); }
@@ -322,7 +332,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   return (
     <div className="chat-page">
       {header}{notice}
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesRef} data-native-scroll="chat-messages" data-native-scroll-owner={viewState?'page':undefined} onScroll={event=>{const element=event.currentTarget;following.current=element.scrollHeight-element.scrollTop-element.clientHeight<80;viewState?.write({top:element.scrollTop,following:following.current})}}>
         <div className="chat-thread">
           {displayMessages.map((msg, i) => {
             const isLast = i === displayMessages.length - 1;
@@ -354,7 +364,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
               }
             }
             return (
-              <div key={`${i}-${msg.role}`}>
+              <div key={`${i}-${msg.role}`} data-native-anchor={'chat:'+((msg as ChatMessage&{id?:string;turnId?:string}).id||(msg as ChatMessage&{turnId?:string}).turnId||`${i}-${msg.role}`)}>
               <MessageBubble
                 key={`${i}-${msg.role}`}
                 message={msg}

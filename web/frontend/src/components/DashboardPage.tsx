@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
   fetchAnalyticsPlatforms, fetchAccountAnalytics,
+  peekApiData,subscribeApiData,
 } from '../lib/api';
 import type {ReactNode} from 'react';
 import type {
@@ -10,6 +11,7 @@ import type {
 } from '../lib/api';
 import type { Page } from './Sidebar';
 import { getWhoamiCache, verifyStale } from '../lib/whoami';
+import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import {
   IconFire, IconCalendar, IconOutputs, IconChat, IconSkills, IconAccounts,
   IconIdea, IconPublish,
@@ -40,29 +42,33 @@ interface DashboardProps {
   persistAnalytics?: boolean;
   verifyAccountsOnMount?: boolean;
   listMaxHeight?: number;
+  onContentReady?:()=>void;
+  viewState?:ViewStateStore<DashboardViewState>;
 }
+export interface DashboardViewState {platform:string;window:'last'|'day'|'week'|'month'|'year'}
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
-export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight }: DashboardProps) {
-  const [trends, setTrends] = useState<TrendGroup[]>([]);
-  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
-  const [outputs, setOutputs] = useState<OutputNode[]>([]);
-  const [outputsLoading, setOutputsLoading] = useState(true);
+export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState }: DashboardProps) {
+  const [trends, setTrends] = useState<TrendGroup[]>(()=>peekApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6')?.trends??[]);
+  const [schedule, setSchedule] = useState<ScheduleItem[]>(()=>peekApiData<ScheduleItem[]>('/api/schedule')??[]);
+  const [outputs, setOutputs] = useState<OutputNode[]>(()=>peekApiData<OutputNode[]>('/api/outputs')??[]);
+  const [outputsLoading, setOutputsLoading] = useState(()=>peekApiData('/api/outputs')===undefined);
   const [outputsError, setOutputsError] = useState('');
   const outputsSeq = useRef(0);
   const loadOutputs = useCallback(() => {
     const seq = ++outputsSeq.current;
-    setOutputsLoading(true);setOutputsError('');
+    setOutputsLoading(peekApiData('/api/outputs')===undefined);setOutputsError('');
     fetchOutputs().then((data) => { if (seq === outputsSeq.current) setOutputs(data); })
       .catch((error: unknown) => { if (seq === outputsSeq.current) setOutputsError(error instanceof Error ? error.message : '读取失败'); })
       .finally(() => { if (seq === outputsSeq.current) setOutputsLoading(false); });
   }, []);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
-  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>(()=>peekApiData<Idea[]>('/api/ideas')??[]);
   // 归因层：账号创作数据
   const [anaPlats, setAnaPlats] = useState<AnalyticsPlatform[]>([]);
-  const [anaSel, setAnaSel] = useState('');
+  const [view,setView]=useStoredViewState<DashboardViewState>(viewState,()=>({platform:'',window:'week'}));
+  const anaSel=view.platform,setAnaSel=(value:string|((previous:string)=>string))=>setView(previous=>({...previous,platform:typeof value==='function'?value(previous.platform):value}));
   const [anaData, setAnaData] = useState<Record<string, AccountAnalytics | 'loading' | 'error'>>(() => {
     if (!persistAnalytics) return {};
     try {
@@ -74,7 +80,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   });
   const anaPending = useRef(new Set<string>());
   const [anaErrors, setAnaErrors] = useState<Record<string, string>>({});
-  const [anaWin, setAnaWin] = useState<'last' | 'day' | 'week' | 'month' | 'year'>('week');
+  const anaWin=view.window,setAnaWin=(window:DashboardViewState['window'])=>setView(previous=>({...previous,window}));
   // whoami 自愈：登录态以真实 profile 为准（与账号页共享 localStorage 缓存）
   const [whoamiMap, setWhoamiMap] = useState<Record<string, AccountWhoami>>(() => persistAnalytics ? getWhoamiCache() : {});
   // 与 AccountsPage 同款：卸载后不再触发 setState（whoami 每个平台要起浏览器，最慢数秒）
@@ -83,6 +89,13 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
     aliveRef.current = true;
     return () => { aliveRef.current = false; };
   }, []);
+  useEffect(()=>{
+    const stops=[subscribeApiData<OutputNode[]>('/api/outputs',value=>{setOutputs(value);setOutputsError('');setOutputsLoading(false)},error=>setOutputsError(error.message)),
+      subscribeApiData<ScheduleItem[]>('/api/schedule',setSchedule),subscribeApiData<Idea[]>('/api/ideas',setIdeas),
+      subscribeApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6',value=>setTrends(value.trends))];
+    return()=>stops.forEach(stop=>stop());
+  },[]);
+  useEffect(()=>{if(!outputsLoading)onContentReady?.()},[outputsLoading,outputs,trends,schedule,onContentReady]);
 
   useEffect(() => {
     fetchTrends(undefined, 6).then((d) => setTrends(d.trends)).catch(() => {});

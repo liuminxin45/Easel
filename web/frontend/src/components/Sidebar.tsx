@@ -14,6 +14,9 @@ import ThemeToggle from './ThemeToggle';
 export type Page = 'dashboard' | 'chat' | 'trends' | 'ideas' | 'calendar' | 'publish' | 'breakdown' | 'skills' | 'outputs' | 'accounts' | 'profile';
 
 export interface SidebarProps {
+  /** Optional host lifecycle/layout ports; native defaults remain unchanged. */
+  compactQuery?:string;
+  registerLayer?:(dismiss:()=>void|boolean)=>()=>void;
   currentPage: Page;
   onPageChange: (page: Page) => void;
   personas: PersonaItem[];

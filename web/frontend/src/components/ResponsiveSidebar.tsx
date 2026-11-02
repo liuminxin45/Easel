@@ -7,7 +7,8 @@ const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]';
 
 /** Keep one mounted sidebar while changing only its narrow-screen presentation. */
 export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>) {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_SCREEN).matches);
+  const queryText=props.compactQuery||NARROW_SCREEN;
+  const [narrow, setNarrow] = useState(() => window.matchMedia(queryText).matches);
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -15,12 +16,17 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const query = window.matchMedia(NARROW_SCREEN);
+    const query = window.matchMedia(queryText);
     const update = () => { setNarrow(query.matches); setOpen(false); };
     update();
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
-  }, []);
+  }, [queryText]);
+
+  useEffect(()=>{
+    if(!narrow||!open)return;
+    return props.registerLayer?.(()=>setOpen(false));
+  },[narrow,open,props.registerLayer]);
 
   // Also dismiss when navigation is initiated outside the sidebar.
   useEffect(() => { setOpen(false); }, [props.currentPage, props.activeSessionId, props.selectedPersona]);
@@ -64,14 +70,14 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       siblings.forEach((node, index) => { node.inert = previousInert[index]; });
-      if (window.matchMedia(NARROW_SCREEN).matches) {
+      if (window.matchMedia(queryText).matches) {
         trigger?.focus({ preventScroll: true });
       } else if (panel.contains(document.activeElement)
         && !(document.activeElement as HTMLElement).getClientRects().length) {
         focusable()[0]?.focus({ preventScroll: true });
       }
     };
-  }, [narrow, open]);
+  }, [narrow, open,queryText]);
 
   const dismiss = () => setOpen(false);
   const onNavigationClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -80,15 +86,15 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
   };
 
   return <>
-    <button ref={triggerRef} type="button" className="sidebar-toggle" aria-label="打开导航"
+    <button ref={triggerRef} type="button" className="sidebar-toggle" data-compact={props.compactQuery?narrow:undefined} aria-label="打开导航"
         aria-expanded={narrow && open} aria-controls={panelId} onClick={() => setOpen(true)}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
     </button>
-    <div ref={backdropRef} className={`sidebar-backdrop${narrow && open ? ' is-open' : ''}`}
+    <div ref={backdropRef} data-compact={props.compactQuery?narrow:undefined} className={`sidebar-backdrop${narrow && open ? ' is-open' : ''}`}
       aria-hidden="true" onClick={dismiss} />
-    <div ref={panelRef} id={panelId} className={`sidebar-panel${narrow && open ? ' is-open' : ''}`}
+    <div ref={panelRef} id={panelId} data-compact={props.compactQuery?narrow:undefined} className={`sidebar-panel${narrow && open ? ' is-open' : ''}`}
       role={narrow ? 'dialog' : undefined} aria-modal={narrow && open ? true : undefined}
       aria-label={narrow ? '主导航' : undefined} aria-hidden={narrow && !open ? true : undefined}
       inert={narrow && !open} tabIndex={-1} onClickCapture={onNavigationClick}>

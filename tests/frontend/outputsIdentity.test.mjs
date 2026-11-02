@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
 const ts=require('typescript');
@@ -35,7 +36,8 @@ function gallery(initial,{jumpPath}={}){
  runInNewContext(compiled,{exports,document:{addEventListener(){},removeEventListener(){}},require:specifier=>{
   if(specifier==='react')return hooks;
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
-  if(specifier==='../lib/api')return {fetchOutputs:async()=>data,fetchOutputContent:async()=>({content:'original'}),mediaUrl:path=>'/media/'+path};
+  if(specifier==='../lib/api')return {peekApiData:()=>undefined,subscribeApiData:()=>()=>{},fetchOutputs:async()=>data,fetchOutputContent:async()=>({content:'original'}),mediaUrl:path=>'/media/'+path};
+  if(specifier==='../lib/viewState')return viewStateModule(hooks);
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
   if(specifier==='./DownloadLink')return {default:'DownloadLink'};
   if(specifier==='./icons')return new Proxy({},{get:(_,name)=>name});

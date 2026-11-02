@@ -3,6 +3,7 @@ import type { ComponentType,ReactNode } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
 import SkillDrawer from './SkillDrawer';
+import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import { displayName } from '../lib/skillDisplayNames';
 import {
   IconSearch, IconCompass, IconSkills, IconSend, IconChart, IconLayers,
@@ -14,6 +15,8 @@ interface SkillPageProps {
   catalog?:{items:SkillItem[];error?:string;loading?:boolean;reload?:()=>void};
   renderDrawer?:(name:string,onClose:()=>void)=>ReactNode;
   headerActions?:ReactNode;
+  viewState?:ViewStateStore<{query:string}>;
+  onContentReady?:()=>void;
 }
 
 type IconC = ComponentType<{ size?: number }>;
@@ -56,14 +59,15 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona,catalog,renderDrawer,headerActions }: SkillPageProps) {
+export default function SkillPage({ persona,catalog,renderDrawer,headerActions,viewState,onContentReady }: SkillPageProps) {
   const [localSkills, setSkills] = useState<SkillItem[]>([]);
   const [localError, setError] = useState('');
   const [localLoading, setLoading] = useState(true);
   const skills=catalog?catalog.items:localSkills,error=catalog?catalog.error||'':localError;
   const loading=catalog?catalog.loading===true:localLoading;
   const waiting=loading&&skills.length===0&&!error;
-  const [query, setQuery] = useState('');
+  const [view,setView]=useStoredViewState(viewState,()=>({query:''}));
+  const query=view.query,setQuery=(query:string)=>setView({query});
   const [selected, setSelected] = useState<string | null>(null);
 
   const load = () => {
@@ -72,6 +76,7 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions }
     fetchSkills().then(value=>{setSkills(value);setError('')}).catch(() => setError('加载 SKILL 列表失败')).finally(()=>setLoading(false));
   };
   useEffect(()=>{if(!catalog)load()}, [!!catalog]);
+  useEffect(()=>{if(!loading&&!error)onContentReady?.()},[loading,error,skills,onContentReady]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

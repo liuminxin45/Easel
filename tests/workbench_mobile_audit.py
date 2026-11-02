@@ -1237,7 +1237,16 @@ def main():
                                     page.get_by_role('button', name='确认适用范围并发布', exact=True).click()
                                     expect(page.get_by_role('dialog', name='发布技能版本', exact=True)).to_be_visible()
                                 run('skills.publish', skill_path, '.drawer[role="dialog"][aria-label="发布技能版本"]', 'publish_scope', before=skill_publish_navigation)
-                                run('skills.experience', '/toolbox?section=skills&pane=experience', '.drawer[role="dialog"][aria-label="整理经验"]', 'completed_task', marker=MARK)
+                                def experience_ready():
+                                    drawer = page.get_by_role('dialog', name='整理经验', exact=True)
+                                    # A stored goal does not prove async works/task data arrived.
+                                    response = page.request.get(fixture['origin'] + '/api/works')
+                                    assert response.ok, response.text()
+                                    expected = [work for work in response.json()['items'] if (work.get('creator') or {}).get('id', 'oil-pig') == 'oil-pig']
+                                    section = drawer.locator('details.ew-disclosure').filter(has=page.locator('summary > span', has_text='限定作品 · 可选'))
+                                    expect(section.locator('label.ew-check')).to_have_count(len(expected))
+                                    expect(drawer.get_by_role('heading', name='整理完成', exact=True)).to_be_visible()
+                                run('skills.experience', '/toolbox?section=skills&pane=experience', '.drawer[role="dialog"][aria-label="整理经验"]', 'completed_task', marker=MARK, before=experience_ready)
                                 def proposal():
                                     page.get_by_text('作者身份', exact=True).click()
                                     expect(page.get_by_text('确认此字段', exact=True)).to_be_visible()

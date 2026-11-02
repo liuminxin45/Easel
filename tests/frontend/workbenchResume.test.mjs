@@ -46,7 +46,8 @@ test('a new protected write during version fetch prevents reload and its complet
  const stop=f.bindNativeUpgradeChecks({activities:f.activities,release:'old'});
  f.window.emit('focus');await f.advance();assert.equal(f.requests.length,1);
  const finish=f.activities.begin('write');pending.resolve(f.response());await f.advance();assert.equal(f.reloads(),0);
- f.state.fetch=async()=>f.response();finish();await f.advance();assert.equal(f.requests.length,2);assert.equal(f.reloads(),1);stop();
+ f.state.fetch=async()=>f.response();finish();await f.advance();assert.equal(f.requests.length,1);assert.equal(f.reloads(),0);
+ await f.advance(30000);assert.equal(f.requests.length,2);assert.equal(f.reloads(),1);stop();
 });
 
 test('foreground loss while preparing a worker never reloads the hidden page',async()=>{
@@ -54,13 +55,15 @@ test('foreground loss while preparing a worker never reloads the hidden page',as
  const stop=f.bindNativeUpgradeChecks({activities:f.activities,release:'old',registration:Promise.resolve({})});
  f.window.emit('pageshow');await f.advance();assert.equal(f.preparations.length,1);
  f.document.hidden=true;pending.resolve(true);await f.advance();assert.equal(f.reloads(),0);
- f.document.hidden=false;f.state.prepare=async()=>true;f.document.emit('visibilitychange');await f.advance();assert.equal(f.reloads(),1);stop();
+ f.document.hidden=false;f.state.prepare=async()=>true;f.document.emit('visibilitychange');await f.advance();assert.equal(f.reloads(),0);
+ await f.advance(30000);assert.equal(f.reloads(),1);stop();
 });
 
 test('a stuck register promise is bounded and later resume attempts remain usable',async()=>{
  const f=fixture(),pending=deferred(),stop=f.bindNativeUpgradeChecks({activities:f.activities,release:'old',registration:pending.promise});
  f.window.emit('pageshow');await f.advance(12001);assert.equal(f.requests.length,1);assert.equal(f.reloads(),0);
- pending.resolve({});f.window.emit('pageshow');await f.advance();assert.equal(f.requests.length,2);assert.equal(f.reloads(),1);stop();
+ pending.resolve({});f.window.emit('pageshow');await f.advance();assert.equal(f.requests.length,1);
+ await f.advance(17999);assert.equal(f.requests.length,2);assert.equal(f.reloads(),1);stop();
 });
 
 test('read activities and blocked persistence never request an unsafe reload; network failures stay silent',async()=>{
@@ -68,9 +71,27 @@ test('read activities and blocked persistence never request an unsafe reload; ne
  const read=f.activities.begin('read');read();await f.advance();assert.equal(f.requests.length,0);
  f.window.emit('online');await f.advance();assert.equal(f.requests.length,0);
  blocked=false;f.state.fetch=async()=>{throw Error('offline')};f.window.emit('pageshow');await f.advance();assert.equal(f.reloads(),0);
- f.state.fetch=async()=>({ok:false});f.window.emit('focus');await f.advance();assert.equal(f.reloads(),0);
- f.state.fetch=async()=>({ok:true,json:async()=>({release:'old'})});f.window.emit('focus');await f.advance();assert.equal(f.reloads(),0);
+ f.state.fetch=async()=>({ok:false});f.window.emit('focus');await f.advance(30000);assert.equal(f.reloads(),0);
+ f.state.fetch=async()=>({ok:true,json:async()=>({release:'old'})});f.window.emit('focus');await f.advance(30000);assert.equal(f.reloads(),0);
  stop();f.window.emit('pageshow');await f.advance(60000);assert.equal(f.requests.length,3);
+});
+
+test('repeated successful draft saves and focus events share the thirty-second version budget',async()=>{
+ const f=fixture();f.state.fetch=async()=>({ok:true,json:async()=>({release:'old'})});
+ const stop=f.bindNativeUpgradeChecks({activities:f.activities,release:'old'});
+ for(let i=0;i<5;i++){const finish=f.activities.begin('save');finish();f.window.emit('focus');await f.advance(1000)}
+ assert.equal(f.requests.length,1);assert.equal(f.reloads(),0);
+ await f.advance(24999);assert.equal(f.requests.length,1);
+ await f.advance(1);assert.equal(f.requests.length,2);stop();
+});
+
+test('ordinary editing and the following quiet period defer a discovered build without losing input',async()=>{
+ const f=fixture();f.owner.matches=()=>true;
+ const stop=f.bindNativeUpgradeChecks({activities:f.activities,release:'old'});
+ f.window.emit('pageshow');await f.advance();assert.equal(f.requests.length,0);
+ f.document.emit('input');f.owner.matches=()=>false;f.document.emit('focusout');
+ await f.advance(9999);assert.equal(f.requests.length,0);assert.equal(f.reloads(),0);
+ await f.advance(1);assert.equal(f.requests.length,1);assert.equal(f.reloads(),1);stop();
 });
 
 test('unmount cancels pending foreground work and a late prepared worker cannot reload',async()=>{

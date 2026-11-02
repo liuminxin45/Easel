@@ -1,14 +1,14 @@
 import {ChatTurnProducts,productArtifacts} from './ChatTurnProducts';
-import {useEffect,useRef,useMemo} from 'react';
+import {useCallback,useEffect,useRef,useMemo} from 'react';
 import {useStore} from 'zustand';
 import {sessionRuntime,type FrozenTurn,type SessionDraft} from './chatRuntime';
-import ChatPage,{type ChatCommand} from '../../components/ChatPage';
+import ChatPage,{type ChatCommand,type ChatViewState} from '../../components/ChatPage';
 import {type SkillItem} from '../../lib/api';
 import {generateSessionTitle,type ChatSession} from '../../lib/store';
 import type {Artifact as ChatArtifact} from '../../lib/artifacts';
 import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
 import {nativeContinuationPath,workProductionRecovery,type Work,array,record,string,type JsonRecord} from '@workbench/core';
-import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
+import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
 import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
@@ -17,6 +17,7 @@ export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;disp
 export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
 export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[];pendingSubmissionId?:string|null}
 export interface NativeSessions {sessions:NativeSession[]}
+interface HistoryPage {has_more:boolean;next_before:string|null;before?:string|null;limit:number}
 export function nativeSkillChoices(skills:NativeSkill[],versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
  const choices=skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
   const id=skill.skill_id||skill.id||skill.name,workflow=skill.execution_kind==='workflow'||id==='content-production';
@@ -50,14 +51,16 @@ export function confirmedContinuation(message:unknown,sessionId:string,profileId
  return nativeContinuationPath(value.business_recovery,workId,versionId);
 }
 export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
- const vm=useWorkbench(),resource=useResource<{session:NativeSession;linked_works?:JsonRecord[]}>('/api/chat/sessions/'+encodeURIComponent(id),{interval:3000}),catalog=useResource<NativeSkill[]>('/api/skills');
+ const vm=useWorkbench(),historyBefore=search.get('history_before')||'',historyQuery=new URLSearchParams({limit:'50',...(historyBefore?{before:historyBefore}:{})});
+ const resource=useResource<{session:NativeSession;linked_works?:JsonRecord[];history_page?:HistoryPage}>('/api/chat/sessions/'+encodeURIComponent(id)+'?'+historyQuery,{interval:historyBefore?undefined:3000}),catalog=useResource<NativeSkill[]>('/api/skills');
+ const viewState=useViewState<ChatViewState>('chat-view:'+id,{top:0,following:true});
+ const onContentReady=useCallback(()=>{if(resource.data?.session)vm.navigation.contentReady?.({entryId:vm.navigation.entryKey})},[resource.data?.session,vm.navigation.entryKey,vm.navigation.contentReady]);
  const key='chat:'+id,[draft,patch]=useDraft<SessionDraft>(key,{text:'',files:[]}),action=useAsyncAction();
  const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
  const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
  const continuationIdle=!running&&!session?.pendingTurnId&&!session?.pendingSubmissionId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
  const lastAssistant=session?.messages.filter(message=>message.role==='assistant').at(-1),lastTurn=string(record(lastAssistant).turnId||record(lastAssistant).id);
- useEffect(()=>{if(session)vm.navigation.contentReady?.()},[session,vm.navigation.contentReady]);
  const continuationWork=useResource<Work>(search.get('continue')==='1'&&workId?'/api/works/'+encodeURIComponent(workId):null),continuationApplied=useRef('');
  const continuationVersion=continuationWork.data?.versions.find(v=>v.id===parentVersion),continuationPath=continuationWork.data?nativeContinuationPath(workProductionRecovery(continuationWork.data,continuationVersion),workId,parentVersion):null;
  useEffect(()=>{if(search.get('continue')!=='1'||!continuationPath||!session||session.pendingTurnId||draft.pending||continuationApplied.current===search.toString())return;continuationApplied.current=search.toString();runtime.state.setState({error:'',feedback:undefined});if(!draft.text.trim()&&!draft.files.length)patch({text:'请继续完成《'+continuationWork.data!.title+'》，沿用所选版本的原始素材、制作要求和保留文件，完成后另存新版本。'})},[continuationPath,session?.pendingTurnId,draft.pending,search.toString()]);
@@ -66,15 +69,16 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   if(selected){applied.current=search.toString();patch({command:{...selected.selection,...(Number.isSafeInteger(version)&&version>0?{version}:{}),...(search.get('trial')==='1'?{trial:true}:{})}});}
  },[catalog.data,id,search.toString()]);
  const confirmedStoppedPath=confirmedContinuation(lastAssistant,id,profileId),historicalError=string(record(lastAssistant).business_error);
- useEffect(()=>{if(confirmedStoppedPath&&!session?.pendingTurnId)runtime.restoreStopped(lastTurn,historicalError)},[runtime,confirmedStoppedPath,session?.pendingTurnId,lastTurn,historicalError]);
+ useEffect(()=>{if(!historyBefore&&confirmedStoppedPath&&!session?.pendingTurnId)runtime.restoreStopped(lastTurn,historicalError)},[runtime,historyBefore,confirmedStoppedPath,session?.pendingTurnId,lastTurn,historicalError]);
  useEffect(()=>{const pendingId=session?.pendingTurnId||session?.pendingSubmissionId||draft.pending?.turnId;if(!session||!pendingId||runtime.state.getState().running||runtime.blocked.has(pendingId)||runtime.completed.has(pendingId)||draft.pending?.state==='rejected')return;
   const saved=draft.pending?.turnId===pendingId?draft.pending:{turnId:pendingId,message:'',attachments:[],context:{profile_id:profileId},inputs:{text:'',files:[]},state:'accepted' as const};
   runtime.connect(saved,profileId,true);
  },[resource.data,id,runtime]);
- useEffect(()=>{const first=session?.messages.find(message=>message.role==='user');if(!session||!first||!['新对话','New Chat'].includes(session.title)||session.pendingTurnId||repair.current===session.id)return;
+ useEffect(()=>{const first=session?.messages.find(message=>message.role==='user');if(historyBefore||resource.data?.history_page?.has_more||!session||!first||!['新对话','New Chat'].includes(session.title)||session.pendingTurnId||repair.current===session.id)return;
   repair.current=session.id;void vm.api.post('/api/chat/sessions',{action:'auto-title',session_id:id,operation_id:crypto.randomUUID(),expected_revision:session.revision,title:generateSessionTitle(first.content)},vm.config?.csrf||'').then(()=>vm.client.invalidate(['chat'])).catch(()=>{});
  },[session?.id,session?.revision]);
  const submit=()=>void action.run(async()=>{
+  if(historyBefore)throw Error('请返回最新消息后继续输入；当前草稿已保留。');
   if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId||session.pendingSubmissionId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
   const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.source_revision?{skill_revision:draft.command.source_revision}:{}),...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
@@ -101,19 +105,20 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const historyJson=useMemo(()=>JSON.stringify(session?.messages||[]),[session?.messages]);
  const visibleMessages=useMemo(()=>
   {const messages=(JSON.parse(historyJson) as ChatSession['messages']).map(message=>{const path=string(record(message).library_path);return message.role==='assistant'&&path?{...message,content:message.content+'\n\n[内容库 › 本版产物](#/outputs/'+path.split('/').map(encodeURIComponent).join('/')+')'}:message}).filter(message=>!((running||!!session?.pendingTurnId||!!session?.pendingSubmissionId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)));
-   const pending=draft.pending;if(pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments} as ChatSession['messages'][number]);return messages;},
-  [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted]);
+  const pending=draft.pending;if(!historyBefore&&pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments} as ChatSession['messages'][number]);return messages;},
+  [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label+' · v'+draft.command.version}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId||!!session?.pendingSubmissionId;
- return <div className="ew-chat-layout" ref={element=>{element?.querySelector('.chat-messages')?.setAttribute('data-native-scroll-region','chat-messages')}}><ChatPage apiDirect={session?.runtime==='api'} session={shown} stream={running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:null}
+ const historyPath=(before?:string)=>{const query=new URLSearchParams(search);if(before)query.set('history_before',before);else query.delete('history_before');return '/chat/'+encodeURIComponent(id)+(query.size?'?'+query:'')};
+ return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:null}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
   composer={{text:draft.text,attachments:draft.files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:text=>patch({text}),onUpload:async files=>patch({files:await vm.service.attach(files,draft.files)}),onRemoveAttachment:fileId=>patch({files:draft.files.filter(file=>file.id!==fileId)}),commands:choices,selectedCommand:selected,
-   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
+   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:!!historyBefore||busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!historyBefore&&!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:historyBefore?'查看历史消息；返回最新消息后可继续输入':'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
-  notice={<Notice sources={[resource,catalog,action,{error,feedback}]}/>}
+  notice={<><Notice sources={[resource,catalog,action,{error,feedback}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>
    {(draft.article_id||versionContext)&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':versionContext?'已选作品版本':'已选新闻素材'}>
     {draft.article_id&&<div className="ew-row"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined})}>移除本轮来源绑定</button></div>}

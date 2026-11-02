@@ -82,13 +82,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
         if match and get:return response(await asyncio.to_thread(business.skill,match[1]))
         if path=='/api/chat/sessions':
             if get:
-                def listing():
-                    result=service.list_sessions()
-                    for session in result['sessions']:
-                        history=service.history(session['id'])
-                        session.update(message_count=len(history['session']['messages']),linked_works=history['linked_works'])
-                    return result
-                return response(await run_sync(listing))
+                return response(await run_sync(service.list_sessions,summaries=True))
             action=value.get('action','create')
             if action=='create':
                 def create():
@@ -102,7 +96,15 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             if action=='archive':return response(await run_sync(service.archive_session,sid,value))
             raise ValueError('不支持的对话操作')
         match=re.fullmatch(r'/api/chat/sessions/([A-Za-z0-9_.-]+)',path)
-        if match and get:return response(await run_sync(admissions.history if admissions is not None else business.history,match[1]))
+        if match and get:
+            if admissions is None:return response(await run_sync(business.history,match[1]))
+            raw_limit=request.query_params.get('limit')
+            # Existing integrations retain the complete wire response. The
+            # mobile view explicitly opts into bounded windows and cursors.
+            if raw_limit is None:return response(await run_sync(admissions.history,match[1]))
+            try:limit=int(raw_limit)
+            except ValueError:raise ValueError('历史分页数量无效') from None
+            return response(await run_sync(admissions.history,match[1],limit=limit,before=request.query_params.get('before')))
         if path=='/api/chat/plan' and method=='POST':return response(await run_sync(business.plan,value))
         if path=='/api/chat/stream' and method=='POST':
             prepared=await asyncio.to_thread(business.prepare,value)

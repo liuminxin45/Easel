@@ -4,6 +4,8 @@ import {createStore} from 'zustand/vanilla';
 import {createWorkbenchClient,type ClientOptions,type PendingOperation,type ResourceState,type WorkbenchClient} from "../../core/client";
 import {interactionFeedback,type InteractionFeedback} from "../../../lib/interaction";
 import type {ActivityDelegate,JsonRecord,NavigationDelegate,StudioAction} from "../../core/models";
+import type {ViewStateStore} from '../../../lib/viewState';
+import {ViewStateRepository} from '../../platform/view-state';
 
 const Context=createContext<{client:WorkbenchClient;navigation?:NavigationDelegate}|null>(null);
 const fallbackNavigation:NavigationDelegate={get path(){return typeof location==='undefined'?'/toolbox':location.pathname+location.search},navigate:path=>location.assign(path),replace:path=>location.replace(path),back:()=>history.back()};
@@ -14,15 +16,24 @@ export function CoreProvider({children,client:provided,navigation,activities,opt
   useEffect(()=>autoBoot?client.usage.bindDOM():undefined,[client,autoBoot]);
   useEffect(()=>{if(!autoBoot)return;let stopped=false;const resume=()=>{if(document.hidden)client.pauseVisible();else void client.resumeVisible()};void client.initialize().then(()=>{if(!stopped)resume()});window.addEventListener('online',resume);window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{stopped=true;window.removeEventListener('online',resume);window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume);client.pauseVisible()}},[client,autoBoot]);
   // Navigation changes propagate without replacing the business client or draft stores.
-  const value=useMemo(()=>({client,navigation:client.navigation}),[client,navigation?.path]);
+  const value=useMemo(()=>({client,navigation:client.navigation}),[client,navigation?.path,navigation?.entryKey,navigation?.direction]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useWorkbench(){
   const context=useContext(Context);if(!context)throw Error('CoreProvider is required');const {client}=context;
   const session=useStore(client.session);
-  const persistence=useStore(client.drafts.persistence);
+  const persistenceError=useStore(client.drafts.persistence,state=>state.error);
   const navigation=context.navigation??fallbackNavigation;
-  return {...session,client,api:client.api,service:client.service,ready:!!session.config&&!session.expired,persistenceError:persistence.error,legacyPending:client.legacyPending(),navigation,navigate:(path:string,options?:Parameters<NavigationDelegate['navigate']>[1])=>navigation.navigate(path,options),replace:(path:string,options?:Parameters<NavigationDelegate['replace']>[1])=>navigation.replace(path,options),back:()=>navigation.back(),refresh:()=>client.refresh()};
+  return {...session,client,api:client.api,service:client.service,ready:!!session.config&&!session.expired,persistenceError,legacyPending:client.legacyPending(),navigation,navigate:(path:string,options?:Parameters<NavigationDelegate['navigate']>[1])=>navigation.navigate(path,options),replace:(path:string,options?:Parameters<NavigationDelegate['replace']>[1])=>navigation.replace(path,options),back:()=>navigation.back(),refresh:()=>client.refresh()};
+}
+const viewStates=new WeakMap<WorkbenchClient,{epoch:number;repository:ViewStateRepository}>();
+export function useViewState<T>(scope:string,initial:T):ViewStateStore<T>{
+ const {client,navigation}=useWorkbench(),epoch=client.authenticationEpoch;
+ let owner=viewStates.get(client);if(!owner){owner={epoch,repository:new ViewStateRepository()};viewStates.set(client,owner);client.session.subscribe(()=>{const current=viewStates.get(client);if(current&&current.epoch!==client.authenticationEpoch){current.repository.clear();current.epoch=client.authenticationEpoch;navigation.clearViewState?.()}})}
+ if(owner.epoch!==epoch){owner.repository.clear();owner.epoch=epoch}
+ const initialRef=useRef(initial);initialRef.current=initial;
+ const entry=navigation.entryKey||navigation.path,path=navigation.path,repository=owner.repository;
+ return useMemo(()=>({read:()=>client.authenticationEpoch===epoch?(navigation.readViewState?.(entry,scope) as T|null)??repository.read<T>(entry,path,scope)??initialRef.current:null,write:(value:T)=>{if(client.authenticationEpoch===epoch){repository.write(entry,path,scope,value);navigation.writeViewState?.(entry,scope,value)}}}),[client,epoch,repository,entry,path,scope,navigation.readViewState,navigation.writeViewState]);
 }
 const emptyResource=createStore<ResourceState>(()=>({data:null,loading:false,error:'',revision:0,stale:false}));
 export interface ResourceResult<T> {data:T|null;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;reload:()=>Promise<T|null>}

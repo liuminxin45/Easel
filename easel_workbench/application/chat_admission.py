@@ -200,17 +200,26 @@ class ChatAdmission:
                 return
             await asyncio.sleep(.25)
 
-    def history(self,sid):
-        result=self.business.history(sid);messages=result['session']['messages']
+    def history(self,sid,*,limit=None,before=None):
+        window=self.chat.history_window(sid,limit=limit,before=before) if limit is not None else None
+        result=self.business.history(sid,**({'turn_ids':window['ids']} if window else {}));messages=result['session']['messages']
         existing={m['id'] for m in messages}
         with self.store.connect() as c:
-            rows=[json.loads(r[0]) for r in c.execute('SELECT document FROM easel_chat_submissions WHERE session_id=? ORDER BY rowid',(sid,))]
+            if window and not window['ids']:rows=[]
+            elif window:
+                rows=[json.loads(r[0]) for r in c.execute('SELECT document FROM easel_chat_submissions WHERE session_id=? AND id IN ('+','.join('?' for _ in window['ids'])+') ORDER BY rowid',(sid,*window['ids']))]
+            else:rows=[json.loads(r[0]) for r in c.execute('SELECT document FROM easel_chat_submissions WHERE session_id=? ORDER BY rowid',(sid,))]
         for row in rows:
+            if window and row['id'] not in window['ids']:continue
             if row['id'] in existing:continue
             value=row['request'];failed=row['status']=='failed';stopped=row['status']=='stopped'
             messages.extend([{'id':row['id']+'-user','role':'user','content':value.get('message',''),'timestamp':row['created_at'],'attachments':value.get('attachments',[])},
                              {'id':row['id'],'turnId':row['id'],'role':'assistant','content':row.get('error','') if failed else '',
                               'timestamp':row['updated_at'],'status':'failed' if failed else 'stopped' if stopped else 'running',
                               'activity':'已停止准备，未调用模型' if stopped else 'AI已接收，正在处理','admission_failed':failed}])
-        messages.sort(key=lambda message:message['timestamp'])
+        if window:
+            order={tid:index for index,tid in enumerate(window['ids'])}
+            messages.sort(key=lambda message:(order.get(message.get('turnId') or (message['id'][:-5] if message['role']=='user' else message['id']),len(order)),message['role']!='user'))
+        else:messages.sort(key=lambda message:message['timestamp'])
+        if window:result['history_page']={key:value for key,value in window.items() if key!='ids'}
         return result

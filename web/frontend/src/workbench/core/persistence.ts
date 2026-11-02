@@ -9,15 +9,32 @@ const localStorageIfAvailable=():Storage|undefined=>{try{return typeof localStor
 export class DraftRepository {
   private stores=new Map<string,StoreApi<{value:object}>>();
   private resetBaselines=new Set<string>();
+  private inputIndex:Map<string,JsonRecord>|undefined;
+  private pendingKeys=new Set<string>();
   readonly persistence=createStore<{error:string}>(()=>({error:''}));
-  constructor(private storage:Storage|undefined=localStorageIfAvailable(),private activities?:ActivityDelegate){}
+  constructor(private storage:Storage|undefined=localStorageIfAvailable(),private activities?:ActivityDelegate){
+    // Other tabs may update the same allowed input store. Rebuild lazily rather
+    // than scanning/parsing every saved draft during every input render.
+    if(typeof window!=='undefined'&&typeof window.addEventListener==='function')window.addEventListener('storage',event=>{
+      if(event.storageArea===this.storage&&(!event.key||event.key.startsWith(prefix))){this.inputIndex=undefined;this.pendingKeys.clear()}
+    });
+  }
+  private persistenceError(error:string):void{if(this.persistence.getState().error!==error)this.persistence.setState({error})}
+  private indexInput(key:string,value:JsonRecord):void{this.inputIndex?.set(key,value);if(value.pending||value.pendingId||value.request||value.operation||value.pendingSave||value.pendingFinalize)this.pendingKeys.add(key);else this.pendingKeys.delete(key)}
+  private indexedInputs():Map<string,JsonRecord>{
+    if(this.inputIndex)return this.inputIndex;
+    this.inputIndex=new Map();this.pendingKeys.clear();
+    if(this.storage)for(let i=0;i<this.storage.length;i++){const key=this.storage.key(i);if(key?.startsWith(prefix)){const id=key.slice(prefix.length),value=this.get(id);if(value)this.indexInput(id,{...value,id})}}
+    return this.inputIndex;
+  }
   get<T extends object=JsonRecord>(key:string):T|null{try{const raw=this.storage?.getItem(prefix+key);return raw?JSON.parse(raw) as T:null}catch{return null}}
-  set<T extends object>(key:string,value:T):boolean{const release=this.activities?.begin('save');this.resetBaselines.delete(key);this.stores.get(key)?.setState({value});try{if(!this.storage)throw Error('storage unavailable');this.storage.setItem(prefix+key,JSON.stringify({...value,id:key,updatedAt:Date.now()}));this.persistence.setState({error:''});return true}catch{this.persistence.setState({error:'本机存储未能保存，输入仍在当前页面；请保留或复制原文后重试。'});return false}finally{release?.()}}
-  remove(key:string):void{try{this.storage?.removeItem(prefix+key)}catch{this.persistence.setState({error:'本机输入记录未能更新，请核对存储设置。'})}}
-  clearInputs():void{if(!this.storage)return;const keys=Array.from({length:this.storage.length},(_,index)=>this.storage!.key(index));for(const key of keys)if(key&&(key.startsWith(prefix)||key.startsWith('desk-draft:')))this.storage.removeItem(key);this.resetBaselines.clear();for(const [key,store] of this.stores){store.setState({value:{}});this.stores.delete(key)}}
+  set<T extends object>(key:string,value:T):boolean{const release=this.activities?.begin('save');this.resetBaselines.delete(key);this.stores.get(key)?.setState({value});try{if(!this.storage)throw Error('storage unavailable');const saved={...value,id:key,updatedAt:Date.now()};this.storage.setItem(prefix+key,JSON.stringify(saved));if(this.inputIndex)this.indexInput(key,saved);this.persistenceError('');return true}catch{this.persistenceError('本机存储未能保存，输入仍在当前页面；请保留或复制原文后重试。');return false}finally{release?.()}}
+  remove(key:string):void{try{this.storage?.removeItem(prefix+key);this.inputIndex?.delete(key);this.pendingKeys.delete(key)}catch{this.persistenceError('本机输入记录未能更新，请核对存储设置。')}}
+  clearInputs():void{if(!this.storage)return;const keys=Array.from({length:this.storage.length},(_,index)=>this.storage!.key(index));for(const key of keys)if(key&&(key.startsWith(prefix)||key.startsWith('desk-draft:')))this.storage.removeItem(key);this.inputIndex=new Map();this.pendingKeys.clear();this.resetBaselines.clear();for(const [key,store] of this.stores){store.setState({value:{}});this.stores.delete(key)}}
   reset<T extends object>(key:string,initial:T):void{this.remove(key);this.resetBaselines.add(key);this.stores.get(key)?.setState({value:initial})}
   rebaseReset<T extends object>(key:string,initial:T):void{if(!this.resetBaselines.has(key))return;const store=this.stores.get(key);if(store&&JSON.stringify(store.getState().value)!==JSON.stringify(initial))store.setState({value:initial})}
-  list():JsonRecord[]{if(!this.storage)return[];const result:JsonRecord[]=[];for(let index=0;index<this.storage.length;index++){const k=this.storage.key(index);if(k?.startsWith(prefix)){const d=this.get(k.slice(prefix.length));if(d)result.push({...d,id:k.slice(prefix.length)})}}return result.sort((a,b)=>Number(b.updatedAt??0)-Number(a.updatedAt??0))}
+  list():JsonRecord[]{return [...this.indexedInputs().values()].sort((a,b)=>Number(b.updatedAt??0)-Number(a.updatedAt??0))}
+  pending():JsonRecord[]{const index=this.indexedInputs();return [...this.pendingKeys].flatMap(key=>index.has(key)?[index.get(key)!]:[])}
   private compatibleInput(key:string):JsonRecord|null{
     const own=this.get<JsonRecord>(key);if(own)return this.adaptDateInput(own);
     const section=key.match(/^studio:(?:rule|foundation):(.+)$/)?.[1];if(section){const value=record(this.get('studio:foundation-inputs'))[section];return value&&typeof value==='object'?record(value):null}
@@ -34,7 +51,7 @@ export class DraftRepository {
   }
   store<T extends object>(key:string,initial:T):StoreApi<{value:T}>{let current=this.stores.get(key);if(!current){const saved=this.compatibleInput(key),input=Object.fromEntries(Object.entries(saved??{}).filter(([field])=>!['id','updatedAt'].includes(field)));const value=saved?{...initial,...record(saved.draft),...input}:initial;current=createStore<{value:object}>(()=>({value}));this.stores.set(key,current)}else this.rebaseReset(key,initial);return current as StoreApi<{value:T}>}
   /** Inputs remain in their existing keys. Never copy saved server results. */
-  hasPending():boolean{return this.list().some(d=>!!(d.pending||d.pendingId||d.request||d.operation||d.pendingSave||d.pendingFinalize))}
+  hasPending():boolean{return this.pending().length>0}
 }
 export interface StoredDraftFile {blob:Blob;name:string;uploadId?:string;uploaded?:Artifact;[key:string]:unknown}
 export async function draftFile(id:string,value?:StoredDraftFile,activities?:ActivityDelegate):Promise<StoredDraftFile|undefined>{

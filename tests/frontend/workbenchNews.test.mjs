@@ -5,22 +5,23 @@ import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const root=new URL('../../web/frontend/src/',import.meta.url),jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
-function load(file,imports={}){const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,root),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,Date,Set,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(id==='./InteractionNotice'?{InteractionNotice:()=>null}:assert.fail(id))});return exports}
+function load(file,imports={}){const exports={};if(imports['../lib/api'])imports['../lib/api']={peekApiData:()=>undefined,subscribeApiData:()=>()=>{},...imports['../lib/api']};runInNewContext(ts.transpileModule(readFileSync(new URL(file,root),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,Date,Set,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(id==='./InteractionNotice'?{InteractionNotice:()=>null}:assert.fail(id))});return exports}
 const context=load('workbench/platform/news-context.ts'),navigation=load('workbench/platform/navigation.ts',{'./news-context':context});
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
 
 test('quiet trend retries keep layout and prior errors until success; native defaults retain progress',async()=>{
+ const source=readFileSync(new URL('components/TrendsPage.tsx',root),'utf8'),tree=ts.createSourceFile('TrendsPage.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let declaration;
+ const visit=node=>{if(ts.isVariableDeclaration(node)&&node.name.getText(tree)==='load')declaration=node;ts.forEachChild(node,visit)};visit(tree);
+ const compiled=ts.transpileModule('exports.load='+declaration.initializer.arguments[0].getText(tree),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
  for(const quiet of [true,undefined]){
-  const changes=[];let slot=0,loadRead,release;
-  const react={Component:class {},useState:initial=>{const index=slot++,value=index===5?'上次读取失败':initial;return [value,next=>changes.push([index,next])]},useEffect(){},useCallback:fn=>{loadRead??=fn;return fn},useRef:value=>({current:value})};
-  const api={fetchTrends:()=>new Promise(resolve=>release=resolve)};
-  const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./icons':{},'./TrendSourcesDialog':()=>null});
-  const panel=Page({onUseTopic(){},quietBackgroundRefresh:quiet}).props.children;panel.type(panel.props);
-  loadRead(['source'],true);
-  assert.equal(changes.some(([index,value])=>index===4&&value===true),!quiet);
-  assert.equal(changes.some(([index,value])=>index===5&&value===''),!quiet);
+  const changes=[],exports={};let release;
+  runInNewContext(compiled,{exports,requestId:{current:0},quietBackgroundRefresh:quiet,listLimit:15,
+   fetchTrends:()=>new Promise(resolve=>release=resolve),setGroups:()=>{},setLoading:value=>changes.push(['loading',value]),setError:value=>changes.push(['error',value]),setUpdated(){},setWarnings(){}});
+  exports.load(['source'],true);
+  assert.equal(changes.some(([field,value])=>field==='loading'&&value===true),!quiet);
+  assert.equal(changes.some(([field,value])=>field==='error'&&value===''),!quiet);
   release({trends:[],updated:1,warnings:[]});await Promise.resolve();await Promise.resolve();
-  assert.ok(changes.some(([index,value])=>index===5&&value===''));
+  assert.ok(changes.some(([field,value])=>field==='error'&&value===''));
  }
 });
 test('multi-source return context survives old deep links and shell validation',()=>{
@@ -42,8 +43,10 @@ function radar(overrides={},api={}){
  const defaults=[[],[],false,[],false,'',false,0,new Set(),false,[],''];
  const state=defaults.map((value,i)=>Object.hasOwn(overrides,i)?overrides[i]:value);let slot=0;
  const icons=Object.fromEntries(['IconFire','IconRefresh','IconBookmark','IconCheck'].map(key=>[key,()=>null]));
- const react={Component:class {},useState:()=>{const index=slot++;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]},useEffect(){},useCallback:fn=>fn,useRef:value=>({current:value})};
- const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/api':api,'./icons':icons,'./TrendSourcesDialog':()=>null});
+ const map=[0,2,3,4,5,6,7,8,9,10,11];
+ const react={Component:class {},useState:()=>{const index=map[slot++];return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]},useEffect(){},useCallback:fn=>fn,useRef:value=>({current:value})};
+ const viewState={useStoredViewState:()=>[{selected:state[1],initialized:true},next=>{const value=typeof next==='function'?next({selected:state[1],initialized:true}):next;state[1]=value.selected}]};
+ const {default:Page}=load('components/TrendsPage.tsx',{'react':react,'../lib/viewState':viewState,'../lib/api':{fetchTrends:async()=>({trends:[],updated:1,warnings:[]}),...api},'./icons':icons,'./TrendSourcesDialog':()=>null});
  return {state,render(props){slot=0;const panel=Page(props).props.children;return nodes(panel.type(panel.props))}};
 }
 

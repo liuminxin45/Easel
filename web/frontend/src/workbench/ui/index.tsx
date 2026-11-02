@@ -16,6 +16,7 @@ import {IconDashboard,IconChat,IconSkills,IconOutputs,IconAccounts,IconProfile} 
 import {Notice} from './common';
 import {Dashboard,Library,Research} from './overview';
 import {nativePageRoutes} from '../platform/native-routes';
+import {COMPACT_LAYOUT_QUERY} from '../platform/profile';
 import NativeNews from './NativeNews';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
@@ -26,6 +27,7 @@ import {Settings,LocalInputs} from './system';
 import '../../index.css';
 import './styles/workbench.css';
 import './styles/mobile.css';
+import './styles/sidebar.css';
 
 export interface EaselProps{theme:'light'|'dark';onThemeChange:(theme:'light'|'dark')=>void}
 const icons:Record<string,React.ReactNode>={workbench:<IconDashboard size={18}/>,chat:<IconChat size={18}/>,skills:<IconSkills size={18}/>,content:<IconOutputs size={18}/>,accounts:<IconAccounts size={18}/>,profiles:<IconProfile size={18}/>};
@@ -60,7 +62,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const sessionCommand=(action:string,id:string,extra:JsonRecord={})=>void chatAction.run(async()=>{const current=sessions.data?.sessions.find(value=>value.id===id);await vm.client.mutate('chat:'+action+':'+id,'/api/chat/sessions',{action,session_id:id,expected_revision:current?.revision,...extra});});
 
  let page:React.ReactNode;
- if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId} id={nativeId} search={q}/>:<ChatLanding sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
+ if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId+':'+(q.get('history_before')||'latest')} id={nativeId} search={q}/>:<ChatLanding sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
  else if(p==='/news'||p.startsWith('/news/a/'))page=<NativeNews onUseTopic={useTopic} id={p.startsWith('/news/a/')?decodeURIComponent(p.slice(8)):undefined} search={q}/>;
  else if(['/posters/new','/articles/new','/works/new'].includes(p))page=<NativeNewChat key={shownPath} format={p==='/articles/new'?'article':'poster'} profileId={profile} search={q} onCreate={createChat}/>;
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
@@ -75,6 +77,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const currentPage:Page=p.startsWith('/chat')?'chat':p.startsWith('/news')?'trends':/^\/(posters|articles|works)(\/|$)/.test(p)?'outputs':q.get('section')==='skills'?'skills':q.get('section')==='profiles'?'profile':q.get('section')==='research'?(q.get('pane')==='breakdown'?'breakdown':'ideas'):q.get('section')==='calendar'?'calendar':['publications','distribution','insights'].includes(q.get('section')||'')?(q.get('pane')==='connections'?'accounts':'publish'):'dashboard';
  const onPageChange=(value:Page)=>open(nativePageRoutes[value]||'/toolbox');
  return <App host={{currentPage,onPageChange,sidebar:{currentPage,onPageChange,
+  compactQuery:COMPACT_LAYOUT_QUERY,registerLayer:vm.navigation.registerLayer,
   personas:[],selectedPersona:profile,onPersonaChange:changeProfile,onNewProfile:()=>open('/toolbox?section=profiles&item=new'),
   sessions:sessions.data?.sessions||[],activeSessionId:nativeId||null,hasMessages:session=>!!(session as import('./ChatSessionView').NativeSession).message_count||session.messages?.length>0,
   onSessionSelect:id=>open('/chat/'+encodeURIComponent(id)),onSessionDelete:()=>{},canDeleteSession:false,
@@ -89,7 +92,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
  notice:<Notice sources={[chatAction]}/>,
  overlays:settingsOpen&&apiReady&&vm.ready?<Settings/>:undefined,
- content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><p>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</p><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&(vm.ready||booted.current)&&page}</>,
+ content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><p>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</p><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&!vm.expired&&(vm.ready||booted.current)&&page}</>,
  }}/>;
 }
 export function EaselAuth({next='/native/'}:{next?:string}){const {service}=useWorkbench(),[code,setCode]=useState(''),action=useAsyncAction();return <main className="ew-auth"><div className="card ew-auth-card"><IconDashboard size={36}/><h1>登录创作工作台</h1><p>使用 Ente Auth 的验证码继续。</p><form onSubmit={e=>{e.preventDefault();void action.run(async()=>location.assign(await service.login(code,next)))}}><label className="ew-field"><span>6位验证码</span><input className="field" autoFocus aria-label="6位验证码" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))}/></label><Notice sources={[action]}/><ActionButton action={action} className="btn btn-primary" type="submit" disabled={action.busy||code.length!==6}>{action.busy?'正在登录…':'登录'}</ActionButton></form></div></main>}

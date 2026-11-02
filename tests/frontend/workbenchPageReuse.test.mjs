@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
 const ts=require('typescript');
@@ -19,15 +20,17 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
  const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const exports={};
  const client={drafts:{get:()=>({}),set:()=>true},...vm.client};
- const host={service:{collectAll:async()=>({accepted:true})},navigate:()=>{},replace:()=>{},...vm,client};
+ const host={service:{collectAll:async()=>({accepted:true})},navigation:{entryKey:'fixture',contentReady(){}},navigate:()=>{},replace:()=>{},...vm,client};
  const core={record,string:(value,fallback='')=>typeof value==='string'?value:fallback,array:value=>Array.isArray(value)?value:[],number:value=>Number(value)||0,
   useWorkbench:()=>host,useResource:path=>({data:data[path]??null,reload:async()=>data[path]??null}),
   useDraft:(_,initial)=>[initial,()=>{}],useAsyncAction:()=>({busy:false,run:async fn=>fn()}),
+  useViewState:(_,initial)=>({read:()=>initial,write(){}}),
   creatorAssetInputs:value=>value||[],workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
  runInNewContext(compiled,{exports,URLSearchParams,matchMedia:()=>({matches:viewport.compact,addEventListener(){},removeEventListener(){}}),require:specifier=>{
   if(specifier==='react')return {useCallback:fn=>fn,useMemo:fn=>fn(),useState:initial=>[initial,()=>{}],useSyncExternalStore:(_,snapshot)=>snapshot()};
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='@workbench/core'||specifier==='./hooks')return core;
+  if(specifier==='../../lib/api')return {peekApiData:()=>undefined};
   if(specifier==='../platform/native-routes')return routeModule;
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
@@ -144,10 +147,12 @@ test('native gallery resolves declared virtual file paths independently of displ
  const source=readFileSync(new URL('../../web/frontend/src/components/OutputsPage.tsx',import.meta.url),'utf8');
  const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const exports={},states=[],effects=[],reads=[];let cursor=0,handled=0;
+ const react={useState:initial=>{const index=cursor++;if(!(index in states))states[index]=typeof initial==='function'?initial():initial;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value}]},useMemo:fn=>fn(),useCallback:fn=>fn,useRef:value=>({current:value}),useEffect:fn=>effects.push(fn)};
  runInNewContext(compiled,{exports,require:specifier=>{
-  if(specifier==='react')return {useState:initial=>{const index=cursor++;if(!(index in states))states[index]=index===0?roots:initial;return [states[index],value=>{states[index]=value}]},useMemo:fn=>fn(),useCallback:fn=>fn,useRef:value=>({current:value}),useEffect:fn=>effects.push(fn)};
+  if(specifier==='react')return react;
+  if(specifier==='../lib/viewState')return viewStateModule(react);
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
-  if(specifier==='../lib/api')return {fetchOutputs:async()=>roots,fetchOutputContent:async path=>{reads.push(path);return {content:'原字内容',isBinary:false}},mediaUrl:path=>path,deleteOutput:async()=>{throw Error('Deletion must not run')}};
+  if(specifier==='../lib/api')return {peekApiData:()=>roots,subscribeApiData:()=>()=>{},fetchOutputs:async()=>roots,fetchOutputContent:async path=>{reads.push(path);return {content:'原字内容',isBinary:false}},mediaUrl:path=>path,deleteOutput:async()=>{throw Error('Deletion must not run')}};
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
   if(specifier==='./DownloadLink')return {default:'DownloadLink'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});
@@ -156,8 +161,8 @@ test('native gallery resolves declared virtual file paths independently of displ
  exports.default({jumpPath:file.path,onJumpHandled:()=>{handled++}});
  for(const effect of effects)effect();
  await new Promise(resolve=>setImmediate(resolve));
- assert.deepEqual(Array.from(states[3]),['workbench-id','workbench-id/exact-version']);
- assert.equal(states[5],file);
+ assert.deepEqual(Array.from(states.find(value=>value?.stack)?.stack||[]),['workbench-id','workbench-id/exact-version']);
+ assert.ok(states.includes(file));
  assert.deepEqual(reads,[file.path]);
  assert.equal(handled,1);
  cursor=0;let selectedProject;

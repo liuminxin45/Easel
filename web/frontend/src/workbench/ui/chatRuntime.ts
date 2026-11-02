@@ -17,7 +17,7 @@ export class SessionRuntime {
  private recoveryTimer?:ReturnType<typeof setTimeout>;
  constructor(readonly client:WorkbenchClient,readonly id:string){}
  private patch(value:Partial<SessionDraft>){const key='chat:'+this.id;this.client.drafts.set(key,{...this.client.drafts.get<SessionDraft>(key)||{text:'',files:[]},...value})}
- private reload(){return this.client.read('/api/chat/sessions/'+encodeURIComponent(this.id),true)}
+ private reload(){return this.client.read('/api/chat/sessions/'+encodeURIComponent(this.id)+'?limit=50',true)}
  private finishDraft(turn:FrozenTurn,receipt:JsonRecord){
   const current=this.client.drafts.get<SessionDraft>('chat:'+this.id);
   const restore=receipt.admission_failed===true&&current&&!current.text&&!current.files.length&&!current.command;

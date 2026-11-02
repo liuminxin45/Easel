@@ -4,13 +4,49 @@ import {bindWhoamiStorage} from '../../lib/whoami';
 import type {WorkbenchClient} from '../core/client';
 import {requestFingerprint} from '../../lib/interaction';
 import {record, type JsonRecord} from '../core/models';
+import {nativeResourceCacheable} from '../core/resource-cache';
+import {RequestError} from '../core/transport';
+
+/** Cancellation belongs to this reader, never the shared in-flight request. */
+function reader<T>(promise:Promise<T>,signal?:AbortSignal|null):Promise<T>{
+ if(!signal)return promise;
+ if(signal.aborted){void promise.catch(()=>{});return Promise.reject(new RequestError('读取已取消',{cancelled:true}));}
+ return new Promise<T>((resolve,reject)=>{
+  const abort=()=>reject(new RequestError('读取已取消',{cancelled:true}));signal.addEventListener('abort',abort,{once:true});
+  void promise.then(value=>{signal.removeEventListener('abort',abort);if(!signal.aborted)resolve(value)},error=>{signal.removeEventListener('abort',abort);reject(error)});
+ });
+}
 
 /** Keep native protocols while retaining the host's durable operation identity. */
 export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
  const transport:EaselApiTransport={
+  peek<T>(path:string){return nativeResourceCacheable(path)?client.peek<T>(path):undefined},
+  subscribe<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void){
+   if(!nativeResourceCacheable(path))return()=>{};
+   const state=client.resource(path),unwatch=client.watch(path);let previous=state.getState().data,error='';
+   if(state.getState().error){error=state.getState().error;onError?.(new Error(error))}
+   const unsubscribe=state.subscribe(value=>{
+    if(value.data!==null&&(value.data!==previous||error&&!value.error)){previous=value.data;onData(value.data as T)}
+    if(value.error&&value.error!==error)onError?.(new Error(value.error));error=value.error;
+   });
+   return()=>{unsubscribe();unwatch()};
+  },
   async request<T>(path:string,options:RequestInit={}):Promise<T>{
    const method=(options.method||'GET').toUpperCase();
-   if(method==='GET'||method==='HEAD')return client.api.get<T>(path,options.signal??undefined);
+   if(method==='GET'||method==='HEAD'){
+    if(options.signal?.aborted)throw new RequestError('读取已取消',{cancelled:true});
+    if(!nativeResourceCacheable(path))return client.api.get<T>(path,options.signal??undefined);
+    const force=options.cache==='reload'||options.cache==='no-cache',epoch=client.authenticationEpoch;
+    const read=async()=>{
+     const value=await client.read<T>(path,force);
+     if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});
+     if(value===null)throw new RequestError(client.resource(path).getState().error||'页面数据暂未读取成功');
+     return value;
+    };
+    const snapshot=force?undefined:client.peek<T>(path);
+    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});return snapshot}),options.signal)}
+    return reader(read(),options.signal);
+   }
    if(!['POST','PUT','PATCH','DELETE'].includes(method))throw Error('请求方法不受支持');
    const body:JsonRecord=typeof options.body==='string'?record(JSON.parse(options.body)):{};
    const raw=options.body instanceof FormData?options.body:undefined;
@@ -24,7 +60,6 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
     method:method as 'POST'|'PUT'|'PATCH'|'DELETE',raw,preserveBody:true,metadataOnly:true,requestSignature,
     receiptPath:id=>'/api/native/operations/'+encodeURIComponent(id),
    });
-   client.invalidate(['creator','works','easel','distribution']);
    return result;
   },
   mediaUrl:path=>'/api/media/'+path.split('/').map(encodeURIComponent).join('/'),

@@ -3,6 +3,7 @@ import {CoreProvider,useWorkbench,useUsage} from './ui/hooks';
 import {ActivityCoordinator,NavigationService,bindViewport,bindNavigationLinks,browserProfile,prepareNativeWorker,type PlatformProfile} from '@workbench/platform';
 import {bindNativeModalFocus} from './platform/modal-focus';
 import {bindNativeUpgradeChecks} from './platform/native-resume';
+import type {ImageLink} from './platform/links';
 import './host.css';
 const EaselRoot=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselWorkbench}))),EaselAuth=lazy(()=>import('@workbench/ui-easel').then(m=>({default:m.EaselAuth}))),ImagePreview=lazy(()=>import('./ui/ImagePreview'));
 const nonce=()=>document.querySelector<HTMLMetaElement>('meta[name="style-nonce"]')?.content||'';
@@ -16,21 +17,21 @@ class Boundary extends React.Component<{children:ReactNode},{error:string;detail
 }
 function InputNotice(){const vm=useWorkbench();return vm.persistenceError?<aside className="native-host-notice" role="alert">本机保存未完成：{vm.persistenceError}。请保留当前页面。</aside>:vm.expired?<aside className="native-host-notice" role="alert">登录已过期，草稿保留。<a href={'/native/login?'+new URLSearchParams({next:location.pathname+location.search})}>重新登录</a></aside>:null}
 function RuntimeServices({activities,path,direction}:{activities:ActivityCoordinator;path:string;direction:string}){
- const {ready,persistenceError}=useWorkbench(),usage=useUsage();
+ const {ready,persistenceError,client}=useWorkbench(),usage=useUsage();
  useEffect(()=>{if(ready)usage.view(path,direction)},[ready,path,direction,usage]);
  useEffect(()=>{if(!ready)return;let stopped=false;const release=document.querySelector<HTMLMetaElement>('meta[name="native-release"]')?.content;
   const cacheShell=()=>navigator.serviceWorker?.controller?.postMessage({type:'CACHE_SHELL'});
   let registration:Promise<ServiceWorkerRegistration>|undefined;
   if('serviceWorker' in navigator){navigator.serviceWorker.addEventListener('controllerchange',cacheShell);registration=navigator.serviceWorker.register('/native/sw.js',{scope:'/native/',updateViaCache:'none'});void registration.then(async current=>{if(release)await prepareNativeWorker(current,release);if(!stopped){cacheShell();current.active?.postMessage({type:'CACHE_SHELL'})}}).catch(()=>{/* The online app remains usable if service workers are unavailable. */})}
-  const stopChecks=bindNativeUpgradeChecks({activities,release,registration,blocked:()=>!!persistenceError});
+  const stopChecks=bindNativeUpgradeChecks({activities,release,registration,blocked:()=>!!client.drafts.persistence.getState().error||client.drafts.hasPending()||!!document.querySelector('.settings-panel,.drawer-overlay,dialog[open],[data-native-upgrade-blocked="true"]')});
   return()=>{stopped=true;stopChecks();navigator.serviceWorker?.removeEventListener('controllerchange',cacheShell)};
  },[ready,activities,persistenceError]);return null;
 }
 export default function NativeHost({auth=false}:{auth?:boolean}){
- const [imagePreview,setImagePreview]=useState<{url:string;name:string}|null>(null);
+ const [imagePreview,setImagePreview]=useState<ImageLink|null>(null);
  const [layout,setLayout]=useState<Layout>(()=>{try{const v=localStorage.getItem('native:layout');return v==='compact'||v==='expanded'?v:'auto'}catch{return 'auto'}}),[profile,setProfile]=useState<PlatformProfile>(()=>browserProfile()),[preference,setPreference]=useState<Theme>(initialTheme),[systemDark,setSystemDark]=useState(()=>matchMedia('(prefers-color-scheme:dark)').matches);
  const activities=useMemo(()=>new ActivityCoordinator(),[]),navigation=useMemo(()=>new NavigationService(),[]),route=useSyncExternalStore(navigation.subscribe,navigation.snapshot,navigation.snapshot),theme=preference==='system'?(systemDark?'dark':'light'):preference;
- const delegate=useMemo(()=>({path:route.path,navigate:navigation.navigate,replace:navigation.replace,back:navigation.back,ticket:navigation.ticket,finishFlow:navigation.finishFlow,contentReady:navigation.contentReady,updateReturnAnchor:navigation.updateReturnAnchor,registerLayer:navigation.registerLayer}),[navigation,route.path]);
+ const delegate=useMemo(()=>({path:route.path,entryKey:route.key,direction:route.direction,navigate:navigation.navigate,replace:navigation.replace,back:navigation.back,ticket:navigation.ticket,finishFlow:navigation.finishFlow,contentReady:navigation.contentReady,updateReturnAnchor:navigation.updateReturnAnchor,registerLayer:navigation.registerLayer,registerLeaveGuard:navigation.registerLeaveGuard,readViewState:navigation.readViewState,writeViewState:navigation.writeViewState,clearViewState:navigation.clearViewState}),[navigation,route.path,route.key,route.direction]);
  const next=useMemo(()=>{const target=new URLSearchParams(location.search).get('next')||'/native/';try{const url=new URL(target,location.origin);return url.origin===location.origin&&url.pathname!=='/native/login'?url.pathname+url.search:'/native/'}catch{return '/native/'}},[]);
  useLayoutEffect(()=>auth?undefined:navigation.start(),[navigation,auth]);useLayoutEffect(()=>auth?undefined:navigation.committed(),[navigation,route,auth]);
  useEffect(()=>auth?undefined:bindNavigationLinks(navigation,setImagePreview),[navigation,auth]);

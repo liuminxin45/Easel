@@ -1,13 +1,15 @@
 import {ExtensionDetails} from './ExtensionDetails';
-import {useMemo,useState} from 'react';
+import {useCallback,useMemo,useState} from 'react';
 import ProfilePage,{type ProfilePageDraft} from '../../components/ProfilePage';
 import OnboardingWizard,{type OnboardingDraft} from '../../components/OnboardingWizard';
 import {creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
-import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
+import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
 import {ActionButton,Field,Panel,Notice,Pending,resultDocument} from './common';
 
 export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;profileId?:string}){
  const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap');
+ const viewState=useViewState('profiles:'+profileId,{viewedPersona:search.get('item')||profileId});
+ const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  const draftStore=useMemo(()=>({
   read:(id:string)=>vm.client.drafts.get<ProfilePageDraft>('easel:profile-files:'+id),
   write:(id:string,draft:ProfilePageDraft)=>{vm.client.drafts.set('easel:profile-files:'+id,draft)},
@@ -16,7 +18,7 @@ export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;pro
  const item=search.get('item')||'';
  if(item==='new')return <CreateProfile/>;
  const profile=resource.data?.profiles.find(value=>value.id===(item||profileId));
- return <><Notice sources={[resource]}/><ProfilePage key={item||profileId||'profiles'} persona={profile?.id||item||profileId}
+ return <><Notice sources={[resource]}/><ProfilePage key={item||profileId||'profiles'} persona={profile?.id||item||profileId} viewState={viewState} onContentReady={onContentReady}
   personaLabel={id=>resource.data?.profiles.find(value=>value.id===id)?.name||id}
   onUsePersona={id=>vm.navigate('/chat?fresh=1&profile='+encodeURIComponent(id))}
   onNewProfile={()=>vm.navigate('/toolbox?section=profiles&item=new')}

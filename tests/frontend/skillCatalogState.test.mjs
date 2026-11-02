@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const element=(type,props)=>({type,props}),jsx={jsx:element,jsxs:element,Fragment:'fragment'};
@@ -13,12 +14,14 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
  let cursor=0,fetches=0;const slots=[],deps=[],effects=[],requests=[];
  const react={
-  useState:initial=>{const at=cursor++;if(!(at in slots))slots[at]=initial;return [slots[at],value=>{slots[at]=typeof value==='function'?value(slots[at]):value}]},
+  useState:initial=>{const at=cursor++;if(!(at in slots))slots[at]=typeof initial==='function'?initial():initial;return [slots[at],value=>{slots[at]=typeof value==='function'?value(slots[at]):value}]},
+  useRef:initial=>{const at=cursor++;return slots[at]??=( {current:initial} )},
+  useCallback:fn=>{cursor++;return fn},
   useMemo:fn=>{cursor++;return fn()},
   useEffect:(effect,next)=>{const at=cursor++,old=deps[at];if(!old||old.length!==next.length||next.some((value,index)=>value!==old[index])){deps[at]=next;effects.push(effect)}},
  };
  const exports={},source=readFileSync(new URL('../../web/frontend/src/components/SkillPage.tsx',import.meta.url),'utf8');
- const imports={react,'react/jsx-runtime':jsx,'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
+ const imports={react,'react/jsx-runtime':jsx,'../lib/viewState':viewStateModule(react),'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:id=>imports[id]??assert.fail('Unexpected import '+id)});
  const render=catalog=>{cursor=0;const tree=exports.default({persona:'author',...(catalog?{catalog}:{})});effects.splice(0).forEach(effect=>effect());return tree};
  return {render,requests,get fetches(){return fetches}};

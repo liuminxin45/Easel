@@ -1,13 +1,13 @@
 import {safePath,type NavigationService} from './navigation';
+import {COMPACT_LAYOUT_QUERY} from './profile';
 export function authenticationUrl(navigation:Pick<NavigationService,'publicUrl'>,next:string):string{
  const target=navigation.publicUrl(safePath(next)||'/toolbox');return (target.startsWith('/native/')?'/native/login':'/login')+'?'+new URLSearchParams({next:target});
 }
-/** Compact documents use the current browsing context so system Back has a source.
- * Downloads, custom protocols and explicit modified-clicks keep browser behavior. */
+/** Classify documents without turning external URLs into application routes. */
 export function mobileDocumentLink(href:string,origin:string):boolean {
  try{const url=new URL(href,origin);return /^https?:$/.test(url.protocol)&&(url.origin!==origin||/^\/(?:api\/(?:files|media|outputs|chat\/products)(?:\/|$)|media\/)/.test(url.pathname))}catch{return false}
 }
-export interface ImageLink {url:string;name:string;downloadUrl?:string}
+export interface ImageLink {url:string;name:string;downloadUrl?:string;kind?:'image'|'file'}
 export function bindNavigationLinks(navigation:NavigationService,openImage?:(image:ImageLink)=>void):()=>void {
  const adapt=()=>{for(const anchor of document.querySelectorAll<HTMLAnchorElement>('#root a[href]')){
   const raw=anchor.getAttribute('href');delete anchor.dataset.nativePath;if(!raw||raw.startsWith('#/outputs/')||anchor.hasAttribute('download'))continue;
@@ -17,7 +17,7 @@ export function bindNavigationLinks(navigation:NavigationService,openImage?:(ima
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
   const anchor=event.target instanceof Element?event.target.closest<HTMLAnchorElement>('#root a[href]'):null;
   if(!anchor||anchor.hasAttribute('download')||anchor.target&&!['_self','_blank'].includes(anchor.target))return;
-  const compact=matchMedia('(max-width: 900px), (max-width: 1100px) and (max-height: 500px)').matches;
+   const compact=matchMedia(COMPACT_LAYOUT_QUERY).matches;
   const image=anchor.querySelector<HTMLImageElement>('img')||anchor.closest('.artifact-gallery')?.querySelector<HTMLImageElement>('.artifact-image-link img');
   if(openImage&&image&&image.src===anchor.href&&new URL(anchor.href).origin===location.origin){
    const download=anchor.closest('.artifact-gallery')?.querySelector<HTMLAnchorElement>('a[download]');
@@ -26,7 +26,16 @@ export function bindNavigationLinks(navigation:NavigationService,openImage?:(ima
   }
   const path=anchor.dataset.nativePath;
   if(path&&(!anchor.target||anchor.target==='_self'||compact)){event.preventDefault();event.stopPropagation();navigation.navigate(path);return}
-  if(compact&&mobileDocumentLink(anchor.href,location.origin)){event.preventDefault();event.stopPropagation();location.assign(anchor.href)}
+  if(compact&&mobileDocumentLink(anchor.href,location.origin)){
+   const target=new URL(anchor.href,location.origin);
+   if(target.origin===location.origin&&openImage){
+    const name=anchor.closest('.artifact-gallery')?.querySelector('.artifact-name')?.textContent?.trim()||anchor.textContent?.trim()||decodeURIComponent(target.pathname.split('/').at(-1)||'文档');
+    event.preventDefault();event.stopPropagation();openImage({url:anchor.href,name,kind:'file'});return;
+   }
+   // Keep the workbench alive. Let the browser/WebView open a separate context
+   // instead of unconditionally replacing this document with location.assign.
+   anchor.target='_blank';anchor.rel='noopener noreferrer';
+  }
  };
  const observer=new MutationObserver(adapt);observer.observe(document.getElementById('root')||document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});adapt();document.addEventListener('click',click,true);return()=>{observer.disconnect();document.removeEventListener('click',click,true)};
 }

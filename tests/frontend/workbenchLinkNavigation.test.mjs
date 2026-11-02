@@ -25,10 +25,12 @@ function fixture(compact=true){
  return {Anchor,anchors,bind,click,navigated,assigned,images,mutate:()=>mutation(),mobileDocumentLink};
 }
 
-test('mobile links preserve a browser return source for external pages and opaque local files',()=>{
+test('mobile external links keep the workbench alive and opaque local documents reuse its preview',()=>{
  const f=fixture(),external=new f.Anchor('https://source.test/article?original=1#section'),html=new f.Anchor('/api/outputs/file?path=article.html'),file=new f.Anchor('/api/chat/products/turn/files/'+'a'.repeat(64));
- f.bind();for(const anchor of [external,html,file])assert.ok(f.click(anchor).defaultPrevented);
- assert.deepEqual(f.assigned,[external.href,html.href,file.href]);assert.deepEqual(f.navigated,[]);
+ f.bind();assert.equal(f.click(external).defaultPrevented,false);assert.equal(external.target,'_blank');assert.equal(external.rel,'noopener noreferrer');
+ for(const anchor of [html,file])assert.equal(f.click(anchor).defaultPrevented,true);
+ assert.deepEqual(f.images.map(value=>({url:value.url,kind:value.kind})),[{url:html.href,kind:'file'},{url:file.href,kind:'file'}]);
+ assert.deepEqual(f.assigned,[]);assert.deepEqual(f.navigated,[]);
 });
 
 test('inline artwork and its open action share the existing modal callback without leaving the session',()=>{
@@ -52,11 +54,19 @@ test('desktop documents, downloads, custom targets, schemes and modified clicks 
 
 test('a reused anchor cannot keep a stale internal destination after changing to an external or download URL',()=>{
  const f=fixture(),anchor=new f.Anchor('/works/one');f.bind();anchor.raw='https://source.test/article';f.mutate();f.click(anchor);
- assert.deepEqual(f.navigated,[]);assert.deepEqual(f.assigned,['https://source.test/article']);
+ assert.deepEqual(f.navigated,[]);assert.deepEqual(f.assigned,[]);assert.deepEqual(f.images,[]);assert.equal(anchor.target,'_blank');assert.equal(anchor.rel,'noopener noreferrer');
 });
 
 test('document routing excludes unsafe schemes and ordinary internal navigation',()=>{
  const {mobileDocumentLink}=fixture();
  for(const path of ['javascript:alert(1)','data:text/html,x','mailto:test@example.test','tel:123','/chat/exact','/native/?path=%2Fworks'])assert.equal(mobileDocumentLink(path,'https://owner.test'),false,path);
  for(const path of ['https://source.test','/api/files/id?download=0','/api/media/path.png','/media/path.png','/api/outputs/file?path=x.html'])assert.equal(mobileDocumentLink(path,'https://owner.test'),true,path);
+});
+
+test('explicit inline document previews admit only same-origin file routes',()=>{
+ const load=moduleLoader({globals:{window:{location:{pathname:'/native/'}}}});
+ const {canPreviewDocument}=load('components/ArtifactGallery.tsx');
+ const origin='https://owner.test';
+ for(const path of ['/api/files/id','/api/media/a.pdf','/api/chat/products/turn/files/hash','/media/preview'])assert.equal(canPreviewDocument(path,origin),true,path);
+ for(const path of ['https://external.test/api/files/id','javascript:alert(1)','data:text/html,x','https://name:secret@owner.test/api/files/id','/api/settings/models','/native/login'])assert.equal(canPreviewDocument(path,origin),false,path);
 });

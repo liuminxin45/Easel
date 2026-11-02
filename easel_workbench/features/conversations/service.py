@@ -57,6 +57,7 @@ class ChatService:
             for statement in (
                 'CREATE TABLE IF NOT EXISTS easel_chat_sessions(id TEXT PRIMARY KEY,document TEXT NOT NULL)',
                 'CREATE TABLE IF NOT EXISTS easel_chat_turns(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,operation_id TEXT UNIQUE NOT NULL,signature TEXT NOT NULL,document TEXT NOT NULL)',
+                'CREATE INDEX IF NOT EXISTS easel_chat_turn_session ON easel_chat_turns(session_id)',
                 'CREATE TABLE IF NOT EXISTS easel_chat_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL)',
             ):
                 c.execute(statement)
@@ -172,10 +173,43 @@ class ChatService:
     def archive_session(self, session_id, value):
         return self._command('archive', value, session_id)
 
-    def list_sessions(self):
+    def list_sessions(self, *, summaries=False):
         with self.store.connect() as c:
             items = [json.loads(row[0]) for row in c.execute('SELECT document FROM easel_chat_sessions ORDER BY rowid DESC')]
+            if summaries:
+                counts={row[0]:row[1]*2 for row in c.execute('SELECT session_id,count(*) FROM easel_chat_turns GROUP BY session_id')}
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():
+                    for sid,count in c.execute('SELECT s.session_id,count(*) FROM easel_chat_submissions s WHERE NOT EXISTS(SELECT 1 FROM easel_chat_turns t WHERE t.id=s.id) GROUP BY s.session_id'):
+                        counts[sid]=counts.get(sid,0)+count*2
+                linked={}
+                for sid,raw in c.execute("SELECT session_id,json_extract(document,'$.work') FROM easel_chat_turns WHERE json_type(document,'$.work')='object' ORDER BY rowid"):
+                    value=json.loads(raw);rows=linked.setdefault(sid,[])
+                    if value not in rows:rows.append(value)
+                for item in items:item.update(message_count=counts.get(item['id'],0),linked_works=linked.get(item['id'],[]))
         return {'sessions': items}
+
+    def history_window(self, session_id, *, limit=50, before=None):
+        """Stable, session-bound cursors; project only IDs before loading bodies."""
+        if type(limit) is not int or not 1<=limit<=100:raise ValueError('历史分页数量须为1至100')
+        session_id=identity(session_id)
+        with self.store.connect() as c:
+            self._session(c,session_id)
+            source="SELECT id,json_extract(document,'$.created_at') AS at FROM easel_chat_turns WHERE session_id=?"
+            parameters=[session_id]
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():
+                source+=" UNION ALL SELECT s.id,json_extract(s.document,'$.created_at') AS at FROM easel_chat_submissions s WHERE s.session_id=? AND NOT EXISTS(SELECT 1 FROM easel_chat_turns t WHERE t.id=s.id)"
+                parameters.append(session_id)
+            prefix='WITH entries AS ('+source+') '
+            condition='';page_parameters=list(parameters)
+            if before:
+                before=identity(before)
+                cursor=c.execute(prefix+'SELECT at FROM entries WHERE id=?',(*parameters,before)).fetchone()
+                if not cursor:raise ValueError('历史游标不属于当前会话')
+                condition='WHERE (julianday(at)<julianday(?) OR (julianday(at)=julianday(?) AND id<?)) '
+                page_parameters.extend([cursor[0],cursor[0],before])
+            rows=c.execute(prefix+'SELECT id FROM entries '+condition+'ORDER BY julianday(at) DESC,id DESC LIMIT ?',(*page_parameters,limit+1)).fetchall()
+        has_more=len(rows)>limit;selected=[row[0] for row in rows[:limit]]
+        return {'ids':list(reversed(selected)),'has_more':has_more,'next_before':selected[-1] if has_more and selected else None,'before':before,'limit':limit}
 
     def get_turn(self, turn_id, *, private=False):
         while True:
@@ -231,10 +265,14 @@ class ChatService:
                 self._release_owned(turn_id)
             raise
 
-    def history(self, session_id):
+    def history(self, session_id, *, turn_ids=None):
         with self.store.connect() as c:
             session = self._session(c, session_id)
-            turns = [json.loads(row[0]) for row in c.execute('SELECT document FROM easel_chat_turns WHERE session_id=? ORDER BY rowid', (session_id,))]
+            if turn_ids is None:
+                turns = [json.loads(row[0]) for row in c.execute('SELECT document FROM easel_chat_turns WHERE session_id=? ORDER BY rowid', (session_id,))]
+            elif not turn_ids:turns=[]
+            else:
+                turns=[json.loads(row[0]) for row in c.execute('SELECT document FROM easel_chat_turns WHERE session_id=? AND id IN ('+','.join('?' for _ in turn_ids)+') ORDER BY rowid',(session_id,*turn_ids))]
         messages, linked = [], []
         for turn in turns:
             messages.append({'id': turn['id'] + '-user', 'role': 'user', 'content': turn['message'], 'timestamp': turn['created_at'],

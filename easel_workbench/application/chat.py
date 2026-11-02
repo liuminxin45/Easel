@@ -73,8 +73,8 @@ class ChatBusiness:
         metadata,body=parse_skill(release['prompt'])
         return {**item,**release,'body':body,'content':body,'meta':metadata,'raw':release['prompt']}
 
-    def history(self,sid):
-        result=self.chat.history(sid)
+    def history(self,sid,*,turn_ids=None):
+        result=self.chat.history(sid,**({'turn_ids':turn_ids} if turn_ids is not None else {}))
         with self.store.connect() as c:
             for message in result['session']['messages']:
                 if message['role']!='assistant':continue

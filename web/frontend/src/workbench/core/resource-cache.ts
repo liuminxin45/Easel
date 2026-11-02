@@ -8,6 +8,13 @@ export const RESOURCE_CACHE_ENTRIES=128;
 const active=new Set(['queued','dispatching','running','working','processing','sending','leased','retry_wait','uncertain','needs_desktop','checking','login']);
 const url=(path:string)=>new URL(path,'https://workbench.invalid');
 
+/** Only ordinary native page data may use the host's read snapshots. */
+export function nativeResourceCacheable(path:string):boolean {
+ const p=url(path).pathname;
+ return p==='/api/outputs'||p.startsWith('/api/output/')||p==='/api/ideas'||p==='/api/trends'||p==='/api/trends/sources'
+  ||p==='/api/personas'||/^\/api\/persona\/[^/]+(?:\/files)?$/.test(p)||p==='/api/schedule'||p==='/api/schedule/context';
+}
+
 export function resourceCacheable(path:string):boolean{return !/^\/api\/(?:config(?:\?|$)|operations\/|mobile\/|auth(?:\/|$)|distribution\/credentials(?:\/|\?|$))/.test(path)}
 export function dynamicResource(path:string,data:unknown):boolean{
  const root=record(data),state=string(root.status)||string(root.state)||string(root.phase);
@@ -27,6 +34,12 @@ export function dynamicResource(path:string,data:unknown):boolean{
 export const resourceFreshMs=(path:string,data:unknown):number=>resourceCacheable(path)?dynamicResource(path,data)?url(path).pathname==='/api/platform-accounts'?1500:DYNAMIC_FRESH_MS:url(path).pathname==='/api/learning/bootstrap'?15_000:RESOURCE_FRESH_MS:0;
 export function resourceTags(path:string):string[]{
  const target=url(path),p=target.pathname,work=p.match(/^\/api\/works\/([^/]+)/)?.[1];
+ if(p==='/api/outputs'||p.startsWith('/api/output/'))return ['outputs','works'];
+ if(p==='/api/ideas')return ['ideas'];
+ if(p==='/api/trends/sources'||p==='/api/trends/manage')return ['trend-sources','collection'];
+ if(p==='/api/trends')return ['trends','news','collection'];
+ if(p==='/api/personas'||p.startsWith('/api/persona/'))return ['creator','foundation'];
+ if(p==='/api/schedule'||p.startsWith('/api/schedule/'))return ['schedule'];
  if(p.startsWith('/api/chat/'))return ['chat'];
  if(p==='/api/skills'||p.startsWith('/api/skill/'))return ['native-skills'];
  if(p.startsWith('/api/easel/'))return ['easel-plans'];
@@ -50,7 +63,18 @@ export function resourceTags(path:string):string[]{
 
 /** null means unknown mutation and requires conservative global invalidation. */
 export function mutationTags(path:string,input:JsonRecord,result:unknown):string[]|null{
- if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/settings/')||new URL(path,'https://workbench.invalid').pathname.startsWith('/api/env/'))return ['settings'];
+ const nativePath=url(path).pathname;
+ if(nativePath==='/api/trends/manage')return ['trend-sources','trends','collection','news'];
+ if(nativePath==='/api/ideas'||nativePath.startsWith('/api/ideas/'))return ['ideas'];
+ if(nativePath==='/api/schedule'||nativePath.startsWith('/api/schedule/'))return ['schedule','studio'];
+ if(nativePath.startsWith('/api/output/'))return ['outputs','works'];
+ if(nativePath.startsWith('/api/persona/')||nativePath==='/api/profile/build')return ['creator','foundation'];
+ if(nativePath.startsWith('/api/easel/'))return ['easel-plans'];
+ if(nativePath==='/api/env'||nativePath.startsWith('/api/settings/')||nativePath.startsWith('/api/env/'))return ['settings','native-skills'];
+ if(nativePath.startsWith('/api/login/')||nativePath.startsWith('/api/logout/')||nativePath.startsWith('/api/accounts/'))return ['accounts','platform-accounts','distribution','creator'];
+ if(nativePath==='/api/chat'||nativePath==='/api/skill')return ['chat','outputs','works'];
+ if(nativePath==='/api/upload'||nativePath==='/api/upload/local'||/^\/api\/manual-publish\/[^/]+\/export$/.test(nativePath))return ['outputs'];
+ if(nativePath.startsWith('/api/publish/'))return ['publications','distribution','works','studio','outputs'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/chat/'))return ['chat'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/platform-accounts'))return ['platform-accounts','distribution','creator'];
  if(new URL(path,'https://workbench.invalid').pathname.startsWith('/api/creator/'))return ['creator','creative','foundation','learning'];

@@ -5,7 +5,7 @@ import SkillDrawer from '../../components/SkillDrawer';
 import SettingsSelect from '../../components/SettingsSelect';
 import QuestionCards from '../../components/QuestionCards';
 import {array,record,string,type JsonRecord,type CreatorBootstrap} from '@workbench/core';
-import {useWorkbench,useResource} from './hooks';
+import {useWorkbench,useResource,useViewState} from './hooks';
 import {Drawer,TextRecord,Notice} from './common';
 import {SkillDetail} from './management';
 import {createSkillServices,type PreparedSkillExecution} from './skillServices';
@@ -20,7 +20,10 @@ interface Confirmation {
 /** Native catalog and native skill detail; only their service ports are adapted. */
 export function NativeSkills({profileId}:{profileId:string}){
  const vm=useWorkbench(),resource=useResource<NativeSkill[]>('/api/skills');
+ const viewState=useViewState('skills:'+profileId,{query:''});
+ const onContentReady=useMemo(()=>()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  return <SkillPage persona={profileId} catalog={{items:resource.data||[],error:resource.error,loading:!resource.data&&!resource.error,reload:()=>void resource.reload()}}
+  viewState={viewState} onContentReady={onContentReady}
   headerActions={<button className="btn" onClick={()=>vm.navigate('/toolbox?section=skills&pane=experience&profile='+encodeURIComponent(profileId))}>整理经验</button>}
   renderDrawer={(name,close)=><NativeDetail name={name} skills={resource.data||[]} profileId={profileId} close={close} reload={()=>void resource.reload()}/>}/>;
 }
@@ -29,6 +32,7 @@ function NativeDetail({name,skills,profileId,close,reload}:{name:string;skills:N
  const vm=useWorkbench(),skill=skills.find(item=>item.name===name),choices=nativeSkillChoices(skill?[skill]:[]);
  const runnable=choices.filter(choice=>!choice.selection.path),pathOnly=!!skill&&skill.origin!=='easel'&&!runnable.length;
  const services=useMemo(()=>createSkillServices(vm.client,profileId,skills,name),[vm.client,profileId,skills,name,vm.client.authenticationEpoch]);
+ const draftStore=useMemo(()=>({read:()=>vm.client.drafts.get<{text:string}>('easel:skill-input:'+profileId+':'+name)?.text??null,write:(text:string)=>{vm.client.drafts.set('easel:skill-input:'+profileId+':'+name,{text})},remove:()=>vm.client.drafts.remove('easel:skill-input:'+profileId+':'+name)}),[vm.client,profileId,name]);
  const execution=useStore(services.execution);
  useEffect(()=>services.resume(),[services]);
  const [actionId,setActionId]=useState(''),[confirmation,setConfirmation]=useState<Confirmation|null>(null);
@@ -67,7 +71,7 @@ function NativeDetail({name,skills,profileId,close,reload}:{name:string;skills:N
  if(pathOnly)return <PrivateSkillDetail skill={skill} profileId={profileId} close={close}/>;
  return <>
   <SkillDrawer skillName={name} persona={profileId} onClose={close} onConfigured={reload}
-   services={{...services,execute}} onInputChange={cancelPreview}
+   services={{...services,execute}} onInputChange={cancelPreview} draftStore={draftStore}
    extension={execution.questions.length||skill?.origin!=='easel'?<>
     {execution.questions.length>0&&<QuestionCards questions={execution.questions} services={services.questionServices}
      onDone={id=>services.closeQuestion(id)} onClosed={id=>services.closeQuestion(id)}/>}

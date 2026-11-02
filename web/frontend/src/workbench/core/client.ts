@@ -16,6 +16,7 @@ export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:s
 export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string}
 export interface OperationState {busy:boolean;pending:PendingOperation|null;error:string;notice:string;result?:unknown;feedback?:InteractionFeedback}
 export interface SessionState {config:Config|null;loading:boolean;error:string;feedback?:InteractionFeedback;expired:boolean;reachable:boolean|null}
+interface ResourceMetadata {etag?:string;checkedAt:number;lastAccess:number;lastAttempt:number;bytes:number;failures?:number;retryAt?:number}
 export interface ClientOptions extends TransportOptions {storage?:Storage;navigation?:NavigationDelegate;activities?:ActivityDelegate;clock?:()=>number;cacheBytes?:number;cacheEntries?:number}
 const message=(error:unknown)=>error instanceof Error?error.message:'操作未完成';
 const signature=(value:JsonRecord)=>JSON.stringify(Object.fromEntries(Object.entries(value).filter(([key])=>!['id','operation_id'].includes(key)).sort(([a],[b])=>a.localeCompare(b))));
@@ -23,7 +24,7 @@ export class WorkbenchClient {
   readonly session=createStore<SessionState>(()=>({config:null,loading:true,error:'',expired:false,reachable:null}));
   readonly api:ApiTransport;readonly drafts:DraftRepository;readonly service:DomainService;readonly auth:AuthService;readonly usage:UsageTracker;
   private resources=new Map<string,StoreApi<ResourceState>>();private activeResources=new Map<string,number>();private inflight=new Map<string,Promise<unknown>>();private invalidations=new Map<string,number>();private operations=new Map<string,StoreApi<OperationState>>();private receiptReads=new Map<string,Promise<unknown>>();private initializePromise?:Promise<void>;
-  private cacheMeta=new Map<string,{etag?:string;checkedAt:number;lastAccess:number;lastAttempt:number;bytes:number}>();
+  private cacheMeta=new Map<string,ResourceMetadata>();
   private pollWatchers=new Map<string,Map<symbol,number|undefined>>();private pollTimers=new Map<string,ReturnType<typeof setTimeout>>();
   private authEpoch=0;private lastAuthCheckedAt=0;private authCheckPromise?:Promise<boolean>;private resumePromise?:Promise<void>;private hidden=false;
   private receiptTimers=new Map<string,ReturnType<typeof setTimeout>>();
@@ -33,7 +34,7 @@ export class WorkbenchClient {
     this.usage=new UsageTracker({fetcher:options.fetcher,onExpired:()=>{this.expireSession();options.onExpired?.()}});
     this.now=options.clock??Date.now;this.cacheBytes=options.cacheBytes??RESOURCE_CACHE_BYTES;this.cacheEntries=options.cacheEntries??RESOURCE_CACHE_ENTRIES;
     this.navigation=options.navigation;this.activities=options.activities;this.drafts=new DraftRepository(options.storage,options.activities);
-    this.api=new ApiTransport({...options,authEpoch:()=>this.authEpoch,onExpired:()=>{this.expireSession();options.onExpired?.()},onConnectivity:reachable=>{this.session.setState({reachable});options.onConnectivity?.(reachable)}});
+    this.api=new ApiTransport({...options,authEpoch:()=>this.authEpoch,onExpired:()=>{this.expireSession();options.onExpired?.()},onConnectivity:reachable=>{if(this.session.getState().reachable!==reachable)this.session.setState({reachable});options.onConnectivity?.(reachable)}});
     this.auth=new AuthService({fetcher:options.fetcher,activities:options.activities});this.service=new DomainService(this);
   }
   get authenticationEpoch():number{return this.authEpoch}
@@ -57,6 +58,11 @@ export class WorkbenchClient {
     let state=this.resources.get(path);if(!state){state=createStore<ResourceState>(()=>({data:null,loading:true,error:'',revision:0,stale:true}));this.resources.set(path,state)}
     const meta=this.cacheMeta.get(path);if(meta)meta.lastAccess=this.now();return state;
   }
+  peek<T>(path:string):T|undefined {
+    if(this.session.getState().expired||!this.session.getState().config)return;
+    const value=this.resources.get(path)?.getState().data;
+    return value===null||value===undefined?undefined:value as T;
+  }
   private visible():boolean{return !this.hidden&&(typeof document==='undefined'||!document.hidden)}
   watch(path:string,interval?:number):()=>void{
     this.activeResources.set(path,(this.activeResources.get(path)??0)+1);let watchers=this.pollWatchers.get(path);if(!watchers){watchers=new Map();this.pollWatchers.set(path,watchers)}
@@ -66,8 +72,9 @@ export class WorkbenchClient {
   private schedulePoll(path:string):void{
     const previous=this.pollTimers.get(path);if(previous)clearTimeout(previous);this.pollTimers.delete(path);
     if(!this.visible()||this.session.getState().expired||![...(this.pollWatchers.get(path)?.values()??[])].some(value=>value!==undefined&&value>0))return;
-    const ttl=Math.max(1000,resourceFreshMs(path,this.resources.get(path)?.getState().data??null)),last=this.cacheMeta.get(path)?.lastAttempt;
-    const timer=setTimeout(()=>{this.pollTimers.delete(path);if(this.visible())void this.read(path).finally(()=>this.schedulePoll(path))},Math.max(20,last===undefined?ttl:ttl-(this.now()-last)));
+    const intervals=[...(this.pollWatchers.get(path)?.values()??[])].filter((value):value is number=>value!==undefined&&value>0);
+    const ttl=Math.max(1000,Math.min(...intervals)),meta=this.cacheMeta.get(path),last=meta?.lastAttempt;
+    const timer=setTimeout(()=>{this.pollTimers.delete(path);if(this.visible())void this.read(path,true).finally(()=>this.schedulePoll(path))},Math.max(20,last===undefined?ttl:ttl-(this.now()-last),(meta?.retryAt??0)-this.now()));
     (timer as unknown as {unref?:()=>void}).unref?.();this.pollTimers.set(path,timer);
   }
   pauseVisible():void{this.hidden=true;for(const timer of this.pollTimers.values())clearTimeout(timer);this.pollTimers.clear();for(const timer of this.receiptTimers.values())clearTimeout(timer);this.receiptTimers.clear()}
@@ -91,6 +98,7 @@ export class WorkbenchClient {
     if(typeof document!=='undefined'&&!document.hidden&&(this.hidden||this.resumePromise&&this.authCheckPromise))return (this.hidden?this.resumeVisible():this.resumePromise!).then(()=>this.read<T>(path));
     const state=this.resource(path),running=this.inflight.get(path);if(this.session.getState().expired){state.setState({data:null,loading:false,refreshing:false,feedback:undefined,error:'登录已过期，输入已保留。'});return Promise.resolve(null)}if(running)return running as Promise<T|null>;
     const oldMeta=this.cacheMeta.get(path),oldState=state.getState(),now=this.now();
+    if(!force&&oldState.data!==null&&oldMeta?.retryAt&&now<oldMeta.retryAt)return Promise.resolve(oldState.data as T);
     if(!force&&oldState.data!==null&&!oldState.stale&&oldMeta&&now-oldMeta.checkedAt<resourceFreshMs(path,oldState.data)){oldMeta.lastAccess=now;return Promise.resolve(oldState.data as T)}
     // A retry is not recovery: retain a real failure until a successful read.
     state.setState({loading:oldState.data===null,refreshing:true});
@@ -104,11 +112,11 @@ export class WorkbenchClient {
       revalidate=epoch!==(this.invalidations.get(path)??0);
       if(!revalidate){
         data=withServerTime(reply.status==='not-modified'?state.getState().data as T:reply.data as T,reply.serverTime);
-        meta.etag=resourceCacheable(path)?reply.etag??(reply.status==='not-modified'?meta.etag:undefined):undefined;meta.checkedAt=this.now();meta.lastAccess=this.now();
+        meta.etag=resourceCacheable(path)?reply.etag??(reply.status==='not-modified'?meta.etag:undefined):undefined;meta.checkedAt=this.now();meta.lastAccess=this.now();meta.failures=0;meta.retryAt=undefined;
         try{meta.bytes=new TextEncoder().encode(JSON.stringify(data)).byteLength}catch{meta.bytes=this.cacheBytes+1}
         state.setState(previous=>({data,loading:false,refreshing:false,error:'',feedback:undefined,revision:previous.revision+(reply.status==='modified'?1:0),stale:false,checkedAt:meta.checkedAt}));
       }
-    }catch(error){const valid=authEpoch===this.authEpoch&&!this.session.getState().expired;revalidate=valid&&epoch!==(this.invalidations.get(path)??0);if(valid&&!revalidate)state.setState({loading:false,refreshing:false,error:message(error),feedback:interactionFeedback(error)})}
+    }catch(error){const valid=authEpoch===this.authEpoch&&!this.session.getState().expired;revalidate=valid&&epoch!==(this.invalidations.get(path)??0);if(valid&&!revalidate){meta.failures=(meta.failures??0)+1;const intervals=[...(this.pollWatchers.get(path)?.values()??[])].filter((value):value is number=>value!==undefined&&value>0),base=intervals.length?Math.min(...intervals):resourceFreshMs(path,oldState.data);meta.retryAt=this.now()+Math.min(60000,Math.max(1000,base)*2**Math.min(meta.failures,5));state.setState({loading:false,refreshing:false,error:message(error),feedback:interactionFeedback(error)})}}
     finally{if(this.inflight.get(path)===job)this.inflight.delete(path);this.pruneResources();this.schedulePoll(path)}
     return revalidate?this.read<T>(path,true):data})();this.inflight.set(path,job);return job;
   }
@@ -125,7 +133,7 @@ export class WorkbenchClient {
   refresh():Promise<void>{return this.invalidate(null)}
   /** Apply an exact server acknowledgement without waiting for list refreshes. */
   updateResource<T>(path:string,update:(previous:T)=>T):void{const state=this.resource(path),data=state.getState().data;if(data!==null){this.invalidations.set(path,(this.invalidations.get(path)??0)+1);state.setState(previous=>({data:update(data as T),revision:previous.revision+1,stale:true}))}}
-  legacyPending():{key:string;id:string;input:JsonRecord}[]{return this.drafts.list().filter(input=>!retiredPersonalDraft(input)&&!string(input.id).startsWith('native:pending:')).flatMap(input=>{const pending=record(input.pending),request=record(input.request),operation=record(input.operation);const id=string(input.pendingId)||string(pending.id)||string(request.id)||string(request.operation_id)||string(operation.id)||string(record(input.pendingSave).id)||string(record(input.pendingFinalize).id);return id?[{key:string(input.id),id,input}]:[]})}
+  legacyPending():{key:string;id:string;input:JsonRecord}[]{return this.drafts.pending().filter(input=>!retiredPersonalDraft(input)&&!string(input.id).startsWith('native:pending:')).flatMap(input=>{const pending=record(input.pending),request=record(input.request),operation=record(input.operation);const id=string(input.pendingId)||string(pending.id)||string(request.id)||string(request.operation_id)||string(operation.id)||string(record(input.pendingSave).id)||string(record(input.pendingFinalize).id);return id?[{key:string(input.id),id,input}]:[]})}
   private legacyOperation(scope:string):PendingOperation|null{
     for(const item of this.legacyPending()){
       const key=item.key,request=record(item.input.request),pending=record(item.input.pending);

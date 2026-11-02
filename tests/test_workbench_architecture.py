@@ -6,6 +6,7 @@ The TypeScript check uses the installed compiler's syntax tree, not grep.
 from __future__ import annotations
 
 import ast
+import hashlib
 from functools import lru_cache
 import json
 import os
@@ -412,3 +413,13 @@ def test_source_development_retains_legacy_root_fallback(tmp_path,monkeypatch):
     monkeypatch.chdir(tmp_path);monkeypatch.setenv('AI_DESK_PROJECT_ROOT','relative/data')
     assert runpy.run_path(str(module))['ROOT']==(tmp_path/'relative/data').resolve()
     assert not list(tmp_path.iterdir())
+
+
+def test_content_addressed_prompt_archives_keep_their_original_raw_bytes():
+    directory = ROOT / 'skills/shared/workbench/规范/创作方案/策略文本'
+    files = list(directory.glob('*.md'))
+    assert files, 'Content-addressed prompt archives are missing'
+    for path in files:
+        assert len(path.stem) == 64
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == path.stem, (
+            'Raw prompt bytes changed during checkout/rebase; restore the exact tracked original, never rewrite its hash', path.name)

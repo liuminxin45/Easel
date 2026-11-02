@@ -66,8 +66,7 @@ def main():
               'backend': {'release': backend.name, 'manifest_sha256': sha(backend / 'workbench-release.json')},
               'native': {'release': native.name, 'manifest_sha256': sha(native / 'native-manifest.json')},
               'checks': [], 'screenshots': {}, 'covered_states': {}, 'not_applicable': [
-                  {'surface_id': 'settings.environment', 'state': 'expand_install_detail', 'reason': 'EnvBoard has no details expander; actual foot-status text/title are tested.'},
-                  {'surface_id': 'nav.selectors', 'state': 'native_popup_dom_bounds', 'reason': 'Sidebar uses native select; OS/browser popup is outside the DOM. Control, options, open screenshot and Escape are tested.'}],
+                  {'surface_id': 'settings.environment', 'state': 'expand_install_detail', 'reason': 'EnvBoard has no details expander; actual foot-status text/title are tested.'}],
               'physical_mobile_device_tested': False, 'real_AI_calls': 0, 'real_installations': 0, 'real_platform_writes': 0,
               'production_data_access': False, 'synthetic_catalog_requests': [], 'blocked_requests': [], 'profiles': []}
 

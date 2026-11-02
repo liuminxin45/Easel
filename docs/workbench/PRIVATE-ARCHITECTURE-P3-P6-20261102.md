@@ -104,9 +104,45 @@ Edge TEMP 内容闭环 34 项通过；200 模块边界/职责无错，927 份原
 新增实际 core import/export 图反例，以及客户端入口不加载 React 的运行检查。
 旧 VM 测试夹具同步明确的 UI hooks 端口，模块加载器补齐目录 index 的解析。
 378 项前端回归通过；check:workbench、私有和官方构建通过，原大包体积提示保留。
-最终后端组合 323 项回归通过。干净检出及冻结配对仍待本批收尾验证，尚未切换正式运行。
+最终后端组合 323 项回归通过。源码提交 `1415930a86ae73cea89ec625de4943df489a3861`。
+
+干净独立 Git 克隆固定该提交，使用 Node 24.19.0 和项目 Python 3.14.7，
+重新 npm ci、check:workbench、私有 build、官方 build 和前端 378 项均通过。
+依赖安装完成后另跑后端 155 项通过；1 项需要本机激活 dry-run 历史证据，按既有规则跳过，
+根工作区对应检查已经通过。克隆未复制 node_modules、未恢复本机技能/资源，结束时 Git clean。
+原工作区 843 份保护文本与 Git blob 存在纯 CRLF/LF 差异；不是本轮变更。
+干净克隆验证 Git 源码可构建，实际冻结仍保存原工作区技能/资源的准确原字节，二者不混称。
+
+独立候选 `workbench-20261102-042728`，manifest
+`9a09fb2001a4c67ddf51d9fda133a3bf4bde99a2eaf79205c093335cb870bd8a`；
+绑定前端 `native-easel-workbench-20261102042113`，manifest
+`bd2e90c7a71f349aea7f4030a158d7ad0db78548c13f9c5f206415ac4991555a`。
+1171 个后端成员、27 个前端成员、436 Python 编译、15 个关键资源、157 个前端输入、
+916 份包内保护成员及准确技能/工作区签名全部核对。
+
+准确冻结组合实际 Windows Edge：内容闭环 34 项、断线/停止/unknown 恢复 9 项、
+共通页面/账号/默认 App 样式对比 72 项、设置及安装回执 14 项通过；
+模型/安装/平台使用合成或假执行器，实际本地 RSS 为只读采集。七角色真实入口通过。
+导入模块均落在准确后端包内，前后端成员再次验 SHA，页面无脚本错误。
+桌面浅色工作台、模拟移动深色账号截图已查看；没有引入新外观。
+
+共通界面第一轮脚本在模拟移动端未打开折叠侧栏，参考 App 的账号按钮不可见；
+修正为先点击真实“打开导航”后重跑通过，没有强制点击或修改产品。
+最终参考来源为当前 fork 默认 App 的准确 `1415930`，包含已登记的共通适配，
+不称其为未经修改的官方构建。初次失败报告及修复后证据均保留。
+
+证据：`.local/workbench-validation/architecture-p3-p6-20261102/p6/`。
+其中 `integrity.json`、`entry/report.json`、`frozen-content/`、`frozen-recovery/`、
+`frozen-base-fixed/`、`frozen-settings/` 和 `clean-backend-after-install.xml`/`clean-frontend.log`
+分别绑定成员、入口、真实行为与干净检出，源码交付不自动激活此候选。
 
 ## 验证与交付边界
 
 每批保留独立提交与原始失败依据；最终源码、候选和生产状态分别登记。
 实体 vivo/WebToApp、真实模型质量与平台发布继续按实际可用条件验收，不由 TEMP 或模拟移动端代填。
+
+45 份选中验收原件的 SHA 与阶段源码提交见
+`docs/workbench/private-architecture-p3-p6-evidence.json`；原件仍在本机 `.local/`，索引不冒称上传原件。
+阶段源码提交依次为 P3 `e32b2cd`、P4 采集 `e542627`、交付 `4d23f3b`、
+安装 `66e0983`、P5 `7d18fa9`、P6 `1415930`。本轮仅推送自有 fork 的既有集成分支，
+不向官方推送，不切换正式前后端或共享候选。

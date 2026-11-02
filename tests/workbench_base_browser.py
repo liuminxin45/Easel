@@ -286,6 +286,8 @@ def main():
                                 expect(reference.locator('.settings-close')).to_be_visible()
                                 reference.locator('.settings-close').click()
                             assert styles(reference, list(dashboard_styles), mobile=mobile) == dashboard_styles, {'native': dashboard_styles, 'reference': styles(reference, list(dashboard_styles), mobile=mobile)}
+                            if mobile:
+                                reference.get_by_role('button', name='打开导航', exact=True).click()
                             reference.locator('.sidebar-nav .nav-item').filter(has_text='账号').click()
                             expect(reference.locator('.accounts-page')).to_be_visible()
                             expect(reference.locator('.account-card').first).to_be_visible()

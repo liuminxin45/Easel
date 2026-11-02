@@ -1,0 +1,250 @@
+{
+  "schema": 1,
+  "spec": "private-workbench-architecture",
+  "base": "892485c1fb05c2a385755559d201772bcd3ba3ce",
+  "official_ancestor": "0f43dc98277eac85fb48952878acad349731d3fc",
+  "branch": "codex/easel-sync-20261102-082005",
+  "push_remote": "https://github.com/liuminxin45/Easel.git",
+  "phase_source_commits": {
+    "P3": "e32b2cdd487524115c1532f9cff9059dcd30f22c",
+    "P4-collection": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
+    "P4-delivery": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+    "P4-installation": "66e0983f4cb8b0c6aa7bf623bb07634f6751c234",
+    "P5": "7d18fa9c04af91f66f5b49f051d3da3cbcdcdcb6",
+    "P6-source": "1415930a86ae73cea89ec625de4943df489a3861"
+  },
+  "candidate": {
+    "release": "workbench-20261102-042728",
+    "manifest_sha256": "9a09fb2001a4c67ddf51d9fda133a3bf4bde99a2eaf79205c093335cb870bd8a",
+    "native": {
+      "release": "native-easel-workbench-20261102042113",
+      "manifest_sha256": "bd2e90c7a71f349aea7f4030a158d7ad0db78548c13f9c5f206415ac4991555a"
+    }
+  },
+  "production_activated": false,
+  "production_pointer_hashes_unchanged": {
+    "data/active-workbench.json": "9f1168a3cb84558160777a1d6e9492efefa3f63a6d80cfc876a4228fda09af19",
+    "data/active-native.json": "0a32559687afc2f3e3bf69e298ba02132401774ac8ebe0e803a089b89cdde6b1",
+    ".local/workbench-deployment/candidate.json": "9d5d830998d768bc4b876be26fa5e9709781bf8b32015ff61616a56270ccee88"
+  },
+  "evidence_scope": "Selected actual acceptance records; overlapping test groups are not additive; raw local evidence is not uploaded by this index",
+  "clean_checkout_skip": "Existing activation dry-run check requires local historical receipt; corresponding root-workspace check passed",
+  "records": [
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/fixed.xml",
+      "sha256": "52670040e4b3425831c65ca557075e9f6292743779b8b25fb0b417db77a2b9a7",
+      "tests": 269,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/evidence.xml",
+      "sha256": "44ca65210de887d12184b4d0d4d1642c368e579e5309f9762b0fa077be057e31",
+      "tests": 39,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/statement-parity.json",
+      "sha256": "16047b3c21b5ce92837f7af954e21a83f83aee060a434f26db73a69f5d7339a1"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/inventory-final.json",
+      "sha256": "9a91de74555652028b2599d397b6f29273662dc98de3138bdcc4792f8dee140c"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/protected.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p3/closedloop-fixed/content-closedloop-browser.json",
+      "sha256": "62def53f46a74f5757070b30a56dc6ab5000225995f990b67c009f8522270a6d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-collection/tests.xml",
+      "sha256": "515d0fb9c98adce5ada62e79c700021ff468d9e5c516952de6fe73d46c2f6eed",
+      "tests": 185,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-collection/producer-final.log",
+      "sha256": "538d62f482930d5b12a6fdc28e815f3e0bd67058a5d832b2b4252a141d5e767f"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-collection/statement-parity.json",
+      "sha256": "a2fd77a15d0c71998062a3681cd017bf64fc2f8b9597c1b83f1191c36a30aaa6"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-collection/protected.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-collection/closedloop/content-closedloop-browser.json",
+      "sha256": "b80f034b4fec4fd8d70f8cffb9273d143753b4c98687df52596fc8d1298430a4"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/fixed.xml",
+      "sha256": "ee3dcbaff342af93c33b171c1bd7aaa401e95267586fdca4b6ac8985658aa63a",
+      "tests": 217,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/statement-parity.json",
+      "sha256": "c0f4ba422ad083aa7c5f637a6c9cb28f1fbf6c92eb6c997d6d30ac0d1c7701ec"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/inventory-final.json",
+      "sha256": "8a87ef1d9d792b848c14db9b0a1f450b06871a8380aa6e4440de8ceb784f7864"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/protected.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-installation/final.xml",
+      "sha256": "1a1f320be55e2ac4c9b0f07b0af18e68818ee13733c959c17b4836d8ebe9b356",
+      "tests": 187,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-installation/statement-parity.json",
+      "sha256": "6631997d45c776bcdaa6146994c5088143ca2ce66232cff0a057c5cdfa5d8365"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-installation/inventory-final.json",
+      "sha256": "38027a3ab5ecd4027e4c8c25a9dd3d62f3b9f26b5a93c0dc405df4d37b1030c0"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p4-installation/protected.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/tests.xml",
+      "sha256": "a4ec0e35cbc2234a99592c14987e2ec43de2c7b2074d5bd9628cf4fd9b49a031",
+      "tests": 247,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/final.xml",
+      "sha256": "a7484274976b402c9e1f2f5d76319d6ca8f1662e86732c80935ea81e75900157",
+      "tests": 143,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/statement-parity.json",
+      "sha256": "0d9149344124d4d3e9968697ed2b09392c4ccf23a863ea43135081c559e635d7"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/inventory-final.json",
+      "sha256": "2494c766fb77ea52372a749908cb3190392721420bd6f18e448623d53da3765b"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/protected.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p5/closedloop/content-closedloop-browser.json",
+      "sha256": "221443a00593ca1deb908373bb499408bb7093b9de6e18b0520ef06bbdf6b609"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frontend-final.log",
+      "sha256": "f88185d87bfdddd867f32250e3d0ecc09b364bd0006ca2d6f55ed530d98a3a3e"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/backend.xml",
+      "sha256": "88612d48b2aa78a057a65460df61b0fb221a4309aed9abdc3599475319f58bc8",
+      "tests": 323,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/check.log",
+      "sha256": "58560f1337c5b5c77c2f2ad76262904555b08b9c53987a949b2f83cbb0a55e9b"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/build-private.log",
+      "sha256": "87b557a696ed83aae968e364d4d9f5b51b1db9ba72e58e4fadaee803a22a5508"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/build-official.log",
+      "sha256": "574f75c7b0a5975a061710eb379a3b0c60022006aea1a9b0c23250759c9841bd"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frontend-migration.json",
+      "sha256": "6dfa6c07efd6ed795f7240a4d090153bad8ba434a872c920b5e707f831a0315f"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/integrity.json",
+      "sha256": "8cbddfc11b22b01963ada9d29134314876762256f8670445cb1fa36e8f84e226"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/protected-final.json",
+      "sha256": "bd6ddebbeaf1acb0e623fc45c490361fee02e77f2928e327ed4e10c69871a31d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/inventory-final.json",
+      "sha256": "ec21d62f5e23bbeb716306f8dc0167d7c5593cc78679e2ec73268562050bce56"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-npm.log",
+      "sha256": "cd6f84965c3328aa596d379f4d32f71019cf44a00a1025546981fc9fe5afefa3"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-check.log",
+      "sha256": "8d926ceafba4927d0d478745e46a903ca4c1c49b047e0667bf150e373805a3d6"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-build-private.log",
+      "sha256": "47d8a97dfba6ef1c47820b89da68860f2d022c96559da0dd33a694d5a5e7fd98"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-build-official.log",
+      "sha256": "1e076afd99f97da6fbc8bff97722aa94627a156edf9d7733a11160e1e5cd17ba"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-frontend.log",
+      "sha256": "a9ecff379534baca247c249041945e065480149bfb55475df3b988ccc9a4ffad"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/clean-backend-after-install.xml",
+      "sha256": "ac941dd7ab63565080533f3da824d160ce703524db941fa759f5b306d73ddd56",
+      "tests": 156,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/entry/report.json",
+      "sha256": "df152aaf2750fde17c4048784b16c98496d0240fba5ace5a5c41819212dd989b"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frozen-content/content-closedloop-browser.json",
+      "sha256": "aa393e52451b5948a130fdb880ae9d3035e15b6b02444c5a92080d82d7cadbac"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frozen-recovery/chat-recovery-browser.json",
+      "sha256": "6a65eb1c5fcb8a2d99a6c93701fc6b1d4454b353300da6aee2dad0b744c66c1d"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frozen-base-fixed/report.json",
+      "sha256": "6b70b71615c42ee1b589485ef298d5d56b36acde4462ca0e7c388119e992fc98"
+    },
+    {
+      "path": ".local/workbench-validation/architecture-p3-p6-20261102/p6/frozen-settings/browser.json",
+      "sha256": "be32dbf256bba5e2ddddba6dda2d70cf1e1b1c87feea5e1e673d5726bb528f17"
+    }
+  ]
+}

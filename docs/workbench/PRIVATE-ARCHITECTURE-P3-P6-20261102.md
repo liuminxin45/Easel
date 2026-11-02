@@ -44,6 +44,22 @@ TEMP 内容闭环 34 项通过。模型与平台为合成执行，不代表真�
 未改方法语句对照保持；构造装配与资源路径单独验证。927 份保护字节和正式指针保持。
 证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-collection/`。
 
+## P4 交付：批准台账、资产核对与平台适配
+
+`features/distribution/service.py` 是原批准、租约、attempt 与远端状态的唯一实现；
+资产前置读取在 `features/distribution/assets.py`，worker 在 `application/distribution.py`。
+账号与平台调用位于 `integrations/platform_accounts.py`、`integrations/publishing.py`，
+保留原 vault、账号连接、平台脚本与 CLI 入口。未新增平台支持或扩展回退。
+66 个函数/方法的完整语句保持；改变的导入和发布 worker 路径另经回归核查。
+
+首次整组运行 216 项通过，旧登录测试失败：其全局 Thread 替换阻断 Python 3.14
+asyncio 的执行器退出，线程转储与 300 秒超时记录均保留。将替换限制在旧执行入口
+拒绝检查内后，该组 7 项在 3.53 秒通过；完整 217 项在 65.49 秒通过。
+没有修改产品行为或放宽账号、版本、发送边界、unknown 不重放与 readback 断言。
+187 模块职责/边界核查无错；保护文件与正式指针保持。
+同时清理上一采集提交中两个文件的末尾空行。
+证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/`。
+
 ## 后续切片
 
 P4 分采集、交付、安装三批；P5 整理装配与共享基础能力；P6 核对前端依赖、

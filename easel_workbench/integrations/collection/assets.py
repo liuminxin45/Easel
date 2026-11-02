@@ -47,4 +47,3 @@ class SourceAssets:
             if hashlib.sha256(path.read_bytes()).hexdigest() != row['script_sha256']:
                 raise ValueError('来源脚本 SHA 不匹配')
         return _source(row, self.root)
-

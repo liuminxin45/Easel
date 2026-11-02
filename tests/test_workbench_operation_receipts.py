@@ -69,13 +69,14 @@ def test_login_ack_does_not_wait_for_full_dependency_diagnostics(accounts,monkey
     session=fixtures.create(accounts);accounts.runner=None;accounts.autostart=True
     monkeypatch.setattr(connection_environment,'service',lambda *_:pytest.fail('synchronous dependency diagnostics delayed login'))
     starts=[]
-    monkeypatch.setattr('easel_workbench.runtime.easel_accounts.threading.Thread',lambda **kwargs:SimpleNamespace(start=lambda:starts.append(kwargs)))
     with accounts.store.connect() as c:
         before=[tuple(row) for row in c.execute('SELECT * FROM media_account_sessions')]
     # The retired executor cannot regain a write path merely to satisfy an old
     # acknowledgement test. It must reject before launching or diagnosing.
-    with pytest.raises(ConnectionConflict,match='旧账号执行入口已退役'):
-        accounts.command({'id':'fast-login','action':'login','session_id':session['id'],'base_revision':1})
+    with monkeypatch.context() as legacy_threads:
+        legacy_threads.setattr('easel_workbench.runtime.easel_accounts.threading.Thread',lambda **kwargs:SimpleNamespace(start=lambda:starts.append(kwargs)))
+        with pytest.raises(ConnectionConflict,match='旧账号执行入口已退役'):
+            accounts.command({'id':'fast-login','action':'login','session_id':session['id'],'base_revision':1})
     assert starts==[]
     with accounts.store.connect() as c:
         assert [tuple(row) for row in c.execute('SELECT * FROM media_account_sessions')]==before

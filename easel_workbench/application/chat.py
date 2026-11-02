@@ -11,9 +11,6 @@ import hashlib
 import json
 from pathlib import Path
 import uuid
-import sqlite3
-import tempfile
-import contextlib
 
 from easel_workbench.skill_catalog import ProjectSkillCatalog,parse_skill
 from easel_workbench.paths import owned_output_path
@@ -233,7 +230,7 @@ class ChatBusiness:
         return '\n\n'.join(sections)
 
     def _review_document(self,snapshot,work,message,parent=None):
-        """Compile the existing review contract on a disposable DB, no task/files."""
+        """Compile the existing review contract read-only, without task/file writes."""
         from easel_workbench.runtime.task_runtime import attach_profile_contract
         creative={'schema_version':2,'enabled':True,'creator':{
             'profile_id':snapshot['profile']['id'],'profile_revision':snapshot['profile']['revision'],
@@ -246,15 +243,13 @@ class ChatBusiness:
                   'creation_options':creative,'creator_snapshot':snapshot,
                   'annotations':copy.deepcopy((parent or {}).get('annotations',[])),
                   'raw_feedback':{'items':copy.deepcopy((parent or {}).get('raw_feedback',[]))}}
-        with tempfile.TemporaryDirectory(prefix='easel-chat-review-preview-') as folder:
-            database=Path(folder)/'preview.sqlite'
-            with self.store.connect() as source,contextlib.closing(sqlite3.connect(database)) as target:source.backup(target)
-            store=copy.copy(self.store);store.path=database
-            box=copy.copy(self.box);box.store=store;box.creative_preview=True
-            box.creator=copy.copy(self.creator);box.creator.store=store;box.creator.box=box
-            if getattr(box,'learning',None):
-                box.learning=copy.copy(box.learning);box.learning.store=store;box.learning.box=box
-            with store.connect() as c:attach_profile_contract(box,c,document,work['version_id'],request_text=message)
+        # The same contract builder supports a read-only preview: learning is
+        # only its persistence sink, while creative_preview prevents asset writes.
+        # Copying the complete business DB per plan scales with unrelated history.
+        box=copy.copy(self.box);box.creative_preview=True;box.learning=None
+        with self.store.connect() as c:
+            c.execute('PRAGMA query_only=ON')
+            attach_profile_contract(box,c,document,work['version_id'],request_text=message)
         if not document.get('learning_snapshot') or not document.get('style_delivery_contract'):
             raise ValueError('未能冻结独立交付核验合同，未开始制作')
         return document

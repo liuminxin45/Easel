@@ -418,4 +418,12 @@ def run_source(source_id,task_dir,report=None,force=False,*,root=ROOT):
         if path.exists() and name=='candidates.json':
             try:value['fetched']=len(json.loads(path.read_text(encoding='utf-8')))
             except (ValueError,OSError):pass
+        elif path.exists() and name=='coverage.json' and path.stat().st_size<=256*1024:
+            # A late failed sub-source must not erase the already observed
+            # coverage. Expose only source labels, never raw provider errors.
+            try:
+                coverage=json.loads(path.read_text(encoding='utf-8'))
+                errors=coverage.get('errors',[]) if isinstance(coverage,dict) else []
+                if isinstance(errors,list):value['warnings']=result(warnings=errors[:100])['warnings']
+            except (ValueError,OSError,TypeError):pass
     atomic(folder/'failure.json',value);return value

@@ -85,7 +85,13 @@
     "easel_workbench/runtime/easel_accounts.py",
     "easel_workbench/integrations/platform_accounts.py",
     "easel_workbench/runtime/easel_distribution.py",
-    "easel_workbench/integrations/publishing.py"
+    "easel_workbench/integrations/publishing.py",
+    "easel_workbench/runtime/connection_environment.py",
+    "easel_workbench/features/installations/recipes.py",
+    "easel_workbench/infrastructure/installations/host.py",
+    "easel_workbench/features/installations/queue.py",
+    "easel_workbench/application/installation.py",
+    "easel_workbench/runtime/media_environment.py"
   ],
   "modules": [
     {
@@ -1891,6 +1897,142 @@
         "source_commit": "e542627e46a6b59cf9d2a4bdbb9093d6f98809b2",
         "path": "easel_workbench/integrations/collection/assets.py",
         "reviewed_sha256": "9eb3f76abf1a58a13b0995cdad163eb7f5ebe1fb6bf3662e432f443c2642369f"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "5948408716b6e6d5c72d0667cddadc2d54dd6225017b9818129957e6ed34c2a8",
+      "path": "easel_workbench/runtime/connection_environment.py",
+      "symbol_groups": [],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/connection_environment.py",
+        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: features/installations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "025e9e6e8585d8bb03098bab44fa85864e9e5f2dcd0be5a6a0ddb68af72eb1b2",
+      "path": "easel_workbench/features/installations/recipes.py",
+      "symbol_groups": [],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/connection_environment.py",
+        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: infrastructure/installations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "346618cb59b8c19e6c02ceea886bc6cea3e5caa9bb95f508294f75faac87318e",
+      "path": "easel_workbench/infrastructure/installations/host.py",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/installations",
+          "members": [
+            "InstallationHost",
+            "InstallationHost.__init__",
+            "InstallationHost.python",
+            "InstallationHost.remotion",
+            "InstallationHost.child_environment",
+            "InstallationHost._run",
+            "InstallationHost._install_run",
+            "InstallationHost.check"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/connection_environment.py",
+        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: features/installations",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "e071b16fb24f7d0f42faea0dd8332dcec1ac38507a0de188e5633553e5816ff9",
+      "path": "easel_workbench/features/installations/queue.py",
+      "symbol_groups": [
+        {
+          "area": "features/installations",
+          "members": [
+            "InstallationQueue",
+            "InstallationQueue.__init__",
+            "InstallationQueue.enqueue"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/connection_environment.py",
+        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: application",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "00d222753918271fee5118e847a938ab8bf9367c5a623dc75b3068facf584591",
+      "path": "easel_workbench/application/installation.py",
+      "symbol_groups": [
+        {
+          "area": "application",
+          "members": [
+            "ConnectionEnvironment",
+            "ConnectionEnvironment.__init__",
+            "ConnectionEnvironment.python",
+            "ConnectionEnvironment.remotion",
+            "ConnectionEnvironment.child_environment",
+            "ConnectionEnvironment._run",
+            "ConnectionEnvironment._install_run",
+            "ConnectionEnvironment.check",
+            "ConnectionEnvironment.install",
+            "ConnectionEnvironment.run",
+            "service",
+            "tools",
+            "install_port",
+            "job_port"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/connection_environment.py",
+        "reviewed_sha256": "ea6fd20f9c1faac5a2af46e9fa8acc0d57da910891ff63a9d4a6890bc3e1f3d4"
+      }
+    },
+    {
+      "responsibility": "p4-installation sole implementation: runtime",
+      "lifecycle": "current canonical implementation with original state contracts",
+      "state_contract": "existing durable identities and transactions",
+      "reviewed_sha256": "e4151f80006f1028fb48596e84fdbf0eebfc41f021e47b9b7d64b5486e1411b3",
+      "path": "easel_workbench/runtime/media_environment.py",
+      "symbol_groups": [
+        {
+          "area": "runtime",
+          "members": [
+            "MediaEnvironment",
+            "MediaEnvironment.__init__",
+            "MediaEnvironment.python",
+            "MediaEnvironment._run",
+            "MediaEnvironment._install_run",
+            "MediaEnvironment.check",
+            "MediaEnvironment.install",
+            "MediaEnvironment.run",
+            "service"
+          ]
+        }
+      ],
+      "prior_review": {
+        "source_commit": "4d23f3b7a3b1f25602ad08ff4bd8171edf3bd05f",
+        "path": "easel_workbench/runtime/media_environment.py",
+        "reviewed_sha256": "3ad087f62fe981c3d4e5f1bc5650cb115cf164b8dd618b300ecde2437d24860c"
       }
     }
   ],

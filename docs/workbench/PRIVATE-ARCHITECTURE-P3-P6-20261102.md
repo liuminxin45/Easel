@@ -60,6 +60,21 @@ asyncio 的执行器退出，线程转储与 300 秒超时记录均保留。将�
 同时清理上一采集提交中两个文件的末尾空行。
 证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-delivery/`。
 
+## P4 安装：唯一入队事务与隔离宿主
+
+当前协调入口位于 `application/installation.py`；原配方在
+`features/installations/recipes.py`，唯一入队事务在 `queue.py`，
+宿主检测、进程运行与依赖路径在 `infrastructure/installations/host.py`。
+历史 MediaEnvironment 也调用同一入队实现，继续使用自己的原配方、哈希函数和异常合同。
+两入口都使用原 `media_install_jobs`，没有新表、新锁系统或任务转换；不自动运行历史任务。
+
+187 项回归通过，包括真实 TEMP 数据库上当前/历史任一入口先受理、同操作重复读取，
+两个队列实例并发受理只成功一个、同操作不能换配方，以及中断安装仅复测、不重放。
+新增测试最初误把原 ValueError 合同写成 RuntimeError，依实际异常定义修正测试，
+没有改变产品异常类型。原安装执行与五个宿主方法语句对照保持；检测通过显式 run 端口委托。
+194 模块静态职责/边界无错，保护字节与正式指针保持。未下载或安装真实依赖。
+证据：`.local/workbench-validation/architecture-p3-p6-20261102/p4-installation/`。
+
 ## 后续切片
 
 P4 分采集、交付、安装三批；P5 整理装配与共享基础能力；P6 核对前端依赖、

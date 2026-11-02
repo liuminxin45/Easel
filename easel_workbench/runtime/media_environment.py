@@ -98,28 +98,12 @@ class MediaEnvironment:
 
     def install(self, value):
         self.check()
-        operation = ident(value.get('id'))
-        recipe = value.get('recipe')
-        if recipe not in RECIPES:
-            raise ValueError('此运行时由项目固定管理，请选择已注册依赖')
-        jid = 'install-' + digest(operation)[:24]
-        created = False
-        with self.store.connect() as c:
-            c.execute('BEGIN IMMEDIATE')
-            old = c.execute('SELECT recipe,document FROM media_install_jobs WHERE id=?', (jid,)).fetchone()
-            if old:
-                if old['recipe'] != recipe:
-                    raise IntegrationConflict('同一安装操作不能更换依赖')
-                return json.loads(old['document'])
-            busy = c.execute("SELECT document FROM media_install_jobs WHERE json_extract(document,'$.state') IN ('queued','running') LIMIT 1").fetchone()
-            if busy:
-                raise IntegrationConflict('当前运行目录已有安装任务，请先核对其结果')
-            from easel_workbench.runtime.distribution_runtime import process_identity
-            job = {'id': jid, 'recipe': recipe, 'state': 'queued', 'host': platform.node(), 'owner_pid':os.getpid(),'owner_identity':process_identity(os.getpid()),'target': str(self.directory), 'packages': list(dict.fromkeys([*BASE_PACKAGES,*RECIPES[recipe]['packages']])), 'created_at': stamp(), 'lines': []}
-            c.execute('INSERT INTO media_install_jobs VALUES(?,?,?)', (jid, recipe, pack(job)))
-            created = True
+        from easel_workbench.features.installations.queue import InstallationQueue
+        queue=InstallationQueue(store=self.store,root=self.root,directory=self.directory,
+                                recipes=RECIPES,base_packages=BASE_PACKAGES,conflict=IntegrationConflict,digest_fn=digest)
+        job,created=queue.enqueue(value)
         if created:
-            threading.Thread(target=self.run, args=(jid,), name=jid, daemon=True).start()
+            threading.Thread(target=self.run,args=(job['id'],),name=job['id'],daemon=True).start()
         return job
 
     def run(self, jid):

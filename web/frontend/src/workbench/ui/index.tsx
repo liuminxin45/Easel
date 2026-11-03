@@ -18,6 +18,8 @@ import {Dashboard,Library,Research} from './overview';
 import {nativePageRoutes} from '../platform/native-routes';
 import {COMPACT_LAYOUT_QUERY} from '../platform/profile';
 import NativeNews from './NativeNews';
+import {startNewsTurn} from './newsCreationStart';
+import type {NewsCreationRequest} from './newsCreation';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
 import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
@@ -62,6 +64,15 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   void createChat(profile,undefined,prompt,[],sourceId,undefined,title);
  };
  const changeProfile=(id:string)=>{if(id==='__new__'){open('/toolbox?section=profiles&item=new');return}patch({profile_id:id});void createChat(id)};
+ const startNews=async(articleId:string,creation:NewsCreationRequest,sessionId?:string)=>{
+  await startNewsTurn(vm.client,articleId,profile,creation,{sessionId,navigate:vm.navigate,open:async()=>{
+   const context=await vm.api.get<JsonRecord>('/api/news/'+encodeURIComponent(articleId)+'/creation-context?profile_id='+encodeURIComponent(profile));
+   const linked=record(context.linked_session),ended=!!(linked.archived||linked.deleted_at);
+   if(ended&&!window.confirm('关联会话已归档或删除。要保留原记录并新建会话吗？'))return undefined;
+   const session=await sessionFlows.open({profileId:profile,sourceKey:'news:'+articleId,newsArticleId:articleId,newsNewSession:ended,navigate:false});
+   return string(session?.id)||undefined;
+  }});void sessions.reload();
+ };
  const sessionCommand=(action:string,id:string,extra:JsonRecord={})=>void chatAction.run(async()=>{const current=sessions.data?.sessions.find(value=>value.id===id);await vm.client.mutate('chat:'+action+':'+id,'/api/chat/sessions',{action,session_id:id,expected_revision:current?.revision,...extra});});
  const deleteSession=(id:string)=>{
   if(!window.confirm('确定删除这条对话？'))return;
@@ -78,7 +89,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
 
  let page:React.ReactNode;
  if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId+':'+(q.get('history_before')||'latest')} id={nativeId} search={q}/>:q.get('flow')?<SessionOpenStage client={vm.client} flow={sessionFlow}/>:<ChatLanding client={vm.client} sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
- else if(p==='/news'||p.startsWith('/news/a/'))page=<NativeNews onUseTopic={useTopic} id={p.startsWith('/news/a/')?decodeURIComponent(p.slice(8)):undefined} search={q}/>;
+ else if(p==='/news'||p.startsWith('/news/a/'))page=<NativeNews profileId={profile} onStart={startNews} onUseTopic={useTopic} id={p.startsWith('/news/a/')?decodeURIComponent(p.slice(8)):undefined} search={q}/>;
  else if(['/posters/new','/articles/new','/works/new'].includes(p))page=<NativeNewChat key={shownPath} format={p==='/articles/new'?'article':'poster'} profileId={profile} search={q} onCreate={createChat}/>;
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
  else if(['/posters','/articles','/works'].includes(p)||p.endsWith('/history'))page=q.get('drafts')==='1'?<LocalInputs/>:<Library format={p==='/articles'?'article':q.get('format')||''} history={p.endsWith('/history')}/>;

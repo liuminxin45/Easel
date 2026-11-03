@@ -1,5 +1,5 @@
 import {ChatTurnProducts,productArtifacts} from './ChatTurnProducts';
-import {useCallback,useEffect,useRef,useMemo} from 'react';
+import {useCallback,useEffect,useRef,useMemo,useState} from 'react';
 import {useStore} from 'zustand';
 import {sessionRuntime,type FrozenTurn,type SessionDraft} from './chatRuntime';
 import ChatPage,{type ChatCommand,type ChatViewState} from '../../components/ChatPage';
@@ -9,13 +9,16 @@ import type {Artifact as ChatArtifact} from '../../lib/artifacts';
 import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
 import {nativeContinuationPath,workProductionRecovery,type Work,array,record,string,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
-import {Notice} from './common';
+import {Notice,JsonDetails} from './common';
+import NewsCreationDrawer from './NewsCreationDrawer';
+import {startNewsTurn} from './newsCreationStart';
+import Drawer from '../../components/Drawer';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
 
 export type NativeSkill=SkillItem;
 export interface NativeSelection {skill_id:string;version?:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
-export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[];pendingSubmissionId?:string|null}
+export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;source_article_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[];pendingSubmissionId?:string|null}
 export interface NativeSessions {sessions:NativeSession[]}
 interface HistoryPage {has_more:boolean;next_before:string|null;before?:string|null;limit:number}
 export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
@@ -26,7 +29,11 @@ export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]|undefined{const files=productArtifacts(record(message).output_files);return files.length?files:undefined}
 export function nativeArtifactPath(message:unknown,path:string,kind:'media'|'library'='media'):string|undefined{const rel=path.replace(/^outputs\//,'');const file=array<JsonRecord>(record(message).output_files).find(file=>string(file.source_path)===rel);return file?(kind==='library'?'#/outputs/__workbench__/'+encodeURIComponent(string(file.id))+'/'+encodeURIComponent(string(file.name)):string(file.url)):undefined}
-export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>}
+export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{record(message).creation&&<CreationTurnRecord turnId={string(record(message).turnId||record(message).id)}/>}</>}
+function CreationTurnRecord({turnId}:{turnId:string}){
+ const [open,setOpen]=useState(false),resource=useResource<JsonRecord>(open?'/api/chat/turns/'+encodeURIComponent(turnId)+'/creation':null),creation=record(resource.data?.creation),files=array<JsonRecord>(record(resource.data?.material_manifest).files);
+ return <><button className="btn btn-sm" onClick={()=>setOpen(true)}>本轮创作设置</button>{open&&<Drawer title="本轮创作设置" onClose={()=>setOpen(false)}><Notice sources={[resource]}/>{resource.loading&&!resource.data&&<p>正在读取本轮材料…</p>}{resource.data&&<><p>{creation.intent==='discuss'?'讨论新闻':creation.format==='poster'?'制作贴图':'写文章'}</p>{creation.note&&<p className="ew-preserve">{string(creation.note)}</p>}<h3>本轮参考材料</h3><ul>{files.map(file=><li key={string(file.name)}>{string(file.label)||string(file.name)}</li>)}</ul><JsonDetails title="查看校验记录" value={resource.data.material_manifest}/></>}</Drawer>}</>;
+}
 /** Bind server-authorized continuation to this view's exact stopped version. */
 export function confirmedContinuation(message:unknown,sessionId:string,profileId:string):string|null{
  const value=record(message),work=record(value.work),versionId=string(value.turnId||value.id),workId=string(work.work_id),link=record(record(value.business_recovery).continuation);
@@ -41,6 +48,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const key='chat:'+id,[draft,patch]=useDraft<SessionDraft>(key,{text:'',files:[]}),action=useAsyncAction();
  const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
+ const [creationOpen,setCreationOpen]=useState(false);
  const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
  const continuationIdle=!running&&!session?.pendingTurnId&&!session?.pendingSubmissionId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
  const lastAssistant=session?.messages.filter(message=>message.role==='assistant').at(-1),lastTurn=string(record(lastAssistant).turnId||record(lastAssistant).id);
@@ -106,6 +114,8 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
   notice={<><Notice sources={[resource,catalog,action,{error,feedback}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>
+   {session?.source_article_id&&<div className="ew-row ew-news-chat-context"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(session.source_article_id!))}>新闻详情</button><button className="btn btn-sm" disabled={readOnly||busy||unknown||!!historyBefore} onClick={()=>setCreationOpen(true)}>制作内容</button></div>}
+   {creationOpen&&session?.source_article_id&&<NewsCreationDrawer articleId={session.source_article_id} profileId={profileId} sessionId={id} onClose={()=>setCreationOpen(false)} onStart={async(articleId,creation)=>{await startNewsTurn(vm.client,articleId,profileId,creation,{sessionId:id,open:async()=>id,navigate:vm.navigate})}}/>}
    {(draft.article_id||versionContext)&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':versionContext?'已选作品版本':'已选新闻素材'}>
     {draft.article_id&&<div className="ew-row"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined})}>移除本轮来源绑定</button></div>}
     {versionContext&&<><p>{search.get('continue')==='1'?'发送后基于所选版本继续制作，结果另存新版本。':draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><a href={"#/outputs/"+encodeURIComponent("workbench-"+workId)+"/"+encodeURIComponent(parentVersion)}>内容库 › 所选版本</a></>}

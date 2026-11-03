@@ -29,13 +29,16 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Drawer:()=>{},Field:()=>{},ActionButton:'button'}});
  const timers=new Map();
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'./NewsCreationDrawer':'NewsCreationDrawer','./newsCreationStart':module('workbench/ui/newsCreationStart.ts',{'./chatRuntime':runtime}),'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const continuationButtons=value=>nodes(value).filter(node=>node.type==='button'&&node.props.children==='继续制作');
-const renderedProducts=(ui,message)=>{const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);return wrapper.type(wrapper.props)};
+// NativeTurnOutputs now includes the independent creation-record sibling. Keep
+// these history tests focused on the exact shared product subtree as before.
+const productTree=wrapper=>{const product=nodes(wrapper).find(node=>typeof node.type==='function'&&node.type.name==='ChatTurnProducts');assert.ok(product,'the shared product component must remain present');return product.type(product.props)};
+const renderedProducts=(ui,message)=>{const extra=ui.chat.renderMessageExtra(message);return productTree(extra.type(extra.props))};
 function interruptedMessage(){return {role:'assistant',content:'已保留原文件',status:'stopped',turnId:'interrupted-version',work:{work_id:'exact-work',version_id:'interrupted-version'},business_recovery:{job_id:'interrupted-version',failure_kind:'production',send_state:'submitted',action:'edit_materials',error_code:'native_interrupted',can_continue:true,continuation:{session_id:'session-one',work_id:'exact-work',version_id:'interrupted-version',profile_id:'oil-pig',skill_id:'content-production',skill_version:2}}};}
 const historicalInterruption='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';
 const retainedDraft=()=>({text:'  后写的新要求\n逐字保留  ',files:[{id:'later-file',name:'后来添加.png'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}});
@@ -149,7 +152,7 @@ test('the latest confirmed interrupted production keeps its unique continuation 
  buttons[0].props.onClick();const destination=new URL(f.calls.navigate[0],'https://example.test');
  assert.equal(destination.pathname,'/chat/session-one');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'interrupted-version',skill:'content-production',skill_version:'2',action:'change',continue:'1'});
  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);assert.equal(f.draft.text,'  原字材料\n保留  ');
- const standalone=f.lib.NativeTurnOutputs({message}),standaloneProducts=standalone.type(standalone.props);
+ const standalone=f.lib.NativeTurnOutputs({message}),standaloneProducts=productTree(standalone);
  assert.equal(continuationButtons(standaloneProducts).length,1,'standalone registered products retain the default continuation action');
 });
 test('continuation requires server authorization and exact stopped turn session profile work and version identities',()=>{
@@ -176,7 +179,7 @@ test('an unresolved or active turn prevents every continuation action and no his
   else if(state==='running')f.runtime.sessionRuntime(f.vm.client,'session-one').state.setState({running:true});
   else f.draft={...f.draft,pending:{turnId:'another-turn',state}};
   const ui=f.render();assert.equal(continuationButtons(ui.chat.notice).length,0,state);
-  const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,state+' must block the message action too');
+  assert.equal(continuationButtons(renderedProducts(ui,message)).length,0,state+' must block the message action too');
   assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);
  }
  const f=fixture();f.resources.session.messages=[interruptedMessage(),{role:'assistant',turnId:'newer-turn',status:'completed',content:'后来已完成'}];
@@ -192,7 +195,7 @@ test('opening the confirmed continuation prepares the pinned skill without repla
   assert.ok(f.calls.resources.includes('/api/works/exact-work/versions/interrupted-version/view'),'continuation reads only its accurate interrupted parent');
   assert.ok(!f.calls.resources.includes('/api/works/exact-work')&&!f.calls.resources.includes('/api/works/exact-work/view'),'continuation must not hydrate the entire work or substitute its latest version');
   assert.equal(continuationButtons(ui.chat.notice).length,0,'the continuation page already represents this action');
-  const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,'the continuation page must not offer its message action again');
+  assert.equal(continuationButtons(renderedProducts(ui,message)).length,0,'the continuation page must not offer its message action again');
   assert.equal(f.draft.command.skill_id,'content-production');assert.equal(f.draft.command.version,undefined);assert.equal(f.draft.command.action_id,'native');
   if(text)assert.equal(f.draft.text,text);else assert.match(f.draft.text,/请继续完成《原始贴图》/);
   assert.deepEqual(plain(f.draft.files),files);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.post.length,0);assert.equal(f.calls.navigate.length,0);
@@ -330,7 +333,7 @@ test('new skill sends ignore private parent binding while keeping historical sou
 test('historical turn products use registered file IDs and open the exact business version',()=>{
  const f=fixture(),message={turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}};
  f.resources.product={work_id:'exact-work',version_id:'exact-version',files:message.output_files,text_blocks:[],can_adopt:false};
- const wrapper=f.lib.NativeTurnOutputs({message}),tree=wrapper.type(wrapper.props);
+ const wrapper=f.lib.NativeTurnOutputs({message}),tree=productTree(wrapper);
  assert.equal(f.lib.nativeArtifacts(message)[0].url,'/api/files/registered');assert.equal(nodes(tree).find(n=>n.type===f.components.ProductionParameters),undefined);assert.equal(nodes(tree).filter(n=>n.type==='button').length,0);assert.equal(f.calls.navigate.length,0);
  f.resources.session.messages=[{...message,role:'assistant',content:'已生成',library_path:'workbench-exact-work/exact-version'}];assert.match(f.render().chat.session.messages[0].content,/#\/outputs\/workbench-exact-work\/exact-version/);
 });

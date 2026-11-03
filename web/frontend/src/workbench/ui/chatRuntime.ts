@@ -4,9 +4,10 @@ import {streamChat,type UploadedFile,type ChatQuestion} from '../../lib/api';
 import {type StreamState} from '../../lib/store';
 import {draftFingerprint,record,string,type WorkbenchClient,type DraftAttachment,type JsonRecord,type InteractionFeedback} from '@workbench/core';
 import type {NativeSelection} from './ChatSessionView';
+import type {NewsCreationRequest} from './newsCreation';
 
-export interface FrozenTurn {turnId:string;message:string;attachments:UploadedFile[];context:JsonRecord;initial_title?:string;inputs:{text:string;files:DraftAttachment[];command?:NativeSelection|null;article_id?:string;article_mode?:'auto'|'product'};state:'connecting'|'accepted'|'rejected'|'unknown';accepted?:boolean}
-export interface SessionDraft {text:string;files:DraftAttachment[];article_id?:string;article_mode?:'auto'|'product';command?:NativeSelection|null;pending?:FrozenTurn}
+export interface FrozenTurn {turnId:string;message:string;attachments:UploadedFile[];context:JsonRecord;initial_title?:string;inputs:{text:string;files:DraftAttachment[];command?:NativeSelection|null;article_id?:string;article_mode?:'auto'|'product';creation?:NewsCreationRequest};state:'connecting'|'accepted'|'rejected'|'unknown';accepted?:boolean}
+export interface SessionDraft {text:string;files:DraftAttachment[];article_id?:string;article_mode?:'auto'|'product';creation?:NewsCreationRequest;command?:NativeSelection|null;pending?:FrozenTurn}
 const emptyStream=():StreamState=>({content:'',thinking:'',activity:'',questions:[]});
 const recovering=():InteractionFeedback=>({kind:'status',message:'连接暂时中断，正在恢复原任务状态。输入已保留。'});
 const awaitingReceipt=(receipt:JsonRecord):InteractionFeedback=>({kind:'status',message:'原任务执行结果待核对。'+(string(receipt.error)?string(receipt.error)+' ':'')+'输入已保留，不会重复发送。'});
@@ -24,7 +25,7 @@ export class SessionRuntime {
   this.patch({...(restore?turn.inputs:{}),pending:undefined});
  }
  private acknowledge(turn:FrozenTurn){
-  const current=this.client.drafts.get<SessionDraft>('chat:'+this.id),same=current&&draftFingerprint({text:current.text,files:current.files,command:current.command,article_id:current.article_id,article_mode:current.article_mode})===draftFingerprint(turn.inputs);
+  const current=this.client.drafts.get<SessionDraft>('chat:'+this.id),same=current&&draftFingerprint({text:current.text,files:current.files,command:current.command,article_id:current.article_id,article_mode:current.article_mode,...(current.creation?{creation:current.creation}:{})})===draftFingerprint(turn.inputs);
   this.patch({...(same&&!current?.pending?.accepted?{text:'',files:[],command:null,...((['poster','article','change'].includes(string(turn.context.action_id))||string(turn.context.action_id)==='native'&&!!turn.inputs.article_id&&turn.context.article_id===turn.inputs.article_id)?{article_id:undefined,article_mode:undefined}:{})}:{}),pending:{...turn,state:'accepted',accepted:true}});this.state.setState({accepted:true});
  }
  private clearRecovery(){if(this.recoveryTimer)clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined}

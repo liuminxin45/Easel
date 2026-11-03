@@ -3,7 +3,7 @@ import type {WorkbenchClient,PendingOperation} from './client';
 import {record,string,type JsonRecord,type NavigationTicket} from './models';
 
 export type SessionOpenPhase='creating'|'checking'|'not_accepted'|'ready'|'failed'|'opened';
-export interface SessionOpenInput {profileId:string;draft?:JsonRecord;query?:string;navigate?:boolean;sourceKey?:string;flowId?:string}
+export interface SessionOpenInput {profileId:string;draft?:JsonRecord;query?:string;navigate?:boolean;sourceKey?:string;flowId?:string;newsArticleId?:string;newsNewSession?:boolean}
 export interface SessionOpenFlow extends JsonRecord {flow_id:string;operation_id:string;profile_id:string;phase:SessionOpenPhase;created_at:number;updated_at:number;request:JsonRecord;draft?:JsonRecord;query?:string;navigate:boolean;source_key?:string;session_id?:string;runtime?:string;draft_applied?:boolean;auto_retries:number;parent_operation_id?:string;error?:string;code?:string;trace_id?:string;ticket?:NavigationTicket;route_opened?:boolean;recovered?:boolean}
 const key=(id:string)=>'session-open:'+id;
 const scope=(id:string)=>'session-open:'+id;
@@ -57,7 +57,7 @@ export class SessionOpenFlows {
   if(input.flowId&&this.load(input.flowId)){this.restore(input.flowId);return this.run(input.flowId);}
   if(current&&!['opened','failed'].includes(current.phase)&&current.profile_id===input.profileId&&current.source_key===(input.sourceKey||'')&&JSON.stringify(current.draft||{})===JSON.stringify(input.draft||{})){this.save({...current,ticket:this.client.navigation?.ticket?.()});this.show(current.flow_id);return this.run(current.flow_id);}
   const legacy=this.client.drafts.get<{operation?:PendingOperation}>('native:pending:chat:create')?.operation;
-  const id=crypto.randomUUID(),operation=crypto.randomUUID(),request={action:'create',profile_id:input.profileId,id:operation};
+  const id=crypto.randomUUID(),operation=crypto.randomUUID(),request={action:'create',profile_id:input.profileId,id:operation,...(input.newsArticleId?{news_article_id:input.newsArticleId,...(input.newsNewSession?{news_new_session:true}:{})}:{})};
   const flow:SessionOpenFlow={flow_id:id,operation_id:operation,profile_id:input.profileId,request,phase:legacy?'checking':'creating',created_at:Date.now(),updated_at:Date.now(),auto_retries:0,draft:input.draft,query:input.query,navigate:input.navigate!==false,source_key:input.sourceKey||'',ticket:this.client.navigation?.ticket?.(),...(legacy?{legacy:true,legacy_operation_id:legacy.id,legacy_request:legacy.body}:{})};
   if(!this.save(flow))return null;this.attach(flow);
   const timer=setTimeout(()=>{this.timers.delete(id);const row=this.load(id);if(row&&!['opened'].includes(row.phase))this.show(id)},800);(timer as unknown as {unref?:()=>void}).unref?.();this.timers.set(id,timer);

@@ -113,7 +113,7 @@ def main():
                     page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=skills'}))
                     expect(page.locator('.skill-card')).to_have_count(123,timeout=30000)
                     page.get_by_placeholder('搜索技能名或描述…').fill('card-quote')
-                    page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname').filter(has_text=re.compile('^card-quote$'))).click()
+                    page.locator('.skill-card').filter(has=page.get_by_text('金句卡 / 数据卡',exact=True)).click()
                     expect(page.get_by_text('Easel 原生技能，执行时冻结准确源码与依赖版本。',exact=True)).to_be_visible(timeout=30000)
                     page.get_by_placeholder('输入内容，例如主题 / 素材 / 要求…').fill('TEMP 从技能库带入对话')
                     page.get_by_role('button',name='带入对话',exact=True).click()

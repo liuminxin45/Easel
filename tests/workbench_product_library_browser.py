@@ -70,7 +70,7 @@ def main():
                         link=helper.turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True)
                         link.click();expect(page.locator('.gallery-page')).to_be_visible();expect(page.locator('.gallery-grid').first.locator('.gcard')).to_have_count(4)
                         expect(page.get_by_text('成品 · 4',exact=True)).to_be_visible();expect(page.locator('.ew-work')).to_have_count(0);expect(page.get_by_role('button',name='复制图文',exact=True)).to_have_count(0)
-                        check(label,'shared breadcrumbs keep the library label on one line',page.locator('.gallery-breadcrumbs > .crumb').evaluate('element=>element.getBoundingClientRect().height<=parseFloat(getComputedStyle(element).lineHeight)*1.1'))
+                        check(label,'shared breadcrumbs keep the library label on one line',page.locator('.gallery-breadcrumb > .crumb').evaluate('element=>element.getBoundingClientRect().height<=parseFloat(getComputedStyle(element).lineHeight)*1.1'))
                         operations=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
                         check(label,'native gallery is the only browser and lifecycle controls start collapsed',not operations.evaluate('element=>element.open'))
                         page.locator('.gcard').filter(has_text='1-成品.png').click();expect(page.get_by_role('link',name='下载原图',exact=True)).to_be_visible()

@@ -169,7 +169,7 @@ def exercise_official_skill_drawer(page, open_catalog, out, label, *, hosted):
     page.route('**/api/**', wire)
     try:
         open_catalog()
-        card = page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname', has_text=skill))
+        card = page.locator('.skill-card').filter(has=page.get_by_text('AI 生图', exact=True))
         expect(card).to_have_count(1);card.click()
         drawer = page.locator('.drawer-overlay .drawer')
         expect(drawer.locator('.skill-body-md')).to_contain_text('TEMP 原版技能说明')

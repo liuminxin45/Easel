@@ -31,6 +31,7 @@ function component(file,api={},options={}){
   '../lib/sanitize':{renderMarkdown:value=>value},'../lib/skillDisplayNames':{displayName:value=>value},'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect',
   './SkillDrawer':'SkillDrawer','./TrendSourcesDialog':'TrendSourcesDialog','./DownloadLink':'DownloadLink','./MessageBubble':'MessageBubble','./QuestionCards':'QuestionCards',
   './BrushEntry':{default:'BrushEntry',BrushItem:'BrushItem'},'./useBrushPopover':{useBrushPopover(){}}};
+ Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{
   exports,Date,Math,JSON,Error,window:{setTimeout:()=>1,clearTimeout(){},confirm:()=>true},document:{addEventListener(){},removeEventListener(){}},navigator:{clipboard:{}},requestAnimationFrame:fn=>{fn();return 1},
   fetch:async()=>({json:async()=>({max_mb:50})}),setTimeout:()=>1,clearTimeout(){},require:name=>name==='./icons'?new Proxy({},{get:()=>function Icon(){}}):imports[name]??assert.fail('Unexpected import '+name),

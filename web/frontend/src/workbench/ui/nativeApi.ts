@@ -23,11 +23,11 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
   peek<T>(path:string){return nativeResourceCacheable(path)?client.peek<T>(path):undefined},
   subscribe<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void){
    if(!nativeResourceCacheable(path))return()=>{};
-   const state=client.resource(path),unwatch=client.watch(path,new URL(path,'https://workbench.invalid').pathname==='/api/trends'?RESOURCE_FRESH_MS:undefined);let previous=state.getState().data,error='';
-   if(state.getState().error){error=state.getState().error;onError?.(new Error(error))}
+   const state=client.resource(path),unwatch=client.watch(path,new URL(path,'https://workbench.invalid').pathname==='/api/trends'?RESOURCE_FRESH_MS:undefined);let previous=state.getState().data,error='',status:number|undefined;
+   if(state.getState().error){error=state.getState().error;status=state.getState().errorStatus;onError?.(new RequestError(error,{status}))}
    const unsubscribe=state.subscribe(value=>{
     if(value.data!==null&&(value.data!==previous||error&&!value.error)){previous=value.data;onData(value.data as T)}
-    if(value.error&&value.error!==error)onError?.(new Error(value.error));error=value.error;
+    if(value.error&&(value.error!==error||value.errorStatus!==status))onError?.(new RequestError(value.error,{status:value.errorStatus}));error=value.error;status=value.errorStatus;
    });
    return()=>{unsubscribe();unwatch()};
   },
@@ -40,7 +40,7 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
     const read=async():Promise<T>=>{
      const value=await client.read<T>(path,force);
      if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});
-     if(value===null)throw new RequestError(client.resource(path).getState().error||'页面数据暂未读取成功');
+     if(value===null){const failure=client.resource(path).getState();throw new RequestError(failure.error||'页面数据暂未读取成功',{status:failure.errorStatus})}
      return value;
     };
     const snapshot=force?undefined:client.peek<T>(path);

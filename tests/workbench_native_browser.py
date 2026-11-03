@@ -335,7 +335,7 @@ def main():
                         # the selected profile opens its named detail page.
                         for route,heading in [('/toolbox',re.compile(r'^(?:夜深了|上午好|中午好|下午好|晚上好) 👋$')),('/works','内容库'),('/toolbox?section=profiles','油猪大侠'),('/settings','设置'),('/toolbox?section=skills','技能库')]:
                             page.goto(f['origin']+'/native/?'+urlencode({'path':route}),wait_until='domcontentloaded');expect(page.get_by_role('heading',name=heading,exact=True).first).to_be_visible(timeout=20000)
-                        page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname',has_text='content-production')).click();expect(page.get_by_role('button',name='版本与试用',exact=True)).to_be_visible(timeout=20000);page.get_by_role('button',name='版本与试用',exact=True).click();expect(page.get_by_role('combobox',name='技能版本')).to_be_visible(timeout=20000)
+                        page.locator('.skill-card').filter(has=page.get_by_text('content-production',exact=True)).click();expect(page.get_by_role('button',name='版本与试用',exact=True)).to_be_visible(timeout=20000);page.get_by_role('button',name='版本与试用',exact=True).click();expect(page.get_by_role('combobox',name='技能版本')).to_be_visible(timeout=20000)
                         page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=skills'}));page.get_by_role('button',name='整理经验',exact=True).click();expect(page.get_by_role('heading',name='整理经验',exact=True)).to_be_visible(timeout=20000)
                         assert len(f['adapter'].requests)==before_pages
                         check(profile,'native skills retain version trial experience and existing domain page entry points')

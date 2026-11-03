@@ -63,3 +63,7 @@ git fetch origin refs/tags/easel-upstream/2026-10-30-5a597e5:refs/tags/easel-ups
 git rev-parse 'easel-upstream/2026-10-30-5a597e5^{commit}'
 git show --no-patch easel-upstream/2026-10-30-5a597e5
 ```
+
+## 2026-11-03 指定 PR 增量
+
+按用户要求单独引入 #190、#191、#194、#195 及两项必要依赖，未将官方 main 全部更新冒称完成。准确 head、原提交、fork 提交及原样文件 blob 见 [overlay 账本](upstream-overlays.json)。完整基线仍为 `0f43dc9`；#195 携带的 #194 共同提交只引入一次。仅推自有 fork，官方 push 继续禁用。

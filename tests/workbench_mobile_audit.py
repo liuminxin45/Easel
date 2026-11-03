@@ -1190,7 +1190,7 @@ def main():
                                 run('drafts.local', '/posters?drafts=1', '.page-scroll', 'nonempty_local_inputs', marker=MARK)
                                 skill_path = '/toolbox?section=skills&item=' + ids['skill'] + '&version=' + str(ids['skill_version'])
                                 def open_skill():
-                                    card = page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname', has_text=re.compile(r'^ai-image-gen$')))
+                                    card = page.locator('.skill-card').filter(has=page.get_by_text('AI 生图',exact=True))
                                     expect(card).to_have_count(1)
                                     card.click()
                                     expect(page.locator('.drawer .skill-body-md')).to_be_visible()

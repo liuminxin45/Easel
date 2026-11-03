@@ -123,6 +123,11 @@ def freeze(native, *, candidate_path=None):
         shutil.copytree(ROOT/folder,target/folder,ignore=shutil.ignore_patterns('__pycache__','*.pyc','trend-sources.json','workbench-trend-sources.json','trend-collectors'))
     shutil.copytree(ROOT/'agents/workspace',target/'agents/workspace',ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     if (ROOT/'AGENTS.md').is_file():shutil.copy2(ROOT/'AGENTS.md',target/'AGENTS.md')
+    overlay_path=ROOT/'docs/workbench/upstream-overlays.json'
+    overlays=json.loads(overlay_path.read_text(encoding='utf-8')) if overlay_path.is_file() else None
+    if overlays:
+        (target/'docs/workbench').mkdir(parents=True,exist_ok=True)
+        shutil.copy2(overlay_path,target/'docs/workbench/upstream-overlays.json')
     if capabilities_revision(target)!=capabilities or capabilities_revision(ROOT)!=capabilities:
         raise ValueError('Project skill source changed while freezing')
     if workspace_revision(target)!=workspace or workspace_revision(ROOT)!=workspace:
@@ -152,6 +157,7 @@ main()
         'upstream_commit':'0f43dc98277eac85fb48952878acad349731d3fc',
         'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
+    if overlays:value['upstream_pr_overlays']={'ledger':'docs/workbench/upstream-overlays.json','sha256':sha(target/'docs/workbench/upstream-overlays.json'),'pull_requests':[item['number'] for item in overlays['pull_requests']]}
     if committed_source()!=revision:
         raise ValueError('Source commit changed while freezing; candidate was not selected')
     atomic(target/'workbench-release.json',value)

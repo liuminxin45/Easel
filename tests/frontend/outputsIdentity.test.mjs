@@ -55,7 +55,7 @@ function gallery(initial,{jumpPath,dataSource}={}){
  const card=path=>all(tree).find(node=>node.key===path&&node.props.className?.split(' ').includes('gcard'));
  const click=async path=>{const node=card(path);assert.ok(node,'card exists: '+path);node.props.onClick();await settle();};
  return {settle,click,paths:()=>all(tree).filter(node=>node.props.className?.split(' ').includes('gcard')).map(node=>node.key),
-  project:()=>details.at(-1),breadcrumbs:()=>text(all(tree).find(node=>node.props.className==='page-title gallery-breadcrumbs')),
+  project:()=>details.at(-1),breadcrumbs:()=>text(all(tree).find(node=>node.props.className==='gallery-breadcrumb')),
   preview:()=>text(all(tree).find(node=>node.props.className==='drawer-header')),
   async jump(path){props={...props,jumpPath:path};dirty=true;await settle();},
   async refresh(next){data=next;const button=all(tree).find(node=>node.type==='button'&&text(node).includes('刷新'));assert.ok(button);button.props.onClick();await settle();},

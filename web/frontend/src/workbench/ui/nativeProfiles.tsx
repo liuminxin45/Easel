@@ -1,6 +1,7 @@
 import {ExtensionDetails} from './ExtensionDetails';
 import {useCallback,useMemo,useState} from 'react';
 import ProfilePage,{type ProfilePageDraft} from '../../components/ProfilePage';
+import {fetchPersonas} from '../../lib/api';
 import OnboardingWizard,{type OnboardingDraft} from '../../components/OnboardingWizard';
 import {creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
@@ -18,7 +19,7 @@ export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;pro
  const item=search.get('item')||'';
  if(item==='new')return <CreateProfile/>;
  const profile=resource.data?.profiles.find(value=>value.id===(item||profileId));
- return <><Notice sources={[resource]}/><ProfilePage key={item||profileId||'profiles'} persona={profile?.id||item||profileId} viewState={viewState} onContentReady={onContentReady}
+ return <><Notice sources={[resource]}/><ProfilePage key={item||profileId||'profiles'} persona={profile?.id||item||profileId} viewState={viewState} onContentReady={onContentReady} loadPersonas={fetchPersonas}
   personaLabel={id=>resource.data?.profiles.find(value=>value.id===id)?.name||id}
   onUsePersona={id=>vm.navigate('/chat?fresh=1&profile='+encodeURIComponent(id))}
   onNewProfile={()=>vm.navigate('/toolbox?section=profiles&item=new')}

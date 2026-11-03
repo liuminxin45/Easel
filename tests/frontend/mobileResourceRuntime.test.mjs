@@ -43,6 +43,39 @@ test('a failed cold read is rejected rather than returning null as page data',as
  const f=fixture();try{f.state.response=()=>json({error:'TEMP forbidden'},403);await assert.rejects(f.api.fetchOutputs(),/TEMP forbidden/);assert.equal(f.api.peekApiData('/api/outputs'),undefined)}finally{f.close()}
 });
 
+test('native profile reads and snapshot errors preserve exact HTTP status through the official API port',async()=>{
+ const f=fixture(),path='/api/persona/profile-a/files';try{
+  let caught;const stop=f.api.subscribeApiData(path,()=>{},error=>{caught=error});
+  for(const status of [404,403]){
+   f.state.response=()=>json({error:'TEMP profile unavailable'},status);
+   await assert.rejects(f.api.fetchPersonaFiles('profile-a',true),error=>error instanceof f.api.ApiError&&error.status===status);
+   assert.equal(f.client.resource(path).getState().errorStatus,status);assert.ok(caught instanceof f.api.ApiError);assert.equal(caught.status,status);
+  }
+  f.state.response=()=>{throw new TypeError('TEMP network offline')};
+  await assert.rejects(f.api.fetchPersonaFiles('profile-a',true),error=>!(error instanceof f.api.ApiError)&&error.status===undefined);
+  assert.equal(f.client.resource(path).getState().errorStatus,undefined);assert.equal(caught.status,undefined);
+  f.state.response=()=>json({name:'profile-a',files:[]});await f.api.fetchPersonaFiles('profile-a',true);assert.equal(f.client.resource(path).getState().errorStatus,undefined);assert.equal(f.client.resource(path).getState().error,'');stop();
+ }finally{f.close()}
+});
+
+test('stale profile failures cannot restore a status across an authentication epoch',async()=>{
+ const f=fixture(),path='/api/persona/profile-a/files';try{
+  let finish;f.state.response=()=>new Promise(resolve=>{finish=resolve});const request=f.api.fetchPersonaFiles('profile-a',true);
+  f.client.beginAuthentication();f.client.session.setState({config:{csrf:'NEXT'},loading:false});finish(json({error:'TEMP old missing profile'},404));
+  await assert.rejects(request,error=>error.cancelled===true);assert.equal(f.client.resource(path).getState().errorStatus,undefined);assert.equal(f.client.resource(path).getState().error,'');
+  f.state.response=()=>json({name:'profile-a',files:[]});await f.api.fetchPersonaFiles('profile-a',true);assert.equal(f.client.resource(path).getState().errorStatus,undefined);
+ }finally{f.close()}
+});
+
+test('native cached persona catalogs are validated for snapshots and subscriptions as ordinary reads are',async()=>{
+ const f=fixture(),path='/api/personas';try{
+  const list=[{name:'profile-a',description:'Actual profile'}];f.state.response=()=>json(list);await f.api.fetchPersonas();assert.equal(f.api.peekApiData(path)[0].name,'profile-a');
+  let error;const stop=f.api.subscribeApiData(path,()=>{},value=>{error=value});f.client.resource(path).setState({data:[{name:'broken'}]});
+  assert.equal(f.api.peekApiData(path),undefined);assert.match(error.message,/画像列表响应格式无效/);
+  f.state.response=()=>json([{name:'broken'}]);await assert.rejects(f.api.fetchPersonas(true),/画像列表响应格式无效/);stop();
+ }finally{f.close()}
+});
+
 test('failed background refreshes back off, while an explicit refresh can retry immediately',async()=>{
  const f=fixture();try{
   await f.api.fetchOutputs();f.clock.now+=31000;f.state.response=()=>json({error:'TEMP offline'},500);

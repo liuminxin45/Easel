@@ -92,7 +92,7 @@ test('compact dashboard delegates flat scrolling to the native page and restores
  const viewport={compact:true},pages=load('nativePages.tsx',{viewport});
  const mobile=pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}});
  assert.equal(mobile.type,native.DashboardPage);
- assert.equal(mobile.props.listMaxHeight,undefined);
+ assert.equal(mobile.props.listMaxHeight,null);
  assert.equal(mobile.props.verifyAccountsOnMount,false);
  viewport.compact=false;
  assert.equal(pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}}).props.listMaxHeight,360);

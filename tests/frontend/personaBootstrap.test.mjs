@@ -12,7 +12,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../../web/frontend/src/
 }).outputText, { exports: personaHelpers });
 const source = readFileSync(new URL('../../web/frontend/src/App.tsx', import.meta.url), 'utf8');
 const parsed = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const app = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'App');
+const app = ['NativeApp','App'].map(name=>parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name)).find(Boolean);
 const selected = app.body.statements.filter(node => {
   if (ts.isVariableStatement(node)) return node.declarationList.declarations.some(d =>
     ts.isIdentifier(d.name) && ['personaRequestId', 'refreshPersonas'].includes(d.name.text));

@@ -25,6 +25,7 @@ test('native radar subscriptions share the existing poll, update completed resul
 
 function dashboard(api,file='DashboardPage',suppliedProps){
  const slots=[],effects=[];let index=0,dirty=true,tree,props=suppliedProps??{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){}};
+ if(file==='ProfilePage'&&!props.loadPersonas)props={...props,loadPersonas:api.fetchPersonas};
  const same=(a,b)=>a&&b&&a.length===b.length&&a.every((value,i)=>Object.is(value,b[i]));
  const react={
   useState(initial){const i=index++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],next=>{const value=typeof next==='function'?next(slots[i]):next;if(!Object.is(value,slots[i])){slots[i]=value;dirty=true}}]},
@@ -43,6 +44,13 @@ test('ordinary dashboard retains its original tree source and waits for the init
  const f=dashboard(api,'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},onContentReady(){ready++}});
  let tree=await f.settle();assert.equal(reads,1);assert.equal(ready,0);assert.ok(text(tree).includes('正在读取最近产物'));assert.ok(api.subscriptions.has('/api/outputs'));
  finish([{type:'dir',name:'Original project',path:'old'}]);tree=await f.settle();assert.ok(ready>0);assert.ok(text(tree).includes('Original project'));
+});
+
+test('dashboard retains official default trend scrolling and explicit host modes never nest scroll containers',async()=>{
+ for(const [listMaxHeight,trends,boards] of [[undefined,1,0],[360,0,4],[null,0,0]]){
+  const f=dashboard(dashboardApi(),'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},listMaxHeight});
+  const tree=await f.settle();assert.equal(all(tree).filter(node=>node.props.className==='dash-trend-list').length,trends);const registered=all(tree).filter(node=>node.props.className==='dash-card-list');assert.equal(registered.length,boards);for(const board of registered)assert.equal(board.props.style.maxHeight,360);
+ }
 });
 
 test('private dashboard becomes ready before bounded metadata, counts the real total and shows only five recent projects',async()=>{

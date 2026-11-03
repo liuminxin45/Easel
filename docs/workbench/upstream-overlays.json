@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "full_upstream_baseline": "0f43dc98277eac85fb48952878acad349731d3fc",
+  "strategy": "explicit-pr-cherry-picks",
+  "official_push_allowed": false,
+  "pull_requests": [
+    {
+      "number": 190,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/190",
+      "head": "1795d3fc9e5a06034a178c923c6f01e77f715222",
+      "original_commits": [
+        "67d5ff0044a96d0335b1060b0815629fd7ded784",
+        "1795d3fc9e5a06034a178c923c6f01e77f715222"
+      ],
+      "fork_commits": [
+        "d7adce9feb4258470c40bc58f62999906c416ea3",
+        "ecd047f661716603082ee2cdcee17f632a352dae"
+      ]
+    },
+    {
+      "number": 191,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/191",
+      "head": "d13212889ab896546ca581d97d4b33e277a9319e",
+      "original_commits": [
+        "d13212889ab896546ca581d97d4b33e277a9319e"
+      ],
+      "fork_commits": [
+        "1878204f587cc885e12fc064f892cc122cc6bd94"
+      ]
+    },
+    {
+      "number": 194,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/194",
+      "head": "d1b923f9b2843fd7cd2c395188325ab3a534f709",
+      "original_commits": [
+        "d1b923f9b2843fd7cd2c395188325ab3a534f709"
+      ],
+      "fork_commits": [
+        "738d087c3bd2a0e4aa288eff8470f07ee1ff7a26"
+      ]
+    },
+    {
+      "number": 195,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/195",
+      "head": "0819776f11cd9c5c21025cf1e4f45a323033dc93",
+      "original_commits": [
+        "0819776f11cd9c5c21025cf1e4f45a323033dc93"
+      ],
+      "fork_commits": [
+        "d2e4d7f6231a7097f4902297098b0decf36d2325"
+      ]
+    }
+  ],
+  "prerequisites": [
+    {
+      "original": "547c15c23c672b328c7c211bcf180360dc3b73d2",
+      "fork": "e9060cc339c69877e70848f97e7d27def01ee88c"
+    },
+    {
+      "original": "5c12e42e9019d276368130b52385b770749ffa6f",
+      "fork": "c73b2baa6f0d4aadd3b2c6987932751b2c7d0253"
+    }
+  ],
+  "exact_official_blobs": {
+    "easel/commands/doctor.py": "9a14f29a9db0a9378a32e7736b88aad9d5f0327c",
+    "easel/openclaw_workspace.py": "9a3203139894b9aecbe1df3000f5e51d4b4d3ea1",
+    "easel/skills_sync.py": "520fec2bb4e570f119ce403fefc85d97e3fc83e2",
+    "scripts/sync_if_stale.py": "9386e38e2e05a62a8c5a45e6236c48f2753ba4ad",
+    "web/frontend/src/lib/personas.ts": "754669852e2c5e0eaa17e5a46e93e63159c315eb",
+    "web/frontend/src/components/skillIconsProduce.tsx": "4fbfaa551fd5d17085b11771db8f1a47e09047c9",
+    "web/frontend/src/components/skillIconsPublish.tsx": "df66162c552cd8246646d8f3e94e11cf4e948d78",
+    "web/frontend/src/assets/platform/bilibili.svg": "6c114c71103ff63958dfc29ffd991ad90fe2cabc",
+    "web/frontend/src/assets/platform/kuaishou.svg": "d4b4beeed778e3aced42e5eeab88cd8889fe6de2",
+    "web/frontend/src/assets/platform/README.md": "59269292cd881adf897fb45310708c81045b2d48",
+    "web/frontend/src/assets/platform/wechat.svg": "c3eb6c4a666f66fcda5df187936c5fee829d4ecb",
+    "web/frontend/src/assets/platform/xiaohongshu.svg": "3de64c5c648d694c5f72b3888af8070fa64b0fc4",
+    "web/frontend/src/assets/platform/zhihu.svg": "c283d23e6d9678f96e5efb493a4091fef1fd2706",
+    "web/frontend/src/components/skillIconsBrand.tsx": "c0caaea537ffe40756cf46500c1d789073a37987",
+    "web/frontend/src/components/skillIconsPlanning.tsx": "bb31b4f91cfbc1c5c0adb158efacf3de00e65b75",
+    "web/frontend/src/components/icons.tsx": "fe66d13472e4d80df45c036e660fc6000176ce7b",
+    "web/frontend/src/lib/skillDisplayNames.ts": "4f46a6093dec311b8e7e2fee0f4989a7b66508e4"
+  },
+  "note": "PR195 includes PR194; shared parent imported once. Full baseline is unchanged. Local conflict adaptations preserve private optional ports."
+}

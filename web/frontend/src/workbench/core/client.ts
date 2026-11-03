@@ -12,7 +12,7 @@ import {AUTH_CHECK_MS,RESOURCE_CACHE_BYTES,RESOURCE_CACHE_ENTRIES,mutationTags,r
 import {commandScope,interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
 import {dailyTrendsPath,dailyTrendsDay,beijingDay,nextBeijingDayDelay,emptyDailyTrends} from './daily-trends';
 
-export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
+export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;errorStatus?:number;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
 export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean;receiptProtocol?:2;acceptance?:'accepted'|'unknown';createdAt?:number}
 export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string;receiptProtocol?:2}
 export interface OperationState {busy:boolean;pending:PendingOperation|null;error:string;notice:string;result?:unknown;feedback?:InteractionFeedback}
@@ -92,7 +92,7 @@ export class WorkbenchClient {
     for(const state of this.operations.values())state.setState({result:undefined,error:'',feedback:undefined,notice:''});
     this.authEpoch++;this.cacheMeta.clear();this.inflight.clear();this.lastAuthCheckedAt=0;this.resumePromise=undefined;
     for(const timer of this.pollTimers.values())clearTimeout(timer);this.pollTimers.clear();
-    for(const [path,state] of this.resources){this.invalidations.set(path,(this.invalidations.get(path)??0)+1);state.setState({data:null,loading:false,refreshing:false,error:'',feedback:undefined,stale:true,checkedAt:undefined})}
+    for(const [path,state] of this.resources){this.invalidations.set(path,(this.invalidations.get(path)??0)+1);state.setState({data:null,loading:false,refreshing:false,error:'',errorStatus:undefined,feedback:undefined,stale:true,checkedAt:undefined})}
     clearSessionMediaCache();this.pruneResources();
   }
   beginAuthentication():void{this.clearPrivateMemory();this.initializePromise=undefined;this.authCheckPromise=undefined;this.session.setState({config:null,loading:true,expired:false,error:''})}
@@ -101,7 +101,7 @@ export class WorkbenchClient {
     const epoch=this.authEpoch;this.session.setState({loading:true,error:'',feedback:undefined});
     this.initializePromise=(async()=>{try{const config=await this.api.get<Config>('/api/config');if(epoch!==this.authEpoch)return;this.lastAuthCheckedAt=this.now();void this.usage.configure(record(config).usage,config.csrf);this.session.setState({config,loading:false,expired:false,error:'',feedback:undefined})}catch(error){if(epoch===this.authEpoch){this.session.setState({loading:false,error:message(error),feedback:interactionFeedback(error)});this.initializePromise=undefined}}})();return this.initializePromise;
   }
-  expireSession():void{this.clearPrivateMemory();this.initializePromise=undefined;this.authCheckPromise=undefined;this.session.setState({expired:true,config:null,loading:false,error:'',feedback:undefined});for(const state of this.resources.values())state.setState({error:'登录已过期，输入已保留。'})}
+  expireSession():void{this.clearPrivateMemory();this.initializePromise=undefined;this.authCheckPromise=undefined;this.session.setState({expired:true,config:null,loading:false,error:'',feedback:undefined});for(const state of this.resources.values())state.setState({error:'登录已过期，输入已保留。',errorStatus:401})}
   resource(path:string):StoreApi<ResourceState>{
     let state=this.resources.get(path);if(!state){state=createStore<ResourceState>(()=>({data:null,loading:true,error:'',revision:0,stale:true}));this.resources.set(path,state)}
     const meta=this.cacheMeta.get(path);if(meta)meta.lastAccess=this.now();return state;
@@ -121,7 +121,7 @@ export class WorkbenchClient {
       if(path!==undefined&&key!==path||!dailyTrendsPath(key))continue;
       const value=state.getState().data;if(value===null||record(value).version!==1||!Array.isArray(record(value).trends)||dailyTrendsDay(value)===today)continue;
       this.invalidations.set(key,(this.invalidations.get(key)??0)+1);this.cacheMeta.delete(key);
-      state.setState(previous=>({data:emptyDailyTrends(now),revision:previous.revision+1,loading:false,refreshing:false,error:'',feedback:undefined,stale:true,checkedAt:undefined}));
+      state.setState(previous=>({data:emptyDailyTrends(now),revision:previous.revision+1,loading:false,refreshing:false,error:'',errorStatus:undefined,feedback:undefined,stale:true,checkedAt:undefined}));
     }
   }
   private scheduleDailyTrends():void{
@@ -167,7 +167,7 @@ export class WorkbenchClient {
     // A child hook may receive visibilitychange before CoreProvider does.
     // Its forced reload must still wait for foreground authentication.
     if(typeof document!=='undefined'&&!document.hidden&&(this.hidden||this.resumePromise&&this.authCheckPromise))return (this.hidden?this.resumeVisible():this.resumePromise!).then(()=>this.read<T>(path));
-    const state=this.resource(path),running=this.inflight.get(path);if(this.session.getState().expired){state.setState({data:null,loading:false,refreshing:false,feedback:undefined,error:'登录已过期，输入已保留。'});return Promise.resolve(null)}if(running)return running as Promise<T|null>;
+    const state=this.resource(path),running=this.inflight.get(path);if(this.session.getState().expired){state.setState({data:null,loading:false,refreshing:false,feedback:undefined,error:'登录已过期，输入已保留。',errorStatus:401});return Promise.resolve(null)}if(running)return running as Promise<T|null>;
     const oldMeta=this.cacheMeta.get(path),oldState=state.getState(),now=this.now();
     if(!force&&oldState.data!==null&&oldMeta?.retryAt&&now<oldMeta.retryAt)return Promise.resolve(oldState.data as T);
     if(!force&&oldState.data!==null&&!oldState.stale&&oldMeta&&now-oldMeta.checkedAt<resourceFreshMs(path,oldState.data)){oldMeta.lastAccess=now;return Promise.resolve(oldState.data as T)}
@@ -192,9 +192,9 @@ export class WorkbenchClient {
         if(dailyTrendsPath(path)&&dailyTrendsDay(data)!==beijingDay(this.dailyNow())){data=null;throw new RequestError('热点数据日期未能核对，请重新读取。')}
         meta.etag=resourceCacheable(path)?reply.etag??(reply.status==='not-modified'?meta.etag:undefined):undefined;meta.checkedAt=this.now();meta.lastAccess=this.now();meta.failures=0;meta.retryAt=undefined;
         try{meta.bytes=new TextEncoder().encode(JSON.stringify(data)).byteLength}catch{meta.bytes=this.cacheBytes+1}
-        state.setState(previous=>({data,loading:false,refreshing:false,error:'',feedback:undefined,revision:previous.revision+(reply.status==='modified'?1:0),stale:false,checkedAt:meta.checkedAt}));
+        state.setState(previous=>({data,loading:false,refreshing:false,error:'',errorStatus:undefined,feedback:undefined,revision:previous.revision+(reply.status==='modified'?1:0),stale:false,checkedAt:meta.checkedAt}));
       }
-    }catch(error){const valid=authEpoch===this.authEpoch&&!this.session.getState().expired;revalidate=valid&&epoch!==(this.invalidations.get(path)??0);if(valid&&!revalidate){meta.failures=(meta.failures??0)+1;const intervals=[...(this.pollWatchers.get(path)?.values()??[])].filter((value):value is number=>value!==undefined&&value>0),base=intervals.length?Math.min(...intervals):resourceFreshMs(path,oldState.data);meta.retryAt=this.now()+Math.min(60000,Math.max(1000,base)*2**Math.min(meta.failures,5));state.setState({loading:false,refreshing:false,error:message(error),feedback:interactionFeedback(error)})}}
+    }catch(error){const valid=authEpoch===this.authEpoch&&!this.session.getState().expired;revalidate=valid&&epoch!==(this.invalidations.get(path)??0);if(valid&&!revalidate){meta.failures=(meta.failures??0)+1;const intervals=[...(this.pollWatchers.get(path)?.values()??[])].filter((value):value is number=>value!==undefined&&value>0),base=intervals.length?Math.min(...intervals):resourceFreshMs(path,oldState.data);meta.retryAt=this.now()+Math.min(60000,Math.max(1000,base)*2**Math.min(meta.failures,5));state.setState({loading:false,refreshing:false,error:message(error),errorStatus:error instanceof RequestError?error.status:undefined,feedback:interactionFeedback(error)})}}
     finally{if(this.inflight.get(path)===job)this.inflight.delete(path);this.pruneResources();this.schedulePoll(path)}
     return revalidate?this.read<T>(path,true):data})();this.inflight.set(path,job);return job;
   }

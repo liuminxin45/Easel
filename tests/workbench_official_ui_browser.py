@@ -158,7 +158,7 @@ def main():
         def open_skill():
             goto(page, f, '/toolbox?section=skills')
             page.get_by_placeholder('搜索技能名或描述…').fill('ai-image-gen')
-            page.locator('.skill-card').filter(has=page.locator('.skill-card-rawname').filter(has_text=re.compile('^ai-image-gen$'))).click()
+            page.locator('.skill-card').filter(has=page.get_by_text('AI 生图',exact=True)).click()
             drawer = page.locator('.drawer').filter(has=page.locator('.skill-detail-rawname').filter(has_text=re.compile('^ai-image-gen$')))
             expect(drawer.get_by_role('button', name='执行', exact=True)).to_be_visible()
             return drawer

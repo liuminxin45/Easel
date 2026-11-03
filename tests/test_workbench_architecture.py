@@ -109,12 +109,33 @@ WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','
 
 
 def allowed_upstream_patch(relative):
+    ledger=ROOT/'docs/workbench/upstream-overlays.json'
+    if ledger.is_file():
+        expected=json.loads(ledger.read_text(encoding='utf-8')).get('exact_official_blobs',{}).get(relative)
+        if expected:
+            target=ROOT/relative
+            if not target.is_file() or target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):return False
+            raw=target.read_bytes().replace(b'\r\n',b'\n')
+            return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==expected
     if relative in UPSTREAM_PATCH_ALLOWLIST or relative.startswith('web/frontend/src/workbench/'):
         return True
     if relative=='skills/workbench-import.json' or relative.startswith('skills/shared/workbench/'):
         return True
     parts=Path(relative).parts
     return len(parts)>3 and parts[:2]==('skills','builtin') and parts[2] in WORKBENCH_BUILTIN_IDS
+
+
+def test_official_overlay_exception_requires_exact_registered_blob(tmp_path,monkeypatch):
+    relative='easel/commands/doctor.py'
+    target=tmp_path/relative;target.parent.mkdir(parents=True);target.write_bytes(b'official\r\n')
+    raw=b'official\n';blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+    ledger=tmp_path/'docs/workbench/upstream-overlays.json';ledger.parent.mkdir(parents=True)
+    ledger.write_text(json.dumps({'exact_official_blobs':{relative:blob}}),encoding='utf-8')
+    monkeypatch.setitem(globals(),'ROOT',tmp_path)
+    assert allowed_upstream_patch(relative)
+    target.write_bytes(b'private mutation\n')
+    assert not allowed_upstream_patch(relative)
+    assert not allowed_upstream_patch('easel/commands/unregistered.py')
 
 
 def python_edges(source):

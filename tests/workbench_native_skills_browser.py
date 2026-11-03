@@ -107,7 +107,6 @@ def main():
                 composer.fill('请修改刚才的贴图，保留原文件并另存。 TEMP edit '+case);page.get_by_role('button',name='发送',exact=True).click();helper.wait_history(page,f['origin'],sid,history['session']['messages'][-1]['turnId'])
                 expect(page.locator('.chat-thread')).to_contain_text('TEMP_ORIGINAL_TEXT_3');assert len(f['adapter'].requests)==3
                 check(case,'original slash menu sends a generic native skill and a later modification creates separate actual files')
-                api=f['box']._native_api;api._build_library()
                 start=len(requests);goto(page,f,'/works?path=TEMP-native-skills/run-3/正文.md');expect(page.get_by_text('TEMP_ORIGINAL_TEXT_3',exact=False).first).to_be_visible()
                 assert not any(r['path']=='/api/outputs' for r in requests[start:]);assert any(r['path'].startswith('/api/output/') for r in requests[start:])
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')

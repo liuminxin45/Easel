@@ -282,7 +282,20 @@ class ChatBusiness:
         return {'model_call_id':call_id}
 
     def finished(self,turn):
-        if not turn.get('snapshot'):return {'session_id':turn['session_id'],'model_status':turn['status']}
+        if not turn.get('snapshot'):
+            # Ordinary native runs can write files without creating private work
+            # rows. Wake the existing metadata index, including partial outputs.
+            if turn.get('status') in ('completed','stopped','failed','unknown'):
+                try:
+                    native=getattr(self.box,'_native_api',None)
+                    if native is not None:native.library.invalidate()
+                    else:
+                        from easel_workbench.features.works.library_index import request_refresh
+                        request_refresh(self.root)
+                except Exception as error:
+                    from easel_workbench.runtime.server_logging import exception
+                    exception('library_refresh_signal_failed',error,phase='native_finish')
+            return {'session_id':turn['session_id'],'model_status':turn['status']}
         from easel_workbench.runtime.task_runtime import finish_call
         with self.store.connect() as c:
             calls=c.execute('SELECT id FROM creator_model_calls WHERE task_id=?',(turn.get('work',{}).get('version_id') if turn.get('work') else turn['id'],)).fetchall()

@@ -15,6 +15,22 @@ def _read(path):
     c=sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True,timeout=1);c.row_factory=sqlite3.Row;return c
 
 
+def _refresh_counts(c):
+    values=dict(c.execute("SELECT key,value FROM metadata WHERE key IN ('refresh_requested','refresh_completed')"))
+    return int(values.get('refresh_requested',0)),int(values.get('refresh_completed',0))
+
+
+def request_refresh(root):
+    """A durable metadata signal; original file enumeration stays in the worker."""
+    path=Path(root)/'data/content-library.sqlite'
+    if not path.is_file():return False # A newly created index starts with a full build.
+    if path.is_symlink():raise ValueError('linked library index is not writable')
+    with contextlib.closing(_connect(path)) as c,c:
+        c.execute('BEGIN IMMEDIATE');requested,_=_refresh_counts(c)
+        c.execute("INSERT OR REPLACE INTO metadata VALUES('refresh_requested',?)",(str(requested+1),))
+    return True
+
+
 def health(root):
     path=Path(root)/'data/content-library.sqlite'
     if not path.exists() or path.is_symlink():return {'status':'unavailable','building':False,'counts':{}}
@@ -32,7 +48,7 @@ class LibraryIndex:
     def __init__(self,root,builder,signature=lambda:None):
         self.root=Path(root);self.path=self.root/'data/content-library.sqlite'
         if self.path.is_symlink():raise ValueError('linked library index is not writable')
-        self.builder=builder;self.signature=signature;self.stop=threading.Event();self.thread=None
+        self.builder=builder;self.signature=signature;self.stop=threading.Event();self.wake=threading.Event();self.thread=None
         self.metrics_lock=threading.Lock();self.last_metrics={}
         self.path.parent.mkdir(parents=True,exist_ok=True)
         with contextlib.closing(_connect(self.path)) as c,c:
@@ -49,7 +65,9 @@ class LibraryIndex:
 
     def rebuild(self):
         with locked(self.root/'data/content-library.lock',timeout=.1):
-            with contextlib.closing(_connect(self.path)) as c,c:self._state(c,building=True,status='building',build_started_at=time.time())
+            with contextlib.closing(_connect(self.path)) as c,c:
+                requested,_=_refresh_counts(c)
+                self._state(c,building=True,status='building',build_started_at=time.time())
             try:
                 source_version=self.signature()
                 roots=self.builder()
@@ -84,10 +102,14 @@ class LibraryIndex:
                         c.execute('DELETE FROM thumbnails');c.executemany('INSERT INTO thumbnails VALUES(?,?)',thumbs.items())
                         c.execute("INSERT OR REPLACE INTO metadata VALUES('revision',?)",(uuid.uuid4().hex,))
                         c.execute("INSERT OR REPLACE INTO metadata VALUES('content_hash',?)",(digest,))
+                    c.execute("INSERT OR REPLACE INTO metadata VALUES('refresh_completed',?)",(str(requested),))
                     self._state(c,status='ready',building=False,counts={'nodes':len(rows),'projects':len(roots)},refreshed_at=time.time(),source_revision=source_version,**self.last_metrics)
             except BaseException as error:
                 with contextlib.closing(_connect(self.path)) as c,c:self._state(c,status='error',building=False,error_type=type(error).__name__)
                 raise
+
+    def invalidate(self):
+        request_refresh(self.root);self.wake.set()
 
     def start(self):
         if self.thread and self.thread.is_alive():return
@@ -95,19 +117,21 @@ class LibraryIndex:
             state=health(self.root)
             previous=state.get('source_revision',object());last=time.monotonic() if state.get('status')=='ready' else 0
             while not self.stop.is_set():
+                self.wake.clear()
                 try:
                     current=self.signature()
-                    if current!=previous or time.monotonic()-last>300:
+                    with contextlib.closing(_read(self.path)) as c:requested,completed=_refresh_counts(c)
+                    if requested>completed or current!=previous or time.monotonic()-last>300:
                         self.rebuild();previous=current;last=time.monotonic()
                     with self.metrics_lock:metrics=dict(self.last_metrics)
                     if metrics:
                         with contextlib.closing(_connect(self.path)) as c,c:self._state(c,**metrics)
                 except Exception:pass
-                self.stop.wait(5)
+                self.wake.wait(5)
         self.thread=threading.Thread(target=run,name='content-library-index',daemon=True);self.thread.start()
 
     def close(self):
-        self.stop.set()
+        self.stop.set();self.wake.set()
         if self.thread:self.thread.join(timeout=2)
 
     @staticmethod
@@ -126,7 +150,7 @@ class LibraryIndex:
         with contextlib.closing(_read(self.path)) as c:
             c.execute('BEGIN')
             row=c.execute("SELECT value FROM metadata WHERE key='revision'").fetchone();revision=row[0] if row else ''
-            state=c.execute("SELECT value FROM metadata WHERE key='state'").fetchone();indexing=not bool(revision)
+            state=c.execute("SELECT value FROM metadata WHERE key='state'").fetchone();requested,completed=_refresh_counts(c);indexing=not bool(revision) or requested>completed
             args=[parent];where='parent=?'
             if query:where+=' AND name LIKE ? ESCAPE \'!\'';args.append('%'+query.replace('!','!!').replace('%','!%').replace('_','!_')+'%')
             if kind and kind!='all':where+=' AND (sort_type=0 OR kind=?)';args.append(kind)
@@ -159,6 +183,19 @@ class LibraryIndex:
         return value
 
     def resolve(self,path):
+        # Await only an already-requested background publication, never scan
+        # files in a request. Stay below the host's ordinary 30-second read cap.
+        deadline=time.monotonic()+20
+        while True:
+            try:return self._resolve_indexed(path)
+            except HTTPException as error:
+                if error.status_code!=404:raise
+                with contextlib.closing(_read(self.path)) as c:requested,completed=_refresh_counts(c)
+                if requested<=completed or time.monotonic()>=deadline:
+                    return self._resolve_indexed(path) # Recheck a publication racing this read.
+                time.sleep(.05)
+
+    def _resolve_indexed(self,path):
         if not isinstance(path,str) or len(path)>4096:raise HTTPException(400,'内容路径无效')
         nodes=[];seen=set()
         with contextlib.closing(_read(self.path)) as c:

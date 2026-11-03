@@ -37,14 +37,14 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
     if(options.signal?.aborted)throw new RequestError('读取已取消',{cancelled:true});
     if(!nativeResourceCacheable(path))return client.api.get<T>(path,options.signal??undefined);
     const force=options.cache==='reload'||options.cache==='no-cache',epoch=client.authenticationEpoch;
-    const read=async()=>{
+    const read=async():Promise<T>=>{
      const value=await client.read<T>(path,force);
      if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});
      if(value===null)throw new RequestError(client.resource(path).getState().error||'页面数据暂未读取成功');
      return value;
     };
     const snapshot=force?undefined:client.peek<T>(path);
-    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});const current=client.peek<T>(path);return current===undefined?read():current}),options.signal)}
+    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then<T>(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});const current=client.peek<T>(path);return current===undefined?read():current}),options.signal)}
     return reader(read(),options.signal);
    }
    if(!['POST','PUT','PATCH','DELETE'].includes(method))throw Error('请求方法不受支持');

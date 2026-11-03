@@ -37,6 +37,26 @@ test('direct creation durably preserves exact draft and opens the same completed
  }finally{f.close()}
 });
 
+test('navigate false completion cancels the delayed stage timer and cannot redirect or recreate after 800ms',async()=>{
+ const timers=[],globals={setTimeout:(callback,ms)=>{const timer={callback,ms,cleared:false,unref(){}};timers.push(timer);return timer},clearTimeout:timer=>{if(timer)timer.cleared=true}};
+ const f=fixture(new Map(),globals);try{
+  let writes=0;const set=f.client.drafts.set.bind(f.client.drafts);f.client.drafts.set=(key,value)=>{if(key==='chat:created-exact')writes++;return set(key,value)};
+  const input={profileId:'profile-a',navigate:false,sourceKey:'topic-no-navigation',draft:{text:' Exact selected topic ',files:[{id:'retained-file',name:'附件'}]}};
+  const result=await f.owner.open(input),flow=f.owner.state.getState().flow,timer=timers.find(value=>value.ms===800);assert.equal(result.id,'created-exact');assert.ok(timer);assert.equal(timer.cleared,true,'completed non-navigation flow must release the delayed stage timer');
+  timer.callback();f.owner.show(flow.flow_id);const same=await f.owner.open(input);assert.equal(same.id,'created-exact');assert.equal(f.creates().length,1);assert.equal(f.moves.length,0);assert.equal(f.client.navigation.path,'/toolbox');assert.equal(writes,1);
+  assert.equal(f.owner.state.getState().flow.session_id,'created-exact');assert.notEqual(f.owner.state.getState().flow.route_opened,true);assert.equal(f.client.drafts.get('chat:created-exact').text,input.draft.text);assert.equal(f.client.drafts.get('chat:created-exact').files[0].id,'retained-file');
+ }finally{f.close()}
+});
+
+test('navigate false pending beyond 800ms checks the original operation without opening a page or duplicating creation',async()=>{
+ const timers=[],globals={setTimeout:(callback,ms)=>{const timer={callback,ms,cleared:false,unref(){}};timers.push(timer);return timer},clearTimeout:timer=>{if(timer)timer.cleared=true}};
+ const f=fixture(new Map(),globals);try{
+  f.state.mode='accepted';const input={profileId:'profile-a',navigate:false,sourceKey:'accepted-topic',draft:{text:'Original topic draft',files:[]}};assert.equal(await f.owner.open(input),null);const original=f.owner.state.getState().flow,timer=timers.find(value=>value.ms===800&&!value.cleared);assert.ok(timer);
+  timer.cleared=true;timer.callback();await f.owner.open(input);assert.equal(f.moves.length,0);assert.equal(f.creates().length,1);assert.equal(f.owner.state.getState().flow.operation_id,original.operation_id);assert.equal(f.client.navigation.path,'/toolbox');
+  f.state.receipt='completed';await f.owner.check(original.flow_id);await f.owner.open(input);assert.equal(f.creates().length,1);assert.equal(f.moves.length,0);assert.equal(f.owner.state.getState().flow.session_id,'created-exact');assert.equal(f.client.drafts.get('chat:created-exact').text,'Original topic draft');assert.equal(f.client.operation('session-open:'+original.flow_id).getState().pending,null);
+ }finally{f.close()}
+});
+
 test('accepted response is not completion, and receipt recovery applies draft and navigation without another POST',async()=>{
  const f=fixture();try{f.state.mode='accepted';const result=await f.owner.open({profileId:'profile-a',draft:{text:'frozen input',files:[]}});
   assert.equal(result,null);const flow=f.owner.state.getState().flow;assert.equal(flow.phase,'creating');assert.equal(f.moves.length,0);

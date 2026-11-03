@@ -119,12 +119,12 @@ class UpstreamSkills:
         fingerprints={name:digest(raw) for name,raw in sorted(common.items())}
         return entries,fingerprints,{name:len(raw) for name,raw in common.items()},digest(packed(fingerprints))
 
-    def items(self):
+    def items(self, *, _sources=None):
         # Listing is read-only. Import history is created only with an accepted
         # explicit invocation, in the same transaction as its native turn.
         result=[]
         environment=self.environment() if hasattr(self,'environment') else {}
-        entries,fingerprints,sizes,revision=self._listing_sources()
+        entries,fingerprints,sizes,revision=_sources if _sources is not None else self._listing_sources()
         if sum(sizes.values())>40*1024*1024:raise ValueError('本技能资源包超过40MB，请拆分依赖')
         with self.store.connect() as c:
             history={}
@@ -160,8 +160,18 @@ class UpstreamSkills:
                 'launch_actions':[{'id':'native','task':'native','label':'使用技能','requires_plan':False}]})
         return result
 
-    def detail(self, sid):
-        release=self.release(sid);text=release['prompt'].lstrip('\ufeff');meta,_=parse_skill(text)
+    def detail(self, sid, *, view='full'):
+        if view not in ('full','display'):raise ValueError('技能详情视图无效')
+        if view=='display':
+            sources=self._listing_sources()
+            item=next((item for item in sources[0] if item['id']==sid),None)
+            if item is None:raise ValueError('找不到 Easel 原生技能')
+            identity=next(row for row in self.items(_sources=sources) if row['id']==sid)
+            # The official drawer renders this SKILL body and configuration.
+            # Frozen dependency packages belong to explicit execution/detail.
+            release={**identity,'prompt':item['prompt']}
+        else:release=self.release(sid)
+        text=release['prompt'].lstrip('\ufeff');meta,_=parse_skill(text)
         description,layer,body=parse_skill_text(text)
         configuration=self.configuration() if hasattr(self,'configuration') else {'revision':None,'environment':self.environment() if hasattr(self,'environment') else {}}
         environment=configuration['environment']

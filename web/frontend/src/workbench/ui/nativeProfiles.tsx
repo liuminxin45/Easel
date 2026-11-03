@@ -8,7 +8,7 @@ import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './h
 import {ActionButton,Field,Panel,Notice,Pending,resultDocument} from './common';
 
 export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;profileId?:string}){
- const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap');
+ const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap?view=summary');
  const viewState=useViewState('profiles:'+profileId,{viewedPersona:search.get('item')||profileId});
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  const draftStore=useMemo(()=>({
@@ -24,9 +24,9 @@ export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;pro
   onUsePersona={id=>vm.navigate('/chat?fresh=1&profile='+encodeURIComponent(id))}
   onNewProfile={()=>vm.navigate('/toolbox?section=profiles&item=new')}
   onDeleted={()=>{void resource.reload();vm.replace('/toolbox?section=profiles')}}
-  allowAccountImport={false} allowDelete={false} onFileSaved={()=>void resource.reload()}
+  allowAccountImport={false} allowDelete={false} onFileSaved={()=>{void vm.client.invalidate(['creator']);void resource.reload()}}
   draftStore={draftStore}
-  renderDetailExtension={id=>{const current=resource.data?.profiles.find(value=>value.id===id);return current&&resource.data?<ProfileBindings key={id} profile={current} data={resource.data} reload={resource.reload}/>:null}}/>
+  renderDetailExtension={id=>{const current=resource.data?.profiles.find(value=>value.id===id);return current&&resource.data?<ProfileBindingsDisclosure key={id} profileId={id} data={resource.data} reload={resource.reload}/>:null}}/>
  </>;
 }
 
@@ -40,8 +40,22 @@ function CreateProfile(){
   onCreated={id=>{void vm.client.invalidate(['creator']);vm.replace('/toolbox?section=profiles&item='+encodeURIComponent(id))}}/>;
 }
 
-function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:CreatorBootstrap;reload:()=>Promise<CreatorBootstrap|null>}){
- const vm=useWorkbench(),action=useAsyncAction(),[open,setOpen]=useState(false);
+function ProfileBindingsDisclosure({profileId,data,reload}:{profileId:string;data:CreatorBootstrap;reload:()=>Promise<CreatorBootstrap|null>}){
+ const [loaded,setLoaded]=useState(false);
+ return <ExtensionDetails className="workbench-extension" title="素材、技能与账号" onToggle={event=>{if(event.currentTarget.open)setLoaded(true)}}>
+  {loaded&&<ProfileBindingsSource profileId={profileId} data={data} reload={reload}/>}
+ </ExtensionDetails>;
+}
+
+/** Mount only after expansion, and initialize editable inputs from full current fields. */
+function ProfileBindingsSource({profileId,data,reload}:{profileId:string;data:CreatorBootstrap;reload:()=>Promise<CreatorBootstrap|null>}){
+ const resource=useResource<CreatorProfile>('/api/creator/profiles/'+encodeURIComponent(profileId)+'?view=current');
+ const refresh=async()=>{await Promise.all([resource.reload(),reload()])};
+ return <><Notice sources={[resource]}/>{resource.data&&<ProfileBindings key={profileId} profile={resource.data} data={data} reload={refresh}/>}</>;
+}
+
+function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:CreatorBootstrap;reload:()=>Promise<unknown>}){
+ const vm=useWorkbench(),action=useAsyncAction();
  const [draft,patch]=useDraft('creator:profile-bindings:'+profile.id,{asset_refs:creatorAssetInputs(profile.asset_refs),files:[] as DraftAttachment[],base_revision:profile.revision,default_skills:profile.default_skills||data.task_defaults});
  const changedRevision=draft.base_revision!==profile.revision;
  const save=()=>void action.run(async()=>{
@@ -51,7 +65,7 @@ function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:Crea
    asset_refs:[...draft.asset_refs,...uploaded.map(file=>({file_id:file.id,label:file.name,role:'reference',required:true}))],default_skills:draft.default_skills}});
   const saved=record(resultDocument(result).profile);patch({files:[],base_revision:number(saved.revision),asset_refs:creatorAssetInputs(saved.asset_refs)});void reload();
  });
- return <ExtensionDetails className="workbench-extension" title="素材、技能与账号" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
+ return <>
   <Panel title="角色与品牌参考">{draft.asset_refs.map((asset,index)=><div className="ew-row" key={index}><span>{string(asset.label)||string(asset.path)}</span><button className="btn btn-ghost" onClick={()=>patch({asset_refs:draft.asset_refs.filter((_,position)=>position!==index)})}>移除绑定</button></div>)}
    {draft.files.map(file=><p key={file.id}>{file.name}</p>)}<label className="btn ew-file-pick">添加参考图<input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={event=>{if(event.target.files)void action.run(async()=>patch({files:await vm.service.attach(event.target.files!,draft.files)}))}}/></label>
   </Panel>
@@ -64,5 +78,5 @@ function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:Crea
    const result=await vm.service.creatorCommand(profile.account_ids.includes(account.id)?'unbind-account':'bind-account',{profile_id:profile.id,connection_id:account.id,base_revision:profile.revision});patch({base_revision:number(record(resultDocument(result).profile).revision)});void reload();
   })}>{profile.account_ids.includes(account.id)?'解绑':'绑定'}</ActionButton></div>)}</Panel>
   <Notice sources={[action]}/><Pending scope={'creator:profile-save:'+profile.id}/>
- </ExtensionDetails>;
+ </>;
 }

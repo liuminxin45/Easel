@@ -238,7 +238,7 @@ class CreatorRuntime:
                     'task_policy': task_policy(skills),
                     'learning': {'mode': 'manual', 'automatic_model_learning': False}}
 
-    def detail(self, kind, item_id, version=None):
+    def detail(self, kind, item_id, version=None, *, include_history=True):
         kind = {'profiles': 'profile', 'skills': 'skill', 'runs': 'run'}.get(kind, kind)
         if isinstance(version, str):
             try:
@@ -248,7 +248,8 @@ class CreatorRuntime:
         with self.store.connect() as c:
             if kind == 'profile':
                 result = self._profile(c, item_id, version)
-                result['history'] = [json.loads(r['document']) for r in c.execute('SELECT document FROM creator_profile_history WHERE id=? ORDER BY revision DESC', (item_id,))]
+                if include_history:
+                    result['history'] = [json.loads(r['document']) for r in c.execute('SELECT document FROM creator_profile_history WHERE id=? ORDER BY revision DESC', (item_id,))]
                 return result
             if kind == 'skill':
                 result = self._skill(c, item_id, version)

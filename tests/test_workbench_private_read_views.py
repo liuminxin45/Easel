@@ -177,3 +177,29 @@ def test_legacy_distribution_full_read_keeps_bodies_and_selected_summary_matches
     assert 'PRIVATE_BODY' in full['revisions'][0]['body']
     assert full['deliveries'][0]['result']['body']=='PRIVATE_RESULT'
     assert 'body' not in summary['revisions'][0] and 'result' not in summary['deliveries'][0]
+
+
+def test_current_profile_detail_keeps_exact_fields_without_decoding_historical_or_other_profiles(runtime,monkeypatch):
+    with runtime.store.connect() as c:
+        original=runtime._profile(c,'oil-pig')
+        old={**original,'voice':'DO_NOT_READ_HISTORICAL_PROFILE'*10000}
+        current={**original,'revision':2,'identity':'Exact current identity','audience':'Exact current audience','voice':'Exact current voice','boundaries':'Exact current boundaries',
+                 'asset_refs':[{'path':'assets/exact.png','sha256':'exact-reference-hash','label':'Original asset','role':'reference','required':True}],
+                 'default_skills':{'poster':['content-writing']},'account_ids':['exact-account']}
+        c.execute("UPDATE creator_profile_history SET document=? WHERE id='oil-pig'",(json.dumps(old),))
+        c.execute('INSERT INTO creator_profile_history VALUES(?,?,?)',('oil-pig',2,json.dumps(current)))
+        c.execute("UPDATE creator_profiles SET revision=2,document=? WHERE id='oil-pig'",(json.dumps(current),))
+        c.execute('INSERT INTO creator_profiles VALUES(?,?,?)',('other',1,json.dumps({**old,'id':'other'})))
+    legacy=runtime.detail('profile','oil-pig')
+    loads=json.loads
+    def read_current_only(value,*args,**kwargs):
+        if isinstance(value,str) and 'DO_NOT_READ_HISTORICAL_PROFILE' in value:raise AssertionError('current profile detail decoded unrelated history/body')
+        return loads(value,*args,**kwargs)
+    monkeypatch.setattr(json,'loads',read_current_only)
+    selected=runtime.detail('profiles','oil-pig',include_history=False)
+    assert selected==current
+    assert selected=={k:v for k,v in legacy.items() if k!='history'}
+    assert 'history' not in selected
+    assert len(json.dumps(selected))<5000
+    exact=runtime.detail('profile','oil-pig',version='2',include_history=False)
+    assert exact==selected

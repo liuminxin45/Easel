@@ -65,7 +65,7 @@ class ChatBusiness:
         return (self.upstream.items() if include_upstream else [])+result
 
     def skill(self,sid):
-        if any(item['id']==sid for item in self.upstream.entries()):return self.upstream.detail(sid)
+        if any(item['id']==sid for item in self.upstream.entries()):return self.upstream.detail(sid,view='display')
         item=next((r for r in self.skills(False) if r['id']==sid),None)
         if not item:raise ValueError('找不到项目内置技能')
         release=self.creator.detail('skill',sid)

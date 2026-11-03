@@ -63,6 +63,9 @@ def test_native_menu_stored_versions_do_not_decode_frozen_release_packages(libra
         release=expected[row['id']]
         for key in ('version','sha256','source_revision'):assert row[key]==release[key]
     assert len(json.dumps(rows,ensure_ascii=False).encode())<20000
+    shown=native.detail(rows[0]['id'],view='display')
+    assert shown['version']==rows[0]['version'] and shown['sha256']==rows[0]['sha256']
+    assert shown['prompt']==expected[rows[0]['id']]['prompt'] and 'resources' not in shown
     with b.store.connect() as c:
         assert c.execute('SELECT count(*) FROM creator_skill_versions WHERE skill_id IN (?,?,?)',tuple(expected)).fetchone()[0]==3
 
@@ -114,11 +117,35 @@ def test_frozen_native_catalog_uses_verified_inventory_without_loading_dependenc
     (source/'workbench-release.json').write_text(json.dumps({'files':inventory}),encoding='utf-8')
     native=UpstreamSkills(b.root,b.creator,source)
     expected={entry['id']:native.release(entry['id']) for entry in native.entries()}
+    full_detail=native.detail('card-quote')
     monkeypatch.setattr(native,'_common',lambda *a,**k:pytest.fail('frozen catalog must not load all dependency bytes'))
     rows=native.items();assert_list_only(rows)
     for row in rows:
         assert {k:row[k] for k in ('version','sha256','source_revision')}=={k:expected[row['id']][k] for k in ('version','sha256','source_revision')}
     assert native.items()==rows
+    shown=native.detail('card-quote',view='display')
+    for key in ('id','version','sha256','source_revision','description','layer','body','content','meta','raw','prompt','needsApi','apiConfigured','apiSpec','configuration_revision'):
+        assert shown.get(key)==full_detail.get(key),key
+    assert 'resources' not in shown and 'creator' not in shown and 'history' not in shown
+    b.upstream=native
+    assert b.skill('card-quote')==shown
     # Only list reads use the approved inventory shortcut; selected execution
     # continues to validate its complete byte package through _common.
     with pytest.raises(pytest.fail.Exception,match='dependency bytes'):native.release(rows[0]['id'])
+
+
+def test_native_display_refreshes_source_body_and_configuration_without_changing_full_contract(library):
+    native=library.upstream
+    native.configuration=lambda:{'revision':'configuration-one','environment':{}}
+    first=native.detail('card-quote',view='display')
+    source=library.root/'skills/builtin/card-quote/SKILL.md'
+    source.write_bytes(source.read_bytes()+b'\nCurrent display instructions changed.\n')
+    native.configuration=lambda:{'revision':'configuration-two','environment':{}}
+    second=native.detail('card-quote',view='display')
+    assert 'Current display instructions changed.' in second['body']
+    assert first['source_revision']!=second['source_revision'] and first['sha256']!=second['sha256']
+    assert second['configuration_revision']=='configuration-two'
+    full=native.detail('card-quote')
+    assert full['resources'] and full['prompt']==second['prompt']
+    for key in ('version','sha256','source_revision'):assert full[key]==second[key]
+    with pytest.raises(ValueError,match='视图'):native.detail('card-quote',view='invalid')

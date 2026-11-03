@@ -1,6 +1,7 @@
 """Frozen native pair + TEMP HTTPS + actual Edge; no model/platform execution."""
 from __future__ import annotations
 import argparse
+import base64
 import hashlib
 import importlib.util
 import json
@@ -18,7 +19,7 @@ def sha(path):
 def seed(fixture):
     from easel_workbench.features.distribution.service import DistributionService
     box=fixture['box'];studio=box.studio;service=DistributionService(box)
-    files=fixture['root']/'data'/'lazy-acceptance';files.mkdir(parents=True)
+    files=fixture['root']/'data'/'artifacts'/'lazy-acceptance';files.mkdir(parents=True)
     with box.store.connect() as c:
         for index in range(56):
             wid=f'work-{index:03d}'
@@ -28,6 +29,8 @@ def seed(fixture):
                 (jid,'work-055',kind,'TEMP frozen input','[]','[]',jid,'completed','2026-11-03','2026-11-03','TEMP response'))
             path=files/(jid+'.txt');path.write_text(title+'\n\nTEMP exact body '+jid,encoding='utf-8')
             c.execute('INSERT INTO artifacts VALUES(?,?,?,?,?)',('artifact-'+jid,jid,'标题与配文.txt',str(path),'text/plain'))
+            image=files/(jid+'.png');image.write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZCsAAAAASUVORK5CYII='))
+            c.execute('INSERT INTO artifacts VALUES(?,?,?,?,?)',('image-'+jid,jid,'成品.png',str(image),'image/png'))
         service._put(c,'connections',{'id':'account-lazy','platform':'wechat','account':'TEMP account','label':'TEMP account','enabled':True,'revision':1})
         service._put(c,'deliveries',{'id':'delivery-lazy','work_id':'work-055','revision_id':'revision-lazy','approval_id':'approval-lazy','batch_id':'batch-lazy',
             'connection_id':'account-lazy','account':'TEMP account','platform':'wechat','status':'unknown','error':None,'result':{'reason':'TEMP exact full receipt','original':'TEMP_FULL_DELIVERY_BODY'}})
@@ -46,7 +49,7 @@ def main():
     spec=importlib.util.spec_from_file_location('private_lazy_fixture',ROOT/'tests/workbench_native_browser.py');helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper);helper.ROOT=backend
     from playwright.sync_api import sync_playwright,expect
     report={'passed':False,'native':{'directory':str(native),'manifest_sha256':sha(native/'native-manifest.json')},'backend':{'directory':str(backend),'manifest_sha256':sha(backend/'workbench-release.json')},
-        'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py'),'checks':[],'screenshots':{},'requests':{},'real_model_calls':0,'platform_writes':0,'physical_device_tested':False}
+        'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py'),'checks':[],'screenshots':{},'requests':{},'page_errors':{},'real_model_calls':0,'platform_writes':0,'physical_device_tested':False}
     def check(profile,name,value=True):
         report['checks'].append({'profile':profile,'name':name,'passed':bool(value)})
         assert value,name
@@ -58,17 +61,19 @@ def main():
                 with helper.isolated(native,b'TEMP unused image; no model is allowed') as f:
                     seed(f)
                     context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':900},is_mobile=width<600,has_touch=width<600,color_scheme='light')
+                    f['close_clients']=lambda:context.close()
                     context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}])
                     page=context.new_page();page.set_default_timeout(25000);requests=[];errors=[]
+                    report['requests'][label]=requests;report['page_errors'][label]=errors
                     page.on('pageerror',lambda error:errors.append(str(error)))
                     def requested(request):
                         target=urlsplit(request.url)
                         if target.path.startswith('/api/'):requests.append({'method':request.method,'path':target.path,'query':parse_qs(target.query)})
                     page.on('request',requested)
                     def count(path):return sum(row['method']=='GET' and row['path']==path for row in requests)
-                    def disclosure(title):return page.locator('details').filter(has=page.locator('summary').filter(has_text=title)).first
+                    def disclosure(title):return page.locator('summary').filter(has_text=title).first.locator('..')
                     def toggle(details):details.locator(':scope > summary').click()
-                    page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=publish&work=work-055&version=version-old'}),wait_until='domcontentloaded')
+                    page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=publications&work=work-055&version=version-old'}),wait_until='domcontentloaded')
                     details=disclosure('交付记录');expect(details).to_be_visible();page.wait_for_timeout(350)
                     check(label,'closed delivery does not request work, studio or distribution data',not any(row['path'].startswith(('/api/distribution/','/api/works','/api/studio/bootstrap')) for row in requests))
                     toggle(details)
@@ -89,6 +94,9 @@ def main():
                     check(label,'closing delivery stops its five second poll',count('/api/distribution/bootstrap')==before)
                     toggle(details);expect(body).to_have_value(draft)
                     check(label,'reopening retains the exact unsent channel draft')
+                    if width<600:
+                        controls=details.locator('.ew-delivery-picker > select').evaluate_all('items=>items.map(element=>({width:element.getBoundingClientRect().width,left:element.getBoundingClientRect().left,right:element.getBoundingClientRect().right}))')
+                        check(label,'private delivery pickers keep readable narrow-screen widths',len(controls)==3 and all(control['width']>=240 and control['left']>=0 and control['right']<=width for control in controls))
                     page.screenshot(path=str(out/(label+'-delivery.png')),full_page=True)
                     report['screenshots'][label+'-delivery']={'path':str(out/(label+'-delivery.png')),'sha256':sha(out/(label+'-delivery.png'))}
                     start=len(requests);page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox?section=skills&pane=experience&profile=oil-pig'}),wait_until='domcontentloaded')

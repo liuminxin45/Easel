@@ -507,7 +507,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         creator_detail=re.fullmatch(r'/api/creator/(profiles|skills|runs)/([A-Za-z0-9_-]{1,128})',path)
         if creator_detail:
             kind,key=creator_detail.groups()
-            try:return reply(await asyncio.to_thread(creator.detail,kind,key,version=q.get('version')))
+            try:return reply(await asyncio.to_thread(creator.detail,kind,key,version=q.get('version'),include_history=not(kind=='profiles' and q.get('view')=='current')))
             except CreatorConflict as exc:return error(409,str(exc))
             except ValueError as exc:return error(404,str(exc))
         local_read=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/local-operations',path)

@@ -124,11 +124,11 @@ export class SessionOpenFlows {
   }
   if(!this.save({...flow,phase:pending?'checking':'creating',error:undefined}))return null;return this.run(id);
  }
- show(id:string){const flow=this.load(id);if(!flow||this.state.getState().flow?.flow_id!==id)return;const navigation=this.client.navigation;if(!navigation)return;const path='/chat?'+new URLSearchParams({fresh:'1',flow:id});if(flow.ticket&&navigation.finishFlow&&!navigation.finishFlow(path,flow.ticket))return;if(!flow.ticket||!navigation.finishFlow)navigation.navigate(path,{intent:'flow'});this.save({...flow,route_opened:true,ticket:navigation.ticket?.()});}
+ show(id:string){const flow=this.load(id);if(!flow||!flow.navigate||this.state.getState().flow?.flow_id!==id)return;const navigation=this.client.navigation;if(!navigation)return;const path='/chat?'+new URLSearchParams({fresh:'1',flow:id});if(flow.ticket&&navigation.finishFlow&&!navigation.finishFlow(path,flow.ticket))return;if(!flow.ticket||!navigation.finishFlow)navigation.navigate(path,{intent:'flow'});this.save({...flow,route_opened:true,ticket:navigation.ticket?.()});}
  apply(id:string,explicit=false):boolean{
   const flow=this.load(id);if(!flow?.session_id)return false;
   if(flow.draft&&!flow.draft_applied){if(!this.client.drafts.set('chat:'+flow.session_id,flow.draft)){this.save({...flow,phase:'ready',code:'local_persistence_failed',failure_kind:'local',error:'对话已创建，本机输入尚未保存，请重试保存。'});return false;}if(!this.save({...flow,draft_applied:true,phase:'ready'}))return false;}
-  const current=this.load(id)!;if(!current.navigate&&!explicit)return true;const navigation=this.client.navigation;if(!navigation)return true;
+  const current=this.load(id)!;if(!current.navigate&&!explicit){const timer=this.timers.get(id);if(timer)clearTimeout(timer);this.timers.delete(id);this.releases.get(id)?.();this.releases.delete(id);return true;}const navigation=this.client.navigation;if(!navigation)return true;
   if(current.phase==='opened'&&!explicit)return true;
   if(!explicit&&this.state.getState().flow?.flow_id!==id)return false;
   const moved=explicit?(navigation.navigate(target(current),{intent:'flow'}),true):current.ticket&&navigation.finishFlow?navigation.finishFlow(target(current),current.ticket):(navigation.navigate(target(current),{intent:'flow'}),true);

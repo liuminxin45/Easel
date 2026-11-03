@@ -1,7 +1,7 @@
 import {DraftOperations} from './DraftOperations';
 import React,{useState} from 'react';
 import CopyableText from '../../components/CopyableText';
-import {array,record,string,statusLabel,nativeContinuationPath,workProductionRecovery,type Work,type ReviewDocument,type JsonRecord,type DraftAttachment} from '@workbench/core';
+import {sessionOpenFlows,array,record,string,statusLabel,nativeContinuationPath,workProductionRecovery,type Work,type ReviewDocument,type JsonRecord,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useAsyncAction,useDraft} from './hooks';
 import {ExtensionDetails} from './ExtensionDetails';
 import {Notice,ActionButton,Field,Drawer,Pending,TextRecord,Markdown} from './common';
@@ -40,9 +40,8 @@ export function VersionPanel({workId,versionId}:{workId:string;versionId:string}
   if(!target){
    const root=selected.creative?.creator?.skills?.find(skill=>skill.id==='content-production');
    if(change&&!root?.version)throw Error('原版制作技能没有准确绑定，请先核对版本记录。');
-   const result=await vm.client.mutate<JsonRecord>('chat:create','/api/chat/sessions',{action:'create',profile_id:work.creator?.id||'oil-pig'}),session=record(result.session||record(result.result).session||result),sid=string(session.id);
-   if(!sid)throw Error('原生会话尚未创建，未启动制作。');
-   target='/chat/'+encodeURIComponent(sid)+'?'+new URLSearchParams({work:work.id,version:version.id,...(change?{action:'change',skill:'content-production',skill_version:String(root!.version)}:{})});
+   await sessionOpenFlows(vm.client).open({profileId:work.creator?.id||'oil-pig',sourceKey:'version:'+work.id+':'+version.id,query:new URLSearchParams({work:work.id,version:version.id,...(change?{action:'change',skill:'content-production',skill_version:String(root!.version)}:{})}).toString()});
+   return;
   }
   if(ticket&&vm.navigation.finishFlow)vm.navigation.finishFlow(target,ticket);else vm.navigate(target,{intent:'flow'});
  });

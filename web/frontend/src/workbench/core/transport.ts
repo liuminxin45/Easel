@@ -3,10 +3,10 @@ import {record,string} from './models';
 
 export class RequestError extends Error {
   status?:number; uncertain=false; unreachable=false; cancelled=false; timedOut=false;
-  operationScope?:string;operationId?:string;
-  constructor(message:string,properties:Partial<Pick<RequestError,'status'|'uncertain'|'unreachable'|'cancelled'|'timedOut'|'operationScope'|'operationId'>>={}){super(message);this.name='RequestError';Object.assign(this,properties)}
+  operationScope?:string;operationId?:string;acceptance?:'not_accepted'|'accepted'|'unknown';code?:string;traceId?:string;
+  constructor(message:string,properties:Partial<Pick<RequestError,'status'|'uncertain'|'unreachable'|'cancelled'|'timedOut'|'operationScope'|'operationId'|'acceptance'|'code'|'traceId'>>={}){super(message);this.name='RequestError';Object.assign(this,properties)}
 }
-export interface RequestOptions {body?:JsonRecord;csrf?:string;id?:string;raw?:Blob|FormData;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string;readOnly?:boolean;method?:'POST'|'PUT'|'PATCH'|'DELETE'}
+export interface RequestOptions {body?:JsonRecord;csrf?:string;id?:string;raw?:Blob|FormData;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string;readOnly?:boolean;method?:'POST'|'PUT'|'PATCH'|'DELETE';operationProtocol?:2}
 export interface ConditionalResponse<T> {status:'modified'|'not-modified';data?:T;etag?:string;serverTime?:string}
 export interface TransportOptions {fetcher?:typeof fetch;activities?:ActivityDelegate;onExpired?:()=>void;onConnectivity?:(reachable:boolean)=>void;authEpoch?:()=>number;readTimeout?:number;writeTimeout?:number;uploadTimeout?:number;retryDelay?:number}
 const abortError=()=>new RequestError('读取已取消',{cancelled:true});
@@ -37,7 +37,8 @@ export class ApiTransport {
     const stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
     try{
       const multipart=typeof FormData!=='undefined'&&options.raw instanceof FormData;
-      const response=await this.fetcher(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,...(post?{method:options.method??'POST',headers:{...(!multipart?{'Content-Type':options.raw?'application/octet-stream':'application/json'}:{}),'X-CSRF-Token':options.csrf??'',...(options.id?{'X-Operation-Id':options.id}:{}),...(options.name?{'X-File-Name':encodeURIComponent(options.name)}:{})},body:options.raw??JSON.stringify(options.body)}:options.conditional&&options.etag?{headers:{'If-None-Match':options.etag}}:{})});
+      const headers:Record<string,string>={...(post?{...(!multipart?{'Content-Type':options.raw?'application/octet-stream':'application/json'}:{}),'X-CSRF-Token':options.csrf??'',...(options.id?{'X-Operation-Id':options.id}:{}),...(options.name?{'X-File-Name':encodeURIComponent(options.name)}:{})}:options.conditional&&options.etag?{'If-None-Match':options.etag}:{}),...(options.operationProtocol===2?{'X-Workbench-Operation-Protocol':'2'}:{})};
+      const response=await this.fetcher(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,...(Object.keys(headers).length?{headers}:{}),...(post?{method:options.method??'POST',body:options.raw??JSON.stringify(options.body)}:{})});
       if(epoch!==this.options.authEpoch?.())throw abortError();
       this.options.onConnectivity?.(true);
       if(response.status===401){if(epoch===this.options.authEpoch?.())this.options.onExpired?.();throw new RequestError('登录已过期，输入已保留，请重新登录。',{status:401})}
@@ -45,7 +46,10 @@ export class ApiTransport {
       if(response.status===304&&options.conditional&&!write)return {status:'not-modified',...metadata} as T;
       const text=await response.text();if(epoch!==this.options.authEpoch?.())throw abortError();let value:unknown;
       try{value=text?JSON.parse(text):{}}catch{throw new RequestError('服务器响应未能核对',{status:response.status,uncertain:write})}
-      if(!response.ok)throw new RequestError(string(record(value).error)||string(record(value).detail,'请求未完成'),{status:response.status});
+      if(!response.ok){
+        const body=record(value),notAccepted=write&&options.operationProtocol===2&&body.protocol_version===2&&body.operation_id===options.id&&body.operation_state==='not_accepted'&&response.headers.get('X-Workbench-Operation-Protocol')==='2';
+        throw new RequestError(string(body.error)||string(body.detail,'请求未完成'),{status:response.status,...(notAccepted?{acceptance:'not_accepted' as const,operationId:options.id,uncertain:false}:{}),code:string(body.code)||undefined,traceId:response.headers.get('X-Desk-Trace')||string(body.trace_id)||undefined});
+      }
       return (options.conditional&&!write?{status:'modified',data:value,...metadata}:value) as T;
     }catch(caught){
       if(caught instanceof RequestError)throw caught;

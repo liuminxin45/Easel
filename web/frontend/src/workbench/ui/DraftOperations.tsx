@@ -1,5 +1,5 @@
 import React from 'react';
-import {record,string,array,creatorSelection,creatorTaskSelection,type Work,type CreatorBootstrap,type JsonRecord,type DraftAttachment} from '@workbench/core';
+import {sessionOpenFlows,record,string,array,creatorSelection,creatorTaskSelection,type Work,type CreatorBootstrap,type JsonRecord,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
 import {CreatorControls} from './production';
 import {Field,Notice,ActionButton,Pending} from './common';
@@ -19,11 +19,8 @@ export function DraftOperations({work}:{work:Work}){
   void vm.client.invalidate(['works','chat']);
  });
  const discuss=()=>void action.run(async()=>{
-  const ticket=vm.navigation.ticket?.(),result=await vm.client.mutate<JsonRecord>('chat:create','/api/chat/sessions',{action:'create',profile_id:profile}),session=record(result.session||record(result.result).session||result),id=string(session.id);
-  if(!id)throw Error('原生会话尚未创建，草稿已保留');
   const text=[string(draft.title,work.title),string(draft.material),string(draft.guidance)].filter(Boolean).join('\n\n');
-  if(!vm.client.drafts.set('chat:'+id,{text,files:array(draft.files)}))throw Error('本机输入尚未保存，原草稿仍保留');
-  const path='/chat/'+encodeURIComponent(id);if(ticket&&vm.navigation.finishFlow)vm.navigation.finishFlow(path,ticket);else vm.navigate(path,{intent:'flow'});
+  await sessionOpenFlows(vm.client).open({profileId:profile,sourceKey:'work-draft:'+work.id,draft:{text,files:array(draft.files)}});
  });
  return <div className="ew-version-operations"><Notice sources={[creators,action]}/><Pending scope={'finalize:'+work.id}/>
   <Field label="主题"><input className="field" value={string(draft.title,work.title)} onChange={event=>patch({title:event.target.value})}/></Field>

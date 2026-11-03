@@ -1,7 +1,7 @@
 import type {SkillDetail, SkillResponse, ChatQuestion} from '../../lib/api';
 import {createStore,type StoreApi} from 'zustand/vanilla';
 import {requestFingerprint} from '../../lib/interaction';
-import {record,string,type JsonRecord,type WorkbenchClient} from '@workbench/core';
+import {sessionOpenFlows,record,string,type JsonRecord,type WorkbenchClient} from '@workbench/core';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {nativeSkillChoices,type NativeSelection,type NativeSkill} from './ChatSessionView';
 
@@ -57,9 +57,8 @@ export function createSkillServices(client:WorkbenchClient,profileId:string,skil
       saved=client.drafts.get<SkillRun>(key);
     }
     if(saved?.state==='planned'&&saved.input===input&&sameSelection(saved.selection,selection))return {run:saved,request:requestBody(saved)};
-    const created=await client.mutate<JsonRecord>('skill:session:'+profileId+':'+selection.skill_id,'/api/chat/sessions',{action:'create',profile_id:profileId});
-    const session=record(created.session||record(created.result).session||created),sessionId=string(session.id);
-    if(!sessionId)throw Error('原生会话尚未确认创建，请核对原回执。');
+    const session=await sessionOpenFlows(client).open({profileId,sourceKey:'skill:'+selection.skill_id+':'+selection.action_id,navigate:false,draft:{text:input,files:[],command:{...selection}}}),sessionId=string(session?.id);
+    if(!sessionId||!session)throw Error('请先在对话页面确认本次会话创建结果；本机技能尚未执行。');
     if(session.runtime==='api')throw Error('仅聊天模式不能运行本机技能，请在设置中选择原生 Agent 后新建会话。');
     const run:SkillRun={sessionId,turnId:crypto.randomUUID(),input,selection:{...selection},state:'planned'};
     save(key,run);return {run,request:requestBody(run)};

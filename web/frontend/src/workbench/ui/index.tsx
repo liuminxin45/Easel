@@ -20,6 +20,8 @@ import {COMPACT_LAYOUT_QUERY} from '../platform/profile';
 import NativeNews from './NativeNews';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
+import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
+import type {WorkbenchClient} from '../core/client';
 
 import {Skills,Profiles,Accounts} from './management';
 import {Publishing} from './publishing';
@@ -44,13 +46,14 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const runtimeStatus=useResource<JsonRecord>(vm.ready?'/api/status':null,{interval:30000});
  useEffect(()=>{const reload=()=>void runtimeStatus.reload();window.addEventListener('workbench:settings-changed',reload);return()=>window.removeEventListener('workbench:settings-changed',reload)},[runtimeStatus.reload]);
  const nativeId=p.startsWith('/chat/')?decodeURIComponent(p.slice(6)):q.get('session')||'',activeSession=sessions.data?.sessions.find(session=>session.id===nativeId),profile=q.get('profile')||activeSession?.profile_id||activeSession?.persona||selected.profile_id;
+ const {owner:sessionFlows,flow:sessionFlow}=useSessionOpenFlow(vm.client);
+ useEffect(()=>{if(vm.ready&&p==='/chat'&&q.get('flow'))sessionFlows.restore(q.get('flow')!)},[vm.ready,p,q.get('flow'),sessionFlows]);
  useEffect(()=>bindOutputNavigation(path=>vm.navigate('/works?'+new URLSearchParams({path}),{intent:'object'})),[vm.navigation]);
  const open=(target:string)=>{navigate(target,{intent:'module'})};
- const createChat=async(wantedProfile=profile,command?:NativeSelection,text='',files:DraftAttachment[]=[],articleId?:string,articleMode?:'auto'|'product',topicTitle?:string)=>{let created:string|undefined;const ticket=navigation.ticket?.();await chatAction.run(async()=>{
+ const createChat=async(wantedProfile=profile,command?:NativeSelection,text='',files:DraftAttachment[]=[],articleId?:string,articleMode?:'auto'|'product',topicTitle?:string)=>{let created:string|undefined;await chatAction.run(async()=>{
   if(articleId&&topicTitle){const article=await vm.api.get<JsonRecord>('/api/news/'+encodeURIComponent(articleId));if(string(article.id)!==articleId)throw Error('新闻来源标识不匹配，请重新打开原文');text=[text,string(article.body)].filter(Boolean).join('\n\n');}
-  const response=await vm.client.mutate<JsonRecord>('chat:create','/api/chat/sessions',{action:'create',profile_id:wantedProfile}),session=record(response.session||record(response.result).session||response),id=string(session.id);if(!id)throw Error('服务器尚未返回会话标识');
-  if((text||command||files.length)&&!vm.client.drafts.set('chat:'+id,{text,files,...(command?{command}:{}),...(articleId?{article_id:articleId}:{}),...(articleMode?{article_mode:articleMode}:{})}))throw Error('本机输入暂未保存，原窗口仍保留，请恢复存储后再带入对话。');created=id;void sessions.reload();
-  const target='/chat/'+encodeURIComponent(id)+(p==='/chat'&&q.has('skill')?'?'+q.toString():'');if(ticket&&navigation.finishFlow)navigation.finishFlow(target,ticket);else navigate(target,{intent:'flow'});
+  const session=await sessionFlows.open({profileId:wantedProfile,sourceKey:articleId?'news:'+articleId:shownPath,draft:text||command||files.length?{text,files,...(command?{command}:{}),...(articleId?{article_id:articleId}:{}),...(articleMode?{article_mode:articleMode}:{})}:undefined,query:p==='/chat'&&q.has('skill')?q.toString():undefined}),id=string(session?.id);if(!id)return;
+  created=id;void sessions.reload();
   if(topicTitle){const turn:FrozenTurn={turnId:crypto.randomUUID(),message:text,attachments:[],context:{profile_id:wantedProfile,...(articleId?{article_id:articleId}:{})},inputs:{text,files:[],...(articleId?{article_id:articleId}:{})},state:'connecting',initial_title:generateSessionTitle(topicTitle)};void sessionRuntime(vm.client,id).submit(turn,wantedProfile);}
 
  });return created};
@@ -62,7 +65,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const sessionCommand=(action:string,id:string,extra:JsonRecord={})=>void chatAction.run(async()=>{const current=sessions.data?.sessions.find(value=>value.id===id);await vm.client.mutate('chat:'+action+':'+id,'/api/chat/sessions',{action,session_id:id,expected_revision:current?.revision,...extra});});
 
  let page:React.ReactNode;
- if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId+':'+(q.get('history_before')||'latest')} id={nativeId} search={q}/>:<ChatLanding sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
+ if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId+':'+(q.get('history_before')||'latest')} id={nativeId} search={q}/>:q.get('flow')?<SessionOpenStage client={vm.client} flow={sessionFlow}/>:<ChatLanding client={vm.client} sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
  else if(p==='/news'||p.startsWith('/news/a/'))page=<NativeNews onUseTopic={useTopic} id={p.startsWith('/news/a/')?decodeURIComponent(p.slice(8)):undefined} search={q}/>;
  else if(['/posters/new','/articles/new','/works/new'].includes(p))page=<NativeNewChat key={shownPath} format={p==='/articles/new'?'article':'poster'} profileId={profile} search={q} onCreate={createChat}/>;
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
@@ -71,10 +74,10 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  else if(q.get('section')==='skills')page=<><NativeSkills profileId={profile}/>{(q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item'))&&<Skills profileId={profile} search={q}/>}</>;
  else if(q.get('section')==='profiles')page=<Profiles profileId={profile} search={q}/>;
  else if(q.get('section')==='distribution'&&q.get('pane')==='connections')page=<Accounts/>;
- else if(['distribution','publications','insights','calendar'].includes(q.get('section')||''))page=<Publishing profileId={profile} section={q.get('section')||''} search={q}/>;
+ else if(['distribution','publications','calendar'].includes(q.get('section')||''))page=<Publishing profileId={profile} section={q.get('section')||''} search={q}/>;
  else if(q.get('section')==='research')page=<Research profileId={profile} search={q} onUseTopic={useTopic}/>;
  else page=<Dashboard profileId={profile} onUseTopic={useTopic}/>;
- const currentPage:Page=p.startsWith('/chat')?'chat':p.startsWith('/news')?'trends':/^\/(posters|articles|works)(\/|$)/.test(p)?'outputs':q.get('section')==='skills'?'skills':q.get('section')==='profiles'?'profile':q.get('section')==='research'?(q.get('pane')==='breakdown'?'breakdown':'ideas'):q.get('section')==='calendar'?'calendar':['publications','distribution','insights'].includes(q.get('section')||'')?(q.get('pane')==='connections'?'accounts':'publish'):'dashboard';
+ const currentPage:Page=p.startsWith('/chat')?'chat':p.startsWith('/news')?'trends':/^\/(posters|articles|works)(\/|$)/.test(p)?'outputs':q.get('section')==='skills'?'skills':q.get('section')==='profiles'?'profile':q.get('section')==='research'?(q.get('pane')==='breakdown'?'breakdown':'ideas'):q.get('section')==='calendar'?'calendar':['publications','distribution'].includes(q.get('section')||'')?(q.get('pane')==='connections'?'accounts':'publish'):'dashboard';
  const onPageChange=(value:Page)=>open(nativePageRoutes[value]||'/toolbox');
  return <App host={{currentPage,onPageChange,sidebar:{currentPage,onPageChange,
   compactQuery:COMPACT_LAYOUT_QUERY,registerLayer:vm.navigation.registerLayer,
@@ -90,7 +93,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   personaOptions:[...(creators.data?.profiles.map(value=>({value:value.id,label:value.name}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
   navigation:config?.tools.map(tool=>({id:tool.id,label:tool.name,icon:icons[tool.id]||<IconDashboard size={18}/>,active:active(tool.id,shownPath),onSelect:()=>open(tool.path)}))||[],
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
- notice:<Notice sources={[chatAction]}/>,
+ notice:<Notice sources={[{error:chatAction.error,feedback:chatAction.feedback}]}/>,
  overlays:settingsOpen&&apiReady&&vm.ready?<Settings/>:undefined,
  content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><p>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</p><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&!vm.expired&&(vm.ready||booted.current)&&page}</>,
  }}/>;
@@ -108,9 +111,9 @@ function NativeNewChat({format,profileId,search,onCreate}:{format:'poster'|'arti
   const choices=nativeSkillChoices(catalog.data),legacy=record(saved.command),skill=search.get('skill')||string(legacy.skill_id)||'content-production',actionId=search.get('action')||string(legacy.action_id)||(search.get('mode')==='research'?'discuss':format),wanted=choices.find(choice=>choice.selection.skill_id===skill&&choice.selection.action_id===actionId),version=Number(search.get('skill_version')||legacy.version||profileData?.task_skill_versions?.[wanted?.selection.task||actionId]?.[skill]||profileData?.skill_versions?.[skill]),command=search.get('mode')==='research'&&!search.has('skill')?undefined:wanted?{...wanted.selection,...(Number.isSafeInteger(version)&&version>0?{version}:{}),...(search.get('trial')==='1'?{trial:true}:{})}:undefined;
   if(!command&&search.get('mode')!=='research')throw Error('准确制作技能尚不可用，旧草稿已保留。请从技能库核对后再打开。');
   const material=string(saved.material)||string(source.data?.body),title=string(saved.title)||string(source.data?.title),text=[title,material,string(saved.guidance),string(record(record(saved.creative).recipe).prompt_text)?'原草稿明确制作要求：\n'+string(record(record(saved.creative).recipe).prompt_text):'',saved.article_mode==='product'?'原草稿明确选择：文章类型为产品文章。':''].filter(Boolean).join('\n\n'),files=array<DraftAttachment>(saved.files);
-  if(!await onCreate(profile,command,text,files,sourceId||string(saved.article_id)||undefined,saved.article_mode==='product'?'product':saved.article_mode==='auto'?'auto':undefined))throw Error('原生会话尚未确认创建，旧草稿仍保留。');
+  await onCreate(profile,command,text,files,sourceId||string(saved.article_id)||undefined,saved.article_mode==='product'?'product':saved.article_mode==='auto'?'auto':undefined);
  });
  useEffect(()=>{if(started.current||!catalog.data||!creators.data||(sourceId&&!source.data))return;started.current=true;open()},[catalog.data,creators.data,source.data]);
  return <div className="ew-loading"><Notice sources={[catalog,creators,source,action]}/><p>正在将材料带入原生对话。原草稿与来源保留，确认方案后才开始制作。</p><ActionButton action={action} className="btn" disabled={action.busy} onClick={open}>重新打开对话</ActionButton><button className="btn btn-ghost" onClick={()=>vm.navigate('/posters?drafts=1')}>查看本机草稿</button></div>;
 }
-function ChatLanding({sessions,loading,error,fresh,onOpen,onCreate}:{sessions:NativeSessions|null;loading:boolean;error:string;fresh:boolean;onOpen:(id:string)=>void;onCreate:()=>void}){const started=useRef(false);useEffect(()=>{if(!sessions||started.current)return;started.current=true;const recent=!fresh&&sessions.sessions.find(session=>!session.archived);if(recent)onOpen(recent.id);else onCreate()},[sessions]);return <div className="ew-loading"><Notice message={error}/><p>{loading?'正在读取原生会话…':'正在打开原生对话…'}</p><button className="btn" onClick={onCreate}>新建对话</button></div>}
+function ChatLanding({client,sessions,error,fresh,onOpen,onCreate}:{client:WorkbenchClient;sessions:NativeSessions|null;loading:boolean;error:string;fresh:boolean;onOpen:(id:string)=>void;onCreate:()=>void}){const started=useRef(false),{flow}=useSessionOpenFlow(client);useEffect(()=>{if(!sessions||started.current)return;started.current=true;const recent=!fresh&&sessions.sessions.find(session=>!session.archived);if(recent)onOpen(recent.id);else onCreate()},[sessions]);return <SessionOpenStage client={client} flow={flow} error={error} onRetry={onCreate}/>}

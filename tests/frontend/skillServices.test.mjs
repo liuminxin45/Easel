@@ -19,7 +19,8 @@ function fixture({planned=false}={}){
    return {session_id:'session-exact',turn_id:turn?.turnId||new URL('https://temp'+path).searchParams.get('turn_id'),execution_status:unknown?'unknown':'completed',delivery_state:unknown?'unknown':'accepted',hook_status:hook,output:'actual completed result'};
   },post:async(path,value)=>{posts.push({path,value});return {plan:{production_input:{material:value.message},creator_snapshot:{skills:[{id:'temp-skill',version:3}]}},plan_token:'exact-preview-token',session_id:value.sessionId,turn_id:value.turnId};}},
  };
- const {createSkillServices}=moduleLoader({imports:{'@workbench/core':{record,string},'./chatRuntime':{sessionRuntime:()=>runtime},'./ChatSessionView':{nativeSkillChoices:()=>[{selection,disabled:false}]}}})('workbench/ui/skillServices.ts');
+ const sessionOpenFlows=()=>({open:async input=>{mutations.push(['session-open','/api/chat/sessions',{profile_id:input.profileId},input]);return {id:'session-exact',runtime:'codex'}}});
+ const {createSkillServices}=moduleLoader({imports:{'@workbench/core':{record,string,sessionOpenFlows},'./chatRuntime':{sessionRuntime:()=>runtime},'./ChatSessionView':{nativeSkillChoices:()=>[{selection,disabled:false}]}}})('workbench/ui/skillServices.ts');
  const reopen=()=>createSkillServices(client,'profile-exact',[],'temp-skill');
  return {service:reopen(),reopen,selection,storage,submissions,mutations,posts,setRevision:value=>{revision=value;},setVersion:value=>{selection.version=value;},setUnknown:value=>{unknown=value;},setHook:value=>{hook=value;}};
 }

@@ -48,7 +48,7 @@ async function fixture(){
   }},
  };
  const {createSkillServices}=moduleLoader({imports:{
-  '@workbench/core':{record,string},'./chatRuntime':{sessionRuntime:(_client,id)=>runtimes.get(id)},
+  '@workbench/core':{record,string,sessionOpenFlows:()=>({open:async()=>({id:'new-session',runtime:'codex'})})},'./chatRuntime':{sessionRuntime:(_client,id)=>runtimes.get(id)},
   './ChatSessionView':{nativeSkillChoices:()=>[{selection,disabled:false}]},
  }})('workbench/ui/skillServices.ts');
  const service=createSkillServices(client,'profile-exact',[],'temp-method');

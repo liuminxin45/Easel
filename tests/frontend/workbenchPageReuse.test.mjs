@@ -21,7 +21,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
  const exports={};
  const client={drafts:{get:()=>({}),set:()=>true},...vm.client};
  const host={service:{collectAll:async()=>({accepted:true})},navigation:{entryKey:'fixture',contentReady(){}},navigate:()=>{},replace:()=>{},...vm,client};
- const core={record,string:(value,fallback='')=>typeof value==='string'?value:fallback,array:value=>Array.isArray(value)?value:[],number:value=>Number(value)||0,
+ const core={record,string:(value,fallback='')=>typeof value==='string'?value:fallback,array:value=>Array.isArray(value)?value:[],number:value=>Number(value)||0,sessionOpenFlows:()=>({open:input=>host.openSession?.(input)}),
   useWorkbench:()=>host,useResource:path=>({data:data[path]??null,reload:async()=>data[path]??null}),
   useDraft:(_,initial)=>[initial,()=>{}],useAsyncAction:()=>({busy:false,run:async fn=>fn()}),
   useViewState:(_,initial)=>({read:()=>initial,write(){}}),
@@ -118,20 +118,16 @@ test('creating a profile composes the original onboarding wizard and preserves t
 });
 
 test('publishing AI action opens the same server session composer with the selected exact skill',async()=>{
- const writes=[],drafts=[],navigation=[];
+ const opens=[];
  const selection={skill_id:'skill-content-repurposing',version:7,action_id:'native',source_revision:'sha-exact'};
  const actions=load('nativePublishing.ts',{choices:[{selection}],vm:{
-  client:{mutate:async(...args)=>{writes.push(args);return {session:{id:'session-a',runtime:'codex'}}},drafts:{set:(...args)=>{drafts.push(args);return true}}},
-  navigate:(...args)=>navigation.push(args),
+  openSession:async input=>{opens.push(input);return {id:'session-a',runtime:'codex'}},
  }}).useNativePublishingActions('creator-exact');
  await actions.adapt('原字稿件');
- assert.equal(writes.length,1);
- assert.equal(writes[0][1],'/api/chat/sessions');
- assert.equal(writes[0][2].profile_id,'creator-exact');
- assert.equal(drafts[0][0],'chat:session-a');
- assert.equal(drafts[0][1].command,selection);
- assert.equal(drafts[0][1].text,'原字稿件');
- assert.equal(navigation[0][0],'/chat/session-a');
+ assert.equal(opens.length,1);
+ assert.equal(opens[0].profileId,'creator-exact');
+ assert.equal(opens[0].draft.command,selection);
+ assert.equal(opens[0].draft.text,'原字稿件');
 });
 
 test('unavailable publishing skill cannot start an anonymous model or create a session',async()=>{

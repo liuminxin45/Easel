@@ -2,6 +2,7 @@ export * from './models';
 export * from './transport';
 export * from './persistence';
 export * from './client';
+export * from './session-open-flow';
 export * from '../../lib/interaction';
 export * from './metrics';
 export * from './auth';

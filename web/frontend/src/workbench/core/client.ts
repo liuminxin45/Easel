@@ -13,8 +13,8 @@ import {commandScope,interactionFeedback,type InteractionFeedback} from '../../l
 import {dailyTrendsPath,dailyTrendsDay,beijingDay,nextBeijingDayDelay,emptyDailyTrends} from './daily-trends';
 
 export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
-export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean}
-export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string}
+export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean;receiptProtocol?:2;acceptance?:'accepted'|'unknown';createdAt?:number}
+export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string;receiptProtocol?:2}
 export interface OperationState {busy:boolean;pending:PendingOperation|null;error:string;notice:string;result?:unknown;feedback?:InteractionFeedback}
 export interface SessionState {config:Config|null;loading:boolean;error:string;feedback?:InteractionFeedback;expired:boolean;reachable:boolean|null}
 interface ResourceMetadata {etag?:string;checkedAt:number;lastAccess:number;lastAttempt:number;bytes:number;failures?:number;retryAt?:number}
@@ -30,6 +30,7 @@ export class WorkbenchClient {
   private authEpoch=0;private lastAuthCheckedAt=0;private authCheckPromise?:Promise<boolean>;private resumePromise?:Promise<void>;private hidden=false;
   private receiptTimers=new Map<string,ReturnType<typeof setTimeout>>();
   private dailyTrendsTimer?:ReturnType<typeof setTimeout>;private serverClockOffset=0;private serverClockCalibrated=false;
+  private completionObservers=new Map<string,Set<(result:unknown)=>boolean|void>>();
   private readonly now:()=>number;private readonly cacheBytes:number;private readonly cacheEntries:number;
   navigation?:NavigationDelegate;readonly activities?:ActivityDelegate;
   constructor(options:ClientOptions={}){
@@ -40,6 +41,50 @@ export class WorkbenchClient {
     this.auth=new AuthService({fetcher:options.fetcher,activities:options.activities});this.service=new DomainService(this);
   }
   get authenticationEpoch():number{return this.authEpoch}
+  reportOperationPhase(input:{operation_id:string;flow_id:string;phase:string;elapsed_ms:number;code?:string}):void{
+    const csrf=this.session.getState().config?.csrf;if(!csrf||this.session.getState().expired)return;
+    const id=crypto.randomUUID(),client=typeof navigator!=='undefined'&&/\bwv\b|WebToApp/i.test(navigator.userAgent)?'webview':'browser';
+    void this.api.post('/api/diagnostics/client-operation',{...input,id,client},csrf,id).catch(()=>{/* Diagnostics cannot change an operation's result. */});
+  }
+  /** A flow stores its recovery identity before the command journal is cleared. */
+  beforeOperationComplete(scope:string,callback:(result:unknown)=>boolean|void):()=>void{
+    let callbacks=this.completionObservers.get(scope);if(!callbacks){callbacks=new Set();this.completionObservers.set(scope,callbacks)}callbacks.add(callback);
+    return()=>{callbacks.delete(callback);if(!callbacks.size)this.completionObservers.delete(scope)};
+  }
+  /** Only the dedicated server resolver can retire a legacy create command. */
+  resolveSessionOperation(scope:string,id:string,receipt:unknown):boolean{
+    const pending=this.operation(scope).getState().pending,value=record(receipt);
+    if(!pending||pending.id!==id)return false;
+    if(pending.path!=='/api/chat/sessions'||pending.body.action!=='create'||value.protocol_version!==2||value.operation_id!==id||!['completed','sealed_not_accepted'].includes(string(value.operation_state)))throw new RequestError('原对话操作的核对结果不匹配，请保留原记录。');
+    if(!this.drafts.set('native:resolved:'+id,{operation:pending,outcome:value.operation_state,session_id:string(record(record(value.result).session??value.session).id)}))throw new RequestError('原操作核对记录尚未保存，请保留当前页面。',{code:'local_persistence_failed'});
+    if(value.operation_state==='completed')this.finishOperation(pending,value.result??value,true);
+    else{this.clearPending(pending);this.operation(scope).setState({pending:null,error:'',feedback:undefined,notice:'',result:undefined})}
+    return true;
+  }
+  private preserveCompletion(pending:PendingOperation,result:unknown):void{
+    if(pending.receiptProtocol===2&&pending.path==='/api/chat/sessions'){
+      const value=record(result),session=record(value.session??record(value.result).session),sid=string(session.id);
+      if(!sid)throw new RequestError('服务器尚未返回可核对的对话标识。',{uncertain:true,acceptance:'accepted',operationScope:pending.scope,operationId:pending.id});
+      if(string(session.profile_id)&&string(pending.body.profile_id)&&session.profile_id!==pending.body.profile_id)throw new RequestError('对话回执与所选画像不一致，请保留原操作核对。',{acceptance:'accepted',code:'receipt_result_mismatch',operationScope:pending.scope,operationId:pending.id});
+      if(!this.drafts.set('native:session-receipt:'+pending.id,{operation_id:pending.id,session_id:sid,profile_id:string(session.profile_id),revision:session.revision}))throw new RequestError('对话已创建，本机恢复记录尚未保存，请保留当前页面。',{acceptance:'accepted',code:'local_persistence_failed',operationScope:pending.scope,operationId:pending.id});
+    }
+    for(const callback of this.completionObservers.get(pending.scope)??[])try{if(callback(result)===false)throw Error('not persisted')}catch{throw new RequestError('对话已创建，本机输入尚未完成保存。',{acceptance:'accepted',code:'local_persistence_failed',operationScope:pending.scope,operationId:pending.id})}
+  }
+  private retainAccepted(pending:PendingOperation):void{
+    if(pending.acceptance==='accepted'&&!pending.uncertain)return;
+    const next={...pending,acceptance:'accepted' as const,uncertain:false};
+    const saved=this.drafts.set('native:pending:'+pending.scope,{operation:next});
+    this.operation(pending.scope).setState({pending:next,error:'',feedback:undefined});
+    if(!saved)throw new RequestError('已受理的操作状态尚未保存，请保留当前页面。',{acceptance:'accepted',code:'local_persistence_failed',operationScope:pending.scope,operationId:pending.id});
+  }
+  private finishOperation(pending:PendingOperation,result:unknown,recovered=false):void{
+    try{this.preserveCompletion(pending,result)}catch(error){
+      try{this.retainAccepted(pending)}catch{/* Keep the existing identity even if local storage is full. */}
+      this.operation(pending.scope).setState({result,error:message(error),feedback:undefined});throw error;
+    }
+    this.clearPending(pending);this.operation(pending.scope).setState({pending:null,error:'',feedback:undefined,notice:pending.receiptProtocol===2?'':recovered?'已恢复连接':'已保存',result});
+    this.refreshAfterCommand(pending,result);
+  }
   private clearPrivateMemory():void{
     if(this.dailyTrendsTimer)clearTimeout(this.dailyTrendsTimer);this.dailyTrendsTimer=undefined;this.serverClockOffset=0;this.serverClockCalibrated=false;
     this.usage.clear();
@@ -189,7 +234,7 @@ export class WorkbenchClient {
   operation(scope:string):StoreApi<OperationState>{
     let state=this.operations.get(scope);if(state)return state;
     const current=this.drafts.get<JsonRecord>('native:pending:'+scope);let pending=record(current?.operation) as unknown as PendingOperation|null;
-    if(!pending?.id)pending=null;else pending={...pending,uncertain:true};
+    if(!pending?.id)pending=null;else pending={...pending,uncertain:pending.acceptance!=='accepted'};
     if(scope==='studio'&&!pending){const old=record(this.drafts.get('studio:pending-command')?.request);if(string(old.operation_id))pending={scope,path:'/api/studio/commands',body:old,id:string(old.operation_id),uncertain:true}}
     if(scope==='settings'&&!pending){const old=record(this.drafts.get('settings:pending'));if(string(old.operation_id)&&string(old.path))pending={scope,path:string(old.path),body:{},id:string(old.operation_id),requestSignature:string(old.signature),metadataOnly:true,receiptPath:'/api/settings/operations/'+encodeURIComponent(string(old.operation_id)),legacyKey:'settings:pending',uncertain:true}}
     if(!pending&&['studio','learning','creative','creator'].includes(scope.split(':')[0]||'')){const domain=scope.split(':')[0]!;for(const saved of this.drafts.list()){const key=string(saved.id),old=record(saved.operation),body=record(old.body);if(key==='native:pending:'+scope||!key.startsWith('native:pending:'+domain)||!string(old.id)||commandScope(domain,string(body.action),body)!==scope)continue;pending={...old,scope,body,id:string(old.id),path:string(old.path),uncertain:true,legacyKey:key} as PendingOperation;break}if(!pending&&domain==='studio'){const old=record(this.drafts.get('studio:pending-command')?.request);if(string(old.operation_id)&&commandScope('studio',string(old.action),old)===scope)pending={scope,path:'/api/studio/commands',body:old,id:string(old.operation_id),uncertain:true,legacyKey:'studio:pending-command'}}}
@@ -199,7 +244,7 @@ export class WorkbenchClient {
   private resumeReceiptRecovery():void{for(const row of this.drafts.list()){const pending=record(row.operation);if(string(row.id).startsWith('native:pending:')&&string(pending.scope))this.operation(string(pending.scope))}if(this.drafts.get('settings:pending'))this.operation('settings');for(const scope of this.operations.keys())this.scheduleReceiptRecovery(scope,0)}
   private scheduleReceiptRecovery(scope:string,delay=1500):void{
     if(this.receiptTimers.has(scope)||!this.visible()||this.session.getState().expired||!this.session.getState().config||!this.operations.get(scope)?.getState().pending)return;
-    const timer=setTimeout(()=>{this.receiptTimers.delete(scope);if(!this.visible()||this.operations.get(scope)?.getState().busy)return;void this.reconcile(scope).catch(()=>{/* Definite rejections are exposed by the operation store. */}).finally(()=>this.scheduleReceiptRecovery(scope,Math.min(Math.max(delay*2,1500),15000)))},delay);
+    const timer=setTimeout(()=>{this.receiptTimers.delete(scope);if(!this.visible()||this.operations.get(scope)?.getState().busy)return;const pending=this.operations.get(scope)?.getState().pending,daily=pending?.receiptProtocol===2;void this.reconcile(scope).catch(()=>{/* Definite rejections are exposed by the operation store. */}).finally(()=>this.scheduleReceiptRecovery(scope,Math.min(Math.max(delay*2,daily?1000:1500),daily&&this.now()-(pending?.createdAt??this.now())>=30000?30000:15000)))},delay);
     (timer as unknown as {unref?:()=>void}).unref?.();this.receiptTimers.set(scope,timer);
   }
   async mutate<T=JsonRecord>(scope:string,path:string,fields:JsonRecord,options:MutationOptions={}):Promise<T>{
@@ -209,7 +254,7 @@ export class WorkbenchClient {
     if(pending){state.setState({busy:true});let result:T|null;try{result=await this.reconcile<T>(scope)}finally{state.setState({busy:false});this.scheduleReceiptRecovery(scope)}if(result!==null){if(pending.path===path&&(pending.method??'POST')===(options.method??'POST')&&(pending.requestSignature??signature(pending.body))===(options.requestSignature??signature(fields)))return result;if(options.metadataOnly&&typeof record(result).revision==='number')fields={...fields,expected_revision:record(result).revision};pending=null}else throw new RequestError('连接恢复中，原输入已保留，请稍后再试。',{status:409,uncertain:true,operationScope:scope,operationId:pending.id})}
     if(!this.session.getState().config?.csrf||this.session.getState().expired)throw new RequestError('请等待登录校验完成。');
     const id=(options.preserveBody?'':string(fields.operation_id)||string(fields.id))||crypto.randomUUID(),body=options.preserveBody?fields:{...fields,id,...(['/api/studio/commands','/api/learning/commands','/api/collection/sources'].includes(path)?{operation_id:id}:{})};
-    pending={scope,path,...(options.method?{method:options.method}:{}),body:options.metadataOnly?{}:body,id,uncertain:false,...(options.metadataOnly?{metadataOnly:true,requestSignature:options.requestSignature,receiptPath:options.receiptPath!(id)}:{})};
+    pending={scope,path,...(options.method?{method:options.method}:{}),body:options.metadataOnly?{}:body,id,uncertain:false,...(options.receiptProtocol===2?{receiptProtocol:2 as const,createdAt:this.now()}:{}),...(options.metadataOnly?{metadataOnly:true,requestSignature:options.requestSignature,receiptPath:options.receiptPath!(id)}:{})};
     if(!this.drafts.set('native:pending:'+scope,{operation:pending}))throw new RequestError('原操作标识未能保存，请先核对本机存储；这次尚未提交。');state.setState({pending});
     return this.execute<T>(pending,body,options.raw);
   }
@@ -219,13 +264,15 @@ export class WorkbenchClient {
     const key=scope+':'+pending.id,existing=this.receiptReads.get(key);if(existing)return existing as Promise<T|null>;
     const epoch=this.authEpoch;let job!:Promise<T|null>;
     job=(async()=>{try{
-      const receipt=await this.api.get<{id?:string;state:string;result?:T}>(pending.receiptPath??'/api/operations/'+encodeURIComponent(pending.id)+'?'+new URLSearchParams({path:pending.path}),AbortSignal.timeout(3000));
+      const receipt=await this.api.request<{id?:string;state:string;result?:T;operation_state?:string;operation_id?:string;protocol_version?:number}>(pending.receiptPath??'/api/operations/'+encodeURIComponent(pending.id)+'?'+new URLSearchParams({path:pending.path}),{signal:AbortSignal.timeout(3000),operationProtocol:pending.receiptProtocol});
       if(epoch!==this.authEpoch||(receipt.id!==undefined&&receipt.id!==pending.id)||(!pending.receiptPath&&receipt.id!==pending.id)||this.operation(scope).getState().pending?.id!==pending.id)return null;
+      if(pending.receiptProtocol===2&&receipt.protocol_version===2&&receipt.operation_id!==pending.id)return null;
       if(receipt.state==='unavailable')this.operation(scope).setState({feedback:{kind:'status',message:'暂未取得操作结果，输入已保留。'}});
+      if(pending.receiptProtocol===2&&receipt.protocol_version===2&&receipt.operation_id===pending.id&&['accepted','running'].includes(receipt.operation_state??''))this.retainAccepted(pending);
       if(receipt.state==='rejected'){const error=new RequestError(string(record(receipt.result).error)||string(record(receipt.result).detail,'操作未被受理，请修正后重试。'),{status:400});this.clearPending(pending);this.operation(scope).setState({pending:null,error:error.message,feedback:interactionFeedback(error)});throw error}
       if(!['received','completed'].includes(receipt.state)||receipt.result===undefined)return null;
-      this.clearPending(pending);this.operation(scope).setState({pending:null,error:'',feedback:undefined,notice:'已恢复连接',result:receipt.result});this.refreshAfterCommand(pending,receipt.result);return receipt.result;
-    }catch(error){if(error instanceof RequestError&&error.status===400&&!error.uncertain)throw error;return null}finally{if(this.receiptReads.get(key)===job)this.receiptReads.delete(key)}})();this.receiptReads.set(key,job);return job;
+      this.finishOperation(pending,receipt.result,true);return receipt.result;
+    }catch(error){if(error instanceof RequestError&&(error.status===400&&!error.uncertain||error.acceptance==='accepted'))throw error;return null}finally{if(this.receiptReads.get(key)===job)this.receiptReads.delete(key)}})();this.receiptReads.set(key,job);return job;
   }
   private refreshAfterCommand(pending:PendingOperation,result:unknown):void{
     const payload=record(record(result).result??result),projections:[string,string,string][]=pending.path==='/api/creator/commands'?[['/api/creator/bootstrap','profiles','profile']]:pending.path==='/api/easel/commands'?[['/api/easel/plans','items','plan']]:pending.path==='/api/platform-accounts'?[['/api/platform-accounts','sessions','session']]:pending.path==='/api/collection/sources'?[['/api/collection/sources','sources','source']]:pending.path==='/api/studio/commands'?['publication','metric','comment','analysis','proposal'].map(key=>['/api/studio/bootstrap',key==='analysis'?'analyses':key+'s',key]):pending.path==='/api/distribution/commands'?['connection','revision','approval','delivery'].map(key=>['/api/distribution/bootstrap',key+'s',key]):[];
@@ -239,8 +286,25 @@ export class WorkbenchClient {
     const state=this.operation(pending.scope);if(state.getState().busy)throw new RequestError('这项操作正在处理。');state.setState({busy:true,error:'',feedback:undefined,notice:''});
     const csrf=this.session.getState().config?.csrf;if(!csrf){state.setState({busy:false});throw new RequestError('请等待登录校验完成。')}
     const authEpoch=this.authEpoch;
-    try{this.usage.command(pending.path,pending.body,'attempt',pending.id);const result=await this.api.request<T>(pending.path,{body,csrf,id:pending.id,method:pending.method,raw});if(authEpoch!==this.authEpoch)throw new RequestError('登录状态已变化，原输入已保留。',{uncertain:true});this.clearPending(pending);this.usage.command(pending.path,pending.body,'accepted',pending.id);state.setState({pending:null,notice:'已保存',result});this.refreshAfterCommand(pending,result);return result}
-    catch(error){if(authEpoch!==this.authEpoch){state.setState({error:'登录状态已变化，请重新登录。原输入已保留。'});throw error}this.usage.command(pending.path,pending.body,error instanceof RequestError&&!!error.status&&error.status>=400&&error.status<500&&!error.uncertain?'failed':'uncertain',pending.id);const definite=error instanceof RequestError&&!!error.status&&error.status>=400&&error.status<500&&!error.uncertain;if(definite){this.clearPending(pending);state.setState({pending:null,error:message(error)});throw error}const next={...pending,uncertain:true};this.drafts.set('native:pending:'+pending.scope,{operation:next});state.setState({pending:next});const recovered=await this.reconcile<T>(pending.scope);if(recovered!==null)return recovered;state.setState({error:'',feedback:interactionFeedback(new RequestError('正在恢复状态',{uncertain:true}))});throw new RequestError('连接暂时中断，正在恢复状态。原输入已保留。',{uncertain:true,operationScope:pending.scope,operationId:pending.id})}
+    try{
+      this.usage.command(pending.path,pending.body,'attempt',pending.id);
+      const result=await this.api.request<T>(pending.path,{body,csrf,id:pending.id,method:pending.method,raw,operationProtocol:pending.receiptProtocol});
+      if(authEpoch!==this.authEpoch)throw new RequestError('登录状态已变化，原输入已保留。',{uncertain:true});
+      const envelope=record(result);
+      if(pending.receiptProtocol===2&&envelope.protocol_version===2&&envelope.operation_id!==pending.id)throw new RequestError('对话回执身份尚未核对，请保留原操作。',{uncertain:true,operationScope:pending.scope,operationId:pending.id});
+      if(pending.receiptProtocol===2&&envelope.protocol_version===2&&envelope.operation_id===pending.id&&['accepted','running'].includes(string(envelope.operation_state))){this.retainAccepted(pending);return result}
+      this.finishOperation(pending,result);this.usage.command(pending.path,pending.body,'accepted',pending.id);return result;
+    }catch(error){
+      if(authEpoch!==this.authEpoch){state.setState({error:'登录状态已变化，请重新登录。原输入已保留。'});throw error}
+      if(error instanceof RequestError&&error.acceptance==='accepted')throw error;
+      const notAccepted=error instanceof RequestError&&error.acceptance==='not_accepted',definite=notAccepted||error instanceof RequestError&&!!error.status&&error.status>=400&&error.status<500&&!error.uncertain;
+      this.usage.command(pending.path,pending.body,definite?'failed':'uncertain',pending.id);
+      if(definite){this.clearPending(pending);state.setState({pending:null,error:notAccepted?'':message(error),feedback:undefined});if(notAccepted)Object.assign(error,{operationScope:pending.scope,operationId:pending.id});throw error}
+      const next={...pending,uncertain:true,acceptance:'unknown' as const};this.drafts.set('native:pending:'+pending.scope,{operation:next});state.setState({pending:next});
+      const recovered=await this.reconcile<T>(pending.scope);if(recovered!==null)return recovered;
+      state.setState({error:'',feedback:pending.receiptProtocol===2?undefined:interactionFeedback(new RequestError('正在恢复状态',{uncertain:true}))});
+      throw new RequestError('连接暂时中断，正在恢复状态。原输入已保留。',{uncertain:true,acceptance:state.getState().pending?.acceptance??'unknown',operationScope:pending.scope,operationId:pending.id});
+    }
     finally{state.setState({busy:false});if(state.getState().pending)this.scheduleReceiptRecovery(pending.scope)}
   }
   studio(action:StudioAction,fields:JsonRecord={}):Promise<JsonRecord>{return this.mutate(commandScope('studio',action,fields),'/api/studio/commands',{...fields,action}).then(response=>record(response.result??response))}

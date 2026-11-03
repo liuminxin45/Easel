@@ -54,7 +54,7 @@ def main():
             native_api._save_schedule([{'id':'TEMP-schedule-'+str(n),'title':'TEMP 长排期 '+('中文说明 '*12)+str(n),'date':datetime.now().date().isoformat(),'time':'12:30','platform':'公众号','status':'scheduled','kind':'content','source':'manual'} for n in range(10)])
             selected=[]
             for source,definition in list(f['app'].state.collection.registry.baseline().items())[:3]:
-                selected.append(definition['feed'])
+                selected.append(source)
                 f['box'].store.ingest({'schema_version':1,'source_job':source,'feed_id':definition['feed'],'run_id':'TEMP-pr-ui-'+source,'run_at':datetime.now(timezone.utc).isoformat(),'final_text':'TEMP',
                     'articles':[{'title':f'TEMP {number:02d} '+('一句话中文完整热点标题 ' * 9),'body':'TEMP 原文。\n'+('完整采集正文与来源保持原样。\n'*100),'url':f'https://example.com/pr-ui/{source}/{number}','source_order':number} for number in range(1,51)]})
             context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':height},is_mobile=mobile,has_touch=mobile,service_workers='block')

@@ -50,3 +50,11 @@ def test_native_prompt_uses_selected_materials_and_original_skill_only(business,
     manifest=json.loads((business.root/'outputs/_sessions/inputs'/value['turnId']/'manifest.json').read_text(encoding='utf-8'))
     assert manifest['creation']==creation|{'style':creation.get('style',{})}
     if intent=='discuss':assert '不制作文件' in prepared['actual_prompt']
+
+def test_news_production_does_not_escalate_a_readonly_native_session(business):
+    aid=article(business)
+    with business.store.connect() as c:
+        session=business.chat._session(c,'test-chat');session['runtime']='codex';session['execution_settings']['runtime']='codex';session['execution_settings']['sandbox']='read-only';business.chat._put_session(c,session)
+    with pytest.raises(ValueError,match='只读'):
+        business.prepare({'sessionId':'test-chat','turnId':'readonly-news','message':'制作','context':{'article_id':aid,'creation':{'intent':'produce'},'skill_id':'content-production'}})
+    assert not (business.root/'outputs/_sessions/inputs/readonly-news').exists()

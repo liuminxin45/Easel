@@ -154,6 +154,12 @@ def main():
                 assert page.locator('.ew-news-prose > p').all_text_contents()==BODY.split('\n\n')
                 assert page.locator('.ew-news-prose pre').count()==0
                 expect(page.get_by_role('button',name='讨论怎么写',exact=True)).to_be_enabled()
+                geometry=page.locator('.ew-news-actions').evaluate('(n)=>{const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,viewport:innerHeight,buttons:[...n.querySelectorAll("button")].map(b=>({name:b.textContent,height:b.getBoundingClientRect().height}))}}')
+                assert all(0<item['height']<=72 for item in geometry['buttons']),geometry
+                if mobile:
+                    assert geometry['height']<=180 and abs(geometry['bottom']-height)<=2,geometry
+                    expect(page.locator('.ew-news-article h1')).to_be_in_viewport()
+                report.setdefault('reading_geometry',{})[case]=geometry
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1');shot('reading')
                 page.get_by_role('button',name='采集记录',exact=True).click();record=page.get_by_role('dialog',name='采集记录',exact=True);expect(record.locator('.ew-news-raw')).to_have_text(BODY)
                 assert page.locator('.drawer-overlay').count()==1;record.get_by_role('button',name='关闭',exact=True).click();mark(case,'real news body uses natural paragraphs; raw collection remains in official Drawer')

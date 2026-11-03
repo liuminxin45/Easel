@@ -208,6 +208,10 @@ class ChatBusiness:
             if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
             if context.get('creation') is not None:
                 from easel_workbench.features.news_creation import NewsCreation
+                if isinstance(context['creation'],dict) and context['creation'].get('intent')=='produce':
+                    config=self.chat.execution_settings(session)
+                    if config['runtime']=='api':raise PlanConflict('API 仅聊天模式不能制作，请新建 Agent 对话')
+                    if config['runtime']=='codex' and config.get('sandbox')=='read-only':raise PlanConflict('此对话使用只读沙箱，请新建允许制作文件的 Agent 对话')
                 tid=value.get('turnId') or value.get('turn_id') or value.get('id')
                 prepared=NewsCreation(self.box).prepare(context['creation'],session['profile_id'],context.get('article_id'),tid)
                 if prepared['creation']['intent']=='produce':

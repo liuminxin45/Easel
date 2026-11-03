@@ -89,6 +89,10 @@ def main():
                 drawer=page.get_by_role('dialog');expect(drawer.locator('.skill-detail-rawname')).to_have_text('ai-image-gen');secret=drawer.locator('input[type=password]').first;expect(secret).to_be_visible();secret.fill('TEMP-local-browser-key-'+case)
                 with page.expect_response(lambda r:urlsplit(r.url).path=='/api/env' and r.request.method=='POST') as configured:drawer.get_by_role('button',name='保存到 .env',exact=True).click()
                 assert configured.value.status==200,configured.value.text();expect(drawer.get_by_text('已保存 ✓',exact=True)).to_be_visible()
+                fresh=page.request.get(f['origin']+'/api/skill/ai-image-gen').json();key=next(key for provider in fresh['apiSpec']['providers'] for key in provider['keys'] if key['env']=='IMG_API_KEY')
+                saved_environment=f['box'].settings_service.environment();report.setdefault('configuration_checks',{})[case]={'revision':fresh.get('configuration_revision'),'key_configured':key['configured'],'vault_value_matches':saved_environment.get('IMG_API_KEY')=='TEMP-local-browser-key-'+case}
+                assert key['configured'] is True,'saved native key must be reflected by the original masked detail API'
+                assert saved_environment.get('IMG_API_KEY')=='TEMP-local-browser-key-'+case,'the actual host vault must retain the exact submitted key'
                 assert 'TEMP-local-browser-key-'+case not in drawer.inner_text()
                 assert len(f['adapter'].requests)==1
                 check(case,'original API configuration dialog saves through the host vault without exposing secrets or starting an Agent')

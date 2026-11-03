@@ -10,6 +10,7 @@ import type {LearningBootstrap,LearningDetail,LearningKind} from './learning';
 import {UsageTracker} from './usage';
 import {AUTH_CHECK_MS,RESOURCE_CACHE_BYTES,RESOURCE_CACHE_ENTRIES,mutationTags,resourceCacheable,resourceFreshMs,resourceTags,withServerTime} from './resource-cache';
 import {commandScope,interactionFeedback,type InteractionFeedback} from '../../lib/interaction';
+import {dailyTrendsPath,dailyTrendsDay,beijingDay,nextBeijingDayDelay,emptyDailyTrends} from './daily-trends';
 
 export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
 export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean}
@@ -28,6 +29,7 @@ export class WorkbenchClient {
   private pollWatchers=new Map<string,Map<symbol,number|undefined>>();private pollTimers=new Map<string,ReturnType<typeof setTimeout>>();
   private authEpoch=0;private lastAuthCheckedAt=0;private authCheckPromise?:Promise<boolean>;private resumePromise?:Promise<void>;private hidden=false;
   private receiptTimers=new Map<string,ReturnType<typeof setTimeout>>();
+  private dailyTrendsTimer?:ReturnType<typeof setTimeout>;private serverClockOffset=0;private serverClockCalibrated=false;
   private readonly now:()=>number;private readonly cacheBytes:number;private readonly cacheEntries:number;
   navigation?:NavigationDelegate;readonly activities?:ActivityDelegate;
   constructor(options:ClientOptions={}){
@@ -39,6 +41,7 @@ export class WorkbenchClient {
   }
   get authenticationEpoch():number{return this.authEpoch}
   private clearPrivateMemory():void{
+    if(this.dailyTrendsTimer)clearTimeout(this.dailyTrendsTimer);this.dailyTrendsTimer=undefined;this.serverClockOffset=0;this.serverClockCalibrated=false;
     this.usage.clear();
     for(const timer of this.receiptTimers.values())clearTimeout(timer);this.receiptTimers.clear();this.receiptReads.clear();
     for(const state of this.operations.values())state.setState({result:undefined,error:'',feedback:undefined,notice:''});
@@ -60,14 +63,36 @@ export class WorkbenchClient {
   }
   peek<T>(path:string):T|undefined {
     if(this.session.getState().expired||!this.session.getState().config)return;
+    this.expireDailyTrends(path);
     const value=this.resources.get(path)?.getState().data;
     return value===null||value===undefined?undefined:value as T;
   }
   private visible():boolean{return !this.hidden&&(typeof document==='undefined'||!document.hidden)}
+  private dailyNow():number{return this.now()+this.serverClockOffset}
+  /** Publish an empty current-day result, so mounted official pages drop old rows too. */
+  private expireDailyTrends(path?:string):void{
+    const now=this.dailyNow(),today=beijingDay(now);
+    for(const [key,state] of this.resources){
+      if(path!==undefined&&key!==path||!dailyTrendsPath(key))continue;
+      const value=state.getState().data;if(value===null||record(value).version!==1||!Array.isArray(record(value).trends)||dailyTrendsDay(value)===today)continue;
+      this.invalidations.set(key,(this.invalidations.get(key)??0)+1);this.cacheMeta.delete(key);
+      state.setState(previous=>({data:emptyDailyTrends(now),revision:previous.revision+1,loading:false,refreshing:false,error:'',feedback:undefined,stale:true,checkedAt:undefined}));
+    }
+  }
+  private scheduleDailyTrends():void{
+    if(this.dailyTrendsTimer)clearTimeout(this.dailyTrendsTimer);this.dailyTrendsTimer=undefined;
+    if(!this.visible()||this.session.getState().expired||![...this.activeResources.keys()].some(dailyTrendsPath))return;
+    this.dailyTrendsTimer=setTimeout(()=>{
+      this.dailyTrendsTimer=undefined;this.expireDailyTrends();
+      for(const path of this.activeResources.keys())if(dailyTrendsPath(path))void this.read(path,true);
+      this.scheduleDailyTrends();
+    },Math.max(1,nextBeijingDayDelay(this.dailyNow())));
+    (this.dailyTrendsTimer as unknown as {unref?:()=>void}).unref?.();
+  }
   watch(path:string,interval?:number):()=>void{
     this.activeResources.set(path,(this.activeResources.get(path)??0)+1);let watchers=this.pollWatchers.get(path);if(!watchers){watchers=new Map();this.pollWatchers.set(path,watchers)}
-    const id=Symbol(path);watchers.set(id,interval);this.schedulePoll(path);let released=false;
-    return()=>{if(released)return;released=true;const n=(this.activeResources.get(path)??1)-1;if(n<=0)this.activeResources.delete(path);else this.activeResources.set(path,n);const rows=this.pollWatchers.get(path);rows?.delete(id);if(!rows?.size)this.pollWatchers.delete(path);this.schedulePoll(path);this.pruneResources()};
+    const id=Symbol(path);watchers.set(id,interval);this.expireDailyTrends(path);this.schedulePoll(path);this.scheduleDailyTrends();let released=false;
+    return()=>{if(released)return;released=true;const n=(this.activeResources.get(path)??1)-1;if(n<=0)this.activeResources.delete(path);else this.activeResources.set(path,n);const rows=this.pollWatchers.get(path);rows?.delete(id);if(!rows?.size)this.pollWatchers.delete(path);this.schedulePoll(path);this.scheduleDailyTrends();this.pruneResources()};
   }
   private schedulePoll(path:string):void{
     const previous=this.pollTimers.get(path);if(previous)clearTimeout(previous);this.pollTimers.delete(path);
@@ -77,7 +102,7 @@ export class WorkbenchClient {
     const timer=setTimeout(()=>{this.pollTimers.delete(path);if(this.visible())void this.read(path,true).finally(()=>this.schedulePoll(path))},Math.max(20,last===undefined?ttl:ttl-(this.now()-last),(meta?.retryAt??0)-this.now()));
     (timer as unknown as {unref?:()=>void}).unref?.();this.pollTimers.set(path,timer);
   }
-  pauseVisible():void{this.hidden=true;for(const timer of this.pollTimers.values())clearTimeout(timer);this.pollTimers.clear();for(const timer of this.receiptTimers.values())clearTimeout(timer);this.receiptTimers.clear()}
+  pauseVisible():void{this.hidden=true;if(this.dailyTrendsTimer)clearTimeout(this.dailyTrendsTimer);this.dailyTrendsTimer=undefined;for(const timer of this.pollTimers.values())clearTimeout(timer);this.pollTimers.clear();for(const timer of this.receiptTimers.values())clearTimeout(timer);this.receiptTimers.clear()}
   checkAuthentication():Promise<boolean>{
     if(this.session.getState().expired)return Promise.resolve(false);
     if(this.session.getState().config&&this.lastAuthCheckedAt>0&&this.now()-this.lastAuthCheckedAt<AUTH_CHECK_MS)return Promise.resolve(true);
@@ -88,11 +113,12 @@ export class WorkbenchClient {
     this.authCheckPromise=job;return job;
   }
   resumeVisible():Promise<void>{
-    this.hidden=false;if(this.resumePromise)return this.resumePromise;
+    this.hidden=false;this.expireDailyTrends();this.scheduleDailyTrends();if(this.resumePromise)return this.resumePromise;
     const job=(async()=>{if(!await this.checkAuthentication()||!this.visible())return;this.resumeReceiptRecovery();await Promise.all([...this.activeResources.keys()].map(path=>this.read(path)));for(const path of this.activeResources.keys())this.schedulePoll(path)})();
     this.resumePromise=job;void job.finally(()=>{if(this.resumePromise===job)this.resumePromise=undefined});return job;
   }
   read<T=JsonRecord>(path:string,force=false):Promise<T|null>{
+    this.expireDailyTrends(path);
     // A child hook may receive visibilitychange before CoreProvider does.
     // Its forced reload must still wait for foreground authentication.
     if(typeof document!=='undefined'&&!document.hidden&&(this.hidden||this.resumePromise&&this.authCheckPromise))return (this.hidden?this.resumeVisible():this.resumePromise!).then(()=>this.read<T>(path));
@@ -102,16 +128,23 @@ export class WorkbenchClient {
     if(!force&&oldState.data!==null&&!oldState.stale&&oldMeta&&now-oldMeta.checkedAt<resourceFreshMs(path,oldState.data)){oldMeta.lastAccess=now;return Promise.resolve(oldState.data as T)}
     // A retry is not recovery: retain a real failure until a successful read.
     state.setState({loading:oldState.data===null,refreshing:true});
-    const epoch=this.invalidations.get(path)??0,authEpoch=this.authEpoch,meta=oldMeta??{checkedAt:0,lastAccess:now,lastAttempt:now,bytes:0};meta.lastAttempt=now;meta.lastAccess=now;this.cacheMeta.set(path,meta);
+    const epoch=this.invalidations.get(path)??0,authEpoch=this.authEpoch,requestDay=beijingDay(this.dailyNow()),meta=oldMeta??{checkedAt:0,lastAccess:now,lastAttempt:now,bytes:0};meta.lastAttempt=now;meta.lastAccess=now;this.cacheMeta.set(path,meta);
     let job!:Promise<T|null>;
     job=(async()=>{let data:T|null=null,revalidate=false;try{
       let reply=await this.api.conditionalGet<T>(path,resourceCacheable(path)&&oldState.data!==null?meta.etag:undefined);
       if(authEpoch!==this.authEpoch)return null;
-      if(reply.status==='not-modified'&&state.getState().data===null){reply=await this.api.conditionalGet<T>(path);if(reply.status==='not-modified')throw new RequestError('服务器未返回可恢复的数据，请重新读取。')}
+      if(dailyTrendsPath(path)){
+        // Calibrate once per authenticated session; a response spanning midnight
+        // must not move the clock backwards and revive the previous date.
+        if(!this.serverClockCalibrated&&reply.serverTime&&beijingDay(now)===beijingDay(this.now())){const sampled=Date.parse(reply.serverTime);if(Number.isFinite(sampled)){this.serverClockOffset=sampled-this.now();this.serverClockCalibrated=true}}
+        this.expireDailyTrends(path);this.scheduleDailyTrends();
+      }
+      if(epoch===(this.invalidations.get(path)??0)&&reply.status==='not-modified'&&(state.getState().data===null||dailyTrendsPath(path)&&!this.cacheMeta.get(path)?.etag)){reply=await this.api.conditionalGet<T>(path);if(reply.status==='not-modified')throw new RequestError('服务器未返回可恢复的数据，请重新读取。')}
       if(authEpoch!==this.authEpoch||this.session.getState().expired)return null;
-      revalidate=epoch!==(this.invalidations.get(path)??0);
+      revalidate=epoch!==(this.invalidations.get(path)??0)||dailyTrendsPath(path)&&requestDay!==beijingDay(this.dailyNow());
       if(!revalidate){
         data=withServerTime(reply.status==='not-modified'?state.getState().data as T:reply.data as T,reply.serverTime);
+        if(dailyTrendsPath(path)&&dailyTrendsDay(data)!==beijingDay(this.dailyNow())){data=null;throw new RequestError('热点数据日期未能核对，请重新读取。')}
         meta.etag=resourceCacheable(path)?reply.etag??(reply.status==='not-modified'?meta.etag:undefined):undefined;meta.checkedAt=this.now();meta.lastAccess=this.now();meta.failures=0;meta.retryAt=undefined;
         try{meta.bytes=new TextEncoder().encode(JSON.stringify(data)).byteLength}catch{meta.bytes=this.cacheBytes+1}
         state.setState(previous=>({data,loading:false,refreshing:false,error:'',feedback:undefined,revision:previous.revision+(reply.status==='modified'?1:0),stale:false,checkedAt:meta.checkedAt}));

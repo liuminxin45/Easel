@@ -56,6 +56,9 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
     'web/frontend/src/components/TrendSourcesDialog.tsx',
     'web/frontend/src/components/DashboardPage.tsx','web/frontend/src/styles/index.css'})
+# Reviewed daily-result metadata and bounded item parsing; ordinary official
+# responses retain their original shape and 30-item default, with no host import.
+UPSTREAM_PATCH_ALLOWLIST.add('web/frontend/src/lib/trendValidation.ts')
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
     # Original shell/flow shared by both hosts; no private service dependency.

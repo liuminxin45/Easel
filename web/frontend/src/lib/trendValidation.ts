@@ -52,6 +52,7 @@ function item(value: unknown): TrendItem | null {
 export function parseTrends(value: unknown) {
   const data = version(value);
   if (!Array.isArray(data.trends)) throw new Error('热点列表格式异常。');
+  const daily=typeof data.day==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(data.day)&&data.timezone==='Asia/Shanghai';
   const seen = new Set<string>();
   const trends: TrendGroup[] = [];
   for (const value of rows(data.trends)) {
@@ -60,7 +61,7 @@ export function parseTrends(value: unknown) {
     seen.add(String(row.platform));
     const items: TrendItem[] = [];
     const itemIds = new Set<string>();
-    if (Array.isArray(row.items)) for (const raw of row.items.slice(0, 30)) {
+    if (Array.isArray(row.items)) for (const raw of row.items.slice(0, daily?1000:30)) {
       const normalized = item(raw);
       if (normalized && !itemIds.has(normalized.id)) { itemIds.add(normalized.id); items.push(normalized); }
     }
@@ -73,6 +74,7 @@ export function parseTrends(value: unknown) {
         { code: text(error.code, 64) || 'collector_failed', message: text(error.message, 240) || '采集失败' } : null });
   }
   return { version: 1, trends, updated: typeof data.updated === 'number' && Number.isFinite(data.updated) && data.updated >= 0 && data.updated < 253402300800 ? data.updated : 0,
+    ...(daily?{day:String(data.day),timezone:'Asia/Shanghai'}:{}),
     warnings: warnings(data.warnings) };
 }
 

@@ -4,21 +4,21 @@ import {moduleLoader} from './helpers/modules.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
 const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?[value,...all(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):value==null?'':String(value);
-const trend=version=>({version:1,trends:[{platform:'temp',label:'TEMP',ok:true,status:'fresh',fetched_at:version===1?'2026-11-01T12:00:00+08:00':'2026-11-03T12:00:00+08:00',items:[{id:'t'+version,title:'TEMP '+version}]}],updated:1,warnings:[]});
+const trend=version=>({version:1,day:'1970-01-01',timezone:'Asia/Shanghai',trends:[{platform:'temp',label:'TEMP',ok:true,status:'fresh',fetched_at:version===1?'2026-11-01T12:00:00+08:00':'2026-11-03T12:00:00+08:00',items:[{id:'t'+version,title:'TEMP '+version}]}],updated:1,warnings:[]});
 
 test('native radar subscriptions share the existing poll, update completed results, pause and retain failures',async()=>{
  const timers=[],calls=[],load=moduleLoader({globals:{FormData,window:{location:{pathname:'/native/'},dispatchEvent(){}},setTimeout:(callback,ms)=>{const timer={callback,ms,cleared:false,unref(){}};timers.push(timer);return timer},clearTimeout:timer=>{timer.cleared=true}}});
  let value=trend(1),failure=false,clock=100;
  const client=new(load('workbench/core/client.ts').WorkbenchClient)({clock:()=>clock,fetcher:async path=>{calls.push(path);return failure?json({error:'TEMP collector unavailable'},500):json(value)}});
  client.session.setState({config:{csrf:'TEMP'},loading:false});const api=load('lib/api.ts'),release=load('workbench/ui/nativeApi.ts').bindWorkbenchNativeApi(client),path='/api/trends?limit=12&platforms=temp';
- let a,b,error;const live=()=>timers.filter(timer=>!timer.cleared);
+ let a,b,error;const live=()=>timers.filter(timer=>!timer.cleared),poll=()=>live().find(timer=>timer.ms<3600000);
  try{
   await api.fetchTrends('temp');const stopA=api.subscribeApiData(path,data=>{a=data},caught=>{error=caught}),stopB=api.subscribeApiData(path,data=>{b=data});
-  assert.equal(live().length,1);assert.equal(live()[0].ms,30000);
-  value=trend(2);clock+=30000;let timer=live()[0];timer.cleared=true;timer.callback();await new Promise(done=>setImmediate(done));
+  assert.equal(live().length,2);assert.equal(poll().ms,30000);assert.ok(live().some(timer=>timer.ms>3600000));
+  value=trend(2);clock+=30000;let timer=poll();timer.cleared=true;timer.callback();await new Promise(done=>setImmediate(done));
   assert.equal(calls.length,2);assert.equal(a.trends[0].items[0].title,'TEMP 2');assert.equal(b.trends[0].items[0].title,'TEMP 2');
-  failure=true;clock+=30000;timer=live()[0];timer.cleared=true;timer.callback();await new Promise(done=>setImmediate(done));
-  assert.match(error.message,/TEMP collector unavailable/);assert.equal(api.peekApiData(path).trends[0].items[0].title,'TEMP 2');assert.ok(live()[0].ms>=60000);
+  failure=true;clock+=30000;timer=poll();timer.cleared=true;timer.callback();await new Promise(done=>setImmediate(done));
+  assert.match(error.message,/TEMP collector unavailable/);assert.equal(api.peekApiData(path).trends[0].items[0].title,'TEMP 2');assert.ok(poll().ms>=60000);
   client.pauseVisible();assert.equal(live().length,0);stopA();stopB();
  }finally{release();client.pauseVisible()}
 });

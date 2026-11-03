@@ -31,7 +31,7 @@ export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTo
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  return <DashboardPage persona={profileId} gatewayStatus={status.data?.gateway===true?'connected':'disconnected'}
   apiDirect={status.data?.runtime==='api'} agentRuntime={string(status.data?.runtime)||'codex'}
-  persistAnalytics={false} verifyAccountsOnMount={false} listMaxHeight={compact?undefined:360}
+  persistAnalytics={false} verifyAccountsOnMount={false} trendsEmptyState={null} listMaxHeight={compact?undefined:360}
   onContentReady={onContentReady} viewState={viewState}
   onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic}/>;
 }

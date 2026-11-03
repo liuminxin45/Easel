@@ -121,29 +121,6 @@ def _seconds(value):
         return 0
 
 
-def _trend_freshness(meta, source, heartbeat, now, observed):
-    """Evaluate the actual collection calendar, never the page-query time.
-
-    A weekly source remains current until its next due slot. An unchanged feed
-    can be checked successfully without inserting another copy of its articles.
-    """
-    if heartbeat:
-        beat = _seconds(heartbeat.get('heartbeat'))
-        if heartbeat.get('state') in {'blocked', 'error', 'failed'} or beat and now - beat > 180:
-            return {'code': 'collection_unavailable', 'message': '自动采集服务需要恢复，显示已保存结果'}
-    checked = _seconds(source.get('last_success_at')) or _seconds(observed)
-    following = _seconds(source.get('next_run_at'))
-    overdue = following and following + 300 < now and checked < following
-    schedule = meta.get('schedule')
-    if schedule:
-        from easel_workbench.features.collection.schedules import slot, TZ
-        due = slot(schedule, dt.datetime.fromtimestamp(now, TZ), -1).timestamp()
-        overdue = overdue or due + 300 < now and checked < due
-    if overdue:
-        return {'code': 'collection_overdue', 'message': '已错过采集计划，显示历史结果；请检查采集记录'}
-    return None
-
-
 class NativeApi:
     """One compatibility adapter per private application, never another writer."""
 
@@ -339,6 +316,8 @@ class NativeApi:
             self._invalidate_analytics(accounts)
 
     def _trends(self, request):
+        now = time.time()
+        day = dt.datetime.fromtimestamp(now, dt.timezone(dt.timedelta(hours=8))).date().isoformat()
         collection = self._collection()
         definitions = collection.definitions()
         service_status = collection.status()
@@ -350,38 +329,26 @@ class NativeApi:
         limit = max(1, min(int(request.query_params.get('limit', '1000')), 1000))
         groups = []
         for key in selected:
-            rows = self.store.article_day(source=key)['items']
+            rows = self.store.collected_day(source=key, day=day)['items']
+            if not rows:
+                continue
             latest = status.get(key, {}).get('last_task') or {}
             outcome = latest.get('status')
-            incomplete = outcome in {'failed', 'blocked', 'partial', 'cancelled'}
-            busy = latest.get('status') in {'queued', 'running'}
-            source_warnings = [str(value) for value in latest.get('warnings', []) if value]
-            message = str(latest.get('error') or latest.get('message') or '上次采集未完成')
-            age_error = _trend_freshness(available[key], status.get(key, {}), service_status.get('heartbeat'),
-                                         time.time(), rows[0].get('run_at') if rows else None)
-            if service_status.get('enabled') is False:
-                age_error = {'code': 'collection_paused', 'message': '自动采集已暂停，显示已保存结果'}
-            # A task warning belongs to its stage record, not a permanent page
-            # banner. Existing results stay readable; actual overdue/service
-            # failures still surface through the independently checked freshness.
-            stale = busy or bool(age_error)
-            if outcome == 'partial' and not latest.get('error'):
-                message = '本轮采集不完整，已保留实际结果'
-            groups.append({'platform': key, 'label': available[key]['label'], 'ok': not incomplete and not age_error,
-                           'status': 'stale' if (stale or incomplete) and rows else 'error' if incomplete or age_error else 'fresh',
-                           'stale': stale and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
+            # Reading shows only today's observed rows. Task/provider failures
+            # remain in their stage records and independent health diagnostics.
+            fetched_at = max((row['collected_at'] for row in rows), key=_seconds)
+            groups.append({'platform': key, 'label': available[key]['label'], 'ok': True,
+                           'status': 'fresh', 'stale': False, 'fetched_at': fetched_at,
                            'checked_at': status.get(key, {}).get('last_success_at'),
                            'next_run_at': status.get(key, {}).get('next_run_at'),
                            'last_attempt_at': _seconds(latest.get('created_at')),
                            'finished_at': latest.get('finished_at'), 'collection_status': outcome,
-                           'warnings': source_warnings,
-                           'error': {'code': 'busy', 'message': '正在采集，先显示已保存结果'} if busy else
-                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete and not rows else age_error,
+                           'warnings': [], 'error': None,
                            'items': [{'id': item['id'], 'title': item['title'], 'hot': str(item.get('hot') or ''),
                                       'url': item.get('url', ''), 'published_at': item.get('published_at'),
                                       'heat': {'value': None, 'text': str(item.get('hot') or ''), 'unit': ''}}
                                      for item in rows[:limit]]})
-        return {'version': 1, 'trends': groups, 'updated': int(time.time()), 'warnings': []}
+        return {'version': 1, 'day': day, 'timezone': 'Asia/Shanghai', 'trends': groups, 'updated': int(now), 'warnings': []}
 
     def _ideas(self):
         return [{**item, 'created': item.get('created', _seconds(item.get('created_at')))}

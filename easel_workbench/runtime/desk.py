@@ -122,6 +122,40 @@ ORDER BY julianday(COALESCE(t.created_at,a.run_at)) DESC,t.rowid DESC,a.id''',va
         return {'items':items,'day':chosen,'days':days,'total':len(items),
                 'previous_day':next((d for d in days if chosen and d<chosen),None),
                 'next_day':next((d for d in reversed(days) if chosen and d>chosen),None)}
+    def collected_day(self,source,day):
+        """Actual observations for one Beijing day, never a last-day fallback.
+
+        A repeated collection can link an existing article to a new batch. Read
+        that evidence without changing the article's original identity/date.
+        The initial timestamp also covers retained rows lacking provenance.
+        """
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}',day):raise ValueError('invalid day; expected YYYY-MM-DD')
+        start=dt.datetime.combine(dt.date.fromisoformat(day),dt.time(),TZ)
+        end=start+dt.timedelta(days=1)
+        bounds=(start.isoformat(),end.isoformat())
+        with self.connect() as c:
+            items=[dict(row) for row in c.execute('''
+WITH observations AS (
+ SELECT p.article_id,r.run_at AS collected_at FROM provenance p JOIN runs r ON r.id=p.run
+ WHERE r.source_job=? AND julianday(r.run_at)>=julianday(?) AND julianday(r.run_at)<julianday(?)
+ UNION ALL
+ SELECT id,run_at FROM articles WHERE source_job=?
+ AND julianday(run_at)>=julianday(?) AND julianday(run_at)<julianday(?)
+),latest AS (
+ SELECT article_id,MAX(julianday(collected_at)) AS observed_at FROM observations GROUP BY article_id
+)
+SELECT a.*,strftime('%Y-%m-%dT%H:%M:%fZ',latest.observed_at) AS collected_at
+FROM latest JOIN articles a ON a.id=latest.article_id WHERE a.source_job=?
+ORDER BY latest.observed_at DESC,a.id''',(source,*bounds,source,*bounds,source))]
+        meta=self.sources(include_deleted=True).get(source,{})
+        if meta.get('order')=='rank-prefix':
+            def rank_key(row):
+                match=re.match(r'^#(\d+)\s',row['title'])
+                return (int(match[1]) if match else 10**9,row['id'])
+            items.sort(key=rank_key)
+        elif not meta.get('builtin',True):
+            items.sort(key=lambda row:(-dt.datetime.fromisoformat(row['collected_at']).timestamp(),row.get('source_order') or 0,row['id']))
+        return {'items':items,'day':day,'total':len(items)}
     def detail(self,aid):
         with self.connect() as c:
             a=c.execute('select * from articles where id=?',(aid,)).fetchone()

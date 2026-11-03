@@ -226,18 +226,22 @@ def test_native_trends_only_reads_existing_results(commands, monkeypatch):
         definitions=lambda: {'native-source': {'enabled': True, 'label': '原来源'}},
         status=lambda: {'sources': [{'id': 'native-source', 'last_task': {'status': 'failed', 'error': '上次失败'}}]},
         enqueue=lambda *_: pytest.fail('Opening native trends must never collect'))
-    monkeypatch.setattr(commands.store, 'article_day', lambda **_: {'items': [
+    observed=[]
+    monkeypatch.setattr(commands.store, 'collected_day', lambda **query: observed.append(query) or {'items': [
         {'id': 'news-one', 'title': '准确原标题', 'url': 'https://example.test/source',
-         'run_at': '2026-10-30T08:00:00+08:00'}]})
+         'run_at': '2026-10-30T08:00:00+08:00', 'collected_at': '2026-11-03T08:00:00+08:00'}]})
     response, data = call(commands, '/api/trends')
     assert response.status_code == 200
     group = data['trends'][0]
-    assert not group['stale'] and group['status'] == 'stale'
+    assert observed == [{'source': 'native-source', 'day': data['day']}]
+    assert data['timezone'] == 'Asia/Shanghai'
+    assert not group['stale'] and group['status'] == 'fresh'
     assert group['error'] is None
     assert group['items'][0]['title'] == '准确原标题'
     api._collection_service.status = lambda: {'sources': [{'id': 'native-source', 'last_task': {'status': 'queued'}}]}
     _, pending = call(commands, '/api/trends')
-    assert pending['trends'][0]['error']['code'] == 'busy'
+    assert pending['trends'][0]['error'] is None
+    assert pending['trends'][0]['collection_status'] == 'queued'
 
 
 @pytest.mark.parametrize('status', ['partial', 'blocked', 'failed', 'cancelled'])
@@ -251,22 +255,22 @@ def test_native_trends_report_incomplete_collection_truthfully(commands, monkeyp
             'status': status, 'warnings': ['Missing source: HTTP 500'],
             'finished_at': '2026-11-01T00:04:00+08:00'}}]},
         enqueue=lambda *_: pytest.fail('Observing a partial result must not collect'))
-    rows = [{'id': 'exact-article', 'title': 'Saved result', 'run_at': '2026-11-01T00:03:00+08:00'}] if has_results else []
-    monkeypatch.setattr(commands.store, 'article_day', lambda **_: {'items': rows})
+    rows = [{'id': 'exact-article', 'title': 'Saved result', 'run_at': '2026-11-01T00:03:00+08:00',
+             'collected_at': '2026-11-03T08:00:00+08:00'}] if has_results else []
+    monkeypatch.setattr(commands.store, 'collected_day', lambda **_: {'items': rows})
     response, value = call(commands, '/api/trends')
     assert response.status_code == 200
+    assert value['warnings'] == []
+    if not has_results:
+        assert value['trends'] == []
+        return
     group = value['trends'][0]
     assert group['items'] == [{**{k: row[k] for k in ('id', 'title')}, 'hot': '', 'url': '', 'published_at': None,
                                'heat': {'value': None, 'text': '', 'unit': ''}} for row in rows]
-    assert not group['ok'] and not group['stale']
-    assert group['status'] == ('stale' if has_results else 'error')
-    if has_results:
-        assert group['error'] is None  # Task failures do not become permanent reading-page banners.
-    else:
-        assert group['error']['code'] == 'collection_' + status
+    assert group['ok'] and not group['stale'] and group['status'] == 'fresh'
+    assert group['error'] is None
     assert group['collection_status'] == status and group['finished_at'] == '2026-11-01T00:04:00+08:00'
-    assert group['warnings'] == ['Missing source: HTTP 500']
-    assert value['warnings'] == []  # Detail remains on the task/group, never a global notice.
+    assert group['warnings'] == []
     api._collection_service.status = lambda: {'sources': [{'id': 'source', 'last_task': {'status': 'completed'}}]}
     _, recovered = call(commands, '/api/trends')
     assert recovered['warnings'] == [] and recovered['trends'][0]['warnings'] == []

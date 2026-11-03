@@ -91,7 +91,7 @@ test('one native source mutation invalidates exactly its own data domains once',
 test('cached trend snapshots and subscriptions keep the original URL and protocol validators',async()=>{
  const f=fixture();try{
   const path='/api/trends?limit=12&platforms=temp';
-  f.state.response=()=>json({version:1,trends:[{platform:'temp',label:'TEMP',ok:true,items:[{id:'item',title:'TEMP title',url:'javascript:alert(1)'}]}],updated:1,warnings:[]});
+  f.state.response=()=>json({version:1,day:'1970-01-01',timezone:'Asia/Shanghai',trends:[{platform:'temp',label:'TEMP',ok:true,items:[{id:'item',title:'TEMP title',url:'javascript:alert(1)'}]}],updated:1,warnings:[]});
   assert.equal((await f.api.fetchTrends('temp')).trends[0].items[0].url,'');
   assert.equal(f.api.peekApiData(path).trends[0].items[0].url,'');
   let update,error;const stop=f.api.subscribeApiData(path,value=>{update=value},value=>{error=value});

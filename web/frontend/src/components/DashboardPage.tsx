@@ -44,13 +44,14 @@ interface DashboardProps {
   listMaxHeight?: number;
   onContentReady?:()=>void;
   viewState?:ViewStateStore<DashboardViewState>;
+  trendsEmptyState?:ReactNode;
 }
 export interface DashboardViewState {platform:string;window:'last'|'day'|'week'|'month'|'year'}
 type DashboardRead = 'trends'|'schedule'|'ideas'|'accounts'|'analytics';
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
-export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState }: DashboardProps) {
+export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState,trendsEmptyState=<div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div> }: DashboardProps) {
   const [trends, setTrends] = useState<TrendGroup[]>(()=>peekApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6')?.trends??[]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>(()=>peekApiData<ScheduleItem[]>('/api/schedule')??[]);
   const [outputs, setOutputs] = useState<OutputNode[]>(()=>peekApiData<OutputNode[]>('/api/outputs')??[]);
@@ -240,7 +241,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           </div>
           {board('news','今日热点列表',<>
           {readNotice('trends','热点')}
-          {readReady.trends && !readErrors.trends && trends.length === 0 && <div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>}
+          {readReady.trends && !readErrors.trends && trends.length === 0 && trendsEmptyState}
           {trends.map((g) => (
             <div key={g.platform} className="dash-trend-group">
               <div className="dash-trend-plat">{g.label}{g.fetched_at&&` · ${new Date(g.fetched_at).toLocaleDateString('zh-CN')}采集`}{g.stale ? ' · 过期缓存' : ''}</div>

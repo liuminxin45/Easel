@@ -44,7 +44,7 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
      return value;
     };
     const snapshot=force?undefined:client.peek<T>(path);
-    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});return snapshot}),options.signal)}
+    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});return client.peek<T>(path)??snapshot}),options.signal)}
     return reader(read(),options.signal);
    }
    if(!['POST','PUT','PATCH','DELETE'].includes(method))throw Error('请求方法不受支持');

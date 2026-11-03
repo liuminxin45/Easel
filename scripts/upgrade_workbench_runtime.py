@@ -18,6 +18,18 @@ from activate_workbench import STATE,OLD,PYTHON,read,atomic,sha,verify,idle,queu
 from workbench_release import validate_source_binding,validate_published_skills
 
 
+def validate_session_creation_compat(root,package):
+    """A sealed legacy command must stay fenced after any future cutover."""
+    import sqlite3
+    database=Path(root)/'data/desk.sqlite'
+    if not database.is_file():return
+    with contextlib.closing(sqlite3.connect(database.resolve().as_uri()+'?mode=ro',uri=True,timeout=1)) as c:
+        if not c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_creation_intents'").fetchone():return
+        sealed=c.execute("SELECT 1 FROM easel_chat_creation_intents WHERE state='sealed_not_accepted' LIMIT 1").fetchone()
+    if sealed and package.get('session_creation_protocol')!=2:
+        raise ValueError('Selected runtime cannot preserve sealed session creation commands')
+
+
 def validate_candidate(root, state, acceptance_path, candidate_path=None):
     """Verify the reviewed pair before changing admission or any selector."""
     import re
@@ -27,6 +39,7 @@ def validate_candidate(root, state, acceptance_path, candidate_path=None):
     package=verify(root/'workbench-releases'/choice['release'],choice['manifest_sha256'])
     validate_source_binding(package,root)
     validate_source_binding(package,root/'workbench-releases'/choice['release'])
+    validate_session_creation_compat(root,package)
     native=choice['native']
     if package['native']!=native or not re.fullmatch(r'native-[A-Za-z0-9_-]+',str(native.get('release',''))):
         raise ValueError('Frontend does not match the runtime manifest')

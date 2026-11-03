@@ -57,6 +57,8 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     chat_business.chat=chat;app.state.chat=chat;app.state.chat_business=chat_business
     from easel_workbench.application.chat_admission import ChatAdmission
     admissions=ChatAdmission(chat=chat,business=chat_business);app.state.chat_admissions=admissions
+    app.add_event_handler('startup',chat.session_creations.start)
+    app.add_event_handler('shutdown',chat.session_creations.close)
     app.add_event_handler('startup',admissions.start)
     app.add_event_handler('shutdown',admissions.close)
     from easel_workbench.native_corrections import NativeCorrections
@@ -284,6 +286,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 return reply(await asyncio.to_thread(collection.registry.update,value))
             settings_response=await settings_api(settings,path,request,value)
             if settings_response is not None:return settings_response
+            if path=='/api/diagnostics/client-operation':
+                if len(raw)>2048:return error(413,'操作诊断过大')
+                from easel_workbench.diagnostics.client_operations import observe
+                return reply(observe(value,trace=trace))
             chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response,admissions=admissions)
             if chat_response is not None:return chat_response
             if path=='/api/creative/preview':
@@ -662,7 +668,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         return error(404,'页面不存在')
     @app.api_route('/{path:path}',methods=['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'])
     async def route(path,request:Request):
-        start=time.monotonic();trace=secrets.token_hex(8)
+        start=time.monotonic();trace=getattr(request.state,'workbench_trace',None) or secrets.token_hex(8)
         from easel_workbench.diagnostics.performance import span
         try:
             with span(trace_id=trace,route=request.url.path,role='server',allow_db_copy=request.url.path not in {'/api/easel/plans','/api/chat/plan','/api/creative/preview'}) as measurement:

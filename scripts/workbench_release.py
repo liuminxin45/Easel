@@ -143,7 +143,7 @@ main()
     files={p.relative_to(target).as_posix():sha(p) for p in target.rglob('*') if p.is_file()}
     import importlib.metadata
     dependencies=sorted(d.metadata['Name']+'=='+d.version for d in importlib.metadata.distributions())
-    value={'schema':1,'release':name,'architecture':'easel-workbench-extension',
+    value={'schema':1,'release':name,'architecture':'easel-workbench-extension','session_creation_protocol':2,
         'easel_base':'0f43dc98277eac85fb48952878acad349731d3fc','files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,

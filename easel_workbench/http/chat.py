@@ -17,8 +17,12 @@ from easel_workbench.features.conversations.receipts import ChatConflict, identi
 from easel_workbench.contracts.production import PlanConflict
 
 
-def response(value, status=200):
-    return JSONResponse(value, status_code=status, headers={'Cache-Control':'no-store'})
+def response(value, status=200, *, trace=None):
+    headers={'Cache-Control':'no-store'}
+    if isinstance(value,dict) and value.get('protocol_version')==2:
+        headers['X-Workbench-Operation-Protocol']='2'
+        if trace:value={**value,'trace_id':trace}
+    return JSONResponse(value, status_code=status, headers=headers)
 
 
 def stream(service, turn_id, after=0, accepted=False,authenticated=None):
@@ -85,9 +89,21 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
                 return response(await run_sync(service.list_sessions,summaries=True))
             action=value.get('action','create')
             if action=='create':
-                def create():
-                    profile=business.creator.detail('profile',value.get('profile_id') or 'oil-pig')
+                def validate_profile(profile_id):
+                    profile=business.creator.detail('profile',profile_id)
                     if not profile.get('active',True):raise ValueError('创作画像已停用')
+                    return profile
+                if request.headers.get('x-workbench-operation-protocol')=='2':
+                    operation=identity(value.get('operation_id') or value.get('id'))
+                    if request.headers.getlist('x-operation-id')!=[operation]:raise ValueError('新建对话操作身份与请求不一致')
+                    receipt=await service.session_creations.receive(value,validate_profile)
+                    state=receipt['operation_state']
+                    return response(receipt,202 if state in ('accepted','running') else 409 if state in ('rejected','sealed_not_accepted') else 200,
+                                    trace=getattr(request.state,'workbench_trace',None))
+                def create():
+                    operation=identity(value.get('operation_id') or value.get('id'))
+                    existing=service.session_creations.inspect(operation)
+                    if existing['operation_state']!='completed':validate_profile(value.get('profile_id') or 'oil-pig')
                     return service.create_session(value)
                 return response(await run_sync(create))
             sid=identity(value.get('session_id') or value.get('sessionId'))
@@ -95,6 +111,11 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             if action=='auto-title':return response(await run_sync(service._command,action,value,sid))
             if action=='archive':return response(await run_sync(service.archive_session,sid,value))
             raise ValueError('不支持的对话操作')
+        match=re.fullmatch(r'/api/chat/sessions/operations/([A-Za-z0-9_.-]+)/resolve',path)
+        if match and method=='POST':
+            control=identity(value.get('id'))
+            if request.headers.getlist('x-operation-id')!=[control]:raise ValueError('核对操作缺少匹配身份')
+            return response(await run_sync(service.session_creations.resolve,match[1],value),trace=getattr(request.state,'workbench_trace',None))
         match=re.fullmatch(r'/api/chat/sessions/([A-Za-z0-9_.-]+)',path)
         if match and get:
             if admissions is None:return response(await run_sync(business.history,match[1]))

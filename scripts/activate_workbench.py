@@ -81,6 +81,9 @@ def idle(database=None):
                         active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
                     if active:
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
+        if base.exists_table(c,'easel_chat_creation_intents'):
+            for ident,state in c.execute("SELECT id,state FROM easel_chat_creation_intents WHERE state NOT IN ('completed','rejected','sealed_not_accepted') OR state IS NULL"):
+                status['busy']=True;status.setdefault('additional',[]).append({'table':'easel_chat_creation_intents','id':ident,'state':state})
         if base.exists_table(c,'easel_ui_operations'):
             # A native operation reserves its durable receipt before running
             # the real action in a thread. An unavailable/unknown receipt is

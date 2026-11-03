@@ -197,6 +197,24 @@ def _collection(root, now, grace_seconds):
         return counts
 
 
+def session_creation_health(root, now):
+    """Aggregate only; no original request, profile, session or result content."""
+    database=Path(root)/'data/desk.sqlite'
+    if not database.is_file():return {'status':'not_configured','ok':True}
+    with sqlite3.connect(database.resolve().as_uri()+'?mode=ro',uri=True,timeout=.5) as c:
+        if not c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_creation_intents'").fetchone():return {'status':'not_configured','ok':True}
+        counts=dict(c.execute('SELECT state,count(*) FROM easel_chat_creation_intents GROUP BY state'))
+        oldest=c.execute("SELECT MIN(created_at) FROM easel_chat_creation_intents WHERE state IN ('accepted','running')").fetchone()[0]
+        projections=c.execute('SELECT count(*) FROM easel_chat_creation_intents WHERE projection_error IS NOT NULL').fetchone()[0]
+    stamp=_at(oldest);age=max(0,now-stamp) if stamp is not None else 0
+    active=counts.get('accepted',0)+counts.get('running',0);stuck=bool(active and (stamp is None or age>300))
+    invalid=sum(count for state,count in counts.items() if state not in ('accepted','running','completed','rejected','sealed_not_accepted'))
+    return {'status':'degraded' if stuck or projections or invalid else 'healthy','ok':not (stuck or projections or invalid),
+            'active_count':active,'oldest_active_seconds':round(age,2),'rejected_count':counts.get('rejected',0),
+            'completed_count':counts.get('completed',0),'sealed_count':counts.get('sealed_not_accepted',0),
+            'projection_error_count':projections,'invalid_state_count':invalid,'reason':'invalid_session_creation_state' if invalid else 'session_creation_stalled' if stuck else 'metadata_projection_pending' if projections else 'observed'}
+
+
 def snapshot(root, *, now=None, max_age=180, collection_grace=900):
     """Return independent business status; transport ``ok`` remains separate.
 
@@ -261,6 +279,8 @@ def snapshot(root, *, now=None, max_age=180, collection_grace=900):
         except (OSError, ValueError, TypeError, sqlite3.Error):
             results[role] = {'status': 'unknown', 'ok': None, 'reason': 'progress_unavailable'}
     if 'server' in roles:
+        try:results['session_creation']=session_creation_health(root,now)
+        except (OSError,ValueError,sqlite3.Error):results['session_creation']={'status':'unknown','ok':None,'reason':'session_creation_status_unavailable'}
         try:
             document = _json(root / _FILES['overviews'])
             results['overviews'] = _signal({**document, 'state': 'ready' if not document.get('error_type') else 'error'}, now, max_age, pids.get('release'))

@@ -86,6 +86,11 @@ def read(store, operation_id, path, *, collection=None):
     with store.connect() as c:
         if not c.execute('SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=?', (table,)).fetchone():
             return {'id': operation_id, 'state': 'waiting'}
+        if path=='/api/chat/sessions' and c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_creation_intents'").fetchone():
+            from easel_workbench.features.conversations.session_creation import read_receipt
+            value=read_receipt(c,operation_id)
+            state=value['operation_state']
+            return {'id':operation_id,'state':'received' if state=='completed' else 'rejected' if state in ('rejected','sealed_not_accepted') else 'waiting',**value}
         # Identifiers come exclusively from the fixed allowlist above.
         row = c.execute(f'SELECT result FROM {table} WHERE {key}=?', (operation_id,)).fetchone()
     if row is None or row['result'] is None:

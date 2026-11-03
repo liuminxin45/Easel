@@ -61,6 +61,8 @@ class ChatService:
                 'CREATE TABLE IF NOT EXISTS easel_chat_operations(id TEXT PRIMARY KEY,signature TEXT NOT NULL,result TEXT NOT NULL)',
             ):
                 c.execute(statement)
+        from .session_creation import SessionCreation
+        self.session_creations = SessionCreation(self)
 
     def _session(self, c, session_id):
         row = c.execute('SELECT document FROM easel_chat_sessions WHERE id=?', (identity(session_id),)).fetchone()
@@ -103,7 +105,16 @@ class ChatService:
             raise ValueError('对话操作格式无效')
         operation = identity(value.get('operation_id') or value.get('id'))
         signature = sha({'action': action, 'session_id': session_id, 'value': value})
-        execution_settings = self.settings.capture() if action == 'create' else None
+        creation = None
+        if action == 'create':
+            from .session_creation import guard
+            with self.store.connect() as c:
+                previous = c.execute('SELECT signature,result FROM easel_chat_operations WHERE id=?', (operation,)).fetchone()
+                if previous:
+                    if previous['signature'] != signature:raise ChatConflict('同一操作不能修改对话内容')
+                    return json.loads(previous['result'])
+                creation = guard(c, operation, signature)
+        execution_settings = (json.loads(creation['settings']) if creation else self.settings.capture()) if action == 'create' else None
         with self.store.connect() as c:
             c.execute('BEGIN IMMEDIATE')
             previous = c.execute('SELECT signature,result FROM easel_chat_operations WHERE id=?', (operation,)).fetchone()
@@ -112,8 +123,11 @@ class ChatService:
                     raise ChatConflict('同一操作不能修改对话内容')
                 return json.loads(previous['result'])
             if action == 'create':
+                creation = guard(c, operation, signature)
+                if creation:
+                    execution_settings = json.loads(creation['settings'])
                 owned_output_path(self.root,'outputs/_sessions')
-                session_id = identity(value.get('session_id') or value.get('sessionId') or 'workbench-' + uuid.uuid4().hex)
+                session_id = identity(creation['session_id'] if creation else value.get('session_id') or value.get('sessionId') or 'workbench-' + uuid.uuid4().hex)
                 if c.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?', (session_id,)).fetchone():
                     raise ChatConflict('此对话已经存在')
                 if harness_store.binding(self.sessions_dir, session_id):
@@ -161,7 +175,21 @@ class ChatService:
             self._put_session(c, session)
             result = {'session': copy.deepcopy(session)}
             c.execute('INSERT INTO easel_chat_operations VALUES(?,?,?)', (operation, signature, packed(result)))
-        self._save_metadata(session_id)
+            if action == 'create':
+                from .session_creation import complete
+                complete(c, operation, result)
+        try:
+            if action == 'create':
+                from .session_creation import emit_lifecycle
+                emit_lifecycle(operation,'completed',session_id=session_id)
+            self._save_metadata(session_id)
+        except Exception as error:
+            if action != 'create':raise
+            # The transaction already committed. A file projection failure is
+            # not an unknown business operation and cannot create a duplicate.
+            try:
+                self.session_creations.projection_failed(operation,signature,value,result,execution_settings,type(error).__name__)
+            except Exception:pass
         return result
 
     def create_session(self, value):

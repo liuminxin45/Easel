@@ -25,6 +25,8 @@ def main():
     sys.path.insert(0,str(backend))
     fixture_path=ROOT/'tests/workbench_native_browser.py'
     spec=importlib.util.spec_from_file_location('user_pr_fixture',fixture_path);helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper);helper.ROOT=backend
+    touch_path=ROOT/'tests/workbench_touch_scroll_browser.py'
+    touch_spec=importlib.util.spec_from_file_location('user_pr_touch',touch_path);touch=importlib.util.module_from_spec(touch_spec);touch_spec.loader.exec_module(touch)
     from playwright.sync_api import sync_playwright,expect
     import easel_workbench.application as application
     original_create_app=application.create_app
@@ -35,7 +37,8 @@ def main():
     report={'passed':False,'checks':[],'screenshots':{},'requests':{},'page_errors':[],
         'backend':{'release':backend.name,'manifest_sha256':sha(backend/'workbench-release.json')},
         'native':{'release':native.name,'manifest_sha256':sha(native/'native-manifest.json')},
-        'harness_sha256':sha(__file__),'fixture_sha256':sha(fixture_path),'real_model_calls':0,'production_writes':0,'physical_device_tested':False}
+        'harness_sha256':sha(__file__),'fixture_sha256':sha(fixture_path),'touch_helper_sha256':sha(touch_path),'real_model_calls':0,'production_writes':0,'physical_device_tested':False}
+    shutil.copy2(__file__,out/'harness.py')
     def check(case,name,**evidence):
         report['checks'].append({'case':case,'name':name,'passed':True,**evidence});print('PASS '+case+' '+name,flush=True)
     def screenshot(page,case,name):
@@ -72,12 +75,20 @@ def main():
             def go(path):page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
             def news():
                 go('/news?sources='+','.join(selected));expect(page.locator('.trend-item').first).to_be_visible();page.wait_for_function('()=>document.querySelector(".trends-page")?.getAttribute("aria-busy")==="false"')
+            def gesture(selector,label):
+                outer=page.locator(selector);outer.evaluate('el=>el.scrollTop=100');page.wait_for_timeout(150)
+                before=outer.evaluate('el=>el.scrollTop');url=page.url;writes=sum(r['method']=='POST' for r in requests)
+                cdp=context.new_cdp_session(page);touch.reset_audit(page);touch.touch_swipe(page,cdp,width*.6,height*.7,-180);cdp.detach()
+                after=outer.evaluate('el=>el.scrollTop');audit=page.evaluate('()=>window.nativeTouchAudit')
+                assert after-before>=60 and audit['starts']==1 and audit['moves']>0 and audit['untrusted']==audit['prevented']==audit['clicks']==0
+                assert page.url==url and sum(r['method']=='POST' for r in requests)==writes
+                check(case,label+' first trusted touch swipe moves the only page scroller without actions',before=before,after=after,audit=audit)
             try:
                 news()
                 panels=page.locator('.trend-col');assert panels.count()>=1
                 structure=panels.evaluate_all('els=>els.map(el=>({bodies:el.querySelectorAll(".content-panel-body").length,same:el.querySelector(".content-panel-body")===el.querySelector(".trend-list"),tab:el.querySelector(".content-panel-body").tabIndex}))')
                 assert all(p['bodies']==1 and p['same'] and p['tab']==0 for p in structure)
-                row=page.locator('.trend-item').first;title=row.locator('.trend-title');source_id=row.get_attribute('data-native-anchor').removeprefix('news:');title_text=title.inner_text()
+                row=page.locator('.trend-item').first;title=row.locator('.trend-title');source_id=row.get_attribute('data-native-anchor').removeprefix('news:');title_text=title.get_attribute('title')
                 geometry=row.evaluate('el=>{const main=el.querySelector(".trend-main"),a=el.querySelector(".trend-title"),box=el.getBoundingClientRect(),r=a.getBoundingClientRect();return {row:box.width,main:main.getBoundingClientRect().width,title:r.width,right:r.right,edge:box.right}}')
                 assert geometry['main']>geometry['row']*.65 and geometry['right']<=geometry['edge']+1
                 check(case,'one keyboard-scrollable ContentPanel body and full-width titles',structure=structure,title_geometry=geometry)
@@ -96,11 +107,13 @@ def main():
                 else:
                     assert row.locator('.trend-item-actions').evaluate('el=>getComputedStyle(el).display')=='none'
                     check(case,'touch layouts hide hover actions without removing title navigation')
-                news();screenshot(page,case,'news')
+                news()
+                if compact:gesture('.trends-page','news')
+                screenshot(page,case,'news')
                 scroller='.trends-page' if compact else '.trend-list'
-                target=page.locator('.trend-item').nth(8);target.scroll_into_view_if_needed();page.wait_for_timeout(200)
+                target=page.locator('.trend-item').nth(20);target.scroll_into_view_if_needed();page.wait_for_timeout(200)
                 before=page.locator(scroller).first.evaluate('el=>el.scrollTop');assert before>20
-                target_id=target.get_attribute('data-native-anchor').removeprefix('news:');target_title=target.locator('.trend-title').inner_text()
+                target_id=target.get_attribute('data-native-anchor').removeprefix('news:');target_title=target.locator('.trend-title').get_attribute('title')
                 target.locator('.trend-title').focus();target.locator('.trend-title').press('Enter')
                 expect(page.locator('.ew-news-reading')).to_be_visible();expect(page.locator('.ew-news-reading')).to_contain_text(target_title)
                 assert '/news/a/'+target_id in parse_qs(urlsplit(page.url).query)['path'][0]
@@ -108,7 +121,7 @@ def main():
                 page.go_back();expect(page.locator('.trend-item').first).to_be_attached();page.wait_for_function('()=>document.querySelector(".trends-page")?.getAttribute("aria-busy")==="false"');page.wait_for_timeout(500)
                 after=page.locator(scroller).first.evaluate('el=>el.scrollTop');assert abs(after-before)<=6,{'before':before,'after':after}
                 check(case,'keyboard title opens original reading and browser return restores list position',before=before,after=after)
-                page.locator('.trend-item').nth(8).locator('.trend-title').click();expect(page.locator('.ew-news-reading')).to_be_visible()
+                page.locator('.trend-item').nth(20).locator('.trend-title').click();expect(page.locator('.ew-news-reading')).to_be_visible()
                 count=len(f['adapter'].requests);page.get_by_role('button',name='做内容',exact=True).click();composer=page.get_by_role('textbox',name='对话输入');expect(composer).to_be_visible()
                 page.wait_for_function('()=>new URLSearchParams(location.search).get("path")?.startsWith("/chat/")')
                 sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1].split('?')[0]
@@ -118,7 +131,7 @@ def main():
                 assert submits[0]['body']['context']['article_id']==target_id and target_title in submits[0]['body']['message']
                 assert not any(r['method']=='POST' and r['path'] in ('/api/chat','/api/skill','/api/chat/plan') for r in requests)
                 check(case,'one reading make-content click retains existing native execution exactly once with raw title and source identity')
-                news();page.get_by_role('button',name='数据源',exact=True).click();dialog=page.get_by_role('dialog',name='数据源',exact=True);expect(dialog).to_be_visible();expect(dialog.get_by_text('添加来源',exact=True)).to_be_visible()
+                news();page.get_by_role('button',name='数据源',exact=True).click();dialog=page.get_by_role('dialog',name='数据源',exact=True);expect(dialog).to_be_visible();expect(dialog.get_by_role('heading',name='添加来源',exact=True)).to_be_visible()
                 box=dialog.bounding_box();assert box and box['width']<=width+1 and box['height']<=height+1
                 assert dialog.evaluate('el=>el.scrollWidth<=el.clientWidth+2')
                 screenshot(page,case,'sources');dialog.get_by_role('button',name='关闭',exact=True).click()
@@ -126,6 +139,7 @@ def main():
                 metrics=page.locator('.dash-card:not(.dash-card-wide) .content-panel-body').evaluate_all('els=>els.map(el=>({max:el.scrollHeight-el.clientHeight,overflow:getComputedStyle(el).overflowY,bodies:el.parentElement.querySelectorAll(".content-panel-body").length}))')
                 assert all(m['bodies']==1 for m in metrics)
                 if compact:assert all(m['max']<=2 or m['overflow']=='visible' for m in metrics)
+                if compact:gesture('.dash-page','dashboard')
                 assert max(overflow(page).values())<=width+2
                 screenshot(page,case,'dashboard');check(case,'long source dialog stays in viewport and dashboard has no duplicate or compact nested scrollers',panels=metrics)
                 assert not report['page_errors'],report['page_errors']

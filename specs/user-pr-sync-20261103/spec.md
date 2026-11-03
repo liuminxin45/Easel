@@ -14,4 +14,6 @@
 
 ## 当前状态
 
-核查完成，开始顺序引入197/198。证据目录.local/workbench-validation/user-pr-sync-20261103/。
+已完成197/198顺序cherry-pick、自有fork推送及配对上线。全前端611项、架构策略81项、冻结浏览器36项、线上只读10项通过；20截图复核，远端独立新检出双入口可构建。仅最小宿主接缝保留缓存、来源身份、单一滚动和compact触摸行为，不恢复已撤回176。
+
+部署业务源码3d5340a，后端workbench-20261103-122154配对前端native-user-pr-sync-20261103-r1。切换无迁移，7角色就绪，22表/画像/历史/日检原记录不变。完整SHA、原文证据及测试限制见docs/workbench/USER-PR-SYNC-20261103.md；本轮证据目录.local/workbench-validation/user-pr-sync-20261103/。

@@ -115,7 +115,22 @@ def session_path(page):
 
 
 def wait_session(page):
-    page.wait_for_function(r"()=>/^\/chat\/[^/?]+/.test(new URLSearchParams(location.search).get('path')||'')",timeout=25000)
+    try:
+        page.wait_for_function(r"()=>/^\/chat\/[^/?]+/.test(new URLSearchParams(location.search).get('path')||'')",timeout=25000)
+    except BaseException:
+        # Preserve the failing observable state before fixture cleanup. These
+        # are TEMP operation identifiers only; never dump browser credentials,
+        # complete localStorage, drafts, message text or attachment contents.
+        try:
+            out=getattr(page,'_journey_evidence_dir',None)
+            if out:
+                name='navigation-failure-'+uuid.uuid4().hex[:8]
+                flows=page.evaluate("()=>Object.keys(localStorage).filter(k=>k.startsWith('toolbox:draft:session-open:')).map(k=>{const v=JSON.parse(localStorage.getItem(k));return {flow_id:v.flow_id,operation_id:v.operation_id,phase:v.phase,session_id:v.session_id}})")
+                Path(out,name+'.json').write_text(json.dumps({'url':page.url,'flows':flows},ensure_ascii=False,indent=2),encoding='utf-8')
+                page.screenshot(path=str(Path(out,name+'.png')))
+        except Exception:
+            pass
+        raise
     path=session_path(page);sid=path.split('/chat/',1)[1].split('?',1)[0]
     from playwright.sync_api import expect
     expect(page.locator('.chat-page')).to_be_visible()
@@ -145,7 +160,7 @@ def run(backend,native,out,*,mode='full'):
             context.add_init_script("if(!localStorage.getItem('TEMP-journey-seeded')){"+
                 ''.join('localStorage.setItem('+json.dumps(k)+','+json.dumps(json.dumps(v,ensure_ascii=False))+');' for k,v in seed.items())+
                 "localStorage.setItem('TEMP-journey-seeded','1');}")
-        page=context.new_page();page.set_default_timeout(20000);page.on('pageerror',lambda error:report['page_errors'].append(str(error)))
+        page=context.new_page();page._journey_evidence_dir=out;page.set_default_timeout(20000);page.on('pageerror',lambda error:report['page_errors'].append(str(error)))
         allowed={'/api/chat/sessions','/api/usage/events','/api/usage','/api/diagnostics/client-operation','/api/diagnostics/operations'}
         def guard(route):
             request=route.request;target=urlsplit(request.url)

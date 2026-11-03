@@ -116,8 +116,23 @@ test('background completion of an older independent flow does not replace the ac
 
 test('a reloaded accepted flow recovers the original identity, draft and destination',async()=>{
  const f=fixture();let id;try{f.state.mode='accepted';await f.owner.open({profileId:'profile-a',draft:{text:'reload-safe',files:[]},query:'work=exact-work&version=exact-version'});id=f.owner.state.getState().flow.flow_id;}finally{f.close()}
- const restored=fixture(f.saved);try{restored.state.receipt='completed';restored.owner.restore(id);await restored.owner.check(id);
+ const restored=fixture(f.saved);try{restored.state.receipt='completed';restored.state.entry='reloaded-flow-entry';restored.client.navigation.path='/chat?fresh=1&flow='+id;restored.owner.restore(id);await restored.owner.check(id);
   assert.equal(restored.creates().length,0);assert.equal(restored.moves[0],'/chat/created-exact?work=exact-work&version=exact-version');assert.equal(restored.client.drafts.get('chat:created-exact').text,'reload-safe');
+ }finally{restored.close()}
+});
+
+test('restoring a different flow does not adopt the ticket of the page the user is currently visiting',async()=>{
+ const original=fixture();let id;try{original.state.mode='accepted';await original.owner.open({profileId:'profile-a',draft:{text:'original draft'}});id=original.owner.state.getState().flow.flow_id;}finally{original.close()}
+ const restored=fixture(original.saved);try{restored.state.entry='another-page-entry';restored.client.navigation.path='/toolbox?section=skills';restored.state.receipt='completed';restored.owner.restore(id);await restored.owner.check(id);
+  assert.equal(restored.creates().length,0);assert.equal(restored.moves.length,0);assert.equal(restored.owner.state.getState().flow.phase,'ready');
+  await restored.owner.retry(id);assert.equal(restored.moves[0],'/chat/created-exact');
+ }finally{restored.close()}
+});
+
+test('returning to the owning flow after its session was already created opens it using the new route ticket',async()=>{
+ const original=fixture();let id;try{original.state.mode='accepted';await original.owner.open({profileId:'profile-a'});id=original.owner.state.getState().flow.flow_id;original.state.entry='left-before-completion';original.state.receipt='completed';await original.owner.check(id);assert.equal(original.moves.length,0);}finally{original.close()}
+ const restored=fixture(original.saved);try{restored.state.entry='new-owning-route';restored.client.navigation.path='/chat?fresh=1&flow='+id;restored.owner.restore(id);
+  assert.equal(restored.moves[0],'/chat/created-exact');assert.equal(restored.creates().length,0);
  }finally{restored.close()}
 });
 

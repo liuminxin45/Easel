@@ -40,11 +40,16 @@ export class SessionOpenFlows {
   const stop=state.subscribe(update);this.releases.set(flow.flow_id,()=>{before();stop()});
  }
  restore(id?:string):SessionOpenFlow|null{
-  if(!id)return null;const flow=this.load(id);if(!flow)return null;
+  if(!id)return null;let flow=this.load(id);if(!flow)return null;
+  const navigation=this.client.navigation,route=navigation?new URL(navigation.path,'https://workbench.invalid'):undefined;
+  const ownsRoute=route?.pathname==='/chat'&&route.searchParams.get('flow')===id;
+  // A reload creates a new navigation instance. Adopt its ticket only when
+  // the currently visible route explicitly owns this exact persisted flow.
+  if(ownsRoute){flow={...flow,ticket:navigation?.ticket?.(),route_opened:true,phase:flow.session_id?'ready':flow.phase};if(!this.save(flow))return this.state.getState().flow;}
   this.state.setState({flow});this.attach(flow);
   const pointer=record(this.client.drafts.get('native:session-receipt:'+flow.operation_id));
   if(!flow.session_id&&string(pointer.session_id)){this.save({...flow,session_id:string(pointer.session_id),phase:'ready',recovered:true});void this.check(id);}
-  else if(flow.session_id)this.apply(id,true);else void this.check(id);
+  else if(flow.session_id){if(ownsRoute)this.apply(id);}else void this.check(id);
   return this.state.getState().flow;
  }
  async open(input:SessionOpenInput):Promise<JsonRecord|null>{

@@ -23,3 +23,5 @@
 巡检独立复核补齐：配对与准入/能力启动前后复核；成功必验实际报告hash；时钟回退/状态丢失保持逐日身份；过期配对标记stale_binding；挂起子进程先绑定Job再恢复，失败不执行、超时回收自有树。设置清理任务仅独有文件单独提交，ui/index及中控CLI共享接缝由总调度按两个Spec整合，不独立部署。证据目录 `.local/workbench-validation/session-recovery-20261103/`。
 
 R1 冻结浏览器验收发现真实遗漏：受理后关闭并重开 WebView，持久化流程已恢复到 ready 且服务器只创建一次，但旧 navigation ticket 使页面停在“对话已创建”。保留失败报告与截图；修复为仅在当前 `/chat?flow=<原 flow>` 明确拥有该流程时绑定新的页面 ticket，离开到其他页面仍不抢导航。补充重开/后台完成后返回/其他页面不接管三种回归，并在后续 R2 冻结版本重新验收。浏览器失败时仅记录 TEMP 操作标识、阶段及截图，不导出草稿与凭据。
+
+最终状态：已上线。源码 `eadbf7e174125d0facfecc03a2f5d7edacf94272`；后端 `workbench-20261103-015856` / `a24ea72ec147db0f5c2078bb4c9556ab8fdff5fcbdaca2dbef2cef1725f1a93c`；前端 `native-session-recovery-20261103-r2` / `03bcd1dcb9cca48c6d5b7c7b1526917e45d71ea5080750e88b7cbe0d7f8870c8`。最终前端529、冻结浏览器30、原设置12、Drawer补充2、线上只读4页通过；原库inode与19张历史表不变，7角色核对通过。独立中控 `0b8eb9e4b4e04591` 安装并完成当天独立零模型8项巡检。真实Agent当天旧失败不重跑，partial采集/作品列表慢读仍真实记录。完整交付及限制见 `docs/workbench/SESSION-RECOVERY-20261103.md`；没有实体vivo验收，不冒称所有业务全绿。

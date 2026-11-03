@@ -15,3 +15,7 @@
 证据：`.local/workbench-validation/settings-native-cleanup-20261103/`。Node24.19.0 的 `check:workbench` 通过（含最后失效技能入口清理后的复验），`build:workbench` 生成验证候选 `native-settings-cleanup-20261103-r1`；导航/屏幕映射24项通过；usage/监控/架构/技能回归112项与2个subtests通过；实际Windows Edge TEMP设置桌面及模拟手机12项通过、0真实模型/安装/平台动作。已查看桌面/手机截图确认原生更多设置；物理设备未测。后续仅改历史统计草稿的继续编辑入口、删除失效技能投影及整理未用import，最终统一包仍需总调度重构建。
 
 中控使用当前正式统计库做了一次只读聚合预览：available、7天、记录中，47项有记录操作/15项页面/15条路径；仅在本项目 `.local/.../report-preview/report.html` 生成预览，未安装或切换正式中控。只读SQLite/TEMP库逐字节不变和mtime不变由自动测试覆盖。原库及保留策略不变。总调度须同时上线应用health_bridge/usage与中控usage/cli补丁，单独前端上线不代表中控已生效。
+
+## 总调度交付回填
+
+本任务独有源码由总调度在 `618862d` 提交，共享入口和中控CLI随会话恢复任务整合；未独立部署。最终应用源码 `eadbf7e174125d0facfecc03a2f5d7edacf94272`，已配对上线 `workbench-20261103-015856` 与 `native-session-recovery-20261103-r2`。同一冻结包的桌面/手机设置12项验收通过，独立中控 `0b8eb9e4b4e04591` 已安装，正式只读使用聚合 available、原报告常走路径可见，原统计数据保留。准入/队列/7角色/原库与19张历史表核对通过；没有实体vivo验收。详见 `docs/workbench/SESSION-RECOVERY-20261103.md` 及 `.local/workbench-validation/session-recovery-20261103/controller-postflight.json`。

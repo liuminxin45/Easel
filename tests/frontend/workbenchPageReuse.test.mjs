@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {moduleLoader} from './helpers/modules.mjs';
 import {viewStateModule} from './helpers/viewState.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
@@ -21,7 +22,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false}}={}){
  const exports={};
  const client={drafts:{get:()=>({}),set:()=>true},...vm.client};
  const host={service:{collectAll:async()=>({accepted:true})},navigation:{entryKey:'fixture',contentReady(){}},navigate:()=>{},replace:()=>{},...vm,client};
- const core={record,string:(value,fallback='')=>typeof value==='string'?value:fallback,array:value=>Array.isArray(value)?value:[],number:value=>Number(value)||0,sessionOpenFlows:()=>({open:input=>host.openSession?.(input)}),
+ const core={record,string:(value,fallback='')=>typeof value==='string'?value:fallback,array:value=>Array.isArray(value)?value:[],number:value=>Number(value)||0,sessionOpenFlows:()=>({open:input=>host.openSession?.(input)}),libraryDataSource:()=>({list(){},resolve(){}}),
   useWorkbench:()=>host,useResource:path=>({data:data[path]??null,reload:async()=>data[path]??null}),
   useDraft:(_,initial)=>[initial,()=>{}],useAsyncAction:()=>({busy:false,run:async fn=>fn()}),
   useViewState:(_,initial)=>({read:()=>initial,write(){}}),
@@ -84,6 +85,7 @@ test('dashboard uses server data and leaves retired account auto-detection disab
  assert.equal(dashboard.props.persistAnalytics,false);
  assert.equal(dashboard.props.verifyAccountsOnMount,false);
  assert.equal(dashboard.props.listMaxHeight,360);
+ assert.equal(typeof dashboard.props.outputsSource.list,'function');
 });
 
 test('compact dashboard delegates flat scrolling to the native page and restores bounded desktop lists',()=>{
@@ -147,6 +149,7 @@ test('native gallery resolves declared virtual file paths independently of displ
  runInNewContext(compiled,{exports,require:specifier=>{
   if(specifier==='react')return react;
   if(specifier==='../lib/viewState')return viewStateModule(react);
+  if(specifier==='../lib/outputBrowser')return moduleLoader()('lib/outputBrowser.ts');
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
   if(specifier==='../lib/api')return {peekApiData:()=>roots,subscribeApiData:()=>()=>{},fetchOutputs:async()=>roots,fetchOutputContent:async path=>{reads.push(path);return {content:'原字内容',isBinary:false}},mediaUrl:path=>path,deleteOutput:async()=>{throw Error('Deletion must not run')}};
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};

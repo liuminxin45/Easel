@@ -4,9 +4,11 @@ import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
 import {viewStateModule} from './helpers/viewState.mjs';
+import {moduleLoader} from './helpers/modules.mjs';
 
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url));
 const ts=require('typescript');
+const outputBrowserModule=moduleLoader()('lib/outputBrowser.ts');
 const file=(path,name='成品.png')=>({type:'file',name,path,kind:'image'});
 const dir=(path,name,children,meta)=>({type:'dir',path,name,children,meta});
 const fixture=()=>[
@@ -17,8 +19,8 @@ const fixture=()=>[
  ],{title:'同名项目',work_id:'b',version_id:'b-v2'}),
 ];
 
-function gallery(initial,{jumpPath}={}){
- let data=initial,slots=[],index=0,dirty=true,tree,effects=[],props={jumpPath},handled=0;
+function gallery(initial,{jumpPath,dataSource}={}){
+ let data=initial,slots=[],index=0,dirty=true,tree,effects=[],props={jumpPath,dataSource},handled=0,treeReads=0,ready=0;const timers=[];
  const details=[];
  const element=(type,props,key)=>({type,props:props||{},key});
  const exports={};
@@ -33,17 +35,18 @@ function gallery(initial,{jumpPath}={}){
  };
  const source=readFileSync(new URL('../../web/frontend/src/components/OutputsPage.tsx',import.meta.url),'utf8');
  const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
- runInNewContext(compiled,{exports,document:{addEventListener(){},removeEventListener(){}},require:specifier=>{
+ runInNewContext(compiled,{exports,setTimeout:(callback,ms)=>{const timer={callback,ms,cleared:false};timers.push(timer);return timer},clearTimeout:timer=>{timer.cleared=true},document:{addEventListener(){},removeEventListener(){}},require:specifier=>{
   if(specifier==='react')return hooks;
   if(specifier==='react/jsx-runtime')return {jsx:element,jsxs:element,Fragment:'fragment'};
-  if(specifier==='../lib/api')return {peekApiData:()=>undefined,subscribeApiData:()=>()=>{},fetchOutputs:async()=>data,fetchOutputContent:async()=>({content:'original'}),mediaUrl:path=>'/media/'+path};
+  if(specifier==='../lib/api')return {peekApiData:()=>undefined,subscribeApiData:()=>()=>{},fetchOutputs:async()=>{treeReads++;return data},fetchOutputContent:async()=>({content:'original'}),mediaUrl:path=>'/media/'+path};
   if(specifier==='../lib/viewState')return viewStateModule(hooks);
+  if(specifier==='../lib/outputBrowser')return outputBrowserModule;
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
   if(specifier==='./DownloadLink')return {default:'DownloadLink'};
   if(specifier==='./icons')return new Proxy({},{get:(_,name)=>name});
   assert.fail('Unexpected import '+specifier);
  }});
- const render=()=>{index=0;dirty=false;details.length=0;tree=exports.default({...props,onJumpHandled:()=>{handled++;props={...props,jumpPath:undefined};dirty=true;},
+ const render=()=>{index=0;dirty=false;details.length=0;tree=exports.default({...props,onContentReady:()=>{ready++},onJumpHandled:()=>{handled++;props={...props,jumpPath:undefined};dirty=true;},
   renderProjectDetails:project=>{details.push(project);return element('project-actions',{project});},canDelete:()=>false});
   const pending=effects;effects=[];pending.forEach(run=>run());};
  const settle=async()=>{for(let i=0;i<15;i++){if(dirty)render();await Promise.resolve();}assert.equal(dirty,false,'gallery reaches a stable render');};
@@ -57,7 +60,10 @@ function gallery(initial,{jumpPath}={}){
   async jump(path){props={...props,jumpPath:path};dirty=true;await settle();},
   async refresh(next){data=next;const button=all(tree).find(node=>node.type==='button'&&text(node).includes('刷新'));assert.ok(button);button.props.onClick();await settle();},
   async crumb(label){const node=all(tree).find(node=>node.props.className==='crumb'&&text(node)===label);assert.ok(node);node.props.onClick();await settle();},
-  handled:()=>handled};
+  async more(){const node=all(tree).find(node=>node.type==='button'&&text(node)==='加载更多');assert.ok(node);node.props.onClick();await settle()},
+  async search(value){const input=all(tree).find(node=>node.type==='input'&&node.props['aria-label']==='搜索内容');assert.ok(input);input.props.onChange({target:{value}});await settle();for(const timer of timers)if(!timer.cleared&&timer.ms===250){timer.cleared=true;timer.callback();}await settle()},
+  thumbs:()=>all(tree).filter(node=>typeof node.type==='function'&&node.type.name==='Thumb').map(node=>node.type(node.props)),
+  body:()=>text(tree),handled:()=>handled,treeReads:()=>treeReads,ready:()=>ready};
 }
 
 test('same-name projects and child directories use declared paths for clicks and version actions',async()=>{
@@ -97,4 +103,35 @@ test('refresh removing a selected directory stops at its actual surviving parent
  await ui.refresh(next);assert.deepEqual(ui.paths(),['works/b/left']);
  assert.equal(ui.project().path,'works/b');assert.equal(ui.breadcrumbs(),'内容库/同名项目');
  await ui.click('works/b/left');assert.deepEqual(ui.paths(),['works/b/left/left.png']);
+});
+
+test('private metadata port makes the shell ready before the first page and never requests the legacy tree',async()=>{
+ let resolve;const calls=[],source={list:input=>{calls.push(input);return new Promise(yes=>{resolve=yes})},resolve:()=>assert.fail('Root page must not load a directory chain')};
+ const ui=gallery([],{dataSource:source});await ui.settle();assert.ok(ui.ready()>0);assert.equal(ui.treeReads(),0);assert.equal(calls.length,1);assert.equal(calls[0].parent,undefined);assert.ok(ui.body().includes('正在读取内容库'));assert.ok(!ui.body().includes('还没有产物'));
+ resolve({items:[dir('work-a','Project A',undefined,{title:'Project A'})],next_cursor:null,revision:'r1'});await ui.settle();assert.deepEqual(ui.paths(),['work-a']);
+});
+
+test('private pagination and child loading retain original cards while media summaries use only image thumbnails',async()=>{
+ const image={...file('work-b/image.png'),meta:{cover:'__thumb__/small.jpg'}},video={type:'file',name:'video.mp4',path:'work-b/video.mp4',kind:'video'},calls=[];
+ const source={list:async input=>{calls.push(input);if(input.parent)return {items:[image,video],next_cursor:null,revision:'r1',parent:dir('work-b','Project B',undefined,{title:'Project B',deliverablePaths:[image.path]})};return input.cursor?{items:[dir('work-b','Project B')],next_cursor:null,revision:'r1'}:{items:[dir('work-a','Project A')],next_cursor:'next',revision:'r1'}},resolve:()=>assert.fail('Visited directory summaries already identify the chain')};
+ const ui=gallery([],{dataSource:source});await ui.settle();assert.deepEqual(ui.paths(),['work-a']);await ui.more();assert.deepEqual(ui.paths(),['work-a','work-b']);await ui.click('work-b');
+ assert.equal(calls.filter(call=>call.parent).length,1);assert.deepEqual(ui.paths(),[image.path,video.path]);assert.equal(ui.project().meta.deliverablePaths[0],image.path);
+ const thumbs=ui.thumbs();assert.equal(thumbs.find(node=>node.type==='img').props.src,'/media/__thumb__/small.jpg');assert.ok(!thumbs.some(node=>node.type==='video'));
+ assert.equal(ui.treeReads(),0);
+});
+
+test('a delayed lazy deep-link resolution cannot override a directory the user opens in the meantime',async()=>{
+ let resolve;const a=dir('a','Project A',undefined,{title:'Project A'}),b=dir('b','Project B',undefined,{title:'Project B'});
+ const source={list:async input=>({items:input.parent?[file(input.parent+'/file.png')]:[a,b],next_cursor:null,revision:'r1',...(input.parent?{parent:input.parent==='b'?b:a}:{})}),resolve:()=>new Promise(yes=>{resolve=yes})};
+ const ui=gallery([],{dataSource:source,jumpPath:'a/old.png'});await ui.settle();await ui.click('b');resolve({nodes:[a,file('a/old.png')]});await ui.settle();
+ assert.equal(ui.project().path,'b');assert.deepEqual(ui.paths(),['b/file.png']);assert.equal(ui.handled(),0);assert.equal(ui.treeReads(),0);
+});
+
+test('private directory navigation clears a project-name search before listing child files',async()=>{
+ const project=dir('project','TEMP 预览项目',undefined,{title:'TEMP 预览项目'}),note={type:'file',path:'project/notes.txt',name:'notes.txt',kind:'text'},calls=[];
+ const source={list:async input=>{calls.push(input);const items=input.parent?[note]:[project];return {items:input.query?items.filter(node=>node.name.includes(input.query)):items,next_cursor:null,revision:'r1',...(input.parent?{parent:project}:{})}},resolve:async()=>({nodes:[project,note]})};
+ const ui=gallery([],{dataSource:source});await ui.settle();await ui.search('TEMP 预览项目');await ui.click('project');
+ assert.deepEqual(ui.paths(),[note.path]);assert.ok(calls.filter(call=>call.parent).every(call=>!call.query),'child listing must not inherit the parent search');
+ await ui.search('notes');await ui.crumb('内容库');assert.deepEqual(ui.paths(),[project.path]);assert.equal(calls.at(-1).query,undefined);
+ await ui.search('TEMP 预览项目');await ui.jump(note.path);assert.deepEqual(ui.paths(),[note.path]);assert.equal(calls.at(-1).query,undefined);assert.ok(ui.preview().includes(note.path));
 });

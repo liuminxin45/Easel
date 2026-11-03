@@ -12,6 +12,7 @@ import type {
 import type { Page } from './Sidebar';
 import { getWhoamiCache, verifyStale } from '../lib/whoami';
 import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
+import type {OutputsDataSource} from '../lib/outputBrowser';
 import {
   IconFire, IconCalendar, IconOutputs, IconChat, IconSkills, IconAccounts,
   IconIdea, IconPublish,
@@ -45,27 +46,39 @@ interface DashboardProps {
   onContentReady?:()=>void;
   viewState?:ViewStateStore<DashboardViewState>;
   trendsEmptyState?:ReactNode;
+  outputsSource?:OutputsDataSource;
 }
 export interface DashboardViewState {platform:string;window:'last'|'day'|'week'|'month'|'year'}
 type DashboardRead = 'trends'|'schedule'|'ideas'|'accounts'|'analytics';
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
-export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState,trendsEmptyState=<div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div> }: DashboardProps) {
+export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState,trendsEmptyState=<div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>,outputsSource }: DashboardProps) {
   const [trends, setTrends] = useState<TrendGroup[]>(()=>peekApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6')?.trends??[]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>(()=>peekApiData<ScheduleItem[]>('/api/schedule')??[]);
-  const [outputs, setOutputs] = useState<OutputNode[]>(()=>peekApiData<OutputNode[]>('/api/outputs')??[]);
-  const [outputsLoading, setOutputsLoading] = useState(()=>peekApiData('/api/outputs')===undefined);
+  const [outputs, setOutputs] = useState<OutputNode[]>(()=>outputsSource?outputsSource.peek?.({})?.items??[]:peekApiData<OutputNode[]>('/api/outputs')??[]);
+  const [outputsLoading, setOutputsLoading] = useState(()=>outputsSource?outputsSource.peek?.({})===undefined:peekApiData('/api/outputs')===undefined);
+  const [outputsTotal,setOutputsTotal]=useState<number|undefined>(()=>outputsSource?.peek?.({})?.total);
+  const [outputsIndexing,setOutputsIndexing]=useState(()=>!!outputsSource?.peek?.({})?.indexing);
   const [outputsError, setOutputsError] = useState('');
   const outputsSeq = useRef(0);
   const loadOutputs = useCallback((force=false) => {
     const seq = ++outputsSeq.current;
+    if(outputsSource){
+      setOutputsLoading(outputsSource.peek?.({})===undefined);
+      void outputsSource.list({force}).then(page=>{if(seq===outputsSeq.current){setOutputs(page.items);setOutputsTotal(page.total);setOutputsIndexing(!!page.indexing);setOutputsError('')}})
+        .catch((error:unknown)=>{if(seq===outputsSeq.current)setOutputsError(error instanceof Error?error.message:'读取失败')})
+        .finally(()=>{if(seq===outputsSeq.current)setOutputsLoading(false)});
+      return;
+    }
     const cached=peekApiData('/api/outputs')!==undefined;
     setOutputsLoading(!cached);
     fetchOutputs(force).then((data) => { if (seq === outputsSeq.current) {setOutputs(data);if(!cached||force)setOutputsError('');} })
       .catch((error: unknown) => { if (seq === outputsSeq.current) setOutputsError(error instanceof Error ? error.message : '读取失败'); })
       .finally(() => { if (seq === outputsSeq.current) setOutputsLoading(false); });
-  }, []);
+  }, [outputsSource]);
+  useEffect(()=>{loadOutputs();return()=>{outputsSeq.current++}},[loadOutputs]);
+  useEffect(()=>{if(!outputsSource||!outputsIndexing)return;let timer:ReturnType<typeof setTimeout>|undefined;const refresh=()=>{if(!document.hidden)loadOutputs(true)};timer=setTimeout(refresh,2000);document.addEventListener('visibilitychange',refresh);return()=>{if(timer)clearTimeout(timer);document.removeEventListener('visibilitychange',refresh)}},[outputsSource,outputsIndexing,outputs,loadOutputs]);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>(()=>peekApiData<Idea[]>('/api/ideas')??[]);
   const [readErrors,setReadErrors]=useState<Partial<Record<DashboardRead,string>>>({});
@@ -108,17 +121,16 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
     return () => { aliveRef.current = false; };
   }, []);
   useEffect(()=>{
-    const stops=[subscribeApiData<OutputNode[]>('/api/outputs',value=>{setOutputs(value);setOutputsError('');setOutputsLoading(false)},error=>setOutputsError(error.message)),
+    const stops=[...(!outputsSource?[subscribeApiData<OutputNode[]>('/api/outputs',value=>{setOutputs(value);setOutputsError('');setOutputsLoading(false)},error=>setOutputsError(error.message))]:[]),
       subscribeApiData<ScheduleItem[]>('/api/schedule',value=>{setSchedule(value);readSuccess('schedule')},error=>readFailure('schedule',error)),subscribeApiData<Idea[]>('/api/ideas',value=>{setIdeas(value);readSuccess('ideas')},error=>readFailure('ideas',error)),
       subscribeApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6',value=>{setTrends(value.trends);readSuccess('trends')},error=>readFailure('trends',error))];
     return()=>stops.forEach(stop=>stop());
-  },[]);
-  useEffect(()=>{if(!outputsLoading)onContentReady?.()},[outputsLoading,outputs,trends,schedule,onContentReady]);
+  },[outputsSource]);
+  useEffect(()=>{if(outputsSource||!outputsLoading)onContentReady?.()},[outputsSource,outputsLoading,outputs,trends,schedule,onContentReady]);
 
   useEffect(() => {
     void loadCommon('trends');
     void loadCommon('schedule');
-    loadOutputs();
     void loadCommon('accounts');
     void loadCommon('ideas');
     fetchAnalyticsPlatforms().then((ps) => {
@@ -193,7 +205,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const stats: { label: string; value: string; page: Page; Icon: typeof IconChat }[] = [
     { label: '待做选题', value: count('ideas',String(pendingIdeas.length)), page: 'ideas', Icon: IconIdea },
     { label: '待发排期', value: count('schedule',String(upcoming.length)), page: 'calendar', Icon: IconCalendar },
-      { label: '内容项目', value: outputsLoading && outputs.length === 0 ? '…' : outputsError && outputs.length === 0 ? '—' : String(outputs.length), page: 'outputs', Icon: IconOutputs },
+      { label: '内容项目', value: (outputsLoading||outputsIndexing) && outputs.length === 0 ? '…' : outputsError && outputs.length === 0 ? '—' : String(outputsSource?outputsTotal??outputs.length:outputs.length), page: 'outputs', Icon: IconOutputs },
     { label: '已登录账号', value: count('accounts',`${loggedIn}/${accounts.length}`), page: 'accounts', Icon: IconAccounts },
   ];
 
@@ -301,9 +313,9 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <button className="dash-more" onClick={() => onNavigate('outputs')}>内容库 →</button>
           </div>
           {board('outputs','最近产物列表',<>
-            {outputsLoading && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
+            {(outputsLoading||outputsIndexing) && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
             {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={()=>loadOutputs(true)}>重试</button></div>}
-            {!outputsLoading && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
+            {!outputsLoading && !outputsIndexing && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
           {recent.map((g) => (
             <div key={g.name} className="dash-output" onClick={() => onNavigate('outputs')}>
               <span className="dash-output-name">{g.meta?.title || g.name}</span>

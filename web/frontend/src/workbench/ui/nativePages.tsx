@@ -9,7 +9,7 @@ import BreakdownPage from '../../components/BreakdownPage';
 import type {Page} from '../../components/Sidebar';
 import {nativePageRoutes} from '../platform/native-routes';
 import {peekApiData,type OutputNode,type TrendSource} from '../../lib/api';
-import {creatorLaunchSelection,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
+import {libraryDataSource,creatorLaunchSelection,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useViewState} from './hooks';
 import {Notice} from './common';
 import {SkillTask} from './management';
@@ -28,11 +28,12 @@ export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTo
  const vm=useWorkbench(),status=useResource<JsonRecord>('/api/status');
  const compact=useSyncExternalStore(subscribeDashboardLayout,compactDashboard,()=>false);
  const viewState=useViewState<DashboardViewState>('dashboard:'+profileId,{platform:'',window:'week'});
+ const outputsSource=useMemo(()=>libraryDataSource(vm.client),[vm.client,vm.client.authenticationEpoch]);
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  return <DashboardPage persona={profileId} gatewayStatus={status.data?.gateway===true?'connected':'disconnected'}
   apiDirect={status.data?.runtime==='api'} agentRuntime={string(status.data?.runtime)||'codex'}
   persistAnalytics={false} verifyAccountsOnMount={false} trendsEmptyState={null} listMaxHeight={compact?undefined:360}
-  onContentReady={onContentReady} viewState={viewState}
+  onContentReady={onContentReady} viewState={viewState} outputsSource={outputsSource}
   onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic}/>;
 }
 
@@ -46,10 +47,9 @@ export function NativeLibrary({jumpPath}:{jumpPath?:string}){
  const vm=useWorkbench();
  const viewState=useViewState('outputs',{stack:[] as string[],filter:'all'});
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
- const context=useResource<JsonRecord>(jumpPath?'/api/output-context?'+new URLSearchParams({path:jumpPath}):null);
- const resolved=string(context.data?.canonical_path)||jumpPath;
+ const dataSource=useMemo(()=>libraryDataSource(vm.client),[vm.client,vm.client.authenticationEpoch]);
  const renderProject=useCallback((project:OutputNode)=><ProjectVersion project={project}/>,[]);
- return <OutputsPage jumpPath={resolved} canDelete={()=>false} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
+ return <OutputsPage jumpPath={jumpPath} dataSource={dataSource} canDelete={()=>false} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
 }
 
 export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){

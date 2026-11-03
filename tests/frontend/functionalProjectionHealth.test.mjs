@@ -38,6 +38,31 @@ function dashboard(api,file='DashboardPage',suppliedProps){
 }
 function dashboardApi(){const subscriptions=new Map();return {subscriptions,peekApiData:()=>undefined,subscribeApiData:(path,onData,onError)=>{subscriptions.set(path,{onData,onError});return()=>{}},fetchTrends:async()=>trend(1),fetchSchedule:async()=>[],fetchIdeas:async()=>[],fetchAccounts:async()=>[],fetchOutputs:async()=>[],fetchAnalyticsPlatforms:async()=>[]}}
 
+test('ordinary dashboard retains its original tree source and waits for the initial read',async()=>{
+ const api=dashboardApi();let finish,reads=0,ready=0;api.fetchOutputs=()=>{reads++;return new Promise(resolve=>{finish=resolve})};
+ const f=dashboard(api,'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},onContentReady(){ready++}});
+ let tree=await f.settle();assert.equal(reads,1);assert.equal(ready,0);assert.ok(text(tree).includes('正在读取最近产物'));assert.ok(api.subscriptions.has('/api/outputs'));
+ finish([{type:'dir',name:'Original project',path:'old'}]);tree=await f.settle();assert.ok(ready>0);assert.ok(text(tree).includes('Original project'));
+});
+
+test('private dashboard becomes ready before bounded metadata, counts the real total and shows only five recent projects',async()=>{
+ const api=dashboardApi();api.fetchOutputs=()=>assert.fail('Private home must not fetch the recursive legacy tree');let finish,ready=0;const calls=[];
+ const source={list:input=>{calls.push(input);return new Promise(resolve=>{finish=resolve})},resolve:()=>assert.fail('Home must not descend into projects')};
+ const f=dashboard(api,'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},onContentReady(){ready++},outputsSource:source});
+ let tree=await f.settle();assert.ok(ready>0);assert.equal(calls.length,1);assert.ok(!api.subscriptions.has('/api/outputs'));assert.ok(text(tree).includes('正在读取最近产物'));assert.ok(!text(tree).includes('还没有产物'));
+ finish({items:Array.from({length:50},(_,i)=>({type:'dir',name:'Project '+i,path:'project-'+i})),total:912,next_cursor:'next',revision:'r1'});tree=await f.settle();
+ const stat=all(tree).find(node=>node.props.className==='card card-hover dash-stat'&&text(node).includes('内容项目'));assert.ok(text(stat).includes('912'));
+ const recent=all(tree).filter(node=>node.props.className==='dash-output');assert.equal(recent.length,5);assert.equal(text(recent.at(-1)),'Project 40 文件');assert.equal(calls.length,1);
+});
+
+test('private dashboard exposes a local metadata retry and forces only that bounded request',async()=>{
+ const api=dashboardApi(),calls=[];api.fetchOutputs=()=>assert.fail('Private retry must never fetch the legacy tree');
+ const source={list:async input=>{calls.push(input);if(!input.force)throw Error('TEMP metadata failed');return {items:[],total:0,next_cursor:null,revision:'r2'}},resolve:()=>assert.fail('No project resolve')};
+ const f=dashboard(api,'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},outputsSource:source});
+ let tree=await f.settle();assert.ok(text(tree).includes('TEMP metadata failed'));assert.ok(!text(tree).includes('还没有产物'));const notice=all(tree).find(node=>node.props.role==='alert'&&text(node).includes('最近产物读取失败'));
+ all(notice).find(node=>node.type==='button').props.onClick();tree=await f.settle();assert.equal(calls.length,2);assert.equal(calls[1].force,true);assert.ok(!text(tree).includes('TEMP metadata failed'));assert.ok(text(tree).includes('还没有产物'));
+});
+
 test('dashboard read failures remain visible and never masquerade as empty sources, schedules or account totals',async()=>{
  const api=dashboardApi();for(const key of ['fetchTrends','fetchSchedule','fetchIdeas','fetchAccounts','fetchAnalyticsPlatforms'])api[key]=async()=>{throw Error('TEMP '+key+' failed')};
  const f=dashboard(api),tree=await f.settle(),display=text(tree);

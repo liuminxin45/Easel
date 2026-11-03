@@ -4,6 +4,7 @@ import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
 import {viewStateModule} from './helpers/viewState.mjs';
+import {moduleLoader} from './helpers/modules.mjs';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?[value,...all(value.props?.children)]:[];
@@ -26,7 +27,7 @@ function component(file,api={},options={}){
  const apiPort={peekApiData:()=>undefined,subscribeApiData:()=>()=>{},...api};
  const element=(type,props,key)=>({type,props:props??{},key});
  const exports={},source=readFileSync(new URL('../../web/frontend/src/components/'+file+'.tsx',import.meta.url),'utf8')+(file==='TrendsPage'?'\nexport {TrendsPanel};':'');
- const imports={react,'react/jsx-runtime':{jsx:element,jsxs:element,Fragment:'fragment'},'../lib/viewState':viewStateModule(react),'../lib/api':apiPort,
+ const imports={react,'react/jsx-runtime':{jsx:element,jsxs:element,Fragment:'fragment'},'../lib/viewState':viewStateModule(react),'../lib/api':apiPort,'../lib/outputBrowser':moduleLoader()('lib/outputBrowser.ts'),
   '../lib/sanitize':{renderMarkdown:value=>value},'../lib/skillDisplayNames':{displayName:value=>value},'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect',
   './SkillDrawer':'SkillDrawer','./TrendSourcesDialog':'TrendSourcesDialog','./DownloadLink':'DownloadLink','./MessageBubble':'MessageBubble','./QuestionCards':'QuestionCards',
   './BrushEntry':{default:'BrushEntry',BrushItem:'BrushItem'},'./useBrushPopover':{useBrushPopover(){}}};

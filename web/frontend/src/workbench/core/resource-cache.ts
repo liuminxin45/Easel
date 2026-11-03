@@ -11,7 +11,7 @@ const url=(path:string)=>new URL(path,'https://workbench.invalid');
 /** Only ordinary native page data may use the host's read snapshots. */
 export function nativeResourceCacheable(path:string):boolean {
  const p=url(path).pathname;
- return p==='/api/outputs'||p.startsWith('/api/output/')||p==='/api/ideas'||p==='/api/trends'||p==='/api/trends/sources'
+ return p==='/api/outputs'||p.startsWith('/api/output/')||p==='/api/library/items'||p==='/api/library/resolve'||p==='/api/ideas'||p==='/api/trends'||p==='/api/trends/sources'
   ||p==='/api/personas'||/^\/api\/persona\/[^/]+(?:\/files)?$/.test(p)||p==='/api/schedule'||p==='/api/schedule/context';
 }
 
@@ -35,6 +35,7 @@ export const resourceFreshMs=(path:string,data:unknown):number=>resourceCacheabl
 export function resourceTags(path:string):string[]{
  const target=url(path),p=target.pathname,work=p.match(/^\/api\/works\/([^/]+)/)?.[1];
  if(p==='/api/outputs'||p.startsWith('/api/output/'))return ['outputs','works'];
+ if(p.startsWith('/api/library/'))return ['outputs','works','library'];
  if(p==='/api/ideas')return ['ideas'];
  if(p==='/api/trends/sources'||p==='/api/trends/manage')return ['trend-sources','collection'];
  if(p==='/api/trends')return ['trends','news','collection'];

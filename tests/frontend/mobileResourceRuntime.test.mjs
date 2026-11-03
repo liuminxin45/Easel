@@ -23,6 +23,8 @@ test('original skill config uses the visible detail revision and preserves stale
   const sent=f.calls.find(call=>call.method==='POST'&&call.path==='/api/env');
   assert.equal(JSON.parse(sent.body).expected_revision,4);
   assert.equal(JSON.parse(sent.body).updates.IMG_API_KEY,'TEMP');
+  assert.equal(typeof JSON.parse(sent.body).id,'string');
+  assert.equal(JSON.parse(sent.body).id,sent.headers['X-Operation-Id']);
  }finally{f.close()}
 });
 
@@ -39,6 +41,19 @@ test('a late closed detail read cannot replace the currently opened skill config
   first(json({name:'first',configuration_revision:4}));await old;
   await f.api.saveEnv({IMG_API_KEY:'TEMP'});
   assert.equal(JSON.parse(f.calls.find(call=>call.method==='POST').body).expected_revision,6);
+ }finally{f.close()}
+});
+
+test('original skill config lost replies recover through the existing settings receipt, without resending',async()=>{
+ const f=fixture();try{
+  f.state.response=(path,options)=>options.method==='POST'?Promise.reject(new TypeError('TEMP lost reply')):json({name:'ai-image-gen',configuration_revision:4});
+  await f.api.fetchSkillDetail('ai-image-gen');
+  await assert.rejects(f.api.saveEnv({IMG_API_KEY:'TEMP'}));
+  const pending=f.client.operation('settings').getState().pending;
+  assert.ok(pending&&pending.receiptPath.startsWith('/api/settings/operations/'));
+  f.state.response=path=>{assert.equal(path,pending.receiptPath);return json({id:pending.id,state:'completed',result:{ok:true,revision:5,skills:{}}})};
+  assert.equal((await f.client.reconcile('settings')).revision,5);
+  assert.equal(f.calls.filter(call=>call.method==='POST').length,1);
  }finally{f.close()}
 });
 

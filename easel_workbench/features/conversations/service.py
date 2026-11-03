@@ -101,11 +101,11 @@ class ChatService:
             'stop_reason': turn['status'] if turn['status'] in TERMINAL else None,
         })
 
-    def _command(self, action, value, session_id=None):
+    def _command(self, action, value, session_id=None, *, internal=False):
         if not isinstance(value, dict):
             raise ValueError('对话操作格式无效')
         operation = identity(value.get('operation_id') or value.get('id'))
-        signature = sha({'action': action, 'session_id': session_id, 'value': value})
+        signature = sha({'action': action, 'session_id': session_id, 'value': value,**({'internal':True} if internal else {})})
         creation = None
         if action == 'create':
             from .session_creation import guard
@@ -143,6 +143,7 @@ class ChatService:
                            'execution_settings': execution_settings,
                            'created': int(time.time() * 1000), 'updated': now(), 'sessionKey': session_id,
                            'revision': 1, 'archived': False, 'pendingTurnId': None}
+                if internal:session['internal_skill_run']=True
             else:
                 session = self._session(c, session_id)
                 if session.get('deleted_at'):
@@ -203,6 +204,9 @@ class ChatService:
     def create_session(self, value):
         return self._command('create', value)
 
+    def create_internal_session(self,value):
+        return self._command('create',value,internal=True)
+
     def rename_session(self, session_id, value):
         return self._command('rename', value, session_id)
 
@@ -226,9 +230,9 @@ class ChatService:
     def delete_session(self,session_id,value):
         return self._command('delete',value,session_id)
 
-    def list_sessions(self, *, summaries=False):
+    def list_sessions(self, *, summaries=False,include_internal=False):
         with self.store.connect() as c:
-            items = [json.loads(row[0]) for row in c.execute("SELECT document FROM easel_chat_sessions WHERE json_extract(document,'$.deleted_at') IS NULL ORDER BY rowid DESC")]
+            items = [json.loads(row[0]) for row in c.execute("SELECT document FROM easel_chat_sessions WHERE json_extract(document,'$.deleted_at') IS NULL AND (? OR COALESCE(json_extract(document,'$.internal_skill_run'),0)=0) ORDER BY rowid DESC",(include_internal,))]
             if summaries:
                 counts={row[0]:row[1]*2 for row in c.execute('SELECT session_id,count(*) FROM easel_chat_turns GROUP BY session_id')}
                 if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():
@@ -633,7 +637,7 @@ class ChatService:
                 task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-        for session in self.list_sessions()['sessions']:
+        for session in self.list_sessions(include_internal=True)['sessions']:
             await close_sessions(session['id'])
 
     async def _run(self, turn_id, environment, started):

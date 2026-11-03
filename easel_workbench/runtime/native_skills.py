@@ -85,7 +85,7 @@ class NativeSkills:
                 # operation. Unknown receipts are never converted into replay.
                 sid=session_id or 'skill-'+operation;tid='skill-turn-'+operation
                 with self.box.store.connect() as c:exists=c.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?',(sid,)).fetchone()
-                if not exists:await asyncio.to_thread(self.chat.create_session,{'id':'skill-create-'+operation,'session_id':sid,'profile_id':persona or 'oil-pig'})
+                if not exists:await asyncio.to_thread(self.chat.create_internal_session,{'id':'skill-create-'+operation,'session_id':sid,'profile_id':persona or 'oil-pig'})
                 context={'profile_id':persona or 'oil-pig'}
                 if not plain_chat:context.update(skill_id=skill,action_id='native')
                 message=self.context()._publishing_message(message)

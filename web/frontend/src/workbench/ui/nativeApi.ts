@@ -63,9 +63,10 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
     else {const digest=await crypto.subtle.digest('SHA-256',await value.arrayBuffer());fields.push([key,value.name,value.size,value.type,Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')]);}
    }
    const requestSignature=await requestFingerprint({method,path,body,...(raw?{fields}:{})});
-   const result=await client.mutate<T>('easel-native:'+method+':'+path,path,body,{
-    method:method as 'POST'|'PUT'|'PATCH'|'DELETE',raw,preserveBody:true,metadataOnly:true,requestSignature,
-    receiptPath:id=>'/api/native/operations/'+encodeURIComponent(id),
+   const settings=path==='/api/env';
+   const result=await client.mutate<T>(settings?'settings':'easel-native:'+method+':'+path,path,body,{
+    method:method as 'POST'|'PUT'|'PATCH'|'DELETE',raw,preserveBody:!settings,metadataOnly:true,requestSignature,
+    receiptPath:id=>(settings?'/api/settings/operations/':'/api/native/operations/')+encodeURIComponent(id),
     ...(method==='POST'&&(path==='/api/skill'||path==='/api/chat')?{requestTimeout:null}:{}),
    });
    return result;

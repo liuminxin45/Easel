@@ -1,6 +1,6 @@
 """Frozen Easel skill UI and ordinary chat, actual Edge + TEMP HTTPS only."""
 from __future__ import annotations
-import argparse,asyncio,base64,hashlib,importlib.util,json,sys,time
+import argparse,asyncio,base64,hashlib,importlib.util,json,sys,time,shutil
 from pathlib import Path
 from urllib.parse import urlencode,urlsplit,parse_qs
 from unittest.mock import patch
@@ -30,17 +30,24 @@ def main():
     sys.path.insert(0,str(backend))
     spec=importlib.util.spec_from_file_location('native_skills_fixture',ROOT/'tests/workbench_native_browser.py');helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper);helper.ROOT=backend
     from playwright.sync_api import sync_playwright,expect
+    import easel_workbench.application as application
+    original_create_app=application.create_app
+    def native_fixture_app(*args,**kwargs):
+        root=Path(kwargs['root']);(root/'config').mkdir(exist_ok=True)
+        shutil.copy2(backend/'config/workbench-skills.json',root/'config/workbench-skills.json')
+        shutil.copytree(backend/'skills/builtin/ai-image-gen',root/'skills/builtin/ai-image-gen',dirs_exist_ok=True)
+        return original_create_app(*args,**kwargs)
     report={'passed':False,'backend':{'release':backend.name,'manifest_sha256':sha(backend/'workbench-release.json')},'native':{'release':native.name,'manifest_sha256':sha(native/'native-manifest.json')},'checks':[],'page_errors':[],'screenshots':{},'requests':{},'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py'),'real_model_calls':0,'platform_writes':0,'production_data_access':False,'physical_device_tested':False}
     def check(case,label):report['checks'].append({'case':case,'check':label,'passed':True});print('PASS '+case+' '+label,flush=True)
     def goto(page,f,path):page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
     try:
-      with patch.object(helper.SyntheticAdapter,'run',ordinary_run),sync_playwright() as pw:
+      with patch.object(helper.SyntheticAdapter,'run',ordinary_run),patch.object(application,'create_app',native_fixture_app),sync_playwright() as pw:
         browser=pw.chromium.launch(executable_path='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless=True,args=['--ignore-certificate-errors'])
         for case,width,height,mobile,theme in [('desktop-light',1280,900,False,'light'),('mobile-dark',390,844,True,'dark')]:
           with helper.isolated(native,IMAGE) as f:
             context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':height},is_mobile=mobile,has_touch=mobile,service_workers='block')
             context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);context.add_init_script('localStorage.setItem("native:theme",'+json.dumps(theme)+');')
-            page=context.new_page();page.set_default_timeout(30000);requests=[]
+            page=context.new_page();page.set_default_timeout(30000);requests=[];report['requests'][case]=requests
             page.on('pageerror',lambda error:report['page_errors'].append(str(error)))
             def requested(req):
                 target=urlsplit(req.url)
@@ -69,6 +76,8 @@ def main():
                 assert sent.value.status==200,sent.value.text();expect(drawer.locator('.skill-result')).to_contain_text('TEMP_ORIGINAL_TEXT_1');expect(field).to_have_value(raw)
                 sends=[r for r in requests if r['method']=='POST' and r['path']=='/api/skill'];assert len(sends)==1 and sends[0]['body']['skill']=='content-production' and sends[0]['body']['input']==raw.strip()
                 assert len(f['adapter'].requests)==1
+                listed=page.request.get(f['origin']+'/api/chat/sessions').json()['sessions'];assert not any(str(item.get('id','')).startswith('skill-') for item in listed)
+                with f['box'].store.connect() as c:assert c.execute("SELECT count(*) FROM easel_chat_sessions WHERE id LIKE 'skill-%'").fetchone()[0]==1
                 check(case,'ordinary project card uses the full original drawer, exact input, one original skill POST and actual result')
                 screenshot=out/(case+'-skill.png');page.screenshot(path=str(screenshot));report['screenshots'][screenshot.name]=sha(screenshot)
                 drawer.get_by_role('button',name='关闭',exact=True).click()
@@ -110,6 +119,11 @@ def main():
                     assert c.execute('SELECT count(*) FROM creator_skill_versions').fetchone()[0]==0
                 check(case,'no private skill plan, registry version, experience command or business task snapshot was generated')
                 report['requests'][case]=requests
+            except BaseException as error:
+                report['failure']={'case':case,'type':type(error).__name__,'message':str(error)[:2000]}
+                try:page.screenshot(path=str(out/(case+'-failure.png')),full_page=True)
+                except Exception:pass
+                raise
             finally:context.close()
         browser.close()
       assert not report['page_errors'];report['passed']=True

@@ -42,6 +42,7 @@ class FakeChat:
         self.settings=SimpleNamespace(environment=lambda:{},current=lambda:{'runtime':'codex'})
         self.calls=[];self.status=status
     def create_session(self,value):self.calls.append(('create',value));return {'id':value['session_id']}
+    def create_internal_session(self,value):return self.create_session(value)
     async def submit(self,value,**ports):
         self.calls.append(('submit',value,ports));return {'id':value['turnId']}
     async def events(self,turn):yield {'event':'done','data':{}}
@@ -118,6 +119,10 @@ def test_plain_native_skill_uses_real_chat_service_without_private_snapshot(comm
                 turn=json.loads(row[0]);assert turn['snapshot'] is None and turn['work'] is None
                 assert turn['status']=='completed' and turn['interactive'] is False
             public=chat.get_turn(turn['id']);assert public.get('selected_skills',[])==[]
+            assert chat.list_sessions(summaries=True)['sessions']==[]
+            assert len(chat.list_sessions(include_internal=True)['sessions'])==1
+            with commands.store.connect() as c:
+                assert json.loads(c.execute('SELECT document FROM easel_chat_sessions WHERE id=?',(turn['session_id'],)).fetchone()[0])['internal_skill_run'] is True
         finally:
             await chat.close()
             commands._native_api.library.close()

@@ -49,6 +49,28 @@
       "fork_commits": [
         "d2e4d7f6231a7097f4902297098b0decf36d2325"
       ]
+    },
+    {
+      "number": 197,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/197",
+      "head": "e72b2950bde1e234f22e53db0224c89f9f132d4f",
+      "original_commits": [
+        "e72b2950bde1e234f22e53db0224c89f9f132d4f"
+      ],
+      "fork_commits": [
+        "06376e8d2061114b34df4085214f3767268abb73"
+      ]
+    },
+    {
+      "number": 198,
+      "url": "https://github.com/ZJU-REAL/Easel/pull/198",
+      "head": "e8d32ba564c4bf78a1710425e17c705c726c3ff0",
+      "original_commits": [
+        "e8d32ba564c4bf78a1710425e17c705c726c3ff0"
+      ],
+      "fork_commits": [
+        "6e9e7b9f5ba67baeaea54a30919341b984cfe79d"
+      ]
     }
   ],
   "prerequisites": [
@@ -80,5 +102,21 @@
     "web/frontend/src/components/icons.tsx": "fe66d13472e4d80df45c036e660fc6000176ce7b",
     "web/frontend/src/lib/skillDisplayNames.ts": "4f46a6093dec311b8e7e2fee0f4989a7b66508e4"
   },
-  "note": "PR195 includes PR194; shared parent imported once. Full baseline is unchanged. Local conflict adaptations preserve private optional ports."
+  "note": "PR195 includes PR194; PR198 depends on PR197. Shared commits imported once. Full baseline unchanged; private host ports remain concentrated and preserve native defaults.",
+  "adaptations": {
+    "197": [
+      "Preserve source_id, internal reading navigation and anchors."
+    ],
+    "198": [
+      "ContentPanel has optional body attributes; native host retains scroll restoration and compact outer scrolling.",
+      "Retain cached read lifecycle, output summaries and explicitly empty daily panel.",
+      "Exclude official one-line source toggles from private chip wrapping geometry."
+    ]
+  },
+  "excluded_pull_requests": [
+    {
+      "number": 176,
+      "reason": "Explicitly withdrawn by user; do not restore old navigation bar/sidebar implementation."
+    }
+  ]
 }

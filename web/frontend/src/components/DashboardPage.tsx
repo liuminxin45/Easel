@@ -317,7 +317,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           </ContentPanel>
 
         {/* 创作数据（归因层）：选平台自动拉取登录账号的粉丝/获赞/关注 + 多窗口增长 + 近7日环比 + 最新笔记 */}
-        <ContentPanel className="dash-card dash-card-wide" label="创作数据" header={<div className="dash-card-head">
+        <ContentPanel className="dash-card dash-card-wide" label="创作数据" bodyProps={panelBody('analytics')} header={<div className="dash-card-head">
             <span><IconAccounts size={16} /> 创作数据</span>
             {anaSel && anaData[anaSel] && anaData[anaSel] !== 'loading' && (
               <button className="dash-more" onClick={() => runAna(anaSel)}>刷新 →</button>

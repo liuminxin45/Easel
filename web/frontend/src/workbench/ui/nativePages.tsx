@@ -69,7 +69,7 @@ export function NativeTrends({onUseTopic,search}:{onUseTopic:(title:string,sourc
  const compact=useSyncExternalStore(subscribeDashboardLayout,compactDashboard,()=>false);
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  const refreshAll=useCallback(()=>vm.service.collectAll(),[vm.service]);
- return <TrendsPage onUseTopic={onUseTopic} onRead={id=>vm.navigate('/news/a/'+encodeURIComponent(id))} refreshAll={refreshAll} listLimit={1000} listMaxHeight={compact?undefined:540} quietBackgroundRefresh viewState={viewState} onContentReady={onContentReady}/>;
+ return <TrendsPage onUseTopic={onUseTopic} onRead={id=>vm.navigate('/news/a/'+encodeURIComponent(id))} refreshAll={refreshAll} listLimit={1000} listMaxHeight={compact?null:540} quietBackgroundRefresh viewState={viewState} onContentReady={onContentReady}/>;
 }
 
 export function NativeCalendar(){

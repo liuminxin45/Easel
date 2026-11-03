@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {moduleLoader} from './helpers/modules.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
-const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?[value,...all(value.props?.children)]:[];
+const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?typeof value.type==='function'&&value.type.name==='ContentPanel'?all(value.type(value.props)):[value,...all(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):value==null?'':String(value);
 const trend=version=>({version:1,day:'1970-01-01',timezone:'Asia/Shanghai',trends:[{platform:'temp',label:'TEMP',ok:true,status:'fresh',fetched_at:version===1?'2026-11-01T12:00:00+08:00':'2026-11-03T12:00:00+08:00',items:[{id:'t'+version,title:'TEMP '+version}]}],updated:1,warnings:[]});
 
@@ -46,10 +46,20 @@ test('ordinary dashboard retains its original tree source and waits for the init
  finish([{type:'dir',name:'Original project',path:'old'}]);tree=await f.settle();assert.ok(ready>0);assert.ok(text(tree).includes('Original project'));
 });
 
-test('dashboard retains official default trend scrolling and explicit host modes never nest scroll containers',async()=>{
- for(const [listMaxHeight,trends,boards] of [[undefined,1,0],[360,0,4],[null,0,0]]){
+test('dashboard retains official default panel scrolling and explicit host modes never nest scroll containers',async()=>{
+ for(const listMaxHeight of [undefined,360,null]){
   const f=dashboard(dashboardApi(),'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},listMaxHeight});
-  const tree=await f.settle();assert.equal(all(tree).filter(node=>node.props.className==='dash-trend-list').length,trends);const registered=all(tree).filter(node=>node.props.className==='dash-card-list');assert.equal(registered.length,boards);for(const board of registered)assert.equal(board.props.style.maxHeight,360);
+  const tree=await f.settle(),nodes=all(tree),bodies=nodes.filter(node=>node.props.className?.split(' ').includes('content-panel-body'));
+  assert.equal(bodies.length,5);assert.equal(nodes.filter(node=>node.props.className==='dash-trend-list').length,0);
+  const registered=nodes.filter(node=>node.props['data-native-scroll-region']);assert.equal(registered.length,listMaxHeight===undefined?0:5);
+  for(const body of bodies){
+   assert.equal(body.type,'div');assert.equal(body.props.role,'region');assert.equal(body.props.tabIndex,0);
+   assert.equal(all(body.props.children).filter(node=>node.props.className?.split(' ').includes('content-panel-body')).length,0);
+   if(listMaxHeight===undefined)assert.equal(body.props.style,undefined);
+   else if(listMaxHeight===null){assert.equal(body.props.style.maxHeight,'none');assert.equal(body.props.style.overflowY,'visible')}
+   else assert.equal(body.props.style.maxHeight,360);
+  }
+  if(listMaxHeight!==undefined)assert.deepEqual(registered.map(node=>node.props['data-native-scroll-region']).sort(),['analytics','ideas','news','outputs','schedule'].map(id=>'dashboard:'+id));
  }
 });
 

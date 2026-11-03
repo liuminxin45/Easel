@@ -95,6 +95,8 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'web/frontend/src/styles/theme.css',
     # Restore the exact official stylesheet entry, dropping the fork-only import.
     'web/frontend/src/index.css',
+    # Official shared panel: optional body attributes retain host scroll identity.
+    'web/frontend/src/components/ContentPanel.tsx',
     # Stable account IDs are returned once by the actual native drivers.
     'skills/shared/scripts/bili_login.py',
     'skills/shared/scripts/douyin_publish.py',

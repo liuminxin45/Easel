@@ -7,7 +7,7 @@ import {viewStateModule} from './helpers/viewState.mjs';
 import {moduleLoader} from './helpers/modules.mjs';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const plain=value=>JSON.parse(JSON.stringify(value));
-const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?[value,...all(value.props?.children)]:[];
+const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?typeof value.type==='function'&&value.type.name==='ContentPanel'?all(value.type(value.props)):[value,...all(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):value==null?'':String(value);
 const button=(tree,label)=>all(tree).find(node=>node.type==='button'&&text(node)===label);
 const stateStore=initial=>{let value=initial;return {writes:[],read:()=>value,write(next){value=plain(next);this.writes.push(value)},remove(){value=null}}};
@@ -30,6 +30,7 @@ function component(file,api={},options={}){
  const imports={react,'react/jsx-runtime':{jsx:element,jsxs:element,Fragment:'fragment'},'../lib/viewState':viewStateModule(react),'../lib/api':apiPort,'../lib/outputBrowser':moduleLoader()('lib/outputBrowser.ts'),
   '../lib/sanitize':{renderMarkdown:value=>value},'../lib/skillDisplayNames':{displayName:value=>value},'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect',
   './SkillDrawer':'SkillDrawer','./TrendSourcesDialog':'TrendSourcesDialog','./DownloadLink':'DownloadLink','./MessageBubble':'MessageBubble','./QuestionCards':'QuestionCards',
+  './ContentPanel':moduleLoader({imports:{'react/jsx-runtime':{jsx:element,jsxs:element}}})('components/ContentPanel.tsx'),
   './BrushEntry':{default:'BrushEntry',BrushItem:'BrushItem'},'./useBrushPopover':{useBrushPopover(){}}};
  Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{
@@ -75,11 +76,15 @@ test('mobile trend feeds restore selected sources without adding a nested scroll
  const result=ids=>({trends:ids.map(platform=>({platform,label:platform.toUpperCase(),ok:true,items:Array.from({length:30},(_,i)=>({id:platform+i,title:platform+' item '+i,url:'https://example.invalid/'+i}))})),warnings:[],updated:1});
  const api={peekApiData:path=>path==='/api/trends/sources'?sources:path.startsWith('/api/trends?')?result(new URL('https://x'+path).searchParams.get('platforms').split(',')):undefined,
   fetchTrendSources:async()=>sources,fetchTrends:async platforms=>result(platforms.split(','))},store=stateStore({selected:['a'],initialized:true});
- const f=component('TrendsPage',api);f.render({onUseTopic(){},listLimit:1000,quietBackgroundRefresh:true,viewState:store});let tree=await f.settle();
+ const props={onUseTopic(){},listLimit:1000,listMaxHeight:null,quietBackgroundRefresh:true,viewState:store};
+ const f=component('TrendsPage',api);f.render(props);let tree=await f.settle();
  assert.equal(all(tree).filter(node=>node.props.className==='trend-item').length,30);
- assert.equal(all(tree).find(node=>node.props.className==='trend-list').props.style,undefined);
+ const bodies=all(tree).filter(node=>node.props.className?.split(' ').includes('content-panel-body'));assert.equal(bodies.length,1);
+ assert.ok(bodies[0].props.className.split(' ').includes('trend-list'));assert.equal(bodies[0].props['data-native-scroll-region'],'news:a');
+ assert.equal(bodies[0].props.style.maxHeight,'none');assert.equal(bodies[0].props.style.overflowY,'visible');
+ assert.equal(all(bodies[0].props.children).filter(node=>node.props.className?.split(' ').includes('content-panel-body')).length,0);
  button(tree,'B').props.onClick();tree=await f.settle();assert.deepEqual(store.read().selected,['a','b']);
- const again=component('TrendsPage',api);again.render({onUseTopic(){},listLimit:1000,quietBackgroundRefresh:true,viewState:store});tree=await again.settle();
+ const again=component('TrendsPage',api);again.render(props);tree=await again.settle();
  assert.equal(all(tree).filter(node=>node.props.className==='trend-item').length,60);assert.ok(!JSON.stringify(store.read()).includes('item'));
 });
 

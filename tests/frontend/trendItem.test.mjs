@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
+import { viewStateModule } from './helpers/viewState.mjs';
 
 const require = createRequire(new URL('../../web/frontend/package.json', import.meta.url));
 const ts = require('typescript');
@@ -16,13 +17,14 @@ const item = { id: '1', title, url: 'https://example.com/item', hot: '100' };
 const group = { platform: 'zhihu', label: '知乎', items: [item], ok: true };
 
 function setup() {
-  const values = [[{ id: 'zhihu', label: '知乎', default: true }], ['zhihu'], true, [group], false, '', 0, new Set(), false, [], ''];
-  let index = 0;
   const calls = [];
+  const react = { Component: class {}, useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}], useEffect() {}, useCallback: fn => fn, useRef: value => ({ current: value }) };
+  const sources = { sources: [{ id: 'zhihu', label: '知乎', default: true }], warnings: [] };
   const modules = {
-    react: { Component: class {}, useState: () => [values[index++], () => {}], useEffect() {}, useCallback: fn => fn, useRef: value => ({ current: value }) },
+    react,
+    '../lib/viewState': viewStateModule(react),
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
-    '../lib/api': { createIdea: data => { calls.push(data); return Promise.resolve(); } },
+    '../lib/api': { peekApiData: path => path === '/api/trends/sources' ? sources : { trends: [group], updated: 0, warnings: [] }, subscribeApiData: () => () => {}, createIdea: data => { calls.push(data); return Promise.resolve(); } },
     './icons': { IconFire: 'fire', IconRefresh: 'refresh', IconBookmark: 'bookmark', IconCheck: 'check', IconChat: 'chat' },
     './TrendSourcesDialog': { __esModule: true, default: 'dialog' },
     './ContentPanel': { __esModule: true, default: 'panel' },
@@ -30,7 +32,7 @@ function setup() {
   const exports = {};
   runInNewContext(outputText, { exports, require: name => modules[name], window: {} });
   const topics = [];
-  return { tree: exports.TrendsPanel({ onUseTopic: value => topics.push(value) }), calls, topics };
+  return { tree: exports.TrendsPanel({ onUseTopic: (...values) => topics.push(values) }), calls, topics };
 }
 function nodes(tree) {
   if (Array.isArray(tree)) return tree.flatMap(nodes);
@@ -51,9 +53,11 @@ test('热点操作保留完整标题，并分别触发收藏与内容创作', as
   assert.equal(use.props.children.type, 'chat');
   use.props.onClick();
   await save.props.onClick();
-  assert.deepEqual(app.topics, [title]);
+  assert.deepEqual(app.topics.map(values => values[0]), [title]);
+  assert.deepEqual(app.topics, [[title, item.id]]);
   assert.equal(app.calls.length, 1);
   assert.equal(app.calls[0].title, title);
   assert.equal(app.calls[0].source, '知乎');
+  assert.equal(app.calls[0].source_id, item.id);
   assert.equal(app.calls[0].status, 'pending');
 });

@@ -203,7 +203,7 @@
   html[data-native-platform] .composer .brush-entry { position: static; }
   html[data-native-platform] .brush-panel { inline-size: min(540px, 100%); max-inline-size: 100%; max-block-size: min(420px, calc(var(--native-height, 100dvh) - 16px)); }
   html[data-native-platform] .btn,
-  html[data-native-platform] .chip,
+  html[data-native-platform] .chip:not(.trend-source-controls .chip),
   html[data-native-platform] .idea-act,
   html[data-native-platform] .icon-btn,
   html[data-native-platform] .settings-close,

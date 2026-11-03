@@ -92,8 +92,19 @@ def main():
                 fresh=page.request.get(f['origin']+'/api/skill/ai-image-gen').json();key=next(key for provider in fresh['apiSpec']['providers'] for key in provider['keys'] if key['env']=='IMG_API_KEY')
                 saved_environment=f['box'].settings_service.environment();report.setdefault('configuration_checks',{})[case]={'revision':fresh.get('configuration_revision'),'key_configured':key['configured'],'vault_value_matches':saved_environment.get('IMG_API_KEY')=='TEMP-local-browser-key-'+case}
                 assert key['configured'] is True,'saved native key must be reflected by the original masked detail API'
+                expect(secret).to_have_attribute('placeholder','留空则保持不变，输入以覆盖')
+                expect(drawer.get_by_text('已配置（'+key['masked']+'）',exact=True)).to_be_visible()
                 assert saved_environment.get('IMG_API_KEY')=='TEMP-local-browser-key-'+case,'the actual host vault must retain the exact submitted key'
                 assert 'TEMP-local-browser-key-'+case not in drawer.inner_text()
+                secret.fill('TEMP-second-browser-key-'+case)
+                with page.expect_response(lambda r:urlsplit(r.url).path=='/api/env' and r.request.method=='POST') as saved_again:drawer.get_by_role('button',name='保存到 .env',exact=True).click()
+                assert saved_again.value.status==200,saved_again.value.text()
+                expect(drawer.get_by_text('已保存 ✓',exact=True)).to_be_visible()
+                latest=page.request.get(f['origin']+'/api/skill/ai-image-gen').json();latest_key=next(key for provider in latest['apiSpec']['providers'] for key in provider['keys'] if key['env']=='IMG_API_KEY')
+                assert latest['configuration_revision']>fresh['configuration_revision']
+                expect(drawer.get_by_text('已配置（'+latest_key['masked']+'）',exact=True)).to_be_visible()
+                assert f['box'].settings_service.environment().get('IMG_API_KEY')=='TEMP-second-browser-key-'+case
+                report['configuration_checks'][case]['consecutive_save_revision']=latest['configuration_revision']
                 assert len(f['adapter'].requests)==1
                 check(case,'original API configuration dialog saves through the host vault without exposing secrets or starting an Agent')
                 screenshot=out/(case+'-configuration.png');page.screenshot(path=str(screenshot));report['screenshots'][screenshot.name]=sha(screenshot)

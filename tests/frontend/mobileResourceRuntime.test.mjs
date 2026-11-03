@@ -32,6 +32,30 @@ test('original skill config refuses to invent a revision without a detail read',
  const f=fixture();try{await assert.rejects(f.api.saveEnv({IMG_API_KEY:'TEMP'}),/重新打开技能详情/);assert.equal(f.calls.length,0)}finally{f.close()}
 });
 
+test('original skill detail waits past a cached snapshot so consecutive config saves use the new mask and revision',async()=>{
+ const f=fixture();try{
+  let revision=4,key='',finish;
+  const detail=()=>({name:'ai-image-gen',configuration_revision:revision,apiSpec:{providers:[{keys:[{env:'IMG_API_KEY',configured:!!key,masked:key?'TEMP***':''}]}]}});
+  f.state.response=(path,options)=>{
+   if(options.method==='POST'){
+    const body=JSON.parse(options.body);if(body.expected_revision!==revision)return json({error:'配置已有新修订'},409);
+    key=body.updates.IMG_API_KEY;revision++;return json({ok:true,revision,skills:{}});
+   }
+   return json(detail());
+  };
+  assert.equal((await f.api.fetchSkillDetail('ai-image-gen')).configuration_revision,4);
+  await f.api.saveEnv({IMG_API_KEY:'TEMP-first'});
+  assert.equal(f.client.peek('/api/skill/ai-image-gen').configuration_revision,4);
+  const response=f.state.response;f.state.response=(path,options)=>new Promise(resolve=>{finish=()=>resolve(response(path,options))});
+  let settled=false;const refreshed=f.api.fetchSkillDetail('ai-image-gen').then(value=>{settled=true;return value});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false,'a warm cached detail must not resolve before the current response');
+  finish();const fresh=await refreshed;assert.equal(fresh.configuration_revision,5);assert.equal(fresh.apiSpec.providers[0].keys[0].configured,true);assert.equal(fresh.apiSpec.providers[0].keys[0].masked,'TEMP***');
+  f.state.response=response;await f.api.saveEnv({IMG_API_KEY:'TEMP-second'});
+  assert.deepEqual(f.calls.filter(call=>call.method==='POST').map(call=>JSON.parse(call.body).expected_revision),[4,5]);
+  assert.equal((await f.api.fetchSkillDetail('ai-image-gen')).configuration_revision,6);
+ }finally{f.close()}
+});
+
 test('a late closed detail read cannot replace the currently opened skill configuration revision',async()=>{
  const f=fixture();try{
   let first,second;

@@ -39,7 +39,9 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
     const remember=(value:T):T=>{const revision=record(value).configuration_revision;if(detail&&sequence===detailSequence&&authentication===client.authenticationEpoch){configurationRevision=typeof revision==='number'?revision:undefined;configurationEpoch=authentication;}return value};
     if(options.signal?.aborted)throw new RequestError('读取已取消',{cancelled:true});
     if(!nativeResourceCacheable(path))return remember(await client.api.get<T>(path,options.signal??undefined));
-    const force=options.cache==='reload'||options.cache==='no-cache',epoch=client.authenticationEpoch;
+    // The original skill drawer reads once after saving and does not subscribe to
+    // cache updates. Its masked configuration and save revision must be current.
+    const force=detail||options.cache==='reload'||options.cache==='no-cache',epoch=client.authenticationEpoch;
     const read=async():Promise<T>=>{
      const value=await client.read<T>(path,force);
      if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction, ReactNode } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { defaultSettingsApi, type SettingsApi } from './SettingsApi';
 import EnvBoard from './EnvBoard';
 import HarnessSettings from './HarnessSettings';
@@ -15,7 +15,6 @@ import { IconSlidersHorizontal, IconPackage, IconEllipsis } from './settingsIcon
 interface Props {
   onClose: () => void;
   api?: SettingsApi;
-  moreContent?: ReactNode;
   initialSection?: 'model' | 'env' | 'more';
   onSectionChange?: (section: 'model' | 'env' | 'more') => void;
   hostManaged?: boolean;
@@ -66,7 +65,7 @@ const hhmm = (ts: number) => {
 };
 
 /** 设置（统一入口）：竖＝功能分类（模型配置 / 环境安装 / 更多设置），横＝模型六通道。 */
-export default function SettingsPanel({ onClose:onRequestClose, banner = '', api = defaultSettingsApi, moreContent, initialSection = 'model', onSectionChange, hostManaged = false, operationSource,registerLeaveGuard }: Props) {
+export default function SettingsPanel({ onClose:onRequestClose, banner = '', api = defaultSettingsApi, initialSection = 'model', onSectionChange, hostManaged = false, operationSource,registerLeaveGuard }: Props) {
   const {fetchEnvTools, startEnvInstall, fetchEnvJob, fetchModelChannels, runChannelSelftest, saveModelConfig, fetchLocalAgents, enableLocalAgent, fetchAvailableModels} = api;
   const [sec, setSection] = useState<Sec>(initialSection);
   const setSec = (section: Sec) => { setSection(section); onSectionChange?.(section); };
@@ -938,7 +937,6 @@ export default function SettingsPanel({ onClose:onRequestClose, banner = '', api
 
             {sec === 'more' && (
               <section className="st-sec active">
-                {moreContent}
                 <div className="panel-top">
                   <span className="pill off"><span className="dot" />可扩展位</span>
                   <span className="desc">同一个面板，以后放更多设置</span>

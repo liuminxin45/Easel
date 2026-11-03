@@ -16,6 +16,7 @@ import urllib.request
 import uuid
 
 from .policy import assess, consume, number
+from .usage import project as usage_projection
 
 HEALTH_PATH = '/_workbench/health'
 
@@ -131,6 +132,7 @@ class Monitor:
             result = {'status': 'unavailable', 'binding': bound, 'business': safe_business,
                       'ownership_verified': owner, 'controls_valid': controls, 'needs_repair': False}
             performance = inspected.get('performance')
+            result['usage'] = usage_projection(inspected.get('usage'))
             if isinstance(performance, dict):
                 result['performance'] = {'status': performance.get('status') if performance.get('status') in (
                     'healthy', 'degraded', 'unavailable') else 'unavailable', **{

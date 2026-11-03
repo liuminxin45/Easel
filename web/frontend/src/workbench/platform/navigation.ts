@@ -14,8 +14,9 @@ export function safePath(value:string,origin='https://workbench.invalid'):string
  try{const u=new URL(value,origin),newsContext=/^\/news(?:\/a\/[^/]+)?$/.test(u.pathname),wrapped=/^\/native\/?$/.test(u.pathname)&&u.searchParams.size===1&&u.searchParams.has('path');if(u.origin!==origin||u.username||u.password||u.hash||value.length>(wrapped?196608:newsContext?65536:2400)||/[\\\u0000-\u001f]/.test(value))return null;
   for(const [name,text] of u.searchParams)if(!/^[a-zA-Z][\w-]{0,40}$/.test(name)||text.length>(wrapped&&name==='path'?65536:newsContext&&name==='windows'?32768:newsContext&&name==='sources'?6000:800))return null;
   if(/^\/native\/?$/.test(u.pathname)&&u.searchParams.size===1&&u.searchParams.has('path')){const target=u.searchParams.get('path')||'/toolbox';return /^\/native(?:\/|\?|$)/.test(target)?null:safePath(target,origin)}
+  if(u.pathname==='/toolbox'&&['insights','metrics','statistics','stats'].includes(u.searchParams.get('section')||''))return '/toolbox';
   if(u.pathname==='/messages'||u.pathname==='/toolbox'&&u.searchParams.get('screen')==='notifications')return '/toolbox';
-  if(u.pathname==='/settings'&&['devices','production'].includes(u.searchParams.get('panel')||''))return '/settings';
+  if(u.pathname==='/settings'&&['devices','production','usage','statistics','stats','paths'].includes(u.searchParams.get('panel')||''))return '/settings';
   if(u.pathname==='/settings'&&u.searchParams.get('panel')==='environment')return '/settings?panel=env';
   if(/^\/wiki(?:\/|$)/.test(u.pathname)||u.pathname==='/toolbox'&&(['wiki','knowledge','library','notes','ideas'].includes(u.searchParams.get('section')||'')||u.searchParams.get('panel')==='experience'&&['wiki','note','notes','library','knowledge'].includes(u.searchParams.get('screen')||''))||u.pathname==='/settings'&&['wiki','knowledge','library','obsidian','llm-wiki'].includes(u.searchParams.get('panel')||''))return '/toolbox';
   if(!/^\/chat(?:\/[A-Za-z0-9_-]{1,200})?$/.test(u.pathname)&&!/^\/(?:toolbox|news|posters|articles|works|settings|messages|account)(?:\/[^?#]*)?$/.test(u.pathname))return null;

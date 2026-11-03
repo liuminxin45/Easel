@@ -125,7 +125,10 @@
     "notifications": "通知",
     "account": "账号",
     "unknown": "未分类页面",
-    "learning": "学习与风格"
+    "learning": "学习与风格",
+    "chat.list": "对话列表",
+    "chat.detail": "对话",
+    "calendar": "内容日历"
   },
   "surfaces": [
     "profiles",
@@ -160,5 +163,52 @@
     "annotation",
     "completion",
     "usage"
-  ]
+  ],
+  "retired": {
+    "screens": [
+      "foundation",
+      "learning",
+      "insights",
+      "notifications",
+      "account",
+      "settings.usage"
+    ],
+    "actions": [
+      "foundation.open",
+      "foundation.edit",
+      "foundation.preview",
+      "foundation.confirm",
+      "foundation.revert",
+      "foundation.config",
+      "foundation.workflow",
+      "insights.open",
+      "insights.filter",
+      "insights.import",
+      "insights.confirm",
+      "insights.comment",
+      "insights.analysis",
+      "insights.proposal",
+      "insights.complete",
+      "distribution.detect",
+      "settings.layout",
+      "settings.devices",
+      "settings.account",
+      "settings.usage",
+      "usage.range",
+      "usage.refresh",
+      "usage.enable",
+      "usage.disable",
+      "usage.clear",
+      "insights.window",
+      "learning.open",
+      "learning.filter",
+      "learning.index",
+      "learning.analyze",
+      "learning.proposal",
+      "learning.confirm",
+      "learning.revert",
+      "learning.classify",
+      "learning.processing"
+    ]
+  }
 }

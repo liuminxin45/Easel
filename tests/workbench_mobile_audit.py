@@ -935,10 +935,9 @@ def main():
                                     run('settings.channels', '/settings?panel=model', '.settings-panel', tab,
                                         before=lambda tab=tab: page.get_by_role('dialog', name='设置', exact=True).get_by_role('button', name=tab, exact=True).click())
                                 run('settings.environment', '/settings?panel=env', '.settings-panel', marker='环境安装')
-                                run('settings.usage', '/settings?panel=more', '.settings-panel', marker='使用与路径')
-                                run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
-                            else:
-                                run('settings.clear-usage', '/settings?panel=more', '.drawer[role="dialog"][aria-label="清空操作统计？"]', 'confirm_text', before=lambda: page.get_by_role('button', name='清空统计', exact=True).click())
+                                run('settings.more', '/settings?panel=more', '.settings-panel', marker='可扩展位')
+                                expect(page.get_by_role('heading', name='使用与路径', exact=True)).to_have_count(0)
+                                expect(page.get_by_role('button', name='清空统计', exact=True)).to_have_count(0)
                             if args.phase == 'full':
                                 chat_path = '/chat/' + ids['session']
                                 run('chat.composer', chat_path, '.chat-page', 'raw_multiline_draft', marker=MARK)

@@ -423,25 +423,10 @@ def main():
 
                     def more():
                         go('/settings?panel=more')
-                        expect(page.get_by_role('heading', name='使用与路径', exact=True)).to_be_visible()
-                        inspect(page, profile, 'settings.usage', 'usage_table_populated')
-                        details = page.locator('.settings-panel details').filter(has=page.locator('summary', has_text='常走路径'))
-                        details.locator('summary').click()
-                        inspect(page, profile, 'settings.usage', 'paths_details')
-                        page.get_by_role('button', name='清空统计', exact=True).click()
-                        confirm = page.get_by_role('dialog', name='清空操作统计？', exact=True)
-                        expect(confirm).to_be_visible()
-                        inspect(page, profile, 'settings.clear-usage', 'confirm_text', '.drawer[role="dialog"][aria-label="清空操作统计？"]')
-                        reach(page, profile, 'nested_focus', confirm.get_by_role('button', name='确认清空统计', exact=True), 'settings.clear-usage')
-                        page.keyboard.press('Tab'); page.keyboard.press('Shift+Tab')
-                        mark(profile, 'settings.clear-usage', 'nested_focus', 'focus remains inside native confirmation', confirm.evaluate('element=>element.contains(document.activeElement)'))
-                        page.keyboard.press('Escape')
-                        expect(confirm).not_to_be_visible()
-                        mark(profile, 'settings.clear-usage', 'cancel', 'Escape returns to parent settings without a clear request', page.get_by_role('dialog', name='设置', exact=True).is_visible())
-                        flags['empty_usage'] = True
-                        page.get_by_role('button', name='刷新', exact=True).click()
-                        expect(page.locator('.ew-table-wrap tbody tr')).to_have_count(0)
-                        inspect(page, profile, 'settings.usage', 'empty_summary')
+                        expect(page.get_by_role('heading', name='使用与路径', exact=True)).to_have_count(0)
+                        expect(page.get_by_role('button', name='清空统计', exact=True)).to_have_count(0)
+                        expect(page.get_by_text('网关参数（端口 / 绑定 / 会话）', exact=False)).to_be_visible()
+                        inspect(page, profile, 'settings.more', 'official_more_without_usage')
 
                     def keyboard_and_return():
                         go('/news')

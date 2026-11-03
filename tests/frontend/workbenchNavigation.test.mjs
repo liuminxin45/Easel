@@ -7,6 +7,12 @@ const require=createRequire(new URL('../../web/frontend/package.json',import.met
 let counter=0;
 runInNewContext(ts.transpileModule(readFileSync(new URL('../../web/frontend/src/workbench/platform/navigation.ts',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'navigation-'+(++counter)},require:id=>id==='./news-context'?{navigationIdentity:path=>path}:assert.fail(id)});
 const {safePath,parentPath,NavigationService}=exports;
+
+test('retired statistics and usage links resolve to current native destinations',()=>{
+ for(const section of ['insights','metrics','statistics','stats'])assert.equal(safePath('/toolbox?section='+section+'&publication=old'),'/toolbox');
+ for(const panel of ['usage','statistics','stats','paths','devices','production'])assert.equal(safePath('/settings?panel='+panel),'/settings');
+ assert.equal(safePath('/settings?panel=more'),'/settings?panel=more');
+});
 test('native chat accepts only its root or a stable session ID, including protected shell handoff',()=>{
  assert.equal(safePath('/chat'),'/chat');assert.equal(safePath('/chat/session_1-abc?work=w&version=v'),'/chat/session_1-abc?work=w&version=v');
  assert.equal(safePath('/native/?path=%2Fchat%2Fsession_1-abc'),'/chat/session_1-abc');

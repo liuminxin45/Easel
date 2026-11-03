@@ -14,6 +14,7 @@ import time
 
 from easel_workbench import health_watchdog as watchdog
 from easel_workbench.business_health import snapshot
+from easel_workbench.diagnostics.usage import snapshot as usage_snapshot
 from easel_workbench.processes import rows
 from easel_workbench.runtime.feedback_ledger import atomic, atomic_create, locked
 
@@ -71,7 +72,7 @@ def inspect(root):
         'native_manifest_sha256': binding['native']['manifest_sha256']},
         'controls_valid': True, 'ownership_verified': True, **_operator_idle(root),
         'health_token': watchdog.health_token(root), 'ingress_origin': watchdog.ingress_origin(root),
-        'business': snapshot(root), 'server_member_pids': [], 'role_member_pids': []}
+        'business': snapshot(root), 'usage': usage_snapshot(root), 'server_member_pids': [], 'role_member_pids': []}
     now = time.time()
     for role in ('server', 'manager'):
         pid = state.get('manager') if role == 'manager' else state.get('roles', {}).get('server')

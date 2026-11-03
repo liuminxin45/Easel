@@ -114,7 +114,6 @@ def launch_actions(skill: Mapping) -> list[dict]:
     for task, label, path in (
         ('reference', '拆解参考', '/toolbox?section=research&pane=breakdown'),
         ('learning', '整理经验', '/toolbox?section=skills&pane=experience'),
-        ('analysis', '分析传播', '/toolbox?section=insights'),
     ):
         if task in tasks:
             result.append({'id': task, 'label': label, 'path': path, 'task': task})

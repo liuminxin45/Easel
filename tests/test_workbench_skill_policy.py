@@ -131,6 +131,7 @@ def test_launches_derive_from_scope_and_executor_not_known_skill_identity():
     assert not task_policy([release])['article']['entry_skills']
     assert not launch_actions({'id': 'easel-video', 'tasks': ['video'], 'executor': 'program'})
     assert not launch_actions({'id': 'research-only', 'tasks': ['research'], 'executor': 'agent'})
+    assert not launch_actions({'id': 'publication-analysis', 'tasks': ['analysis'], 'executor': 'agent'})
 
 
 def test_invalid_profile_default_is_rejected_without_revision_change(runtime):

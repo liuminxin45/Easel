@@ -6,11 +6,11 @@ const PATH='/api/trends?limit=6';
 const json=(value,headers={})=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json',...headers}});
 const today=ms=>new Date(ms+8*3600000).toISOString().slice(0,10);
 const payload=(day,id=day)=>({version:1,day,timezone:'Asia/Shanghai',trends:[{platform:'source',label:'Source',ok:true,items:[{id,title:id,url:'https://example.test/'+id}]}],updated:1,warnings:[]});
-function fixture(initial='2026-11-03T23:59:59+08:00'){
+function fixture(initial='2026-11-03T23:59:59+08:00',options={}){
  const clock={now:Date.parse(initial)},timers=[],calls=[];
  const state={response:path=>path==='/api/config'?json({csrf:'TEMP'}):json(payload(today(clock.now)),{'ETag':'"'+today(clock.now)+'"'})};
  const load=moduleLoader({globals:{FormData,Event,window:{location:{pathname:'/native/'},dispatchEvent(){}},setTimeout:(callback,ms)=>{const timer={callback,ms,due:clock.now+ms,cleared:false,unref(){}};timers.push(timer);return timer},clearTimeout:timer=>{if(timer)timer.cleared=true}}});
- const client=new (load('workbench/core/client.ts').WorkbenchClient)({clock:()=>clock.now,retryDelay:0,fetcher:async(path,options)=>{calls.push({path,...options});return state.response(path,options)}});
+ const client=new (load('workbench/core/client.ts').WorkbenchClient)({...options,clock:()=>clock.now,retryDelay:0,fetcher:async(path,options)=>{calls.push({path,...options});return state.response(path,options)}});
  client.session.setState({config:{csrf:'TEMP'},loading:false});
  const api=load('lib/api.ts'),release=load('workbench/ui/nativeApi.ts').bindWorkbenchNativeApi(client);
  return {clock,timers,calls,state,client,api,advance(ms){clock.now+=ms;for(const timer of [...timers])if(!timer.cleared&&timer.due<=clock.now){timer.cleared=true;timer.callback()}},close(){release();client.pauseVisible()}};
@@ -86,6 +86,16 @@ test('a warm snapshot captured before midnight is rechecked when delivered to it
  const f=fixture();try{
   await f.api.fetchTrends(undefined,6);const pending=f.api.fetchTrends(undefined,6);f.clock.now+=1000;
   const result=await pending;assert.equal(result.day,'2026-11-04');assert.equal(result.trends.length,0);
+ }finally{f.close()}
+});
+
+test('evicting a captured warm snapshot across midnight forces a current-day read instead of returning captured rows',async()=>{
+ const f=fixture('2026-11-03T23:59:59+08:00',{cacheEntries:0});try{
+  const stop=f.client.watch(PATH);await f.api.fetchTrends(undefined,6);
+  const pending=f.api.fetchTrends(undefined,6);stop();assert.equal(f.api.peekApiData(PATH),undefined);
+  f.clock.now+=1000;const result=await pending;
+  assert.equal(result.day,'2026-11-04');assert.equal(result.trends[0].items[0].id,'2026-11-04');
+  assert.equal(f.calls.filter(call=>call.path===PATH).length,2);
  }finally{f.close()}
 });
 

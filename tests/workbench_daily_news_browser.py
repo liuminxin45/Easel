@@ -99,7 +99,9 @@ def main():
        for name,path,selector,rows in [('dashboard','/toolbox','.dash-page','.dash-trend-item'),('radar','/news','.trends-page','.trend-item')]:
         with page.expect_response(lambda response:urlsplit(response.url).path=='/api/trends') as read_response:
          result=page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
-        read_response.value.finished()
+        # Wait for the actual JSON body. Playwright's finished() creates a
+        # competing target-close task which can leak noisy teardown warnings.
+        assert read_response.value.json()['day']==today
         page.evaluate('async()=>{for(let n=0;n<4;n++)await new Promise(requestAnimationFrame)}')
         assert result.status==200;expect(page.locator(selector)).to_be_visible()
         expect(page.locator(rows)).to_have_count(min(3,count) if name=='dashboard' else count)

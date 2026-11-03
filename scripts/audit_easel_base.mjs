@@ -138,7 +138,7 @@ export function inspectMobileCss(source,file='mobile.css'){
 export function inspectOfficialPresentation(source,file='host.tsx'){
  const facts=inspectSource(source,file),violations=[];
  const report=(node,rule,extra={})=>violations.push({file,line:facts.ast.getLineAndCharacterOfPosition(node.getStart(facts.ast)).line+1,rule,...extra});
- const blockedSkillProps=new Set(['canConfigure','onUse','useActions','useDisabled','useNotice']);
+ const blockedSkillProps=new Set(['canConfigure','onUse','useActions','useDisabled','useNotice','services','extension','onInputChange']);
  const visit=node=>{
   if(ts.isJsxOpeningElement(node)||ts.isJsxSelfClosingElement(node)){
    const tag=node.tagName.getText(facts.ast);
@@ -148,6 +148,7 @@ export function inspectOfficialPresentation(source,file='host.tsx'){
     const name=attribute.name.getText(facts.ast),initializer=attribute.initializer;
     if(tag==='SkillDrawer'&&blockedSkillProps.has(name))report(attribute,'official-skill-area-cannot-be-replaced',{property:name});
     if(tag==='SkillPage'&&name==='subtitle')report(attribute,'official-catalog-default-copy-must-remain');
+    if(tag==='SkillPage'&&['catalog','renderDrawer','headerActions'].includes(name))report(attribute,'official-skill-area-cannot-be-replaced',{property:name});
     if(name==='className'&&initializer&&ts.isStringLiteral(initializer)&&initializer.text.split(/\s+/).some(value=>value==='drawer-overlay'||value==='modal'||value==='overlay'||value.startsWith('ew-dialog')))report(attribute,'host-must-use-original-shell');
     if(tag==='ChatPage'&&name==='emptyState'&&initializer&&ts.isJsxExpression(initializer)){
      const expression=initializer.expression;
@@ -180,7 +181,7 @@ export function auditEaselBase(base=root){
   ['web/frontend/src/workbench/ui/publishing.tsx','PublishingPage','../../components/PublishingPage'],
   ['web/frontend/src/workbench/ui/ChatSessionView.tsx','ChatPage','../../components/ChatPage'],
   ['web/frontend/src/workbench/ui/NativeSkills.tsx','SkillPage','../../components/SkillPage'],
-  ['web/frontend/src/workbench/ui/NativeSkills.tsx','SkillDrawer','../../components/SkillDrawer'],
+  ['web/frontend/src/components/SkillPage.tsx','SkillDrawer','./SkillDrawer'],
   ['web/frontend/src/workbench/ui/system.tsx','SettingsPanel','../../components/SettingsPanel']];
  for(const [file,component,target] of nativeUse)violations.push(...inspectNativeUse(read(file),component,target,file));
  const privateUi='web/frontend/src/workbench/ui';

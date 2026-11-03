@@ -1,31 +1,19 @@
 import SettingsSelect from './SettingsSelect';
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Drawer from './Drawer';
 import { fetchSkillDetail, executeSkill, saveEnv } from '../lib/api';
 import type { SkillDetail } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { displayName } from '../lib/skillDisplayNames';
-import {useStoredViewState,type DraftStore} from '../lib/viewState';
-
-export interface SkillDrawerServices {
-  loadDetail: typeof fetchSkillDetail;
-  saveEnv: typeof saveEnv;
-  execute: typeof executeSkill;
-}
 
 interface SkillDrawerProps {
   skillName: string;
   persona: string;
   onClose: () => void;
   onConfigured: () => void;   // 保存 API 后通知父组件刷新卡片状态
-  services?: Partial<SkillDrawerServices>;
-  extension?: ReactNode;
-  onInputChange?: (value: string) => void;
-  draftStore?:DraftStore<string>;
 }
 
-export default function SkillDrawer({ skillName, persona, onClose, onConfigured, services, extension, onInputChange,draftStore }: SkillDrawerProps) {
-  const readDetail = services?.loadDetail || fetchSkillDetail;
+export default function SkillDrawer({ skillName, persona, onClose, onConfigured }: SkillDrawerProps) {
   const [detail, setDetail] = useState<SkillDetail | null>(null);
   const [loadErr, setLoadErr] = useState('');
 
@@ -35,7 +23,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
   const [savedMsg, setSavedMsg] = useState('');
 
   // 执行区
-  const [input, setInput] = useStoredViewState(draftStore,()=> '');
+  const [input, setInput] = useState('');
   const [result, setResult] = useState('');
   const [running, setRunning] = useState(false);
   const [runErr, setRunErr] = useState('');
@@ -43,7 +31,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
 
   const loadDetail = () => {
     let ignore = false;
-    readDetail(skillName)
+    fetchSkillDetail(skillName)
       .then((d) => { if (!ignore) { setDetail(d); setLoadErr(''); } })
       .catch(() => { if (!ignore) setLoadErr('加载 SKILL 详情失败'); });
     return () => { ignore = true; };
@@ -62,10 +50,10 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
     setSaving(true);
     setSavedMsg('');
     try {
-      await (services?.saveEnv || saveEnv)(updates);
+      await saveEnv(updates);
       setEnvInputs({});
       const seq = ++reqSeq.current;
-      const fresh = await readDetail(skillName);
+      const fresh = await fetchSkillDetail(skillName);
       if (seq === reqSeq.current) setDetail(fresh);
       setSavedMsg('已保存 ✓');
       onConfigured();
@@ -84,7 +72,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
     setRunErr('');
     setResult('');
     try {
-      const res = await (services?.execute || executeSkill)(skillName, input.trim(), persona || undefined);
+      const res = await executeSkill(skillName, input.trim(), persona || undefined);
       if (seq === reqSeq.current) setResult(res.response);
     } catch (e) {
       if (seq === reqSeq.current) setRunErr(e instanceof Error ? e.message : '执行失败');
@@ -207,7 +195,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
               className="field"
               placeholder="输入内容，例如主题 / 素材 / 要求…"
               value={input}
-              onChange={(e) => { setInput(e.target.value); onInputChange?.(e.target.value); }}
+              onChange={(e) => setInput(e.target.value)}
               style={{ minHeight: 100 }}
             />
             <div style={{ marginTop: 10 }}>
@@ -223,7 +211,6 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
             )}
           </div>
 
-          {extension}
 
           {/* 描述 */}
           <div className="panel">

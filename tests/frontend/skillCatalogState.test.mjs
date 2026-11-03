@@ -24,26 +24,11 @@ function fixture(){
  const imports={react,'react/jsx-runtime':jsx,'../lib/viewState':viewStateModule(react),'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
  Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:id=>imports[id]??assert.fail('Unexpected import '+id)});
- const render=catalog=>{cursor=0;const tree=exports.default({persona:'author',...(catalog?{catalog}:{})});effects.splice(0).forEach(effect=>effect());return tree};
+ const render=()=>{cursor=0;const tree=exports.default({persona:'author'});effects.splice(0).forEach(effect=>effect());return tree};
  return {render,requests,get fetches(){return fetches}};
 }
 const cards=tree=>nodes(tree).filter(node=>node.props?.className?.split(' ').includes('skill-card'));
 const search=tree=>nodes(tree).find(node=>node.type==='input');
-
-test('hosted skill catalog distinguishes initial loading from an actual empty result',()=>{
- const f=fixture();let tree=f.render({items:[],loading:true});
- assert.equal(tree.props['data-catalog-state'],'loading');assert.equal(tree.props['aria-busy'],true);
- assert.match(text(tree),/正在读取技能/);assert.doesNotMatch(text(tree),/没有匹配|暂无可用技能|共 0 个技能/);assert.equal(f.fetches,0);
- tree=f.render({items:[],loading:false});assert.equal(tree.props['data-catalog-state'],'empty');assert.match(text(tree),/暂无可用技能/);
- search(tree).props.onChange({target:{value:' missing '}});tree=f.render({items:[],loading:false});assert.match(text(tree),/没有匹配「missing」的技能/);
- search(tree).props.onChange({target:{value:'  '}});assert.match(text(f.render({items:[],loading:false})),/暂无可用技能/);
-});
-
-test('background catalog refresh leaves loaded cards in place without a routine loading notice',()=>{
- const f=fixture();let tree=f.render({items:[skill],loading:false});assert.equal(cards(tree).length,1);
- tree=f.render({items:[skill],loading:true});assert.equal(cards(tree).length,1);assert.equal(tree.props['data-catalog-state'],'ready');assert.equal(tree.props['aria-busy'],undefined);assert.doesNotMatch(text(tree),/正在读取|暂无可用|没有匹配/);
- tree=f.render({items:[skill],loading:false,error:'服务连接失败，原有技能保留'});assert.equal(cards(tree).length,1);assert.equal(tree.props['data-catalog-state'],'error');assert.match(text(nodes(tree).find(node=>node.props.role==='alert')),/服务连接失败/);
-});
 
 test('standalone Easel skill loading and refresh use the same no-false-empty contract',async()=>{
  const f=fixture();let tree=f.render();assert.equal(f.fetches,1);assert.equal(tree.props['data-catalog-state'],'loading');assert.doesNotMatch(text(tree),/没有匹配|暂无可用/);
@@ -54,8 +39,14 @@ test('standalone Easel skill loading and refresh use the same no-false-empty con
  nodes(tree).find(node=>node.type==='SkillDrawer').props.onConfigured();f.requests[2].resolve([]);await tick();tree=f.render();assert.equal(tree.props['data-catalog-state'],'empty');assert.match(text(tree),/暂无可用技能/);assert.doesNotMatch(text(tree),/加载 SKILL 列表失败/);
 });
 
-test('a host-provided failure stays visible and a new host catalog does not inherit standalone failures',async()=>{
- const f=fixture();f.render();f.requests[0].reject(Error('offline'));await tick();let tree=f.render();assert.equal(tree.props['data-catalog-state'],'error');
- tree=f.render({items:[skill],loading:false,error:''});assert.equal(tree.props['data-catalog-state'],'ready');assert.doesNotMatch(text(tree),/加载 SKILL 列表失败/);
- tree=f.render({items:[],loading:true,error:'读取被拒绝'});assert.equal(tree.props['data-catalog-state'],'error');assert.match(text(tree),/读取被拒绝/);assert.doesNotMatch(text(tree),/正在读取|暂无可用|没有匹配/);
+
+test('native skill catalog distinguishes an in-flight read, an empty directory and an unmatched search',async()=>{
+ const f=fixture();let tree=f.render();assert.equal(f.fetches,1);assert.equal(tree.props['data-catalog-state'],'loading');assert.match(text(tree),/正在读取技能/);assert.doesNotMatch(text(tree),/没有匹配|暂无可用技能|共 0 个技能/);
+ f.requests[0].resolve([]);await tick();tree=f.render();assert.equal(tree.props['data-catalog-state'],'empty');assert.match(text(tree),/暂无可用技能/);
+ search(tree).props.onChange({target:{value:' missing '}});tree=f.render();assert.match(text(tree),/没有匹配「missing」的技能/);search(tree).props.onChange({target:{value:'  '}});assert.match(text(f.render()),/暂无可用技能/);
+});
+
+test('native initial failure stays visible instead of falsely rendering an empty catalog',async()=>{
+ const f=fixture();f.render();f.requests[0].reject(Error('offline'));await tick();const tree=f.render();assert.equal(tree.props['data-catalog-state'],'error');assert.match(text(tree),/加载 SKILL 列表失败/);assert.doesNotMatch(text(tree),/正在读取技能|暂无可用技能|没有匹配/);
+ const fresh=fixture();fresh.render();fresh.requests[0].resolve([skill]);await tick();assert.equal(cards(fresh.render()).length,1);
 });

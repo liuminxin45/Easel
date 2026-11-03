@@ -7,6 +7,13 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from functools import lru_cache
+import asyncio
+import uuid
+from easel.direct_api import read_settings, history_path
+from easel.manual_publish import publishing_mode
+from easel.persona import chat_turn_message
+from fastapi import HTTPException
+from easel.timeouts import TIMEOUT_PRODUCE, TIMEOUT_CHAT
 from .settings import _k, _is_set
 from .binding import bind_functions
 
@@ -209,7 +216,143 @@ def skill_status(name, environment):
             'apiConfigured':_skill_api_configured(name,environment) if needed else True,
             'apiSpec':_api_spec_status(name,environment) if needed else None}
 
-EXPORTS=('_model_spec','_short_drama_spec','_parse_skill_md','parse_skill_text','_mask','_key_configured','_skill_api_configured','_api_spec_status', 'SKILL_API_REQUIREMENTS', '_ENV_ALLOWLIST')
+
+def find_skill(name: str) -> str | None:
+    """查找 SKILL，返回完整名或 None。与 CLI skill.py 一致。"""
+    cands = [name, f'skill-{name}'] if not name.startswith('skill-') else [name]
+    for cand in cands:
+        if (SKILLS_DIR / 'builtin' / cand / 'SKILL.md').is_file():
+            return cand
+    return None
+
+
+def get_skills() -> list[dict]:
+    env = _read_env()
+    result = []
+    sd = SKILLS_DIR / 'builtin'
+    if sd.is_dir():
+        for d in sorted(sd.iterdir()):
+            if d.is_dir() and (d / 'SKILL.md').is_file():
+                desc, layer, _ = _parse_skill_md(d / 'SKILL.md')
+                needs_api = d.name in SKILL_API_REQUIREMENTS
+                result.append({
+                    'name': d.name,
+                    'description': desc,
+                    'layer': layer,
+                    'needsApi': needs_api,
+                    'apiConfigured': _skill_api_configured(d.name, env) if needs_api else True,
+                })
+    return result
+
+
+async def api_skills():
+    return get_skills()
+
+
+async def api_skill_detail(name: str):
+    """单个 SKILL 详情：描述 + 正文 + API 需求与当前配置状态（脱敏）。"""
+    full = find_skill(name)
+    if full is None:
+        raise HTTPException(404, f"SKILL '{name}' 不存在")
+    desc, layer, body = _parse_skill_md(SKILLS_DIR / "builtin" / full / "SKILL.md")
+    needs_api = full in SKILL_API_REQUIREMENTS
+    env = _read_env()
+    return {
+        "name": full,
+        "layer": layer,
+        "description": desc,
+        "body": body,
+        "needsApi": needs_api,
+        "apiConfigured": _skill_api_configured(full, env) if needs_api else True,
+        "apiSpec": _api_spec_status(full, env) if needs_api else None,
+    }
+
+
+async def api_skill(req):
+    if _direct_api_enabled():
+        raise HTTPException(409, "API 直连模式支持聊天；SKILL 执行需要具备本机工具的 Agent 运行时")
+    skill_full = find_skill(req.skill)
+    if skill_full is None:
+        raise HTTPException(404, f"SKILL '{req.skill}' 不存在")
+    message = prepare_skill_message(skill_full, req.input, req.persona)
+    # 统一给足超时：制作类 SKILL（生视频/多镜合成）可能跑很久，取安全上界
+    timeout = TIMEOUT_PRODUCE
+    result = await _run_skill_message(message, timeout)
+    return {"response": result}
+
+async def _run_skill_message(message, timeout, session_id=None):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, run_agent_sync, message, timeout, session_id)
+
+
+def prepare_skill_message(skill, value, persona=None):
+    full = find_skill(skill)
+    if full is None:
+        raise HTTPException(404, f"SKILL '{skill}' 不存在")
+    return f"{_persona_prefix(persona)}请执行 /{full}，内容如下：\n\n{value}"
+
+
+def create_skills_context(root, *, environment, execute, persona, direct_api, skills=None, ports=None):
+    return bind({'SKILLS_DIR':Path(skills or Path(root)/'skills'), '_read_env':environment,
+        '_run_skill_message':execute, '_persona_prefix':persona, '_direct_api_enabled':direct_api,
+        'ENV_FILE':Path(root)/'.env','read_settings':lambda path:environment(),**(ports or {})})
+
+
+def _publishing_message(message: str) -> str:
+    if publishing_mode(read_settings(ENV_FILE)) == "manual":
+        return ("【当前 Web 发布方式：人工提交】AI 只负责创作、排版、素材和审核建议。"
+                "不要调用发布脚本、发布接口、浏览器代填或代点发布。"
+                "引导用户在发布中心审核、复制或导出，再在官方页面亲自提交。"
+                "导出、复制、打开网页和排期均不代表已发布。\n\n" + message)
+    return message
+
+
+def _chat_message(req) -> str:
+    context = _attachment_context(req)
+    message = req.message.strip()
+    if context:
+        message = f"{message}\n\n{context}" if message else context
+    if not message:
+        raise HTTPException(400, "消息不能为空")
+    return _publishing_message(chat_turn_message(message, req.persona))
+
+
+async def api_chat(req):
+    """非流式对话（备选）。"""
+    runtime = _chat_backend(req.sessionId)
+    if runtime not in ("api", "openclaw"):
+        message = _chat_message(req)
+        sk = req.sessionId or uuid.uuid4().hex
+        errors = []
+        def emit(kind, text):
+            if kind == "error":
+                errors.append(text)
+        result = await _run_harness_chat(req, sk, message, runtime, _harness_settings(), emit,
+                                         interactive=False)
+        if errors:
+            raise HTTPException(502, errors[0])
+        return {"response": result, "sessionKey": sk}
+    if runtime == "api":
+        content, system = _direct_chat_content(req)
+        errors = []
+        def emit(kind, text):
+            if kind == "error":
+                errors.append(text)
+        sk = req.sessionId or uuid.uuid4().hex
+        result = await _run_direct_chat(req, sk, content, system, emit)
+        if errors:
+            raise HTTPException(502, errors[0])
+        return {"response": result, "sessionKey": sk}
+    if req.sessionId and history_path(SESSIONS_DIR, req.sessionId).is_file():
+        raise HTTPException(409, "此会话属于 API 直连，请新建会话使用 OpenClaw")
+    # 每轮末尾追加「先查技能库」提醒，抗长对话指令衰减（对用户不可见）
+    message = _chat_message(req)
+    loop = asyncio.get_event_loop()
+    # chat 可能中途触发制作层长任务 → 用 TIMEOUT_CHAT，与流式 /api/chat/stream 一致（勿用 300s）
+    result = await _run_skill_message(message, TIMEOUT_CHAT, req.sessionId)
+    return {"response": result}
+
+EXPORTS=('_publishing_message','_chat_message','api_chat','find_skill','get_skills','api_skills','api_skill_detail','api_skill','prepare_skill_message','_run_skill_message','_model_spec','_short_drama_spec','_parse_skill_md','parse_skill_text','_mask','_key_configured','_skill_api_configured','_api_spec_status', 'SKILL_API_REQUIREMENTS', '_ENV_ALLOWLIST')
 
 def bind(context=None, *, into=None):
     import sys

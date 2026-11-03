@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { ComponentType,ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
 import SkillDrawer from './SkillDrawer';
@@ -18,9 +18,6 @@ import {
 
 interface SkillPageProps {
   persona: string;
-  catalog?:{items:SkillItem[];error?:string;loading?:boolean;reload?:()=>void};
-  renderDrawer?:(name:string,onClose:()=>void)=>ReactNode;
-  headerActions?:ReactNode;
   viewState?:ViewStateStore<{query:string}>;
   onContentReady?:()=>void;
 }
@@ -82,23 +79,20 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona,catalog,renderDrawer,headerActions,viewState,onContentReady }: SkillPageProps) {
-  const [localSkills, setSkills] = useState<SkillItem[]>([]);
-  const [localError, setError] = useState('');
-  const [localLoading, setLoading] = useState(true);
-  const skills=catalog?catalog.items:localSkills,error=catalog?catalog.error||'':localError;
-  const loading=catalog?catalog.loading===true:localLoading;
+export default function SkillPage({ persona,viewState,onContentReady }: SkillPageProps) {
+  const [skills, setSkills] = useState<SkillItem[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const waiting=loading&&skills.length===0&&!error;
   const [view,setView]=useStoredViewState(viewState,()=>({query:''}));
   const query=view.query,setQuery=(query:string)=>setView({query});
   const [selected, setSelected] = useState<string | null>(null);
 
   const load = () => {
-    if(catalog){catalog.reload?.();return}
     setLoading(true);
     fetchSkills().then(value=>{setSkills(value);setError('')}).catch(() => setError('加载 SKILL 列表失败')).finally(()=>setLoading(false));
   };
-  useEffect(()=>{if(!catalog)load()}, [!!catalog]);
+  useEffect(load, []);
   useEffect(()=>{if(!loading&&!error)onContentReady?.()},[loading,error,skills,onContentReady]);
 
   const filtered = useMemo(() => {
@@ -123,7 +117,7 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions,v
   return (
     <div className="skills-page" data-catalog-state={error?'error':waiting?'loading':filtered.length?'ready':'empty'} aria-busy={waiting||undefined}>
       <div className="skills-page-head">
-        <h1 className="page-title">技能库</h1>{headerActions}
+        <h1 className="page-title">技能库</h1>
         <p className="page-subtitle">
           {waiting?'按流水线层分区浏览技能。':<>共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
           标 <span className="badge badge-warn" style={{ padding: '1px 7px' }}>需 API</span> 的需先配置密钥
@@ -190,14 +184,14 @@ export default function SkillPage({ persona,catalog,renderDrawer,headerActions,v
         ))}
       </div>
 
-      {selected && (renderDrawer?renderDrawer(selected,()=>setSelected(null)):(
+      {selected && (
         <SkillDrawer
           skillName={selected}
           persona={persona}
           onClose={() => setSelected(null)}
           onConfigured={load}
         />
-      ))}
+      )}
     </div>
   );
 }

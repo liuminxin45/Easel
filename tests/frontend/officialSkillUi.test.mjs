@@ -24,11 +24,11 @@ function fixture(file,api){
  return {render(props){cursor=0;const tree=exports.default(props);effects.splice(0).forEach(fn=>fn());return tree},timers};
 }
 
-test('native skill controls keep configuration, explicit execution and inline real results through injected services',async()=>{
+test('native skill controls keep configuration, explicit execution and inline real results through the official API functions',async()=>{
  let configured=false,finish;const calls={reads:0,saves:[],executions:[]};
  const read=async()=>{calls.reads++;return {name:'image',body:'原技能正文',layer:'produce',needsApi:true,apiConfigured:configured,apiSpec:{label:'原生供应商',settings:[],providers:[{id:'provider',name:'供应商',keys:[{env:'IMG_API_KEY',label:'API Key',required:true,secret:true,configured,masked:'',choices:[]}]}]}}};
- const api={fetchSkillDetail:()=>assert.fail('Host detail must use its injected port'),saveEnv:()=>assert.fail('Host save must use its injected port'),executeSkill:()=>assert.fail('Host execution must use its injected port')};
- const f=fixture('SkillDrawer.tsx',api),props={skillName:'image',persona:'exact-profile',onClose:()=>{},onConfigured:()=>{},services:{loadDetail:read,saveEnv:async updates=>{calls.saves.push(updates);configured=true;return {ok:true,skills:{image:true}}},execute:(...args)=>{calls.executions.push(args);return new Promise(resolve=>{finish=resolve})}}};
+ const api={fetchSkillDetail:read,saveEnv:async updates=>{calls.saves.push(updates);configured=true;return {ok:true,skills:{image:true}}},executeSkill:(...args)=>{calls.executions.push(args);return new Promise(resolve=>{finish=resolve})}};
+ const f=fixture('SkillDrawer.tsx',api),props={skillName:'image',persona:'exact-profile',onClose:()=>{},onConfigured:()=>{}};
  let tree=f.render(props);await tick();tree=f.render(props);
  assert.equal(tree.type,'Drawer');assert.equal(calls.executions.length,0);
  assert.deepEqual(nodes(tree).filter(node=>node.props?.className==='panel-title').map(text),['🔑 原生供应商 · API 配置（任选一个服务商填齐即可用）','▶ 运行','📖 说明']);

@@ -200,13 +200,16 @@ class ProfileService:
         if type(value.get('base_revision')) is not int or value.get('base_revision') != (old['revision'] if old else 0):
             raise CreatorConflict('画像已有新修订，请重新核对')
         document = value.get('document')
-        fields = {'name', 'identity', 'audience', 'voice', 'boundaries', 'default_skills', 'skill_versions', 'task_skill_versions', 'asset_refs', 'active','media_defaults'}
+        fields = {'name', 'identity', 'audience', 'voice', 'boundaries', 'default_skills', 'skill_versions', 'task_skill_versions', 'asset_refs', 'active','media_defaults','creation_defaults'}
         if not isinstance(document, dict) or set(document) - fields:
             raise ValueError('画像只保存身份、读者、表达、技能和资产引用')
         from easel_workbench.features.skills.retirement import native_mode
         result = copy.deepcopy(old) if old else {'id': pid, 'account_ids': [], 'default_skills': {} if native_mode(self.root) else copy.deepcopy(TASK_DEFAULTS), 'asset_refs': [], 'active': True, 'created_at': stamp()}
         for field in ('name', 'identity', 'audience', 'voice', 'boundaries'):
             result[field] = text(document.get(field, result.get(field, '')), 120 if field == 'name' else 12000, field == 'name')
+        if 'creation_defaults' in document:
+            from easel_workbench.features.news_creation import validate_defaults
+            result['creation_defaults'] = validate_defaults(self.root, document['creation_defaults'])
         if 'media_defaults' in document:
             defaults=document['media_defaults']
             if not isinstance(defaults,dict) or set(defaults)-{'speech','image','video','music','transcribe'}:raise ValueError('画像媒体默认值无效')

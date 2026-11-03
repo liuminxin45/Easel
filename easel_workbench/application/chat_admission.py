@@ -56,7 +56,7 @@ class ChatAdmission:
         if not isinstance(attachments,list) or len(attachments)>32:raise ValueError('附件列表无效')
         if not message.strip() and not attachments:raise ValueError('请输入消息或添加素材')
         context=value.get('context') or {}
-        if not isinstance(context,dict) or set(context)-{'skill_id','version','action_id','profile_id','plan_token','work_id','parent_version_id','trial','article_id','article_mode','skill_revision'}:
+        if not isinstance(context,dict) or set(context)-{'skill_id','version','action_id','profile_id','plan_token','work_id','parent_version_id','trial','article_id','article_mode','skill_revision','creation'}:
             raise ValueError('对话启动上下文无效')
         signature=sha(value)
         with self.store.connect() as c:

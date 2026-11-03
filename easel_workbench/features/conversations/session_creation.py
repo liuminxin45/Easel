@@ -100,7 +100,7 @@ class SessionCreation:
 
     @staticmethod
     def request(value):
-        if not isinstance(value, dict) or set(value)-{'action', 'id', 'operation_id', 'session_id', 'sessionId', 'profile_id', 'persona', 'title'}:
+        if not isinstance(value, dict) or set(value)-{'action', 'id', 'operation_id', 'session_id', 'sessionId', 'profile_id', 'persona', 'title','news_article_id','news_new_session'}:
             raise ValueError('新建对话请求格式无效')
         if value.get('action', 'create') != 'create':
             raise ValueError('仅支持核对新建对话')

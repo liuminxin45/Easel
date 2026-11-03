@@ -206,6 +206,19 @@ class ChatBusiness:
             message=text(value.get('message',''),100000)
             attachments=self._attachments(value,native=True)
             if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
+            if context.get('creation') is not None:
+                from easel_workbench.features.news_creation import NewsCreation
+                tid=value.get('turnId') or value.get('turn_id') or value.get('id')
+                prepared=NewsCreation(self.box).prepare(context['creation'],session['profile_id'],context.get('article_id'),tid)
+                if prepared['creation']['intent']=='produce':
+                    if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
+                    if context.get('skill_id')!='content-production':raise ValueError('新闻制作须调用内容生产技能')
+                elif context.get('skill_id'):raise ValueError('讨论不启动制作技能')
+                message=prepared['input_text']
+                # Material identities and selected bytes are server-owned, never
+                # supplied as arbitrary paths by an HTTP caller.
+                for item in prepared['material_manifest']['files']:
+                    attachments.append({**item,'path':str(self.root/item['path'])})
             if context.get('skill_id'):
                 if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
                 from easel_workbench.runtime.native_skills import service
@@ -213,7 +226,7 @@ class ChatBusiness:
             else:
                 from easel_workbench.runtime.native_skills import service
                 message=service(self.box,self.chat).prepare_chat_message(message,session['profile_id'])
-            source=self._news_source(value)
+            source=self._news_source(value) if context.get('creation') is None else None
             if source:message+='\n\n## 本轮指定来源\n'+packed(source)
             if attachments:message+='\n\n## 本轮附件\n'+packed(attachments)
             return {'snapshot':None,'actual_prompt':message,'work':None,'frozen_instructions':self._workspace(session)}

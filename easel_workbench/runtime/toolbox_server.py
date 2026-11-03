@@ -604,6 +604,25 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             return reply(result)
         if path.startswith('/api/periodicals/'):
             return reply(await asyncio.to_thread(periodical.original,ident(path.rsplit('/',1)[-1])))
+        creation_asset=re.fullmatch(r'/api/news/creation-assets/([A-Za-z0-9_-]+)/(\d+)',path)
+        if creation_asset:
+            from easel_workbench.features.news_creation import NewsCreation
+            try:
+                asset=await asyncio.to_thread(NewsCreation(box).asset,creation_asset[1],int(creation_asset[2]))
+                data=await asyncio.to_thread(asset.read_bytes)
+                return Response(data,media_type=mimetypes.guess_type(asset.name)[0] or 'application/octet-stream',headers={'Cache-Control':'private, no-cache','X-Content-Type-Options':'nosniff'})
+            except (ValueError,OSError) as exc:return error(404,str(exc))
+        creation_context=re.fullmatch(r'/api/news/([A-Za-z0-9_-]+)/creation-context',path)
+        if creation_context:
+            from easel_workbench.features.news_creation import NewsCreation
+            from easel_workbench.features.conversations.news_links import current,summary
+            try:
+                pid=q.get('profile_id','oil-pig');result=await asyncio.to_thread(NewsCreation(box).context,creation_context[1],pid)
+                def linked():
+                    with store.connect() as c:return summary(current(c,creation_context[1],pid))
+                result['linked_session']=await asyncio.to_thread(linked)
+                return reply(result)
+            except ValueError as exc:return error(400,str(exc))
         if path.startswith('/api/news/'):
             aid=ident(path.rsplit('/',1)[-1]);detail=await asyncio.to_thread(store.detail,aid)
             if not detail:return error(404,'资讯不存在')

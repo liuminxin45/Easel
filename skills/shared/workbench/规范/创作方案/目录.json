@@ -6,7 +6,7 @@
       "id": "editorial-writing",
       "name": "清楚、克制、有依据的解释",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/editorial-writing-v1.md",
-      "prompt_sha256": "b76c5190728a9992ea9f9144c0e6fa0b2394ac1c956046c18f189cdef14ba376",
+      "prompt_sha256": "83d30d876080d553decb90510b4bda03dad1b26e6aa16d507c8a16989997fd67",
       "revision": 1,
       "slot": "writing",
       "status": "confirmed"
@@ -16,7 +16,7 @@
       "id": "article-writing",
       "name": "长文：围绕一个问题组织完整意思",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/article-writing-v1.md",
-      "prompt_sha256": "df9e5fffd97de8203ebc57712210039fed70dc73cf91d6b7f536e8ca6909c897",
+      "prompt_sha256": "45cee3493b1ffd7dffb249b17cc5591ef44def57732b4dcf6016031d60962498",
       "revision": 1,
       "slot": "writing",
       "status": "confirmed"
@@ -41,7 +41,7 @@
       "id": "editorial-poster",
       "name": "Kimi v0.4：清楚层次与关系解释",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/editorial-poster-v1.md",
-      "prompt_sha256": "a76a550a91d8d2f7f58db9a2f6814221d6f68d5ae9dea60f84a9a042f76a3b8b",
+      "prompt_sha256": "fcbe21ce49038ff79d39649ee7daf777885def344160788c3645e4d692512ead",
       "revision": 1,
       "slot": "visual",
       "status": "confirmed"
@@ -51,7 +51,7 @@
       "id": "scene-visual",
       "name": "油猪大侠：具象场景解释",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/scene-visual-v1.md",
-      "prompt_sha256": "1600354521091e605302527ca6294460ac880f053cc46fab7763dc48e6c01447",
+      "prompt_sha256": "c1a90b271854955c678083fdf52ddd077d4f432bd3040628d0c2131af34a0632",
       "revision": 1,
       "slot": "visual",
       "status": "confirmed"
@@ -76,7 +76,7 @@
       "id": "simple-pig",
       "name": "简笔小猪侠",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/simple-pig-v1.md",
-      "prompt_sha256": "5f696b3c032073fa47d1c6b641883f59a01531d83171d3ef07c49f7374b17a94",
+      "prompt_sha256": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
       "revision": 1,
       "slot": "character",
       "status": "confirmed"
@@ -94,7 +94,7 @@
       "id": "wuxia-pig",
       "name": "精致武侠小猪",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/wuxia-pig-v1.md",
-      "prompt_sha256": "d6d1afaf162a08d83e213c240650b8199b97c610cfc98027b658d7aed0ec5c14",
+      "prompt_sha256": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
       "revision": 1,
       "slot": "character",
       "status": "confirmed"
@@ -104,7 +104,7 @@
       "id": "by-purpose",
       "name": "按主题选择角色与素材",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/by-purpose-v1.md",
-      "prompt_sha256": "6238f4260a39533fdcf3053ae2297b7304e947e998ba89d3cd22c93a62bd80d8",
+      "prompt_sha256": "bf115a0177a790f88ce8f0b615ef7e59c854442ca83ead2997c02dd0596504c5",
       "revision": 1,
       "slot": "character",
       "status": "confirmed"
@@ -114,7 +114,7 @@
       "id": "page-roles",
       "name": "按内容分工组织整组",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/page-roles-v1.md",
-      "prompt_sha256": "29b767680cefd78bf7c6f41796b060c1bcd3a011a9fc9ecc5745c751894f4570",
+      "prompt_sha256": "388e897fbcf746caad35e214001f6b7fcce330bb539af5aacacc77529bf8e02e",
       "revision": 1,
       "slot": "layout",
       "status": "confirmed"
@@ -139,7 +139,7 @@
       "id": "typographic",
       "name": "工具合集：排字封面试用",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/typographic-v1.md",
-      "prompt_sha256": "a63998efc9cf910d4ffd7120ec830ee7f00ad787b0a5e4b00ed55cf77dd44187",
+      "prompt_sha256": "543889bad4789d09619b8aa64efdba3b476586e37b5c95e62c6a051df0e7b2eb",
       "revision": 1,
       "slot": "visual",
       "status": "candidate"
@@ -149,7 +149,7 @@
       "id": "tool-writing",
       "name": "工具合集：按任务与选择理由",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tool-writing-v1.md",
-      "prompt_sha256": "a7795b03df717f92ccff093323a78dc5892999aa01811a640d8e3a0817ad7a93",
+      "prompt_sha256": "a048341340ca6da405f29caf4080c64fea29effa43e21751f6d3c5db8175815a",
       "revision": 1,
       "slot": "writing",
       "status": "candidate"
@@ -167,7 +167,7 @@
       "id": "tech-pulse",
       "name": "Tech Pulse v01 固定母版",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tech-pulse-v1.md",
-      "prompt_sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "prompt_sha256": "cef547e31078fdea2245bfdfe1bccebf66946742be16c5dc46ca7f9cd887461b",
       "revision": 1,
       "slot": "visual",
       "status": "confirmed"
@@ -177,7 +177,7 @@
       "id": "tech-writing",
       "name": "Tech Pulse：沿用本期栏目文案规范",
       "prompt_file": "skills/shared/workbench/规范/创作方案/组件/tech-writing-v1.md",
-      "prompt_sha256": "bcbc12b5590fe08cad651b2967875ea8500d8fa885bcaf314b527afd91e8fbf6",
+      "prompt_sha256": "7a847a70f029cb8a32ff60bad92bc4fb46b068b57d653b7492130e727c6a28fd",
       "revision": 1,
       "slot": "writing",
       "status": "confirmed"
@@ -280,6 +280,6 @@
       "status": "confirmed"
     }
   ],
-  "revision": 1,
+  "revision": 2,
   "schema_version": 1
 }

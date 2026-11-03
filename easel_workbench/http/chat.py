@@ -73,6 +73,11 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
         if path=='/api/chat/submit' and method=='POST':
             if admissions is None:return response({'error':'接收端口未连接'},503)
             return response(await admissions.receive(value),202)
+        creation_review=re.fullmatch(r'/api/chat/turns/([A-Za-z0-9_-]+)/creation',path)
+        if creation_review and get:
+            from easel_workbench.features.news_creation import NewsCreation
+            turn=await run_sync(service.get_turn,creation_review[1],private=True)
+            return response(await run_sync(NewsCreation(business.box).review,turn))
         match=re.fullmatch(r'/api/chat/products/([A-Za-z0-9_-]+)(?:/files/([a-f0-9]{64}))?',path)
         if match and get:
             from easel_workbench.features.works.products import ChatProducts

@@ -63,6 +63,8 @@ class ChatService:
             ):
                 c.execute(statement)
         from .session_creation import SessionCreation
+        from .news_links import initialize as initialize_news_links
+        with self.store.connect() as c:initialize_news_links(c)
         self.session_creations = SessionCreation(self)
 
     def _session(self, c, session_id):
@@ -127,6 +129,15 @@ class ChatService:
                 creation = guard(c, operation, signature)
                 if creation:
                     execution_settings = json.loads(creation['settings'])
+                from .news_links import creation as news_creation,bind as bind_news
+                article_id,reused=news_creation(c,value)
+                if reused:
+                    result={'session':copy.deepcopy(reused),'reused':True}
+                    c.execute('INSERT INTO easel_chat_operations VALUES(?,?,?)',(operation,signature,packed(result)))
+                    from .session_creation import complete,TABLE
+                    c.execute('UPDATE '+TABLE+' SET session_id=?,settings=? WHERE id=?',(reused['id'],packed(reused.get('execution_settings',execution_settings)),operation))
+                    complete(c,operation,result)
+                    return result
                 owned_output_path(self.root,'outputs/_sessions')
                 session_id = identity(creation['session_id'] if creation else value.get('session_id') or value.get('sessionId') or 'workbench-' + uuid.uuid4().hex)
                 if c.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?', (session_id,)).fetchone():
@@ -137,13 +148,17 @@ class ChatService:
                 persona = value.get('persona')
                 if persona is not None:
                     text(persona, 200, True)
-                session = {'id': session_id, 'title': text(value.get('title', '新对话'), 200, True),
+                source_title=c.execute('SELECT title FROM articles WHERE id=?',(article_id,)).fetchone()[0] if article_id else '新对话'
+                session = {'id': session_id, 'title': text(value.get('title',source_title[:200]), 200, True),
                            'title_source': 'manual' if value.get('title') not in (None, '新对话', 'New Chat') else 'default',
                            'profile_id': profile_id, 'persona': persona, 'runtime': execution_settings['runtime'],
                            'execution_settings': execution_settings,
                            'created': int(time.time() * 1000), 'updated': now(), 'sessionKey': session_id,
                            'revision': 1, 'archived': False, 'pendingTurnId': None}
                 if internal:session['internal_skill_run']=True
+                if article_id:
+                    session['source_article_id']=article_id
+                    bind_news(c,article_id,session)
             else:
                 session = self._session(c, session_id)
                 if session.get('deleted_at'):
@@ -337,6 +352,8 @@ class ChatService:
             messages.append({'id': turn['id'], 'role': 'assistant', 'content': turn.get('output', ''),
                              'timestamp': turn['updated_at'], 'status': self.get_turn(turn['id'])['status'],
                              'runtime': turn['runtime'], 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
+            if turn.get('context',{}).get('creation'):
+                messages[-1]['creation']=copy.deepcopy(turn['context']['creation'])
             if turn.get('work') and turn['work'] not in linked:
                 linked.append(copy.deepcopy(turn['work']))
         session['messages'] = messages
@@ -402,7 +419,7 @@ class ChatService:
                 sandbox=config['sandbox'], codex_auto_approve=config['codex_auto_approve']))
         frozen_instructions = text(frozen_instructions, 1024 * 1024, True)
         context = value.get('context', {})
-        if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode', 'skill_revision'}:
+        if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode', 'skill_revision','creation'}:
             raise ValueError('对话启动上下文无效')
         if 'trial' in context and type(context['trial']) is not bool:
             raise ValueError('技能试用标记必须为布尔值')
@@ -447,6 +464,7 @@ class ChatService:
                     'status': 'accepted', 'delivery_state': 'not_started', 'created_at': now(), 'updated_at': now(),
                     'output': '', 'thinking': '', 'activity': '', 'attachments': copy.deepcopy(value.get('attachments') or []),
                     'native_id': '', 'work': copy.deepcopy(work), 'hook_status': 'not_started'}
+            if context.get('creation'):turn['profile_id']=session['profile_id']
             if self.on_accept:
                 accepted = self.on_accept(c, turn)
                 if inspect.isawaitable(accepted):

@@ -110,6 +110,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             if action=='rename':return response(await run_sync(service.rename_session,sid,value))
             if action=='auto-title':return response(await run_sync(service._command,action,value,sid))
             if action=='archive':return response(await run_sync(service.archive_session,sid,value))
+            if action=='delete':return response(await run_sync(service.delete_session,sid,value))
             raise ValueError('不支持的对话操作')
         match=re.fullmatch(r'/api/chat/sessions/operations/([A-Za-z0-9_.-]+)/resolve',path)
         if match and method=='POST':

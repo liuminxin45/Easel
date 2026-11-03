@@ -58,6 +58,18 @@ test('small current conversations add no pagination controls or alternate shell'
  assert.equal(ui.chat.composer.disabled,false);
 });
 
+for(const state of ['archived','deleted'])test(`a ${state} direct URL preserves exact local draft and refuses send or resend before uploads`,async()=>{
+ const initial=retainedDraft(),f=fixture({draft:initial,receipt:{turn_id:'old-turn',execution_status:'completed',delivery_state:'accepted',context:{profile_id:'oil-pig'},skill_refs:[{id:'topic-research',version:2}]}});
+ if(state==='archived')f.resources.session.archived=true;else f.resources.session.deleted_at='2026-11-03T09:00:00Z';
+ f.resources.session.messages=[{role:'user',content:'原问题',attachments:[{id:'old-file',name:'原素材.txt',path:'old-file'}]},{role:'assistant',content:'原回答',turnId:'old-turn'}];
+ let uploads=0;f.vm.service.uploadFiles=async()=>{uploads++;throw Error('Read-only conversation must not upload')};
+ const ui=f.render();assert.equal(ui.chat.composer.disabled,true);assert.equal(ui.chat.composer.canSend,false);
+ assert.match(ui.chat.composer.placeholder,/仅可查看/);assert.equal(ui.chat.canResend(f.resources.session.messages[0],0),false);
+ ui.chat.onSend();await tick();ui.chat.onResend(0);await tick();
+ assert.equal(uploads,0);assert.equal(f.calls.post.length,0);assert.equal(f.calls.submit.length,0);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.get.length,0);
+ assert.deepEqual(plain(f.draft),initial);assert.equal(ui.chat.session.messages.length,2,'original history remains visible');
+});
+
 test('confirmed explicit stop clears stale connection notices while preserving all later editable input',async()=>{
  const f=fixture();f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();callbacks[8]();
  const later=retainedDraft();f.draft={...later,pending:f.draft.pending};const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');

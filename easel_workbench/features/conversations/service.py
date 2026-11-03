@@ -144,6 +144,8 @@ class ChatService:
                            'revision': 1, 'archived': False, 'pendingTurnId': None}
             else:
                 session = self._session(c, session_id)
+                if session.get('deleted_at'):
+                    raise ChatConflict('这份对话已从列表删除；历史与原文件仍保留，请新建对话')
                 expected = value.get('expected_revision')
                 if type(expected) is not int or expected != session['revision']:
                     raise ChatConflict('对话已有新修订，请重新核对')
@@ -165,15 +167,20 @@ class ChatService:
                     if not c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?', (session_id,)).fetchone():
                         raise ChatConflict('空对话不自动命名')
                     session.update(title=text(value.get('title'), 200, True), title_source='automatic')
-                else:
+                elif action == 'delete':
+                    self._require_deletable(c,session)
+                    session.update(deleted_at=now(),archived=True)
+                elif action == 'archive':
                     if session.get('pendingTurnId') or session.get('pendingSubmissionId'):
                         raise ChatConflict('这份对话尚有运行或待核对回合，不能归档')
                     if type(value.get('archived', True)) is not bool:
                         raise ValueError('归档开关无效')
                     session['archived'] = value.get('archived', True)
+                else:raise ValueError('不支持的对话操作')
                 session.update(revision=session['revision'] + 1, updated=now())
             self._put_session(c, session)
             result = {'session': copy.deepcopy(session)}
+            if action=='delete':result['deleted']=True
             c.execute('INSERT INTO easel_chat_operations VALUES(?,?,?)', (operation, signature, packed(result)))
             if action == 'create':
                 from .session_creation import complete
@@ -201,9 +208,26 @@ class ChatService:
     def archive_session(self, session_id, value):
         return self._command('archive', value, session_id)
 
+    def _require_deletable(self,c,session):
+        if session.get('pendingTurnId') or session.get('pendingSubmissionId'):
+            raise ChatConflict('这份对话仍有运行或待核对任务，请先核对原任务后再删除')
+        # Stored tasks are authoritative even when a stale session projection
+        # has lost its pending pointer. Unknown execution is never cancellation.
+        pending=c.execute("""SELECT 1 FROM easel_chat_turns WHERE session_id=? AND (
+            coalesce(json_extract(document,'$.status'),'') NOT IN ('completed','stopped','failed')
+            OR json_extract(document,'$.hook_status') IN ('pending','running')
+            OR json_extract(document,'$.start_hook_status') IN ('pending','running')) LIMIT 1""",(session['id'],)).fetchone()
+        if pending:raise ChatConflict('这份对话仍有运行或结果待核对回合，不能删除')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():
+            pending=c.execute("SELECT 1 FROM easel_chat_submissions WHERE session_id=? AND coalesce(json_extract(document,'$.status'),'') NOT IN ('failed','stopped','dispatched') LIMIT 1",(session['id'],)).fetchone()
+            if pending:raise ChatConflict('这份对话仍有准备中或待核对的请求，不能删除')
+
+    def delete_session(self,session_id,value):
+        return self._command('delete',value,session_id)
+
     def list_sessions(self, *, summaries=False):
         with self.store.connect() as c:
-            items = [json.loads(row[0]) for row in c.execute('SELECT document FROM easel_chat_sessions ORDER BY rowid DESC')]
+            items = [json.loads(row[0]) for row in c.execute("SELECT document FROM easel_chat_sessions WHERE json_extract(document,'$.deleted_at') IS NULL ORDER BY rowid DESC")]
             if summaries:
                 counts={row[0]:row[1]*2 for row in c.execute('SELECT session_id,count(*) FROM easel_chat_turns GROUP BY session_id')}
                 if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():

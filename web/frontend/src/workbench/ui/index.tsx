@@ -63,6 +63,18 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  };
  const changeProfile=(id:string)=>{if(id==='__new__'){open('/toolbox?section=profiles&item=new');return}patch({profile_id:id});void createChat(id)};
  const sessionCommand=(action:string,id:string,extra:JsonRecord={})=>void chatAction.run(async()=>{const current=sessions.data?.sessions.find(value=>value.id===id);await vm.client.mutate('chat:'+action+':'+id,'/api/chat/sessions',{action,session_id:id,expected_revision:current?.revision,...extra});});
+ const deleteSession=(id:string)=>{
+  if(!window.confirm('确定删除这条对话？'))return;
+  void chatAction.run(async()=>{
+   const current=sessions.data?.sessions.find(value=>value.id===id);
+   if(!current)throw Error('这份对话已变化，请重新读取列表。');
+   const result=await vm.client.mutate<JsonRecord>('chat:delete:'+id,'/api/chat/sessions',{action:'delete',session_id:id,expected_revision:current.revision});
+   if(result.deleted!==true||string(record(result.session).id)!==id)throw Error('原删除回执尚未核对，请重新读取列表。');
+   vm.client.updateResource<NativeSessions>('/api/chat/sessions',previous=>({...previous,sessions:previous.sessions.filter(session=>session.id!==id)}));
+   const route=new URL(vm.navigation.path,location.origin);
+   if(route.pathname==='/chat/'+encodeURIComponent(id)||route.pathname==='/chat'&&route.searchParams.get('session')===id)vm.replace('/toolbox');
+  });
+ };
 
  let page:React.ReactNode;
  if(p==='/chat'||p.startsWith('/chat/'))page=nativeId?<ChatSessionView key={nativeId+':'+(q.get('history_before')||'latest')} id={nativeId} search={q}/>:q.get('flow')?<SessionOpenStage client={vm.client} flow={sessionFlow}/>:<ChatLanding client={vm.client} sessions={sessions.data} loading={sessions.loading} error={sessions.error||chatAction.error} fresh={q.has('skill')||q.get('fresh')==='1'} onOpen={id=>vm.replace('/chat/'+encodeURIComponent(id))} onCreate={()=>void createChat()}/>;
@@ -83,7 +95,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   compactQuery:COMPACT_LAYOUT_QUERY,registerLayer:vm.navigation.registerLayer,
   personas:[],selectedPersona:profile,onPersonaChange:changeProfile,onNewProfile:()=>open('/toolbox?section=profiles&item=new'),
   sessions:sessions.data?.sessions||[],activeSessionId:nativeId||null,hasMessages:session=>!!(session as import('./ChatSessionView').NativeSession).message_count||session.messages?.length>0,
-  onSessionSelect:id=>open('/chat/'+encodeURIComponent(id)),onSessionDelete:()=>{},canDeleteSession:false,
+  onSessionSelect:id=>open('/chat/'+encodeURIComponent(id)),onSessionDelete:deleteSession,
   onSessionRename:(id,title)=>sessionCommand('rename',id,{title}),onSessionArchive:(id,archived)=>sessionCommand('archive',id,{archived}),onNewChat:()=>void createChat(),
   gatewayStatus:runtimeStatus.data?.gateway===true?'connected':runtimeStatus.loading?'connecting':'disconnected',apiDirect:runtimeStatus.data?.runtime==='api',agentRuntime:string(runtimeStatus.data?.runtime)||'codex',
   statusText:vm.reachable===false?'暂时离线':runtimeStatus.error?'运行环境检测失败':runtimeStatus.data?.error?string(runtimeStatus.data.error):undefined,

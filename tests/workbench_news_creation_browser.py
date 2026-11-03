@@ -159,6 +159,12 @@ def main():
                 if mobile:
                     assert geometry['height']<=180 and abs(geometry['bottom']-height)<=2,geometry
                     expect(page.locator('.ew-news-article h1')).to_be_in_viewport()
+                    trigger=page.get_by_role('button',name='打开导航',exact=True)
+                    expect(trigger).to_be_visible()
+                    right=trigger.evaluate('(n)=>n.getBoundingClientRect().right')
+                    prose_left=page.locator('.ew-news-prose').evaluate('(n)=>n.getBoundingClientRect().left')
+                    assert prose_left>=right,{'prose_left':prose_left,'navigation_trigger_right':right}
+                    geometry.update(prose_left=prose_left,navigation_trigger_right=right)
                 report.setdefault('reading_geometry',{})[case]=geometry
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1');shot('reading')
                 page.get_by_role('button',name='采集记录',exact=True).click();record=page.get_by_role('dialog',name='采集记录',exact=True);expect(record.locator('.ew-news-raw')).to_have_text(BODY)
@@ -171,7 +177,15 @@ def main():
                 assert not list((f['root']/'outputs').glob('TEMP-news-created/run-*'))
                 assert history['session']['source_article_id']==article
                 assert history['session']['title']==TITLE,'News session must use the selected headline, not a generic discussion instruction'
-                mark(case,'double-click discussion admits once, uses ordinary native chat and produces no files')
+                # Deliberately use SPA navigation: a full document reload would
+                # hide stale creation-context cache and admit a duplicate turn.
+                page.get_by_role('button',name='新闻详情',exact=True).click()
+                expect(page.get_by_role('button',name='继续讨论',exact=True)).to_be_enabled()
+                prior_posts=len(post_bodies());page.get_by_role('button',name='继续讨论',exact=True).click()
+                expect(page.get_by_role('textbox',name='对话输入')).to_be_visible()
+                page.wait_for_timeout(300)
+                assert session_id(page)==sid and len(post_bodies())==prior_posts and len(f['adapter'].requests)==1
+                mark(case,'double-click discussion admits once, uses ordinary native chat and produces no files',spa_return_reuses_session_without_submit=True)
                 before=current_context(profile);drawer=creation_drawer('贴图');available=before['components']
                 style={slot:next(item['id'] for item in values if item['available']) for slot,values in available.items()}
                 assert all(any(item['available'] and item['id']==cid for item in available[slot]) for slot,cid in [('character','simple-pig'),('character','wuxia-pig')])

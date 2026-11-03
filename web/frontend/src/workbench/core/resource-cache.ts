@@ -54,6 +54,8 @@ export function resourceTags(path:string):string[]{
  if(p==='/api/studio/bootstrap')return ['studio','works','publications','metrics','comments','foundation','distribution','collection'];
  if(p==='/api/studio/context')return ['foundation',...(target.searchParams.get('work_id')?['work:'+target.searchParams.get('work_id')]:[])];
  if(p==='/api/studio/foundation'||p==='/api/style-presets')return ['foundation'];
+ const creation=p.match(/^\/api\/news\/([^/]+)\/creation-context$/);
+ if(creation)return ['news','news:'+creation[1],'creator','news-creation'];
  if(p==='/api/news'||p.startsWith('/api/periodicals/'))return ['news'];
  if(p.startsWith('/api/news/'))return ['news:'+p.slice('/api/news/'.length)];
  if(p.startsWith('/api/distribution/'))return ['distribution'];

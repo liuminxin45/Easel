@@ -24,6 +24,14 @@ test('discussion carries the exact source but does not select a production skill
 for(const field of ['pendingTurnId','pendingSubmissionId'])test(field+' navigates to the original receipt and cannot submit another turn',async()=>{
  const f=setup({[field]:'original-turn'});await assert.rejects(f.run(),/待核对/);assert.equal(f.calls.length,0);assert.equal(f.opened,0);assert.equal(f.navigations.length,1);
 });
+test('even a stale news page cannot submit a new discussion to an already used source conversation',async()=>{
+ const f=setup({messages:[{role:'user',content:'原讨论'}]});await f.run({...f.creation,intent:'discuss'});assert.equal(f.calls.length,0);assert.deepEqual(f.navigations,['/chat/same-session']);
+});
+test('news creation metadata participates in exact source and profile invalidation',()=>{
+ const {resourceTags}=moduleLoader()('workbench/core/resource-cache.ts');
+ const tags=resourceTags('/api/news/exact-article/creation-context?profile_id=oil-pig');
+ for(const tag of ['news','news:exact-article','creator'])assert.ok(tags.includes(tag));
+});
 for(const fields of [{profile_id:'other-profile'},{source_article_id:'other-news'},{archived:true},{deleted_at:'saved'}])test('incompatible or read-only existing context is not silently replaced '+JSON.stringify(fields),async()=>{
  const f=setup(fields);await assert.rejects(f.run());assert.equal(f.calls.length,0);assert.equal(f.opened,0);
 });

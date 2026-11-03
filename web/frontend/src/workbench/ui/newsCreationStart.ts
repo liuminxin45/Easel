@@ -9,6 +9,9 @@ export async function startNewsTurn(client:WorkbenchClient,articleId:string,prof
  if(session.profile_id!==profileId)throw Error('已有会话保持原画像，请返回新闻页选择对应画像。');
  if(session.archived||session.deleted_at)throw Error('此会话已归档或删除，请从新闻页明确重新开始。');
  if(session.source_article_id&&session.source_article_id!==articleId)throw Error('会话绑定的新闻与当前材料不一致。');
+ if(creation.intent==='discuss'&&session.source_article_id===articleId&&(Number(session.message_count)>0||Array.isArray(session.messages)&&session.messages.length>0)){
+  options.navigate('/chat/'+encodeURIComponent(id));return;
+ }
  const runtime=sessionRuntime(client,id),pending=client.drafts.get<SessionDraft>('chat:'+id)?.pending;
  if(session.pendingTurnId||session.pendingSubmissionId||runtime.state.getState().running||pending&&pending.state!=='rejected'){
   options.navigate('/chat/'+encodeURIComponent(id));throw Error('原任务仍在进行或待核对，请查看原会话，不会重复发送。');

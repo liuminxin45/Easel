@@ -5,3 +5,7 @@
 ## 状态与证据
 
 实现中。逐页审计及前后测量保存在 `.local/workbench-validation/private-lazy-pages-20261103/`。完成后记录实际验证、fork SHA与配对发布；未完成前不标记已部署。
+
+## R2交付
+
+上述私有范围已验证、推自有fork并配对上线；源码11fec1f，后端workbench-20261103-082209，前端native-lazy-pages-20261103-r2。详细测量、剩余共通接口例外及真实设备／模型验证边界见 `docs/workbench/PRIVATE-LAZY-PAGES-20261103.md`。

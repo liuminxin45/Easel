@@ -129,10 +129,10 @@ test('profile binding disclosure requests only full selected current data and ne
  disclosure.props.onToggle({currentTarget:{open:false}});disclosure=renderDisclosure();assert.ok(disclosure.props.children,'first-open resource/form remain mounted across collapse');
  selected=source.type(source.props);form=nodes(selected).find(node=>node.props?.profile===profile);bindings=form.type(form.props);
  assert.deepEqual(JSON.parse(JSON.stringify(draftCache.get('creator:profile-bindings:'+id).asset_refs)),[]);
- nodes(bindings).find(node=>node.props?.children==='保存绑定与默认技能').props.onClick();await new Promise(resolve=>setImmediate(resolve));
+ nodes(bindings).find(node=>node.props?.children==='保存素材绑定').props.onClick();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(commands.length,1);assert.equal(commands[0].action,'profile-save');assert.equal(commands[0].input.base_revision,4);
  for(const key of ['name','identity','audience','voice','boundaries'])assert.equal(commands[0].input.document[key],profile[key]);
- assert.deepEqual(JSON.parse(JSON.stringify(commands[0].input.document.default_skills)),profile.default_skills);
+ assert.equal(commands[0].input.document.default_skills,undefined);
  assert.deepEqual(JSON.parse(JSON.stringify(commands[0].input.document.asset_refs)),[]);
  assert.equal(reads.some(path=>path==='/api/creator/bootstrap'),false);
 });
@@ -163,7 +163,7 @@ test('publishing AI action opens the same server session composer with the selec
 test('unavailable publishing skill cannot start an anonymous model or create a session',async()=>{
  let writes=0;
  const actions=load('nativePublishing.ts',{vm:{client:{mutate:async()=>{writes++}}}}).useNativePublishingActions('creator-a');
- await assert.rejects(actions.check('原稿'),/准确版本/);
+ await assert.rejects(actions.check('原稿'),/所需技能尚不可用/);
  assert.equal(writes,0);
 });
 
@@ -195,4 +195,11 @@ test('native gallery resolves declared virtual file paths independently of displ
  cursor=0;let selectedProject;
  exports.default({renderProjectDetails:project=>{selectedProject=project;return null}});
  assert.equal(selectedProject.meta.version_id,'exact-version','historical project directory must not inherit the root latest version');
+});
+
+
+test('breakdown keeps its original execution port and preserved input without private skill selection or experience polling',()=>{
+ const reads=[],draftCache=new Map([['easel:reference',{text:'  Exact source\nsecond line  ',goal:'Historical goal',task_id:'old-task'}]]),pages=load('nativePages.tsx',{resourceReads:reads,draftCache}),page=pages.NativeBreakdown({profileId:'creator-a',search:new URLSearchParams('skill=reference-analysis&trial=1')});
+ assert.equal(page.type,native.BreakdownPage);assert.equal(page.props.persona,'creator-a');assert.equal(page.props.onAnalyze,undefined);assert.equal(page.props.resultContent,undefined);assert.equal(page.props.analysisBusy,undefined);assert.equal(page.props.inputState.value,'  Exact source\nsecond line  ');assert.equal(reads.length,0);
+ page.props.inputState.onChange('  Later editable source  ');assert.equal(draftCache.get('easel:reference').text,'  Later editable source  ');assert.equal(draftCache.get('easel:reference').task_id,'old-task');
 });

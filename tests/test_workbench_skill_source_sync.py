@@ -18,6 +18,7 @@ runtime=_fixtures.runtime
 
 from easel_workbench import project_skill_sync as sync
 from easel_workbench.runtime.creator_runtime import packed
+from easel_workbench.features.skills.retirement import SkillFeatureRetired
 
 
 @pytest.fixture
@@ -47,12 +48,25 @@ def draft(project,prompt=None,resources=None):
     value={'id':'draft-three','action':'skill-draft','skill_id':sid,'base_version':2,
            'prompt':prompt or before['prompt']+'\nApproved new method.','reason':'TEMP review'}
     if resources is not None:value['resources']=resources
-    return runtime.command(value)['result']['skill']
+    with runtime.store.connect() as c:
+        return runtime.propose(c,sid,2,value['prompt'],value['reason'],operation_id=value['id'],resources=resources)
 
 
 def publish(runtime,sid):
-    return runtime.command({'id':'publish-three','action':'skill-publish','skill_id':sid,'version':3,
-                            'expected_published_version':2,'confirm':True})
+    """Construct an already-admitted historical publication, not a new public command."""
+    value={'id':'publish-three','action':'skill-publish','skill_id':sid,'version':3,
+           'expected_published_version':2,'confirm':True}
+    with runtime.store.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
+        old=c.execute('SELECT 1 FROM creator_operations WHERE id=?',(value['id'],)).fetchone()
+        if old:
+            c.rollback()
+            return runtime.command(value)
+        result=runtime._publish(c,value)
+        response={'id':value['id'],'status':'completed','execution':'script','result':result}
+        from easel_workbench.features.skills.records import digest
+        c.execute('INSERT INTO creator_operations VALUES(?,?,?,?)',(value['id'],digest(packed(value)),packed(response),'historical-time'))
+        return sync.finish_response(runtime,c,response)
 
 
 def admission_module():
@@ -134,7 +148,7 @@ def test_initial_admission_does_not_create_database(tmp_path):
     assert not (tmp_path/'data').exists()
 
 
-def test_candidate_never_changes_source_and_publish_preserves_original_versions(project):
+def test_historical_outbox_fixture_preserves_original_versions(project):
     runtime,sid,file,resource=project;original=file.read_bytes()
     with runtime.store.connect() as c:old=c.execute('SELECT document FROM creator_skill_versions WHERE skill_id=? AND version=2',(sid,)).fetchone()[0]
     candidate=draft(project);assert file.read_bytes()==original
@@ -150,7 +164,7 @@ def test_candidate_never_changes_source_and_publish_preserves_original_versions(
     assert resource.read_bytes()==b'Original reference'
 
 
-def test_partial_write_is_closed_and_same_operation_reconciles_without_new_publication(project,monkeypatch):
+def test_partial_historical_write_stays_closed_and_public_receipt_does_not_restart_it(project,monkeypatch):
     runtime,sid,file,resource=project
     before=runtime.detail('skill',sid);original=resource.read_bytes()
     resource.write_bytes(b'New frozen reference')
@@ -168,8 +182,8 @@ def test_partial_write_is_closed_and_same_operation_reconciles_without_new_publi
     monkeypatch.setattr(sync,'_atomic',atomic)
     second=publish(runtime,sid)
     assert second['result']['source_sync']['id']==first['result']['source_sync']['id']
-    assert second['result']['source_sync']['status']=='applied'
-    assert sync.matches_source(runtime,runtime.detail('skill',sid))
+    assert second==first and second['result']['source_sync']['status']=='blocked'
+    assert not sync.matches_source(runtime,runtime.detail('skill',sid))
     with runtime.store.connect() as c:
         assert c.execute("SELECT count(*) FROM creator_skill_events WHERE skill_id=? AND action='publish'",(sid,)).fetchone()[0]==1
 
@@ -190,28 +204,12 @@ def test_completed_publish_receipt_cannot_overwrite_later_manual_source_edits(pr
     draft(project);publish(runtime,sid)
     file.write_bytes(original)  # even a known old release is now an external edit
     response=publish(runtime,sid)
-    assert response['result']['source_sync']['status']=='blocked' and file.read_bytes()==original
+    assert response['result']['source_sync']['status']=='applied' and file.read_bytes()==original
     assert not sync.matches_source(runtime,runtime.detail('skill',sid))
 
 
-def test_revert_publishes_exact_old_local_release_without_rewriting_ledger(project):
-    runtime,sid,file,_=project;original=file.read_bytes()
-    draft(project);publish(runtime,sid)
-    response=runtime.command({'id':'revert-local','action':'skill-revert','skill_id':sid,'version':2,
-                              'expected_published_version':3,'confirm':True})
-    assert response['result']['source_sync']['status']=='applied' and file.read_bytes()==original
-    assert runtime.detail('skill',sid,3)['status']=='published'
 
 
-def test_external_old_release_revert_does_not_convert_or_overwrite_project_source(project):
-    runtime,sid,file,_=project;original=file.read_bytes()
-    response=runtime.command({'id':'legacy-revert','action':'skill-revert','skill_id':sid,'version':1,
-                              'expected_published_version':2,'confirm':True})
-    assert 'source_sync' not in response['result']
-    assert file.read_bytes()==original and runtime.detail('skill',sid)['entry'].startswith('.agents/')
-    restored=runtime.command({'id':'return-project','action':'skill-revert','skill_id':sid,'version':2,
-                              'expected_published_version':1,'confirm':True})
-    assert restored['result']['source_sync']['status']=='applied' and file.read_bytes()==original
 
 
 def test_frozen_derived_baseline_is_retained_without_becoming_writable_source(project):
@@ -239,19 +237,28 @@ def test_frozen_derived_baseline_is_retained_without_becoming_writable_source(pr
         assert old_path not in {item['path'] for item in plan['files']}
 
 
-def test_all_eight_actual_activation_dry_run_releases_match_current_sources(tmp_path):
+@pytest.mark.parametrize('version',[1,2])
+def test_new_revert_is_retired_and_cannot_overwrite_historical_source_or_pointer(project,version):
+    runtime,sid,file,_=project;original=file.read_bytes()
+    with runtime.store.connect() as c:
+        before=[tuple(r) for r in c.execute('SELECT * FROM creator_skill_pointers')]
+        versions=[tuple(r) for r in c.execute('SELECT * FROM creator_skill_versions')]
+    with pytest.raises(SkillFeatureRetired):runtime.command({'id':'new-revert','action':'skill-revert',
+        'skill_id':sid,'version':version,'expected_published_version':2,'confirm':True})
+    assert file.read_bytes()==original
+    with runtime.store.connect() as c:
+        assert [tuple(r) for r in c.execute('SELECT * FROM creator_skill_pointers')]==before
+        assert [tuple(r) for r in c.execute('SELECT * FROM creator_skill_versions')]==versions
+
+
+def test_native_admission_uses_current_sources_without_requiring_private_database_releases(tmp_path):
     root=Path(__file__).resolve().parents[1]
-    artifact=root/'.local/workbench-validation/builtin-skill-activation/dry-run.json'
-    if not artifact.is_file():pytest.skip('Local integration evidence is generated by the activation dry-run')
-    plan=json.loads(artifact.read_text(encoding='utf-8'))
-    assert len(plan['skills'])==8
-    runtime=SimpleNamespace(project=root)
-    with sqlite3.connect(tmp_path/'readonly-evidence.sqlite') as c:
-        for item in plan['skills']:
-            release=item['release'];sync.validate_metadata(release)
-            assert sync.matches_source(runtime,release,c),item['id']
-            changed=copy.deepcopy(release)
-            header,body=sync.parse_skill(changed['prompt'])
-            header['metadata']['openclaw']['workbench']['tasks']=['forged-execution-scope']
-            changed['prompt']='---\n'+yaml.safe_dump(header,allow_unicode=True,sort_keys=False)+'---\n'+body
-            with pytest.raises(ValueError,match='不能通过原始技能头部'):sync.validate_metadata(changed)
+    from easel_workbench.skill_catalog import ProjectSkillCatalog
+    entries=ProjectSkillCatalog(root).entries()
+    before={root/e['entry']:(root/e['entry']).read_bytes() for e in entries}
+    result=admission_module().validate_published_skills(tmp_path,source_root=root)
+    assert result['mode']=='easel-native' and result['checked']==len(entries)==7
+    assert {row['id'] for row in result['skills']}=={e['id'] for e in entries}
+    assert all(row['source']=='SKILL.md' and 'version' not in row for row in result['skills'])
+    assert not (tmp_path/'data/desk.sqlite').exists()
+    assert all(path.read_bytes()==raw for path,raw in before.items())

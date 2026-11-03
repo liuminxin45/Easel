@@ -25,7 +25,7 @@ export class SessionRuntime {
  }
  private acknowledge(turn:FrozenTurn){
   const current=this.client.drafts.get<SessionDraft>('chat:'+this.id),same=current&&draftFingerprint({text:current.text,files:current.files,command:current.command,article_id:current.article_id,article_mode:current.article_mode})===draftFingerprint(turn.inputs);
-  this.patch({...(same&&!current?.pending?.accepted?{text:'',files:[],command:null,...(['poster','article','change'].includes(string(turn.context.action_id))?{article_id:undefined,article_mode:undefined}:{})}:{}),pending:{...turn,state:'accepted',accepted:true}});this.state.setState({accepted:true});
+  this.patch({...(same&&!current?.pending?.accepted?{text:'',files:[],command:null,...((['poster','article','change'].includes(string(turn.context.action_id))||string(turn.context.action_id)==='native'&&!!turn.inputs.article_id&&turn.context.article_id===turn.inputs.article_id)?{article_id:undefined,article_mode:undefined}:{})}:{}),pending:{...turn,state:'accepted',accepted:true}});this.state.setState({accepted:true});
  }
  private clearRecovery(){if(this.recoveryTimer)clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined}
  private scheduleRecovery(turn:FrozenTurn,profileId:string,delay=1500){

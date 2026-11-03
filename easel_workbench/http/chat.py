@@ -10,11 +10,13 @@ import re
 import asyncio
 import contextlib
 
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from easel.web_services.concurrency import run_sync
 
 from easel_workbench.features.conversations.receipts import ChatConflict, identity
 from easel_workbench.contracts.production import PlanConflict
+from easel_workbench.features.skills.retirement import SkillFeatureRetired
 
 
 def response(value, status=200, *, trace=None):
@@ -65,7 +67,7 @@ def stream(service, turn_id, after=0, accepted=False,authenticated=None):
 async def handle(service,business,path,request,value=None,*,authenticated=None,serve_file=None,admissions=None):
     method=request.method
     get=method in ('GET','HEAD')
-    if not (path.startswith('/api/chat/') or path=='/api/skills' or path.startswith('/api/skill/')):
+    if not (path.startswith('/api/chat/') or path in ('/api/skills','/api/skill','/api/chat') or path.startswith('/api/skill/')):
         return None
     try:
         if path=='/api/chat/submit' and method=='POST':
@@ -80,10 +82,20 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
                 metadata,file=await asyncio.to_thread(products.file,match[1],match[2])
                 return serve_file(metadata,file,request.headers,request.query_params.get('download')=='1')
             return response(await asyncio.to_thread(products.describe,match[1]))
-        if path=='/api/skills' and get:return response(await asyncio.to_thread(business.skills))
+        if path=='/api/skills' and get:
+            from easel_workbench.runtime.native_skills import service as native_skills
+            return response(await asyncio.to_thread(native_skills(business.box,service).items))
+        if path=='/api/chat' and method=='POST':
+            from easel_workbench.runtime.native_skills import service as native_skills
+            return response(await native_skills(business.box,service).execute(request,value,plain_chat=True))
+        if path=='/api/skill' and method=='POST':
+            from easel_workbench.runtime.native_skills import service as native_skills
+            return response(await native_skills(business.box,service).execute(request,value))
         if path=='/api/chat/artifacts' and get:return response(await run_sync(business.upstream.library))
         match=re.fullmatch(r'/api/skill/([a-z0-9-]+)',path)
-        if match and get:return response(await asyncio.to_thread(business.skill,match[1]))
+        if match and get:
+            from easel_workbench.runtime.native_skills import service as native_skills
+            return response(await native_skills(business.box,service).detail(match[1]))
         if path=='/api/chat/sessions':
             if get:
                 return response(await run_sync(service.list_sessions,summaries=True))
@@ -127,7 +139,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             try:limit=int(raw_limit)
             except ValueError:raise ValueError('历史分页数量无效') from None
             return response(await run_sync(admissions.history,match[1],limit=limit,before=request.query_params.get('before')))
-        if path=='/api/chat/plan' and method=='POST':return response(await run_sync(business.plan,value))
+        if path=='/api/chat/plan' and method=='POST':raise SkillFeatureRetired('plan')
         if path=='/api/chat/stream' and method=='POST':
             prepared=await asyncio.to_thread(business.prepare,value)
             if authenticated is not None and not authenticated():return response({'error':'authentication_required'},401)
@@ -175,5 +187,7 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
             if not isinstance(ids,list) or len(ids)>100:raise ValueError('问题列表无效')
             return response({'questions':{identity(qid):service.question_status(qid,value.get('sessionId'),value.get('turnId')) for qid in ids}})
         return response({'error':'对话接口或方法不存在'},404)
+    except SkillFeatureRetired as exc:return response({'detail':str(exc),'feature':exc.feature,'retired':True},exc.status_code)
+    except HTTPException as exc:return response({'detail':exc.detail},exc.status_code)
     except (ChatConflict,PlanConflict) as exc:return response({'error':str(exc)},409)
     except (ValueError,TypeError,KeyError) as exc:return response({'error':str(exc)},400)

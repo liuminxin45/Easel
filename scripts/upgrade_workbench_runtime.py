@@ -97,6 +97,8 @@ def activate_builtin_after_stop(root,binding):
 def needs_builtin_activation(root):
     """Never silently run the new project flow on external legacy defaults."""
     import sqlite3
+    from easel_workbench.features.skills.retirement import native_mode
+    if native_mode(root):return False
     from easel_workbench.skill_catalog import ProjectSkillCatalog
     expected={row['id'] for row in ProjectSkillCatalog(root).entries()}
     database=(Path(root)/'data/desk.sqlite').resolve()
@@ -121,6 +123,26 @@ def reviewed_delivery_plan(root,acceptance_path,path,expected):
     return {'path':str(path),'sha256':sha(path),'plan_sha256':expected}
 
 
+def reviewed_skill_retirement(root,package,acceptance_path,path,expected):
+    from easel_workbench.features.skills.retirement import preview,migration_runtime,MIGRATION
+    import sqlite3
+    native=package.get('skills_protocol')=='easel-native-v1'
+    if path is None and expected is None:
+        if not native:return None
+        with contextlib.closing(sqlite3.connect((Path(root)/'data/desk.sqlite').resolve().as_uri()+'?mode=ro',uri=True)) as c:
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='creator_feature_retirements'").fetchone() and c.execute('SELECT 1 FROM creator_feature_retirements WHERE id=?',(MIGRATION,)).fetchone():return None
+        raise ValueError('First native skill cutover requires an explicit reviewed retirement plan')
+    if not native or path is None or not expected:raise ValueError('Native skill retirement needs the exact plan and SHA')
+    path=Path(path).resolve();root=Path(root).resolve()
+    if not path.is_relative_to(root/'.local') or not path.is_file():raise ValueError('Retirement plan must be reviewed local evidence')
+    value=read(path);acceptance=read(acceptance_path)
+    if value.get('plan_sha256')!=expected or acceptance.get('evidence',{}).get(path.relative_to(root).as_posix())!=sha(path):raise ValueError('Skill retirement plan is not bound to candidate acceptance')
+    with contextlib.closing(sqlite3.connect((root/'data/desk.sqlite').as_uri()+'?mode=ro',uri=True)) as c:
+        c.row_factory=sqlite3.Row
+        if preview(migration_runtime(root),c)!=value:raise ValueError('Profile revision changed after retirement preview')
+    return {'path':str(path),'sha256':sha(path),'plan_sha256':expected}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--acceptance',type=Path,default=STATE/'upgrade-acceptance.json')
@@ -129,6 +151,8 @@ def main():
     parser.add_argument('--builtin-plan-sha256')
     parser.add_argument('--delivery-plan',type=Path)
     parser.add_argument('--delivery-plan-sha256')
+    parser.add_argument('--skill-retirement-plan',type=Path)
+    parser.add_argument('--skill-retirement-plan-sha256')
     options=parser.parse_args()
     from easel_workbench.runtime.feedback_ledger import locked
     with locked(STATE/'runtime-release.lock',timeout=30),locked(STATE/'frontend-release.lock',timeout=30):
@@ -158,6 +182,7 @@ def upgrade(options):
     choice,package=validate_candidate(ROOT,STATE,options.acceptance,options.candidate)
     builtin=reviewed_builtin_plan(ROOT,package,options.acceptance,options.builtin_plan,options.builtin_plan_sha256)
     delivery=reviewed_delivery_plan(ROOT,options.acceptance,getattr(options,'delivery_plan',None),getattr(options,'delivery_plan_sha256',None))
+    retirement=reviewed_skill_retirement(ROOT,package,options.acceptance,getattr(options,'skill_retirement_plan',None),getattr(options,'skill_retirement_plan_sha256',None))
     if builtin is None and needs_builtin_activation(ROOT):
         raise ValueError('Legacy skill defaults require an explicit reviewed builtin migration plan')
     previous=read(ROOT/'data/active-workbench.json');owner=read(ROOT/'data/migration-owner.json')
@@ -186,6 +211,11 @@ def upgrade(options):
             stop_new_profile();stopped=True
             fence.execute('ROLLBACK')
         builtin_activation=activate_builtin_after_stop(ROOT,builtin)
+        skill_retirement=None
+        if retirement:
+            from easel_workbench.features.skills.retirement import apply as apply_retirement,migration_runtime
+            if sha(retirement['path'])!=retirement['sha256']:raise ValueError('Skill retirement evidence changed after stop')
+            skill_retirement=apply_retirement(migration_runtime(ROOT),retirement['plan_sha256'])
         # Recheck behind the writer fence, including an explicit migration's
         # resulting published versions, before selecting or admitting services.
         validate_published_skills(ROOT)
@@ -210,7 +240,7 @@ def upgrade(options):
         atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':choice})
         result={'status':'live','candidate':choice,'previous_runtime':previous,'previous_native':previous_native,'data_root':str(ROOT/'data'),
             'database_copied':False,'database_restored':False,'manager':manager_pid,'manager_started_by':'windows-task-scheduler','smoke':ready,'idle':state,
-            'builtin_activation':builtin_activation,'delivery_reconciliation':delivery_reconciliation}
+            'builtin_activation':builtin_activation,'delivery_reconciliation':delivery_reconciliation,'skill_retirement':skill_retirement}
         atomic(STATE/'runtime-upgrade.json',result)
         atomic(STATE/'upgrades'/(choice['release']+'.json'),result)
         original=read(STATE/'deployment.json')

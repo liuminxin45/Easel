@@ -20,20 +20,22 @@ def prepared(business):
 def test_export_minimal_seed_has_no_works_sessions_accounts_or_plain_credentials(business):
     prepared(business);value=export_seed(business.root,business.root)
     assert value['profile_id']=='oil-pig' and value['settings_revision']==2
-    assert len(value['rows']['creator_skill_pointers'])==8
-    assert len(value['rows']['creator_skill_versions'])==8
+    assert value['flow']=='official-native-skill'
+    assert not set(value['rows']) & {'creator_skill_pointers','creator_skill_versions','creator_skill_blobs'}
     assert value['blob_bytes']<32*1024*1024
-    assert set(value['rows'])<= {'creator_skills','creator_skill_pointers','creator_skill_versions','creator_profiles','creator_profile_history','creator_skill_blobs','creator_skill_source_outbox','workbench_settings_versions'}
+    assert set(value['rows'])=={'creator_profiles','creator_profile_history','workbench_settings_versions'}
     with business.store.connect() as c:
         assert c.execute('SELECT count(*) FROM easel_chat_sessions').fetchone()[0]==1
         assert c.execute('SELECT count(*) FROM toolbox_jobs').fetchone()[0]==0
     assert 'opaque-reference-only' in value['rows']['workbench_settings_versions'][0]['document']
 
 
-def test_missing_frozen_resource_fails_closed(business):
+def test_native_seed_has_no_dependency_on_retired_database_skill_resources(business):
     prepared(business)
     with business.store.connect() as c:c.execute('DELETE FROM creator_skill_blobs')
-    with pytest.raises(ValueError,match='blob_missing'):export_seed(business.root,business.root)
+    value=export_seed(business.root,business.root)
+    assert value['blob_bytes']==0 and value['flow']=='official-native-skill'
+    assert 'creator_skill_versions' not in value['rows']
 
 
 def test_non_native_configuration_cannot_silently_use_fake_or_api_engine(business):

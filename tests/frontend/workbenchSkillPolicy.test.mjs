@@ -137,27 +137,6 @@ function nodes(value) {
 }
 const jsx = {jsx: (type, props) => ({type, props}), jsxs: (type, props) => ({type, props})};
 
-test('actual skill detail consumes server actions for an unfamiliar skill ID', () => {
-  const moves = [];
-  const detail = {id: 'unfamiliar-method', name: '新方法', version: 2,
-    published_version: 1, status: 'candidate', resources: [], tasks: ['poster'],
-    launch_actions: [{id: 'server-entry', label: '制作测试稿', path: '/posters/new', task: 'poster'}]};
-  const core = {...models, ...creator, useWorkbench: () => ({navigate: (...args) => moves.push(args)}),
-    useResource: () => ({data: detail}), useDraft: () => [{prompt: 'kept'}, () => {}],
-    useAsyncAction: () => ({busy: false})};
-  const react = {useState: value => [value, () => {}], useEffect: () => {}, useRef: value => ({current: value})};
-  const {SkillDetail} = load('ui/management.tsx', {'react': react,
-    'react/jsx-runtime': jsx, '@workbench/core': core, './components/icons': {}, './common': {}},
-  '\nexport {SkillDetail};');
-  const tree = SkillDetail({id: detail.id, version: '2', data: data(), profileId: 'p'});
-  const launch = nodes(tree).find(node => node.type === 'button' &&
-    node.props.children.includes?.('制作测试稿'));
-  assert.ok(launch);
-  launch.props.onClick();
-  assert.deepEqual(plain(moves), [['/posters/new?profile=p&skill=unfamiliar-method&skill_version=2&trial=1',
-    {intent: 'flow'}]]);
-});
-
 test('actual production controls show the selected pinned version, not latest publication', () => {
   const core = {...models, ...creator, useResource: () => ({data: {packs: []}}),
     selectedRecipe: () => undefined, recipeReferences: () => []};
@@ -200,52 +179,6 @@ test('actual new discussion submits the saved server draft revision and exact tr
   assert.equal(calls[0][0], 'saved-work');
   assert.equal(calls[0][1].revision, 9);
   assert.deepEqual(plain(calls[0][1].creative.creator), input.creative.creator);
-});
-
-test('same-work first production selects production pins while preserving its discussion input', async () => {
-  const work = {id: 'draft-work', title: '讨论后制作', format: 'poster', creator: {id: 'p'},
-    versions: [], history: [], pending: [], draft: {revision: 3, discussion_token: 'frozen-discussion',
-      title: '原字标题', material: '原字材料', files: [], creative: {recipe: {pack_id: 'editorial-poster'},
-        creator: {profile_id: 'p', profile_revision: 7, trial: true, skills: [ref('research-new', 2)]}}}};
-  const before = JSON.stringify(work);
-  const previews = [], submissions = [];
-  const core = {...models, ...creator, ...mainline, ...recovery, changeCreative: () => ({}),
-    useWorkbench: () => ({navigation: {}, client: {read: async () => work, invalidate:async()=>{},drafts: {get: () => ({text:'',files:[],creative:{}})}},
-      service: {prepareProduction: async (...args) => {previews.push(args); return {revision_token: 'exact-frozen-revision'};}, finalize: async (...args) => {submissions.push(args); return {id:'accepted-first-version'};}}}),
-    useResource: path => ({data: path === '/api/creator/bootstrap' ? data() : null}),
-    useDraft: (key, initial) => [initial, () => {}, () => {}],
-    useOperation: () => ({}),
-    useAsyncAction: () => ({busy: false, run: fn => fn()})};
-  const react = {useState: value => [value, () => {}], useEffect: () => {}, useRef: value => ({current: value})};
-  const {WorkCanvas} = load('ui/DraftOperations.tsx', {'react': react,
-    'react/jsx-runtime': jsx, '@workbench/core': core, './components/icons': {}, './common': {}},
-  '\nexport {DraftOperations as WorkCanvas};');
-  const tree = WorkCanvas({work, search: new URLSearchParams(), reload: async () => work});
-  nodes(tree).find(node => node.type === 'button' && node.props.children === '按当前草稿制作').props.onClick();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(previews.length, 1);
-  assert.equal(previews[0][0], 'finalize');
-  assert.equal(previews[0][2], work.id);
-  assert.deepEqual(plain(previews[0][1].creative.creator.skills), [ref('writer-new', 2), ref('checker-new', 4)]);
-  assert.equal(previews[0][1].revision, 3);
-  assert.equal(previews[0][1].discussion_token, 'frozen-discussion');
-  assert.equal(submissions.length, 1);
-  assert.equal(submissions[0][0], work.id);
-  assert.deepEqual(plain(submissions[0][1].creative.creator.skills), [ref('writer-new', 2), ref('checker-new', 4)]);
-  assert.equal(submissions[0][1].creative.context_revision, 'exact-frozen-revision');
-  assert.equal(JSON.stringify(work), before);
-});
-
-test('a slow saved-draft production preserves later editable input',async()=>{
- const creative={creator:{profile_id:'p',skills:[ref('writer-new',2),ref('checker-new',4)]}},submitted={revision:3,title:'原题',material:'本轮原字',files:[],creative};
- const work={id:'existing-work',title:'原题',format:'poster',creator:{id:'p'},versions:[],pending:[],draft:submitted};
- let current=submitted,release;const hold=new Promise(resolve=>{release=resolve}),sent=[];
- const core={...models,...creator,...mainline,...recovery,useWorkbench:()=>({client:{read:async()=>work,invalidate:async()=>{}},service:{prepareProduction:async()=>hold,finalize:async(...args)=>{sent.push(args)}}}),
-  useResource:()=>({data:data()}),useDraft:()=>[submitted,patch=>{current={...current,...patch}}],useAsyncAction:()=>({busy:false,run:fn=>fn()})};
- const {DraftOperations}=load('ui/DraftOperations.tsx',{react:{},'react/jsx-runtime':jsx,'@workbench/core':core,'./common':{}});
- const tree=DraftOperations({work});nodes(tree).find(node=>node.type==='button'&&node.props.children==='按当前草稿制作').props.onClick();
- await new Promise(resolve=>setImmediate(resolve));current={...current,material:'等待时新输入，必须保留'};release({revision_token:'frozen-before-new-input'});await new Promise(resolve=>setImmediate(resolve));
- assert.equal(sent.length,1);assert.equal(sent[0][0],work.id);assert.equal(sent[0][1].creative.context_revision,'frozen-before-new-input');assert.equal(current.material,'等待时新输入，必须保留');
 });
 
 test('private barrel retains manual bridge discovery and has no retired production hooks', () => {

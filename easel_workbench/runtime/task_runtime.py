@@ -769,7 +769,7 @@ def request_snapshot(box, value, task, c, *, fallback_profile='oil-pig'):
 
 
 def enqueue_experience(box, value, c):
-    """Explicit command: freeze a bounded, persona-scoped pack, then queue once."""
+    """Read an exact historical receipt; new experience collection is retired."""
     initialize(c)
     operation = value.get('operation_id') or value.get('id')
     if not isinstance(operation, str) or not operation:
@@ -781,111 +781,8 @@ def enqueue_experience(box, value, c):
         if receipt['signature'] != signature:
             raise ValueError('同一整理操作不能改变范围')
         return receipt['result']
-    creator=request_snapshot(box,value,'learning',c)
-    profile_id=creator['profile']['id']
-    from easel_workbench.runtime.creator_runtime import key
-    target=key(value.get('skill_id','content-writing'))
-    from easel_workbench.contracts.values import text as bounded_text
-    goal=bounded_text(value.get('goal',''),10000)
-    runtime=registry(box,c)
-    # The target is source material to improve, never a learning executor.
-    base=runtime._skill(c,target,creator['profile'].get('skill_versions',{}).get(target))
-    if base['status']!='published':
-        raise ValueError('请先选择已有发布版本作为待改进技能')
-    learning = getattr(box, 'learning', None)
-    if learning is None:
-        raise ValueError('反馈索引服务尚未连接；没有启动模型')
-    work_ids = value.get('work_ids') or []
-    if not isinstance(work_ids, list) or len(work_ids) > 20 or any(not isinstance(w, str) for w in work_ids):
-        raise ValueError('请选择最多20份作品')
-    owned = {}
-    for row in c.execute('SELECT work_id,document FROM creator_task_runs ORDER BY rowid'):
-        owned.setdefault(row['work_id'], json.loads(row['document'])['snapshot']['profile']['id'])
-    if any(owned.get(w, 'oil-pig') != profile_id for w in work_ids):
-        raise ValueError('经验材料不能混入其他画像的作品')
-    evidence_ids=value.get('evidence_ids') or []
-    if not isinstance(evidence_ids,list) or len(evidence_ids)>20 or any(not isinstance(item,str) for item in evidence_ids):
-        raise ValueError('请选择最多20项明确参考或反馈')
-    members = []
-    images=[]
-    image_bytes=0
-    total = len(base['prompt']) + len(goal)
-    candidates=list(reversed(learning._all(c, 'learning_evidence')))
-    order={'work_feedback':0,'annotation':0,'direct_turn':0,'guidance':1,'sample':2,'reader_comment':3}
-    candidates.sort(key=lambda row:order.get(row.get('kind'),100))
-    deferred=0
-    for item in candidates:
-        if evidence_ids and item['id'] not in evidence_ids:continue
-        if item.get('kind') not in order:
-            continue
-        locations = item.get('locators') or [item.get('source', {})]
-        related = {loc.get('work_id') for loc in locations if loc.get('work_id')}
-        if related and any(owned.get(w, 'oil-pig') != profile_id for w in related):
-            continue
-        if not related and profile_id != 'oil-pig' and item['id'] not in evidence_ids:
-            continue
-        if work_ids and not related.intersection(work_ids):
-            continue
-        source = learning.evidence_content(c, item['id'])
-        text = source.get('content')
-        if not source.get('available'):
-            continue
-        source_key=digest({'id':item['id'],'sha256':source['sha256'],'occurrences':locations,'skill_id':target,'base_version':base['version']})
-        handled=c.execute('SELECT status FROM creator_experience_coverage WHERE profile_id=? AND source_key=?',(profile_id,source_key)).fetchone()
-        if handled and handled['status']=='completed':
-            continue
-        if text is None:
-            try:
-                original=learning.original_file(item['id'])
-                frozen,byte_count=freeze_image(box,original,item['id'])
-            except (ValueError,OSError):
-                deferred+=1;continue
-            existing=next((row for row in images if row['sha256']==frozen['sha256']),None)
-            if not existing and (len(images)>=8 or image_bytes+byte_count>40*1024*1024):
-                deferred+=1;continue
-            if not existing:images.append(frozen);image_bytes+=byte_count
-            members.append({'id':item['id'],'kind':item['kind'],'source_key':source_key,'sha256':source['sha256'],
-                            'text':'','image_sha256':frozen['sha256'],'occurrences':locations})
-            if len(members)>=20:break
-            continue
-        if not isinstance(text,str) or not text.strip():continue
-        if len(text) > 24000 or total + len(text) > 24000:
-            deferred+=1
-            continue  # keep the entire original pending, never silently truncate it
-        members.append({'id': item['id'], 'kind':item['kind'],'source_key':source_key,'sha256': source['sha256'], 'text': text, 'occurrences': locations})
-        total += len(text)
-        if len(members) >= 20:
-            break
-    if not members:
-        raise ValueError('所选画像暂无可整理的完整反馈或静态参考图；原件缺失、过大或不可读时没有调用模型')
-    task_id = 'experience-' + hashlib.sha256(operation.encode()).hexdigest()[:40]
-    payload = {'schema_version': 1, 'profile_id': profile_id, 'work_ids': work_ids,
-               'skill_id': target, 'base_version': base['version'], 'base_prompt': base['prompt'],
-               'goal': goal or '减少有原话支持的重复问题，提出可执行且有适用范围的技能修改。',
-               'members': members,'images':images,'image_bytes':image_bytes, 'creator_snapshot': creator, 'manual': True,
-               'input_characters': total, 'max_model_calls': 1, 'operation_id': operation}
-    payload['split_profile_skill']=True
-    scope={'profile_id':profile_id,'target':target,'base_version':base['version'],
-           'sources':[r['source_key'] for r in members],'goal':payload['goal']}
-    legacy_scope_signature=digest(scope)
-    scope_signature=digest({**scope,'creator_snapshot_sha256':creator['snapshot_sha256']})
-    payload['scope_signature']=scope_signature
-    for active in c.execute("SELECT id,status,payload,started_at FROM learning_analysis_queue WHERE kind='skill_distillation' AND status IN ('queued','running','blocked')"):
-        prior_payload=json.loads(active['payload'])
-        known_unknown=c.execute("SELECT 1 FROM creator_model_calls WHERE task_id=? AND json_extract(document,'$.status') IN ('running','unknown','completed') LIMIT 1",(active['id'],)).fetchone()
-        same_scope=prior_payload.get('scope_signature')==scope_signature or (
-            prior_payload.get('scope_signature')==legacy_scope_signature and
-            prior_payload.get('creator_snapshot',{}).get('snapshot_sha256')==creator['snapshot_sha256'])
-        if same_scope and (active['status'] in ('queued','running') or known_unknown):
-            result={'task_id':active['id'],'status':active['status'],'profile_id':profile_id,'skill_id':target,
-                    'evidence_count':len(members),'reused_active_task':True,'model_calls':0}
-            c.execute('INSERT INTO creator_experience_receipts VALUES(?,?,?)',(operation,packed({'signature':signature,'result':result}),stamp()))
-            return result
-    learning._enqueue(c, task_id, 'skill_distillation', payload, 25)
-    result = {'task_id': task_id, 'status': 'queued', 'profile_id': profile_id,
-              'skill_id': target, 'evidence_count': len(members),'image_count':len(images),'deferred_sources':deferred,'model_calls': 0}
-    c.execute('INSERT INTO creator_experience_receipts VALUES(?,?,?)', (operation, packed({'signature': signature, 'result': result}), stamp()))
-    return result
+    from easel_workbench.features.skills.retirement import SkillFeatureRetired
+    raise SkillFeatureRetired('experience-organize')
 
 
 def complete_experience(c, payload, task_id):

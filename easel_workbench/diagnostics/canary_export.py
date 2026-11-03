@@ -7,7 +7,8 @@ import sqlite3
 from types import SimpleNamespace
 
 
-def export_seed(application_root, source_root, profile_id='oil-pig'):
+def export_seed(application_root, source_root, profile_id='oil-pig', *, native=True):
+    if native:return _native_seed(application_root,source_root,profile_id)
     from easel_workbench.skill_catalog import ProjectSkillCatalog
     from easel_workbench.project_skill_sync import matches_source
     root=Path(application_root).resolve();source=Path(source_root).resolve()
@@ -55,3 +56,26 @@ def export_seed(application_root, source_root, profile_id='oil-pig'):
         return {'schema_version':1,'rows':rows,'profile_id':profile_id,'profile_revision':profile['revision'],
                 'settings_revision':settings['revision'],'blob_bytes':sum(len(x['bytes']) for x in blobs),
                 'article_fallback':dict(article) if article else None}
+
+
+def _native_seed(application_root,source_root,profile_id):
+    """A native SKILL run needs current profile/settings, never skill DB pins."""
+    root=Path(application_root).resolve();source=Path(source_root).resolve()
+    entry=source/'skills/builtin/content-production/SKILL.md'
+    if not entry.is_file() or entry.is_symlink() or not entry.resolve().is_relative_to(source):raise ValueError('canary_native_skill_missing')
+    with contextlib.closing(sqlite3.connect((root/'data/desk.sqlite').as_uri()+'?mode=ro',uri=True)) as c:
+        c.row_factory=sqlite3.Row;c.execute('PRAGMA query_only=ON');c.execute('BEGIN')
+        profile=c.execute('SELECT * FROM creator_profiles WHERE id=?',(profile_id,)).fetchone()
+        if not profile:raise ValueError('canary_profile_missing')
+        history=c.execute('SELECT * FROM creator_profile_history WHERE id=? AND revision=?',(profile_id,profile['revision'])).fetchone()
+        if not history:raise ValueError('canary_profile_revision_missing')
+        state=c.execute('SELECT * FROM workbench_settings_versions ORDER BY revision DESC LIMIT 1').fetchone()
+        if not state:raise ValueError('canary_settings_missing')
+        settings=json.loads(state['document'])
+        if settings['runtime']!='codex':raise ValueError('canary_requires_native_codex')
+        article=c.execute('SELECT * FROM articles ORDER BY run_at DESC,id DESC LIMIT 1').fetchone()
+        return {'schema_version':2,'flow':'official-native-skill','rows':{'creator_profiles':[dict(profile)],
+            'creator_profile_history':[dict(history)],'workbench_settings_versions':[dict(state)]},
+            'profile_id':profile_id,'profile_revision':profile['revision'],'settings_revision':settings['revision'],
+            'native_skill_sha256':hashlib.sha256(entry.read_bytes()).hexdigest(),'blob_bytes':0,
+            'article_fallback':dict(article) if article else None}

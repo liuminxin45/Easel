@@ -20,7 +20,8 @@ business=_fixture.business
 
 def inputs(business, image=False):
     attach(business.box)
-    _,_,snapshot=business._selection(_fixture.value())
+    # Persisted historical contracts can be inspected without a live plan API.
+    snapshot=business.creator.resolve('oil-pig','poster',[{'id':sid} for sid in ('content-writing','image-production','delivery-review')])
     if image:
         raw=b'frozen required image fixture';sha=hashlib.sha256(raw).hexdigest()
         with business.store.connect() as c:

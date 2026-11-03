@@ -51,6 +51,13 @@ def validate_published_skills(root, *, source_root=None):
     from types import SimpleNamespace
     from easel_workbench.project_skill_sync import managed,matches_source
     root=Path(root).resolve();source=Path(source_root or root).resolve()
+    mode=source/'config/workbench-skills.json'
+    if mode.is_file() and json.loads(mode.read_text(encoding='utf-8')).get('mode')=='easel-native':
+        from easel_workbench.skill_catalog import ProjectSkillCatalog
+        catalog=ProjectSkillCatalog(source)
+        entries=catalog.entries()
+        return {'checked':len(entries),'source_root':str(source),'mode':'easel-native',
+                'skills':[{'id':entry['id'],'source':'SKILL.md'} for entry in entries]}
     database=root/'data/desk.sqlite'
     result={'checked':0,'source_root':str(source),'skills':[]}
     if not database.is_file():return result
@@ -158,6 +165,8 @@ main()
         'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     if overlays:value['upstream_pr_overlays']={'ledger':'docs/workbench/upstream-overlays.json','sha256':sha(target/'docs/workbench/upstream-overlays.json'),'pull_requests':[item['number'] for item in overlays['pull_requests']]}
+    from easel_workbench.features.skills.retirement import native_mode
+    if native_mode(target):value['skills_protocol']='easel-native-v1'
     if committed_source()!=revision:
         raise ValueError('Source commit changed while freezing; candidate was not selected')
     atomic(target/'workbench-release.json',value)

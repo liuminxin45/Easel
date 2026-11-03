@@ -11,7 +11,7 @@ const url=(path:string)=>new URL(path,'https://workbench.invalid');
 /** Only ordinary native page data may use the host's read snapshots. */
 export function nativeResourceCacheable(path:string):boolean {
  const p=url(path).pathname;
- return p==='/api/outputs'||p.startsWith('/api/output/')||p==='/api/library/items'||p==='/api/library/resolve'||p==='/api/ideas'||p==='/api/trends'||p==='/api/trends/sources'
+ return p==='/api/skills'||p.startsWith('/api/skill/')||p==='/api/outputs'||p.startsWith('/api/output/')||p==='/api/library/items'||p==='/api/library/resolve'||p==='/api/ideas'||p==='/api/trends'||p==='/api/trends/sources'
   ||p==='/api/personas'||/^\/api\/persona\/[^/]+(?:\/files)?$/.test(p)||p==='/api/schedule'||p==='/api/schedule/context';
 }
 

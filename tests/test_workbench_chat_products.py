@@ -20,21 +20,23 @@ def test_registered_and_interrupted_products_are_read_only_and_exact(business,mo
         class Adapter:
             async def run(self,request,emit,ask,bind):
                 bind('product-native');request.on_native_turn('product-native','product-turn')
-                data=json.JSONDecoder().raw_decode(request.prompt.split('## 本轮冻结输入\n')[-1])[0]
-                folder=Path(data['output_directory']);folder.mkdir(parents=True,exist_ok=True)
+                assert '本轮冻结输入' not in request.prompt
+                folder=b.root/'outputs/test-chat/turn-one/products';folder.mkdir(parents=True,exist_ok=True)
                 image=folder/'成品.png';image.write_bytes(b'\x89PNG\r\n\x1a\n'+b'\x00\x00\x00\rIHDR'+(1).to_bytes(4,'big')*2+b'\x08\x02\x00\x00\x00')
-                copy=folder/'标题与配文.txt';copy.write_text('精确标题\n\n  原字正文\n第二段  ',encoding='utf-8')
+                copy=folder/'标题与配文.txt';copy.write_bytes('精确标题\n\n  原字正文\n第二段  '.encode('utf-8'))
                 if interrupted:raise HarnessError('TEMP unknown receipt')
                 emit('token',json.dumps({'deliverables':[str(image),str(copy)],'production_result':{'schema_version':1,'status':'completed'}},ensure_ascii=False))
         monkeypatch.setattr(harnesses,'adapter',lambda _:Adapter())
-        value,_=fixtures.confirmed(b);turn=await b.chat.submit(value,**b.prepare(value));await asyncio.gather(*[task for key,task in b.chat._tasks.items() if key==turn['id']])
+        value=fixtures.value();turn=await b.chat.submit(value,**b.prepare(value));await asyncio.gather(*[task for key,task in b.chat._tasks.items() if key==turn['id']])
         def saved():
             with b.store.connect() as c:return {name:c.execute('SELECT * FROM '+name).fetchall() for name in ('easel_chat_turns','artifacts','creator_skill_versions','toolbox_jobs')}
         before=saved();view=ChatProducts(b).describe(turn['id']);assert saved()==before
         assert [block['label'] for block in view['text_blocks']]==['标题','正文']
         assert view['text_blocks'][0]['text']=='精确标题'
         assert bool(view['incomplete'])==interrupted
-        assert view['can_adopt'] is not interrupted
+        assert view['can_adopt'] is False
+        assert view['work_id'] is None and view['version_id'] is None
+        assert view['text_blocks'][1]['text']=='  原字正文\n第二段  '
         image=next(file for file in view['files'] if file['mime']=='image/png')
         if interrupted:
             assert image['partial'] and b.chat.get_turn(turn['id'])['status']=='unknown'

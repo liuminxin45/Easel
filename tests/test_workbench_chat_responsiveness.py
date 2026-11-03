@@ -19,22 +19,23 @@ spec.loader.exec_module(fixtures)
 business = fixtures.business
 
 
-@pytest.mark.parametrize('kind', ['sessions', 'history', 'plan'])
+@pytest.mark.parametrize('kind', ['sessions', 'history', 'skills'])
 def test_real_chat_io_does_not_block_parallel_health(business, monkeypatch, kind):
     async def scenario():
         entered, release = threading.Event(), threading.Event()
         if kind == 'sessions':
-            owner, name, path, value = business.chat, 'history', '/api/chat/sessions', None
+            owner, name, path, value = business.chat, 'list_sessions', '/api/chat/sessions', None
         elif kind == 'history':
             owner, name, path, value = business, 'history', '/api/chat/sessions/test-chat', None
         else:
-            owner, name, path, value = business, 'plan', '/api/chat/plan', fixtures.value()
+            from easel_workbench.runtime.native_skills import service as native_skills
+            owner, name, path, value = native_skills(business.box,business.chat), 'items', '/api/skills', None
         original = getattr(owner, name)
 
-        def held(*args):
+        def held(*args,**kwargs):
             entered.set()
             assert release.wait(2)
-            return original(*args)
+            return original(*args,**kwargs)
 
         monkeypatch.setattr(owner, name, held)
         app = FastAPI()
@@ -72,12 +73,8 @@ def test_real_chat_io_does_not_block_parallel_health(business, monkeypatch, kind
             elif kind == 'history':
                 assert data['session']['id'] == 'test-chat' and data['session']['messages'] == []
             else:
-                assert data['session_id'] == 'test-chat' and data['turn_id'] == value['turnId']
-                repeated = await client.post(path, json=value)
-                assert repeated.status_code == 200 and repeated.json() == data
-                with business.store.connect() as connection:
-                    assert connection.execute('SELECT COUNT(*) FROM easel_chat_plans').fetchone()[0] == 1
-                    assert connection.execute('SELECT COUNT(*) FROM toolbox_jobs').fetchone()[0] == 0
+                assert any(item['name']=='content-production' for item in data)
+                assert all('prompt' not in item and 'resources' not in item for item in data)
     asyncio.run(scenario())
 
 
@@ -143,7 +140,7 @@ def test_accepted_commit_before_task_registration_is_owned_but_restart_is_unknow
 
     async def scenario():
         service = business.chat
-        value, _ = fixtures.confirmed(business)
+        value = fixtures.value()
         prepared = business.prepare(value)
         connect = service.store.connect
         observations = []
@@ -170,7 +167,7 @@ def test_accepted_commit_before_task_registration_is_owned_but_restart_is_unknow
 def test_failed_acceptance_commit_clears_transient_owner(business, monkeypatch):
     async def scenario():
         service = business.chat
-        value, _ = fixtures.confirmed(business)
+        value = fixtures.value()
         prepared = business.prepare(value)
         connect = service.store.connect
         monkeypatch.setattr(service.store, 'connect', lambda: AcceptanceConnection(connect(), fail=True))

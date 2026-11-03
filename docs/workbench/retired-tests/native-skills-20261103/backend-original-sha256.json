@@ -1,0 +1,7 @@
+{
+  "test_workbench_chat_responsiveness.py": "6c03d50ca949bc3c68bbbfd58bdd43e285559d1c32f9f5b6dd4734e51d729a1e",
+  "test_workbench_chat_products.py": "441f84797e4096a09731b303f4bdffc2b6670d91565cf33153e73601723a43c2",
+  "test_workbench_delivery_reconciliation.py": "58f00f064d31e1c17e9e13436c7bc3cf6a9cf1549e73e03ad65448db1edcbfb0",
+  "test_workbench_native_completion.py": "1a42036da0df45cf318068efc8c1fd59f85d66832d2e23ec64787edd61febf00",
+  "test_workbench_native_corrections.py": "176d625e48da12ca74f8ee7ce534fec78db8ddd91e2a757a0a6b28cf850ae93e"
+}

@@ -1,5 +1,6 @@
-"""TEMP-only catalog projections keep exact releases without full detail reads."""
+"""Current official catalog reads and historical frozen-release compatibility, TEMP only."""
 import importlib.util
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -13,38 +14,63 @@ business=_fixture.business
 library=_fixture.library
 
 
+def test_current_project_menu_and_detail_use_official_shapes_without_private_release_hydration(business,monkeypatch):
+    from easel_workbench.runtime.native_skills import service
+    b=business;native=service(b.box,b.chat)
+    monkeypatch.setattr(b.creator,'detail',lambda *a,**k:pytest.fail('current menu must not hydrate private creator details'))
+    monkeypatch.setattr(b.creator,'_skill',lambda *a,**k:pytest.fail('current menu must not hydrate private versions'))
+    monkeypatch.setattr(b.upstream,'_common',lambda *a,**k:pytest.fail('current menu must not read complete dependency bytes'))
+    rows=native.items();assert rows
+    assert {r['name'] for r in rows}=={p.parent.name for p in (b.root/'skills/builtin').glob('*/SKILL.md')}
+    for row in rows:assert not {'body','resources','prompt','history','version','sha256','launch_actions','origin'}.intersection(row)
+    detail=asyncio.run(native.detail('content-production'))
+    assert set(detail)-{'configuration_revision'}=={'name','description','body','layer','needsApi','apiConfigured','apiSpec'}
+    assert detail['body'] and detail['name']=='content-production'
+
+
+def test_historical_project_release_byte_check_remains_fresh_without_current_private_menu(business):
+    from easel_workbench.project_skill_sync import matches_source
+    b=business;release=b.creator.detail('skill','content-writing')
+    assert matches_source(b.creator,release)
+    path=b.root/'skills/builtin/content-writing/SKILL.md';original=path.stat();raw=path.read_bytes()
+    changed=raw[:-2]+bytes([65 if raw[-2]!=65 else 66])+raw[-1:]
+    assert len(changed)==len(raw)
+    path.write_bytes(changed);os.utime(path,ns=(original.st_atime_ns,original.st_mtime_ns))
+    assert path.stat().st_size==original.st_size and path.stat().st_mtime_ns==original.st_mtime_ns
+    assert not matches_source(b.creator,release)
+
+
+def test_native_mode_seeds_profiles_without_private_releases_and_rejects_new_profile_pins(tmp_path):
+    from types import SimpleNamespace
+    from easel_workbench.runtime.creator_runtime import CreatorRuntime
+    from easel_workbench.runtime.desk import Store
+    from easel_workbench.features.skills.retirement import SkillFeatureRetired
+    config=tmp_path/'config';config.mkdir()
+    (config/'workbench-skills.json').write_text('{"schema_version":1,"mode":"easel-native"}',encoding='utf-8')
+    box=SimpleNamespace(root=tmp_path,store=Store(tmp_path/'data/desk.sqlite'))
+    runtime=CreatorRuntime(box,project=tmp_path)
+    with box.store.connect() as c:
+        assert c.execute('SELECT count(*) FROM creator_profiles').fetchone()[0]==1
+        for table in ('creator_skills','creator_skill_versions','creator_skill_pointers'):
+            assert c.execute('SELECT count(*) FROM '+table).fetchone()[0]==0
+    bootstrap=runtime.bootstrap();assert bootstrap['skills']==[] and bootstrap['task_defaults']=={} and bootstrap['task_policy']=={}
+    profile=runtime.detail('profile','oil-pig');assert profile['default_skills']=={}
+    assert 'skill_versions' not in profile and 'task_skill_versions' not in profile
+    for field,value in [('skill_versions',{'content-writing':1}),('task_skill_versions',{'poster':{'content-writing':1}}),('default_skills',{'poster':['content-writing']})]:
+        with pytest.raises(SkillFeatureRetired):runtime.command({'id':'new-pins-'+field,'action':'profile-save','profile_id':'oil-pig','base_revision':profile['revision'],'document':{field:value}})
+    saved=runtime.command({'id':'normal-profile-edit','action':'profile-save','profile_id':'oil-pig','base_revision':profile['revision'],'document':{'voice':'Exact changed expression'}})['result']['profile']
+    assert saved['voice']=='Exact changed expression' and 'skill_versions' not in saved and 'task_skill_versions' not in saved
+
+
 def assert_list_only(rows):
     forbidden={'body','content','raw','prompt','resources','history','creator','snapshot','meta'}
     assert rows
     for row in rows:assert not forbidden.intersection(row),row['id']
 
 
-def test_project_menu_preserves_exact_launch_identity_without_detail_reads(business,monkeypatch):
-    from easel_workbench.features.skills.catalog_reads import release_metadata
-    from easel_workbench.project_skill_sync import matches_source
-    from easel_workbench.skills import launch_metadata
-    b=business
-    expected={}
-    for entry in b.catalog.entries():
-        full=b.creator.detail('skill',entry['id'])
-        expected[entry['id']]={'version':full['version'],'sha256':full['sha256'],'available':matches_source(b.creator,full),**launch_metadata(full)}
-        with b.store.connect() as c:
-            metadata=release_metadata(c,entry['id'])
-        assert {k:metadata.get(k) for k in metadata if k!='resources'}=={k:full.get(k) for k in metadata if k!='resources'}
-        assert metadata['resources']==[{k:v for k,v in r.items() if k not in ('url','content')} for r in full['resources']]
-        assert not {'history','published_version','is_current'}.intersection(metadata)
-    monkeypatch.setattr(b.creator,'detail',lambda *a,**k:pytest.fail('menu must not hydrate creator detail/history'))
-    monkeypatch.setattr(b.creator,'_skill',lambda *a,**k:pytest.fail('menu must not hydrate full release via creator service'))
-    rows=b.skills(False)
-    assert_list_only(rows)
-    for row in rows:
-        old=expected[row['id']]
-        for key in ('version','sha256','available','execution_kind'):assert row[key]==old[key]
-        assert [(a['id'],a['task']) for a in row['launch_actions']]==[(a['id'],a['task']) for a in old['launch_actions']]
-    assert len(json.dumps(rows,ensure_ascii=False).encode())<30000
 
 
-def test_native_menu_stored_versions_do_not_decode_frozen_release_packages(library,monkeypatch):
+def test_historical_native_menu_stored_versions_do_not_decode_frozen_release_packages(library,monkeypatch):
     b=library;native=b.upstream
     expected={entry['id']:native.release(entry['id']) for entry in native.entries()}
     with b.store.connect() as c:
@@ -70,7 +96,7 @@ def test_native_menu_stored_versions_do_not_decode_frozen_release_packages(libra
         assert c.execute('SELECT count(*) FROM creator_skill_versions WHERE skill_id IN (?,?,?)',tuple(expected)).fetchone()[0]==3
 
 
-def test_native_menu_content_addressed_cache_detects_equal_size_equal_mtime_changes(library):
+def test_historical_native_menu_content_addressed_cache_detects_equal_size_equal_mtime_changes(library):
     native=library.upstream
     first=native.items()
     path=library.root/'skills/shared/scripts/catalog-byte-test.txt'
@@ -90,25 +116,9 @@ def test_native_menu_content_addressed_cache_detects_equal_size_equal_mtime_chan
     assert native.items()==after
 
 
-def test_project_menu_source_validation_is_fresh_even_when_stat_is_unchanged(business):
-    b=business
-    original=next(row for row in b.skills(False) if row['id']=='content-writing')
-    assert original['available']
-    path=b.root/'skills/builtin/content-writing/SKILL.md';stat=path.stat();raw=path.read_bytes()
-    # Change the instruction body only, leaving capability/contract metadata valid.
-    at=raw.rfind(b'\n')
-    changed=bytearray(raw)
-    position=next(i for i in range(len(raw)-1,at,-1) if raw[i] not in (10,13,32)) if at<len(raw)-2 else len(raw)-2
-    changed[position]=65 if raw[position]!=65 else 66
-    path.write_bytes(changed);os.utime(path,ns=(stat.st_atime_ns,stat.st_mtime_ns))
-    assert path.stat().st_size==stat.st_size and path.stat().st_mtime_ns==stat.st_mtime_ns
-    updated=next(row for row in b.skills(False) if row['id']=='content-writing')
-    assert not updated['available']
-    assert updated['version']==original['version'] and updated['sha256']==original['sha256']
-    assert updated['source_revision']!=original['source_revision']
 
 
-def test_frozen_native_catalog_uses_verified_inventory_without_loading_dependency_bytes(library,monkeypatch):
+def test_historical_frozen_native_catalog_uses_verified_inventory_without_loading_dependency_bytes(library,monkeypatch):
     import hashlib
     import shutil
     from easel_workbench.upstream_skills import UpstreamSkills
@@ -127,14 +137,12 @@ def test_frozen_native_catalog_uses_verified_inventory_without_loading_dependenc
     for key in ('id','version','sha256','source_revision','description','layer','body','content','meta','raw','prompt','needsApi','apiConfigured','apiSpec','configuration_revision'):
         assert shown.get(key)==full_detail.get(key),key
     assert 'resources' not in shown and 'creator' not in shown and 'history' not in shown
-    b.upstream=native
-    assert b.skill('card-quote')==shown
     # Only list reads use the approved inventory shortcut; selected execution
     # continues to validate its complete byte package through _common.
     with pytest.raises(pytest.fail.Exception,match='dependency bytes'):native.release(rows[0]['id'])
 
 
-def test_native_display_refreshes_source_body_and_configuration_without_changing_full_contract(library):
+def test_historical_native_display_refreshes_source_body_and_configuration_without_changing_full_contract(library):
     native=library.upstream
     native.configuration=lambda:{'revision':'configuration-one','environment':{}}
     first=native.detail('card-quote',view='display')

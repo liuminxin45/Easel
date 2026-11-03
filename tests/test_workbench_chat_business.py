@@ -34,124 +34,93 @@ def business(tmp_path):
 
 def value(action='poster',tid='turn-one'):
     return {'sessionId':'test-chat','turnId':tid,'message':'说明本次具体变化，保留准确来源。',
-            'attachments':[],'context':{'skill_id':'content-production','version':1,'action_id':action,'profile_id':'oil-pig'}}
+            'attachments':[],'context':{'skill_id':'topic-research' if action=='discuss' else 'content-production',
+                                      'action_id':'native','profile_id':'oil-pig'}}
 
 
 def confirmed(b,action='poster',tid='turn-one'):
-    v=value(action,tid);plan=b.plan(v)
-    v['context']['plan_token']=plan['plan_token'];v['persona']='oil-pig'
-    return v,plan
+    from easel_workbench.features.skills.retirement import SkillFeatureRetired
+    raise SkillFeatureRetired('legacy-test-plan-fixture')
 
 
-def test_plan_is_read_only_idempotent_and_exact_root_skill_is_loaded(business):
-    b=business;v=value();plan=b.plan(v)
-    assert b.plan(v)==plan
-    snap=plan['plan']['creator_snapshot']
-    assert snap['active_skill_ids']==['content-production','content-writing','image-production']
-    assert all(s['entry'].startswith('skills/builtin/') for s in snap['skills'])
-    assert b.creator.detail('skill','content-production')['prompt'] in plan['plan']['execution_prompt']['body']
-    assert not (b.root/'outputs/_sessions/skill-inputs').exists()
-    with b.store.connect() as c:assert c.execute('SELECT count(*) FROM toolbox_jobs').fetchone()[0]==0
-    changed=copy.deepcopy(v);changed['message']='另一个目标'
-    with pytest.raises(PlanConflict):b.plan(changed)
+def test_generic_prepare_preserves_exact_input_without_private_plan_snapshot_or_work(business,monkeypatch):
+    b=business;v={'sessionId':'test-chat','turnId':'plain-input','message':' 原始一行\n 第二行 ','context':{}}
+    monkeypatch.setattr(b.creator,'resolve',lambda *a,**k:pytest.fail('ordinary native chat cannot resolve a private workflow'))
+    prepared=b.prepare(v)
+    assert v['message'] in prepared['actual_prompt'] and prepared['snapshot'] is None and prepared['work'] is None
+    from easel.persona import turn_reminder
+    assert turn_reminder() in prepared['actual_prompt']
+    assert 'frozen_instructions' in prepared
+    with b.store.connect() as c:
+        assert c.execute('SELECT count(*) FROM easel_chat_plans').fetchone()[0]==0
+        assert c.execute('SELECT count(*) FROM toolbox_works').fetchone()[0]==0
 
 
-def test_plan_ignores_display_persona_but_never_recompiles_frozen_input(business):
-    b=business;v,plan=confirmed(b)
-    p=b.prepare(v)
-    assert p['actual_prompt']==plan['plan']['execution_prompt']['body']
-    tampered=copy.deepcopy(v);tampered['message']='未确认的变化'
-    with pytest.raises(PlanConflict):b.prepare(tampered)
-    source=b.root/'skills/builtin/content-writing/SKILL.md'
-    source.write_text(source.read_text(encoding='utf-8')+'\nNew unapproved method',encoding='utf-8')
-    assert b.plan(value())==plan
-    with pytest.raises(PlanConflict):b.prepare(v)
+@pytest.mark.parametrize('legacy',[{'version':1},{'plan_token':'old-plan'},{'work_id':'old-work'},
+    {'parent_version_id':'old-version'},{'trial':True},{'skill_revision':'old-sha'},{'action_id':'poster'}])
+def test_new_private_orchestration_fields_are_retired(business,legacy):
+    from easel_workbench.features.skills.retirement import SkillFeatureRetired
+    with pytest.raises(SkillFeatureRetired):business.prepare({'sessionId':'test-chat','turnId':'legacy-input','message':'raw','context':legacy})
 
 
-def test_native_acceptance_is_atomic_and_files_are_project_local(business,monkeypatch):
+def test_attachment_only_generic_chat_references_actual_verified_material_without_inventing_user_text(business):
+    b=business;upload=b.box.upload('only-material','素材.txt',b'Exact original material')
+    v={'sessionId':'test-chat','turnId':'material-only','message':'','context':{},'attachments':[{'id':upload['id'],'name':upload['name']}]}
+    prepared=b.prepare(v);assert prepared['snapshot'] is None and prepared['work'] is None
+    data=json.loads(prepared['actual_prompt'].split('## 本轮附件\n',1)[1]);assert len(data)==1
+    assert Path(data[0]['path']).read_bytes()==b'Exact original material'
+    assert v['message']==''
+
+
+def test_explicit_project_skill_uses_same_official_native_message_and_no_plan(business,monkeypatch):
+    b=business;v=value()
+    monkeypatch.setattr(b.creator,'resolve',lambda *a,**k:pytest.fail('project SKILL must not invoke private workflow resolution'))
+    prepared=b.prepare(v)
+    assert prepared['snapshot'] is None and prepared['work'] is None
+    assert '请执行 /content-production，内容如下：' in prepared['actual_prompt']
+    assert prepared['actual_prompt'].endswith(v['message'])
+    assert '## 本轮冻结输入' not in prepared['actual_prompt']
+
+
+def test_actual_generic_turn_uses_existing_native_engine_once_and_never_creates_private_work(business,monkeypatch):
     from easel import harnesses
-    class Hold:
-        async def run(self,r,emit,ask,bind):
-            bind('native-test');r.on_native_turn('native-test','native-turn-test')
-            await asyncio.Event().wait()
-    monkeypatch.setattr(harnesses,'adapter',lambda runtime:Hold())
+    calls=[]
+    class Native:
+        async def run(self,request,emit,ask,bind):
+            calls.append(request);bind('native-generic');request.on_native_turn('native-generic','native-generic-turn')
+            emit('token','TEMP actual generic result')
+    monkeypatch.setattr(harnesses,'adapter',lambda runtime:Native())
     async def scenario():
-        b=business;v,plan=confirmed(b)
-        result=await b.chat.submit(v,**b.prepare(v));await asyncio.sleep(.03)
-        assert result['id']=='turn-one'
-        current=b.chat.get_turn(result['id'],private=True)
+        b=business;v=value();original=b.prepare(v);turn=await b.chat.submit(v,**original)
+        async for _ in b.chat.events(turn['id']):pass
+        assert b.chat.get_turn(turn['id'],private=True)['actual_prompt']==original['actual_prompt']
+        assert b.chat.get_turn(turn['id'])['status']=='completed'
+        assert len(calls)==1 and b.prepare(v)['receipt']['id']==turn['id']
+        assert b.history('test-chat')['linked_works']==[]
         with b.store.connect() as c:
-            job=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(result['id'],)).fetchone()
-            assert job['status']=='running' and job['turn_id']=='native-turn-test'
-            call=json.loads(c.execute('SELECT document FROM creator_model_calls WHERE id=?',('chat-call-turn-one',)).fetchone()[0])
-            assert call['status']=='running' and call['native_turn_id']=='native-turn-test'
-            frozen=c.execute('SELECT file_id FROM toolbox_review_inputs WHERE job_id=?',(result['id'],)).fetchone()[0]
-        assert b.box.file(frozen)[1].is_file()
-        bundle=b.root/'outputs/_sessions/skill-inputs'/current['snapshot']['snapshot_sha256']
-        assert (bundle/'skills/builtin/content-production/SKILL.md').is_file()
-        # Busy rejection cannot create an orphan work or job.
-        other,_=confirmed(b,'article','turn-two')
-        with pytest.raises(ChatConflict):await b.chat.submit(other,**b.prepare(other))
-        with b.store.connect() as c:assert c.execute('SELECT count(*) FROM toolbox_jobs').fetchone()[0]==1
-        assert b.prepare(v)['receipt']['id']=='turn-one'
-        await b.chat.stop('test-chat','turn-one');await b.chat.close()
-    asyncio.run(scenario())
-
-
-def test_attachment_paths_are_resolved_by_id_and_bytes_are_checked(business):
-    b=business;uploaded=b.box.upload('file-one','reference.txt',b'TEMP original evidence')
-    v=value();v['attachments']=[{'id':uploaded['id'],'name':uploaded['name'],'path':'C:/Windows/private-secret'}]
-    plan=b.plan(v)
-    assert 'C:/Windows/private-secret' not in plan['plan']['execution_prompt']['body']
-    payload=json.loads(plan['plan']['execution_prompt']['body'].split('## 本轮冻结输入\n')[-1])
-    assert Path(payload['attachments'][0]['path']).is_relative_to(b.root/'outputs/_sessions/materials')
-    assert payload['attachments'][0]['sha256']==b.box.file(uploaded['id'])[0]['sha256']
-    b.box.file(uploaded['id'])[1].write_bytes(b'changed')
-    v['context']['plan_token']=plan['plan_token']
-    with pytest.raises(ValueError):b.prepare(v)
-
-
-def test_unselected_message_uses_project_research_skill_without_work(business):
-    b=business;v={'sessionId':'test-chat','turnId':'discuss-one','message':'讨论题目','context':{}}
-    result=b.prepare(v)
-    assert result['work'] is None and result['snapshot']['task']=='discuss'
-    assert result['snapshot']['active_skill_ids']==['topic-research']
-
-
-@pytest.mark.parametrize('format',['poster','article'])
-def test_native_production_records_real_files_versions_and_exact_receipts(business,monkeypatch,format):
-    from easel import harnesses
-    class Produce:
-        async def run(self,r,emit,ask,bind):
-            bind('native-products');r.on_native_turn('native-products','native-products-turn')
-            payload=json.loads(r.prompt.split('## 本轮冻结输入\n')[-1]);folder=Path(payload['output_directory'])
-            folder.mkdir(parents=True,exist_ok=True)
-            if format=='poster':
-                path=folder/'成品.png'
-                path.write_bytes(b'\x89PNG\r\n\x1a\n'+b'\x00\x00\x00\rIHDR'+(1).to_bytes(4,'big')*2+b'\x08\x02\x00\x00\x00')
-            else:
-                path=folder/'文章交付.json'
-                body=folder/'正文.md';body.write_text('有来源的具体正文。',encoding='utf-8')
-                path.write_text(json.dumps({'schema_version':1,'article_type':'general','title':'具体变化','body_file':'正文.md','sources':[]},ensure_ascii=False),encoding='utf-8')
-            emit('token',json.dumps({'deliverables':[str(path),*([str(body)] if format=='article' else [])],'production_result':{'schema_version':1,'status':'completed'}}))
-    monkeypatch.setattr(harnesses,'adapter',lambda runtime:Produce())
-    async def scenario():
-        b=business;v,_=confirmed(b,format)
-        result=await b.chat.submit(v,**b.prepare(v))
-        if result['id'] in b.chat._tasks:await b.chat._tasks[result['id']]
-        final=b.chat.get_turn(result['id'],private=True)
-        assert final['status']=='completed' and final['hook_status']=='completed',final.get('hook_error')
-        work=b.box.work(final['work']['work_id'])
-        assert work['versions'][0]['status']=='completed',work['versions'][0].get('error')
-        assert work['versions'][0]['artifacts']
-        for file in work['versions'][0]['artifacts']:assert b.box.file(file['id'])[1].is_relative_to(b.root/'data/artifacts')
-        assert b.chat.history('test-chat')['linked_works'][0]['version_id']==result['id']
-        # Repeated HTTP receipt inspection cannot rerun the adapter or create a version.
-        assert b.prepare(v)['receipt']['id']==result['id']
-        with b.store.connect() as c:assert c.execute('SELECT count(*) FROM toolbox_jobs').fetchone()[0]==1
+            assert c.execute('SELECT count(*) FROM toolbox_works').fetchone()[0]==0
+            assert c.execute('SELECT count(*) FROM creator_work_owners').fetchone()[0]==0
+            assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==0
+            assert c.execute('SELECT count(*) FROM creator_task_runs').fetchone()[0]==0
         await b.chat.close()
     asyncio.run(scenario())
 
+
+def test_historical_receipt_is_read_before_retired_field_validation_without_replay(business,monkeypatch):
+    from easel_workbench.features.conversations.receipts import sha
+    b=business;value={'sessionId':'test-chat','turnId':'original-turn','message':' 原始输入 ',
+        'context':{'plan_token':'old','version':1,'work_id':'old-work'}}
+    old={'id':'original-turn','session_id':'test-chat','status':'completed','hook_status':'completed',
+        'snapshot':{'task':'poster','skills':[{'id':'content-production','version':1,'prompt':'HISTORICAL EXACT METHOD'}]},
+        'work':{'work_id':'old-work','version_id':'original-turn'},'request_signature':sha(value),
+        'actual_prompt':'HISTORICAL EXACT PROMPT'}
+    raw=json.dumps(old,ensure_ascii=False,indent=3)
+    with b.store.connect() as c:c.execute('INSERT INTO easel_chat_turns VALUES(?,?,?,?,?)',('original-turn','test-chat','original-turn','legacy-signature',raw))
+    monkeypatch.setattr(b,'_session',lambda *a:pytest.fail('historical receipt cannot resolve current session or skill'))
+    receipt=b.prepare(value)['receipt']
+    assert receipt['id']=='original-turn' and receipt['work']==old['work']
+    assert b.chat.get_turn('original-turn',private=True)['snapshot']==old['snapshot']
+    with b.store.connect() as c:assert c.execute('SELECT document FROM easel_chat_turns WHERE id=?',('original-turn',)).fetchone()[0]==raw
 
 def test_owner_http_ports_use_original_auth_origin_csrf_and_native_sse(business,monkeypatch):
     from easel import harnesses
@@ -181,86 +150,10 @@ def test_owner_http_ports_use_original_auth_origin_csrf_and_native_sse(business,
             assert (await client.get('/api/chat/last/http-session')).json()['clean_end']
             assert (await client.get('/api/chat/sessions')).json()['sessions'][0]['message_count']==2
             assert (await client.get('/api/chat/jobs/http-one/stream')).status_code==200
-            assert (await client.get('/api/skills')).json()[0]['available']
-            assert (await client.get('/api/skill/content-production')).json()['entry'].startswith('skills/builtin/')
+            assert (await client.get('/api/skills')).json()[0]['name']
+            assert (await client.get('/api/skill/content-production')).json()['name']=='content-production'
         await app.state.chat.close()
     asyncio.run(scenario())
-
-
-def test_modification_uses_same_native_session_exact_parent_and_raw_feedback(business,monkeypatch):
-    from easel import harnesses
-    class Versions:
-        def __init__(self):self.requests=[]
-        async def run(self,r,emit,ask,bind):
-            self.requests.append(r);bind('native-version-session')
-            r.on_native_turn('native-version-session','native-turn-'+str(len(self.requests)))
-            payload=json.loads(r.prompt.split('## 本轮冻结输入\n')[-1].split('\n\n## 准确父版与原始意见')[0])
-            folder=Path(payload['output_directory']);folder.mkdir(parents=True,exist_ok=True)
-            path=folder/'标题与配文.txt';path.write_text('有据的标题\n说明准确的变化与来源。',encoding='utf-8')
-            emit('token',json.dumps({'deliverables':[str(path)]}))
-    adapter=Versions();monkeypatch.setattr(harnesses,'adapter',lambda runtime:adapter)
-    async def scenario():
-        b=business;v,_=confirmed(b)
-        first=await b.chat.submit(v,**b.prepare(v))
-        if task:=b.chat._tasks.get(first['id']):await task
-        original=b.chat.get_turn(first['id'],private=True);wid=original['work']['work_id']
-        discussion=b.prepare({'sessionId':'test-chat','turnId':'only-discuss-parent','message':'只讨论这版的背景关系',
-                              'context':{'work_id':wid,'parent_version_id':first['id'],'action_id':'discuss'}})
-        assert discussion['work'] is None and discussion['snapshot']['task']=='discuss'
-        context=json.loads(discussion['actual_prompt'].split('## 本轮冻结输入\n')[-1])
-        assert context['reference_work']['version_id']==first['id'] and context['authorization']['discussion_only']
-        assert context['authorization']['production'] is False
-        b.box.action(wid,{'id':'record-feedback','kind':'feedback','candidate_id':first['id'],'text':'这一版背景太乱，只记录意见。'})
-        change=value('change','version-two');change['context'].update(work_id=wid,parent_version_id=first['id'])
-        plan=b.plan(change);change['context']['plan_token']=plan['plan_token']
-        second=await b.chat.submit(change,**b.prepare(change))
-        if task:=b.chat._tasks.get(second['id']):await task
-        final=b.chat.get_turn(second['id'],private=True)
-        assert final['hook_status']=='completed'
-        assert len(adapter.requests)==2 and adapter.requests[1].native_id=='native-version-session'
-        assert adapter.requests[1].session_key==adapter.requests[0].session_key
-        assert '这一版背景太乱，只记录意见。' in adapter.requests[1].prompt
-        assert final['snapshot']['skills']==original['snapshot']['skills']
-        work=b.box.work(wid)
-        assert len(work['versions'])==2 and any(v['candidate_id']==first['id'] for v in work['history'] if v['id']=='version-two')
-        # A parent from this work cannot be attached to an unrelated chat.
-        b.chat.create_session({'id':'unrelated-create','session_id':'unrelated'})
-        wrong=value('change','wrong-parent');wrong.update(sessionId='unrelated');wrong['context'].update(work_id=wid,parent_version_id=first['id'])
-        with pytest.raises(PlanConflict):b.plan(wrong)
-        await b.chat.close()
-    asyncio.run(scenario())
-
-
-def test_candidate_trial_is_explicit_and_does_not_change_defaults(business):
-    b=business;base=b.creator.detail('skill','content-production')
-    draft=b.creator.command({'id':'new-trial','action':'skill-draft','skill_id':base['id'],'base_version':base['version'],
-                             'prompt':base['prompt']+'\nExplicit TEMP candidate method.','reason':'trial only'})['result']['skill']
-    v=value();v['context']['version']=draft['version']
-    with pytest.raises(ValueError,match='候选'):b.plan(v)
-    v['context']['trial']=True
-    plan=b.plan(v)
-    assert plan['plan']['creator_snapshot']['trial'] is True
-    assert b.creator.detail('skill',base['id'])['published_version']==base['version']
-    assert 'Explicit TEMP candidate method.' in plan['plan']['execution_prompt']['body']
-
-
-def test_plan_binds_workspace_instructions_and_cannot_accept_changed_defaults(business):
-    b=business;v,plan=confirmed(b)
-    assert plan['plan']['execution_prompt']['runtime_instructions']==b.prepare(v)['frozen_instructions']
-    path=b.root/'agents/workspace/AGENTS.md'
-    path.write_text('New workspace instructions',encoding='utf-8')
-    with pytest.raises(PlanConflict,match='会话约定'):b.prepare(v)
-
-
-def test_attachment_only_plan_preserves_empty_user_text_and_rejects_empty_input(business):
-    b=business;v=value();v['message']=''
-    with pytest.raises(ValueError):b.plan(v)
-    upload=b.box.upload('only-material','素材.txt',b'Only attachment, no invented original user words')
-    v['attachments']=[{'id':upload['id'],'name':upload['name'],'path':upload['id']}]
-    plan=b.plan(v);v['context']['plan_token']=plan['plan_token']
-    assert plan['plan']['production_input']['material']==''
-    payload=json.loads(b.prepare(v)['actual_prompt'].split('## 本轮冻结输入\n')[-1])
-    assert payload['user_message']=='' and len(payload['attachments'])==1
 
 
 def test_revoked_stream_stops_reading_without_cancelling_the_native_turn(business,monkeypatch):
@@ -315,105 +208,3 @@ def test_frozen_output_paths_reject_ancestors_links_and_windows_stream_names(tmp
     else:(root/'outputs').symlink_to(outside,target_is_directory=True)
     with pytest.raises(ValueError):owned_output_path(root,'outputs/_sessions/materials/test/file.txt')
     assert not (outside/'_sessions').exists()
-
-
-def test_news_source_is_server_frozen_and_selection_is_local(business,monkeypatch):
-    from easel import harnesses
-    from easel_workbench.runtime.desk import SOURCES
-    b=business;source=next(iter(SOURCES))
-    b.store.ingest({'schema_version':1,'source_job':source,'feed_id':SOURCES[source]['feed'],'run_id':'native-source-fixture',
-                    'run_at':'2026-10-30T08:00:00+08:00','final_text':'原始采集载荷','articles':[{'title':'真实来源标题','body':'原始正文事实A',
-                    'url':'https://example.invalid/source-evidence','source_event_id':'exact-source-event'}]})
-    with b.store.connect() as c:aid=c.execute('SELECT id FROM articles').fetchone()[0]
-    v=value();v['message']='客户端编辑的制作目标';v['context']['article_id']=aid
-    plan=b.plan(v);v['context']['plan_token']=plan['plan_token']
-    payload=json.loads(b.prepare(v)['actual_prompt'].split('## 本轮冻结输入\n')[-1])
-    assert payload['source_article']['body']=='原始正文事实A' and payload['source_article']['provenance']
-    class Blocked:
-        async def run(self,r,emit,ask,bind):
-            bind('native-news');r.on_native_turn('native-news','native-news-turn')
-            emit('token','{"production_result":{"schema_version":1,"status":"blocked","message":"TEMP停止于来源验证之后"}}')
-    monkeypatch.setattr(harnesses,'adapter',lambda runtime:Blocked())
-    async def scenario():
-        result=await b.chat.submit(v,**b.prepare(v))
-        if task:=b.chat._tasks.get(result['id']):await task
-        work=b.chat.get_turn(result['id'])['work']
-        with b.store.connect() as c:
-            assert c.execute('SELECT article_id FROM toolbox_works WHERE id=?',(work['work_id'],)).fetchone()[0]==aid
-            feedback=c.execute('SELECT status,execution,event_json FROM news_feedback WHERE task_id=?',(result['id'],)).fetchone()
-            assert feedback['status']=='recorded' and feedback['execution']=='local'
-            assert json.loads(feedback['event_json'])['raw_text']==''
-            frozen=json.loads(c.execute('SELECT document FROM toolbox_review_inputs WHERE job_id=?',(result['id'],)).fetchone()[0])
-            assert frozen['source_article']==payload['source_article']
-        await b.chat.close()
-    asyncio.run(scenario())
-    changed=value(tid='source-changed');changed['context']['article_id']=aid
-    preview=b.plan(changed);changed['context']['plan_token']=preview['plan_token']
-    with b.store.connect() as c:c.execute('UPDATE articles SET body=? WHERE id=?',('新来源字节',aid))
-    with pytest.raises(PlanConflict,match='资讯来源'):b.prepare(changed)
-
-
-def test_news_poster_rejects_eol_drift_then_plans_exact_published_input_after_restoration(business):
-    from easel_workbench.runtime.desk import SOURCES
-    b=business;source=next(iter(SOURCES))
-    b.store.ingest({'schema_version':1,'source_job':source,'feed_id':SOURCES[source]['feed'],'run_id':'eol-regression-news',
-                    'run_at':'2026-11-02T08:00:00+08:00','final_text':'TEMP source','articles':[{
-                    'title':'换行回归热点','body':'服务器保留的准确来源正文','url':'https://example.invalid/eol-source',
-                    'source_event_id':'eol-news-event'}]})
-    with b.store.connect() as c:
-        aid=c.execute('SELECT id FROM articles').fetchone()[0]
-        before=[tuple(row) for row in c.execute('SELECT * FROM creator_skill_versions ORDER BY skill_id,version')]
-    v=value(tid='news-eol-regression');v['context']['article_id']=aid
-    path=b.root/'skills/shared/workbench/production-contract.md';raw=path.read_bytes()
-    path.write_bytes(raw.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
-    with pytest.raises(ValueError,match='此项目技能尚不可调用'):b.plan(v)
-    with b.store.connect() as c:
-        for table in ('easel_chat_plans','toolbox_jobs','creator_model_calls'):
-            assert c.execute('SELECT count(*) FROM '+table).fetchone()[0]==0
-    path.write_bytes(raw)
-    assert all(skill['available'] for skill in b.skills(False))
-    plan=b.plan(v);v['context']['plan_token']=plan['plan_token']
-    prepared=b.prepare(v);payload=json.loads(prepared['actual_prompt'].split('## 本轮冻结输入\n')[-1])
-    assert payload['source_article']['id']==aid and payload['source_article']['body']=='服务器保留的准确来源正文'
-    assert payload['session_task']=='poster'
-    assert prepared['actual_prompt']==plan['plan']['execution_prompt']['body']
-    with b.store.connect() as c:
-        assert [tuple(row) for row in c.execute('SELECT * FROM creator_skill_versions ORDER BY skill_id,version')]==before
-        assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==0
-
-
-def test_default_discussion_keeps_profile_pin_after_global_skill_publication(business):
-    b=business;base=b.creator.detail('skill','topic-research')
-    candidate=b.creator.command({'id':'new-current-topic','action':'skill-draft','skill_id':base['id'],'base_version':base['version'],
-                                 'prompt':base['prompt']+'\nNew globally published method.','reason':'Test pin isolation'})['result']['skill']
-    b.creator.command({'id':'publish-new-topic','action':'skill-publish','skill_id':base['id'],'version':candidate['version'],
-                       'expected_published_version':base['version'],'confirm':True})
-    assert b.creator.detail('skill',base['id'])['published_version']==candidate['version']
-    v={'sessionId':'test-chat','turnId':'profile-default-discussion','message':'讨论目标','context':{}}
-    prepared=b.prepare(v)
-    assert prepared['snapshot']['skills'][0]['version']==base['version']
-    assert 'New globally published method.' not in prepared['actual_prompt']
-
-
-def test_parallel_preview_returns_one_frozen_plan_without_orphan_work(business):
-    from concurrent.futures import ThreadPoolExecutor
-    b=business;v=value(tid='concurrent-plan')
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        plans=list(executor.map(lambda _:b.plan(v),range(2)))
-    assert plans[0]==plans[1]
-    with b.store.connect() as c:
-        assert c.execute('SELECT count(*) FROM easel_chat_plans WHERE id=?',('plan-concurrent-plan',)).fetchone()[0]==1
-        assert c.execute('SELECT count(*) FROM toolbox_works').fetchone()[0]==0
-        assert c.execute('SELECT count(*) FROM creator_model_calls').fetchone()[0]==0
-
-
-def test_product_article_mode_is_frozen_and_cannot_change_after_plan(business):
-    b=business;v=value('article','product-plan');v['context']['article_mode']='product'
-    plan=b.plan(v);assert plan['plan']['production_input']['article_mode']=='product'
-    v['context']['plan_token']=plan['plan_token']
-    payload=json.loads(b.prepare(v)['actual_prompt'].split('## 本轮冻结输入\n')[-1])
-    assert payload['work']['article_mode']=='product'
-    changed=copy.deepcopy(v);changed['context']['article_mode']='auto'
-    with pytest.raises(PlanConflict):b.prepare(changed)
-    poster=value(tid='poster-invalid-mode');poster['context']['article_mode']='product'
-    with pytest.raises(ValueError):b.plan(poster)

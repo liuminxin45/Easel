@@ -15,7 +15,7 @@ TASK_DEFAULTS = {
     'change': ['content-writing', 'image-production', 'delivery-review'],
     'discuss': ['topic-research'], 'research': ['topic-research'],
     'reference': ['reference-analysis'], 'review': ['delivery-review'],
-    'analysis': ['publication-analysis'], 'learning': ['experience-distillation'],
+    'analysis': ['publication-analysis'], 'learning': [],
     'news_enhancement': ['topic-research'], 'image': ['image-production', 'delivery-review'],
     # Historical profiles may retain these empty, retired task slots.
     'media': [], 'speech': [], 'video': [], 'music': [], 'transcribe': [], 'compose': [],
@@ -24,6 +24,7 @@ RETIRED_TASKS = frozenset(task for task, defaults in TASK_DEFAULTS.items() if no
 RETIRED_EASEL_SKILLS = frozenset((
     'easel-voiceover', 'easel-image', 'easel-video', 'easel-music',
     'easel-transcribe', 'easel-compose',
+    'experience-distillation',
 ))
 
 

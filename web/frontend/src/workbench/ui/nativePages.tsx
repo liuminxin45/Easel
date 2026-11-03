@@ -9,10 +9,9 @@ import BreakdownPage from '../../components/BreakdownPage';
 import type {Page} from '../../components/Sidebar';
 import {nativePageRoutes} from '../platform/native-routes';
 import {peekApiData,type OutputNode,type TrendSource} from '../../lib/api';
-import {libraryDataSource,creatorLaunchSelection,record,string,array,type CreatorBootstrap,type JsonRecord} from '@workbench/core';
+import {libraryDataSource,record,string,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useViewState} from './hooks';
 import {Notice} from './common';
-import {SkillTask} from './management';
 
 /** Only route/data adaptation lives here. Native pages own their complete UI. */
 export {nativePageRoutes} from '../platform/native-routes';
@@ -85,25 +84,9 @@ export function NativeCalendar(){
  return <CalendarPage viewState={viewState} draftStore={draftStore} onContentReady={onContentReady} registerLayer={vm.navigation.registerLayer}/>;
 }
 
-export function NativeBreakdown({profileId,search}:{profileId:string;search:URLSearchParams}){
- const vm=useWorkbench(),creators=useResource<CreatorBootstrap>('/api/creator/bootstrap?view=summary');
- const [draft,patch]=useDraft('easel:reference',{text:'',goal:'',task_id:''});
- const task=useResource<JsonRecord>(draft.task_id?'/api/creator/experience/'+encodeURIComponent(draft.task_id):null,{interval:3000,stopOnTerminal:true});
- const busy=!!draft.task_id&&!['completed','failed','stopped','cancelled'].includes(string(task.data?.status));
- const analyze=async(input:string)=>{
-  if(!creators.data)throw Error('画像与准确技能版本正在读取，请稍后重试。');
-  const creator=creatorLaunchSelection(creators.data,profileId,'reference',search);
-  if(!creator)throw Error('准确拆解技能版本尚未核对，输入已保留。');
-  const saved=await vm.service.creativeCommand('import-sample',{title:'参考拆解：'+input.trim().slice(0,40),body:input,url:'',goal:draft.goal,files:[]});
-  const evidence=array<string>(record(saved.result).evidence_ids)[0];
-  if(!evidence)throw Error('原件已保存，索引尚未核对。');
-  const result=await vm.service.creatorCommand('reference-analyze',{profile_id:profileId,evidence_id:evidence,goal:draft.goal,creator});
-  const id=string(record(result.result).task_id);patch({task_id:id});
-  return ''; // The task slot reads the actual result; an acknowledgement is not content.
- };
- return <><Notice sources={[creators]}/><BreakdownPage persona={profileId} onAnalyze={analyze}
-  inputState={{value:draft.text,onChange:text=>patch({text})}} analysisBusy={busy}
-  resultContent={draft.task_id?<SkillTask id={draft.task_id}/>:undefined}/></>;
+export function NativeBreakdown({profileId}:{profileId:string;search?:URLSearchParams}){
+ const [draft,patch]=useDraft('easel:reference',{text:''});
+ return <BreakdownPage persona={profileId} inputState={{value:draft.text,onChange:text=>patch({text})}}/>;
 }
 
 export interface WorkbenchNativePageProps {page:Page;profileId:string;onUseTopic:(title:string,sourceId?:string,note?:string)=>void;search?:URLSearchParams}

@@ -77,6 +77,8 @@ class CreatorRuntime:
         return self.profiles.bind_work(c, work_id, selection, allow_historical,persist=persist)
 
     def _seed(self, c):
+        from easel_workbench.features.skills.retirement import native_mode
+        native=native_mode(self.root)
         if not c.execute('SELECT 1 FROM creator_profiles WHERE id=?', (DEFAULT_PROFILE,)).fetchone():
             source = self._safe('规范/定位与编辑原则.md')
             raw = source.read_bytes() if source.is_file() else b''
@@ -85,11 +87,12 @@ class CreatorRuntime:
                        'audience': '持续关注 AI，希望看懂变化、看见可能、形成判断的读者。',
                        'voice': '清楚、克制、有依据；不移植他人经历和口头禅。',
                        'boundaries': '事实与判断分开，保留来源和适用范围。',
-                       'default_skills': copy.deepcopy(TASK_DEFAULTS), 'account_ids': [], 'asset_refs': [],
+                       'default_skills': {} if native else copy.deepcopy(TASK_DEFAULTS), 'account_ids': [], 'asset_refs': [],
                        'active': True, 'source': {'path': '规范/定位与编辑原则.md', 'sha256': digest(raw),
                        'content': raw.decode('utf-8-sig') if raw else '', 'available': bool(raw)},
                        'created_at': stamp(), 'updated_at': stamp()}
             self._put_profile(c, profile)
+        if native:return
         if self.catalog is not None:
             document=self.catalog.document()
         else:
@@ -230,8 +233,12 @@ class CreatorRuntime:
 
     def bootstrap(self,summary=False):
         from easel_workbench.features.skills.bootstrap_reads import profiles as read_profiles,skills as read_skills
+        from easel_workbench.features.skills.retirement import native_mode
         with self.store.connect() as c:
             c.execute('BEGIN')
+            if native_mode(self.root):
+                return {'schema_version':1,'default_profile_id':DEFAULT_PROFILE,'profiles':read_profiles(c,summary=summary),
+                        'skills':[],'accounts':self.accounts(c),'task_defaults':{},'task_policy':{}}
             profiles=read_profiles(c,summary=summary);skills=read_skills(c)
             return {'schema_version': 1, 'default_profile_id': DEFAULT_PROFILE, 'profiles': profiles,
                     'skills': skills, 'accounts': self.accounts(c), 'task_defaults': copy.deepcopy(TASK_DEFAULTS),
@@ -409,6 +416,7 @@ class CreatorRuntime:
         return result
 
     def command(self, value, *, before_commit=None):
+        from easel_workbench.features.skills.retirement import RETIRED_ACTIONS,SkillFeatureRetired
         if not isinstance(value, dict):
             raise ValueError('操作格式无效')
         value = copy.deepcopy(value)
@@ -421,29 +429,19 @@ class CreatorRuntime:
             if previous:
                 if previous['signature'] != signature:
                     raise CreatorConflict('相同操作标识不能提交不同内容')
+                if value.get('action') in RETIRED_ACTIONS:
+                    return json.loads(previous['result'])
                 from easel_workbench.project_skill_sync import finish_response
                 return finish_response(self,c,json.loads(previous['result']))
             action = value.get('action')
+            if action=='profile-save' and any(field in (value.get('document') or {}) for field in ('skill_versions','task_skill_versions','default_skills')):
+                from easel_workbench.features.skills.retirement import SkillFeatureRetired
+                raise SkillFeatureRetired('profile-skill-bindings')
+            if action in RETIRED_ACTIONS:raise SkillFeatureRetired(action)
             if action == 'profile-save':
                 result = self._save_profile(c, value)
-            elif action in ('profile-proposal-confirm','profile-proposal-revert'):
-                from easel_workbench.runtime.profile_learning import confirm
-                result=confirm(self,c,value,action=='profile-proposal-revert')
             elif action in ('bind-account', 'unbind-account'):
                 result = self._bind(c, value, action == 'unbind-account')
-            elif action == 'skill-draft':
-                result = {'skill': self.propose(c, value.get('skill_id'), value.get('base_version'), value.get('prompt'), value.get('reason', ''), value.get('evidence_refs'), value.get('conditions'), operation, value.get('resources'), value.get('validation_cases'))}
-            elif action in ('skill-publish', 'skill-revert'):
-                result = self._publish(c, value, action == 'skill-revert')
-            elif action == 'skill-source-reconcile':
-                from easel_workbench.project_skill_sync import pending
-                result={'source_sync':pending(self,c,key(value.get('skill_id')),value.get('version'))}
-            elif action == 'trial':
-                snapshot = self.resolve(value.get('profile_id') or DEFAULT_PROFILE, value.get('task', 'poster'), value.get('skills'), True, value.get('profile_revision'), c)
-                result = {'snapshot': snapshot, 'trial': True, 'started': False}
-            elif action == 'experience-organize':
-                from easel_workbench.runtime.task_runtime import enqueue_experience
-                result = enqueue_experience(self.box, value, c)
             elif action == 'reference-analyze':
                 from easel_workbench.runtime.task_runtime import enqueue_reference
                 result = enqueue_reference(self.box, value, c)

@@ -38,9 +38,11 @@ def commands(runtime):
 
 def candidate(box, sid):
     before = box.creator.detail('skill', sid)
-    return box.creator.command({'id': 'candidate-' + sid, 'action': 'skill-draft', 'skill_id': sid,
-                               'base_version': before['version'], 'prompt': before['prompt'] + '\nExplicit candidate method.',
-                               'reason': 'TEMP candidate'})['result']['skill']
+    # Seed a historical release internally; public authoring is retired.
+    with box.store.connect() as c:
+        return box.creator.propose(c,sid,before['version'],before['prompt']+'\nExplicit candidate method.',
+                                   'TEMP historical candidate',operation_id='candidate-'+sid)
+
 
 
 def selection(sid, version=1, trial=False):
@@ -65,7 +67,6 @@ def payload(box, task_id):
 
 @pytest.mark.parametrize('action,sid,task', [
     ('reference-analyze', 'reference-analysis', 'reference'),
-    ('experience-organize', 'experience-distillation', 'learning'),
 ])
 def test_candidate_version_and_trial_reach_actual_queue(commands, action, sid, task):
     candidate(commands, sid)
@@ -87,7 +88,7 @@ def test_candidate_version_and_trial_reach_actual_queue(commands, action, sid, t
 
 
 @pytest.mark.parametrize('action,sid', [
-    ('reference-analyze', 'reference-analysis'), ('experience-organize', 'experience-distillation'),
+    ('reference-analyze', 'reference-analysis'),
 ])
 def test_candidate_without_explicit_trial_never_queues(commands, action, sid):
     candidate(commands, sid)
@@ -99,7 +100,6 @@ def test_candidate_without_explicit_trial_never_queues(commands, action, sid):
 
 @pytest.mark.parametrize('action,sid,function', [
     ('reference-analyze', 'reference-analysis', task_runtime.enqueue_reference),
-    ('experience-organize', 'experience-distillation', task_runtime.enqueue_experience),
 ])
 def test_same_operation_receipt_does_not_reresolve_or_reread(commands, monkeypatch, action, sid, function):
     value = request(action, 'same-operation', sid)
@@ -120,7 +120,7 @@ def test_same_operation_receipt_does_not_reresolve_or_reread(commands, monkeypat
 
 
 @pytest.mark.parametrize('action,sid', [
-    ('reference-analyze', 'reference-analysis'), ('experience-organize', 'experience-distillation'),
+    ('reference-analyze', 'reference-analysis'),
 ])
 def test_different_executor_version_never_reuses_another_queue_input(commands, action, sid):
     candidate(commands, sid)
@@ -135,7 +135,7 @@ def test_different_executor_version_never_reuses_another_queue_input(commands, a
 
 
 def test_target_skill_cannot_impersonate_experience_executor(commands):
-    with pytest.raises(ValueError, match='不适用于本次任务'):
+    with pytest.raises(ValueError, match='已退役'):
         commands.creator.command(request('experience-organize', 'wrong-executor', 'content-writing'))
     with commands.store.connect() as c:
         assert c.execute('SELECT count(*) FROM learning_analysis_queue').fetchone()[0] == 0
@@ -145,14 +145,14 @@ def test_target_skill_cannot_impersonate_experience_executor(commands):
 def test_experience_target_requires_stable_skill_identity(commands, target):
     value = request('experience-organize', 'invalid-target', 'experience-distillation')
     value['skill_id'] = target
-    with pytest.raises(ValueError, match='标识无效'):
+    with pytest.raises(ValueError, match='已退役'):
         commands.creator.command(value)
     with commands.store.connect() as c:
         assert c.execute('SELECT count(*) FROM learning_analysis_queue').fetchone()[0] == 0
 
 
 @pytest.mark.parametrize('action,sid', [
-    ('reference-analyze', 'reference-analysis'), ('experience-organize', 'experience-distillation'),
+    ('reference-analyze', 'reference-analysis'),
 ])
 @pytest.mark.parametrize('goal', [1, ['a goal'], {'goal': 'unparsed'}])
 def test_command_goal_is_validated_before_queueing(commands, action, sid, goal):
@@ -229,8 +229,9 @@ def test_analysis_pending_intent_reuses_frozen_snapshot_after_candidate_publish(
         original = intent['creator_snapshot']
         assert original['trial'] is True
     monkeypatch.setattr(commands, 'upload', upload)
-    commands.creator.command({'id': 'publish-during-pause', 'action': 'skill-publish', 'skill_id': 'publication-analysis',
-                              'version': 2, 'expected_published_version': 1, 'confirm': True})
+    with commands.store.connect() as c:
+        commands.creator._publish(c,{'id':'historical-publish','skill_id':'publication-analysis',
+            'version':2,'expected_published_version':1,'confirm':True})
     def forbidden(*args, **kwargs):
         raise AssertionError('An accepted analysis intent must not resolve skills again.')
     monkeypatch.setattr(commands.creator, 'resolve', forbidden)

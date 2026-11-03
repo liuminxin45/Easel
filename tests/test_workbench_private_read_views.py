@@ -125,7 +125,7 @@ def test_studio_rejects_unknown_views(commands,view):
 
 def test_creator_bootstrap_uses_projected_descriptors_preserves_status_and_full_profile_compatibility(runtime,monkeypatch):
     from easel_workbench.features.skills.bootstrap_reads import SKILL_FIELDS,PROFILE_FIELDS
-    from easel_workbench.skills import launch_metadata,task_policy
+    from easel_workbench.skills import launch_metadata,task_policy,RETIRED_EASEL_SKILLS
     with runtime.store.connect() as c:
         original=runtime._skill(c,'content-writing',1,False)
         newer={key:value for key,value in original.items() if key not in ('history','published_version','is_current')}
@@ -137,6 +137,7 @@ def test_creator_bootstrap_uses_projected_descriptors_preserves_status_and_full_
         c.execute('INSERT INTO creator_skill_events VALUES(?,?,?,?,?,?)',('publish-two','content-writing',2,'publish','{}','2026-11-03'))
         expected=[]
         for row in c.execute('SELECT id FROM creator_skills ORDER BY rowid'):
+            if row['id'] in RETIRED_EASEL_SKILLS:continue
             item=runtime._skill(c,row['id'],with_content=False)
             expected.append({**{key:item.get(key) for key in SKILL_FIELDS},'published_version':item['published_version'],
                 'is_current':item['is_current'],'status':item['status'],**launch_metadata(item)})

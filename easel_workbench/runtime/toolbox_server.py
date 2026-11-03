@@ -56,6 +56,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.learning_service import LearningConflict
     learning=attach_learning(box,studio);app.state.learning=learning
     from easel_workbench.runtime.creator_runtime import CreatorRuntime,CreatorConflict
+    from easel_workbench.features.skills.retirement import SkillFeatureRetired
     creator=CreatorRuntime(box,project=studio.project);box.creator=creator;app.state.creator=creator
     from easel_workbench.features.conversations.service import ChatService
     from easel_workbench.application.chat import ChatBusiness
@@ -310,6 +311,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 except ValueError as exc:return error(409,str(exc))
             if path=='/api/creator/commands':
                 try:return reply(await asyncio.to_thread(creator.command,value))
+                except SkillFeatureRetired as exc:return reply({'error':'feature_retired','feature':exc.feature,'action':exc.action,'message':str(exc)},410)
                 except CreatorConflict as exc:return error(409,str(exc))
                 except ValueError as exc:return error(400,str(exc))
             if path=='/api/platform-accounts/environment/install':
@@ -684,9 +686,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         start=time.monotonic();trace=getattr(request.state,'workbench_trace',None) or secrets.token_hex(8)
         from easel_workbench.diagnostics.performance import span
         try:
-            with span(trace_id=trace,route=request.url.path,role='server',allow_db_copy=request.url.path not in {'/api/easel/plans','/api/chat/plan','/api/creative/preview'}) as measurement:
+            with span(trace_id=trace,route=request.url.path,role='server',allow_db_copy=request.url.path not in {'/api/easel/plans','/api/chat/plan','/api/creative/preview','/api/skills','/api/skill','/api/chat'} and not request.url.path.startswith('/api/skill/')) as measurement:
                 result=await dispatch(path,request,trace)
                 measurement.status=result.status_code
+        except SkillFeatureRetired as exc:result=reply({'error':'feature_retired','feature':exc.feature,'action':exc.action,'message':str(exc)},410)
         except WorkspaceConflict as exc:result=error(409,str(exc))
         except WorkspaceUnavailable as exc:result=error(503,str(exc))
         except FileNotFoundError as exc:result=error(404,str(exc))

@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from easel import harnesses
+from easel.timeouts import TIMEOUT_CHAT
 from easel.direct_api import read_settings
 from easel.harnesses import store as harness_store
 from easel.harnesses.base import HarnessError, RunRequest
@@ -33,7 +34,7 @@ from .receipts import TERMINAL, ChatConflict, packed, sha, identity, text, now
 
 
 class ChatService:
-    def __init__(self, box, *, root=None, store=None, settings=None, on_accept=None, on_started=None, on_finish=None, timeout=1800):
+    def __init__(self, box, *, root=None, store=None, settings=None, on_accept=None, on_started=None, on_finish=None, timeout=TIMEOUT_CHAT):
         self.box = box
         self.store = store if store is not None else box.store
         self.root = Path(root or box.root).resolve()
@@ -279,7 +280,7 @@ class ChatService:
             break
         if not private:
             turn['skill_refs'] = [{'id': skill['id'], 'version': skill['version']}
-                                  for skill in turn.get('snapshot', {}).get('skills', [])]
+                                  for skill in (turn.get('snapshot') or {}).get('skills', [])]
             for field in ('actual_prompt', 'frozen_instructions', 'snapshot', 'request_signature'):
                 turn.pop(field, None)
         return turn
@@ -365,7 +366,7 @@ class ChatService:
             return self.get_turn(previous['id'])
         return None
 
-    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None):
+    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None, interactive=True):
         if self._closing:
             raise ChatConflict('服务正在关闭，请保留草稿')
         if not isinstance(value, dict):
@@ -381,7 +382,7 @@ class ChatService:
             raise ValueError('请输入消息或添加素材')
         actual_prompt = text(actual_prompt, 1024 * 1024, True)
         from easel_workbench.runtime.task_runtime import validated_snapshot
-        frozen = validated_snapshot(snapshot, snapshot.get('task'))
+        frozen = validated_snapshot(snapshot, snapshot.get('task')) if snapshot is not None else None
         with self.store.connect() as c:
             accepted_session = self._session(c, session_id)
         config = self.execution_settings(accepted_session)
@@ -421,7 +422,7 @@ class ChatService:
                 raise ChatConflict('此对话的原请求正在准备；没有重复发送')
             if admission_id is not None and (admission_id!=turn_id or session.get('pendingSubmissionId')!=admission_id):
                 raise ChatConflict('准备回执与受理身份不同，未发送')
-            if frozen['profile']['id'] != session['profile_id'] or context.get('profile_id', session['profile_id']) != session['profile_id']:
+            if (frozen is not None and frozen['profile']['id'] != session['profile_id']) or context.get('profile_id', session['profile_id']) != session['profile_id']:
                 raise ChatConflict('对话、技能和作品必须使用同一画像')
             initial_title = value.get('initial_title')
             if initial_title is not None:
@@ -434,7 +435,7 @@ class ChatService:
                     session.update(title=initial_title, title_source='automatic')
             turn = {'id': turn_id, 'operation_id': operation, 'session_id': session_id, 'runtime': runtime,
                     'execution_settings': config,
-                    'message': message, 'context': copy.deepcopy(context), 'snapshot': frozen,
+                    'message': message, 'context': copy.deepcopy(context), 'snapshot': frozen, **({'interactive':False} if not interactive else {}),
                     'actual_prompt': actual_prompt, 'actual_prompt_sha256': hashlib.sha256(actual_prompt.encode()).hexdigest(),
                     'frozen_instructions': frozen_instructions, 'instructions_sha256': hashlib.sha256(frozen_instructions.encode()).hexdigest(),
                     'model': model, 'request_signature': sha(value),
@@ -457,9 +458,9 @@ class ChatService:
             register_owned()
         return turn,environment
 
-    async def submit(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None):
+    async def submit(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True):
         task=asyncio.create_task(self._submit_owned(value,snapshot=snapshot,actual_prompt=actual_prompt,
-            work=work,frozen_instructions=frozen_instructions,admission_id=admission_id))
+            work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive))
         self._admissions.add(task)
         def finished(done):
             self._admissions.discard(done)
@@ -467,10 +468,10 @@ class ChatService:
         task.add_done_callback(finished)
         return await asyncio.shield(task)
 
-    async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None):
+    async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True):
         from easel.web_services.concurrency import run_sync
         turn,environment=await run_sync(self._admit,value,snapshot=snapshot,actual_prompt=actual_prompt,
-                                       work=work,frozen_instructions=frozen_instructions,admission_id=admission_id)
+                                       work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive)
         if environment is None:return turn
         turn_id,session_id=turn['id'],turn['session_id']
         runner = None
@@ -728,6 +729,8 @@ class ChatService:
             persist()
 
         async def ask(questions):
+            if turn.get('interactive',True) is False:
+                raise HarnessError('此操作需要权限确认，请在流式对话中执行并确认权限')
             identifier = 'harness_' + uuid.uuid4().hex
             future = asyncio.get_running_loop().create_future()
             safe_questions = json.loads(scrub(json.dumps(questions, ensure_ascii=False)))

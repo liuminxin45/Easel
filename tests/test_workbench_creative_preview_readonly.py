@@ -226,7 +226,7 @@ _http_fixture=importlib.util.module_from_spec(_http_spec);_http_spec.loader.exec
 business=_http_fixture.business
 
 
-def test_actual_chat_plan_http_route_correlates_trace_and_rejects_accidental_backup(business,monkeypatch):
+def test_native_skill_metadata_and_retired_plan_keep_trace_and_block_database_copy(business,monkeypatch):
     import httpx
     from easel_workbench.runtime.toolbox_server import create_app
     class Auth:
@@ -240,14 +240,16 @@ def test_actual_chat_plan_http_route_correlates_trace_and_rejects_accidental_bac
             assert (await client.post('/api/chat/sessions',headers=headers,json={'id':'http-create','session_id':'http-plan','profile_id':'oil-pig','action':'create'})).status_code==200
             payload=_http_fixture.value(tid='http-plan-one');payload['sessionId']='http-plan'
             response=await client.post('/api/chat/plan',headers=headers,json=payload)
-            assert response.status_code==200,response.text
+            assert response.status_code==410,response.text
+            response=await client.get('/api/skills');assert response.status_code==200,response.text
             trace=response.headers['X-Desk-Trace'];event=next(row for row in events if row['event']=='performance_finished' and row['trace_id']==trace)
-            assert event['route']=='/api/chat/plan' and event['query_count']>0 and event['db_copy_bytes']==0
-            def accidental_copy(value):
+            assert event['route']=='/api/skills' and event['query_count']>=0 and event['db_copy_bytes']==0
+            def accidental_copy():
                 with b.store.connect() as source,contextlib.closing(sqlite3.connect(':memory:')) as target:source.backup(target)
                 raise AssertionError('copy was not forbidden')
-            monkeypatch.setattr(app.state.chat_business,'plan',accidental_copy)
-            rejected=await client.post('/api/chat/plan',headers=headers,json=payload)
+            from easel_workbench.runtime.native_skills import service
+            monkeypatch.setattr(service(b.box,app.state.chat),'items',accidental_copy)
+            rejected=await client.get('/api/skills')
             assert rejected.status_code==503
             trace=rejected.headers['X-Desk-Trace'];blocked=next(row for row in events if row['event']=='performance_finished' and row['trace_id']==trace)
             assert blocked['db_copy_blocked']==1 and blocked['db_copy_bytes']==0

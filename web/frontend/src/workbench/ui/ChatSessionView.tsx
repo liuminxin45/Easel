@@ -13,33 +13,16 @@ import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
 
-export interface NativeSkill extends SkillItem {id?:string;skill_id?:string;display_name?:string;origin?:string;source_revision?:string;version:number;available?:boolean;reason?:string;execution_kind?:string;launch_actions?:{id:string;label:string;task?:string;format?:string;requires_plan?:boolean;requires_context?:boolean;path?:string}[]}
-export interface NativeSelection {skill_id:string;version:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
+export type NativeSkill=SkillItem;
+export interface NativeSelection {skill_id:string;version?:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
 export interface NativeSession extends ChatSession {runtime?:string;execution_settings?:JsonRecord;profile_id?:string;revision?:number;message_count?:number;linked_works?:JsonRecord[];pendingSubmissionId?:string|null}
 export interface NativeSessions {sessions:NativeSession[]}
 interface HistoryPage {has_more:boolean;next_before:string|null;before?:string|null;limit:number}
-export function nativeSkillChoices(skills:NativeSkill[],versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
- const choices=skills.flatMap(skill=>(skill.launch_actions||[]).filter(action=>Number.isSafeInteger(skill.version)&&skill.version>0&&(!action.requires_context||versionContext||!!action.path)).map(action=>{
-  const id=skill.skill_id||skill.id||skill.name,workflow=skill.execution_kind==='workflow'||id==='content-production';
-  const position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0];
-  const native=skill.origin==='easel',label=native?(position?.item.label||skill.display_name||skill.name):workflow&&action.task==='poster'?'生成贴图':workflow&&action.task==='article'?'撰写文章':(skill.display_name||skill.name)+' · '+action.label;
-  const fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!;
-  return {id:id+':'+action.id,label,...(native?{prompt:`帮我做「${label}」`}:{}),tab:native?(position?.tab.id||fallback.id):'extensions',tabLabel:native?(position?.tab.label||fallback.label):'工作台扩展',group:native?(position?.group.label||'其他内置技能'):(skill.display_name||skill.name),status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description||skill.reason,disabled:skill.available===false,selection:{skill_id:id,version:skill.version,action_id:action.id,label,...(native?{source_revision:skill.source_revision}:{}),...(action.path?{path:action.path}:{}),task:action.task,requires_plan:action.requires_plan??['poster','article','image','change'].includes(action.task||action.format||'')}};
- }));
- const order=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.map(item=>item.skill))).filter(Boolean);
- return choices.sort((a,b)=>{const ai=order.indexOf(a.selection.skill_id),bi=order.indexOf(b.selection.skill_id);return (a.tab==='extensions'?10000:ai<0?9999:ai)-(b.tab==='extensions'?10000:bi<0?9999:bi)});
-}
-export function nativeSkillDestination(selection:NativeSelection,profileId:string,versionContext=false):string|null{
- if(['poster','article','discuss','native'].includes(selection.task||selection.action_id)||(versionContext&&['change','review'].includes(selection.task||selection.action_id)))return null;
- if(!selection.path)return '/toolbox?section=skills&item='+encodeURIComponent(selection.skill_id);
- const url=new URL(selection.path,'https://workbench.invalid');
- if(url.origin!=='https://workbench.invalid')return '/toolbox?section=skills';
- url.searchParams.set('profile',profileId);url.searchParams.set('skill',selection.skill_id);url.searchParams.set('skill_version',String(selection.version));url.searchParams.set('action',selection.action_id);if(selection.trial)url.searchParams.set('trial','1');
- return url.pathname+url.search;
-}
-export function nativeSkillInputTarget(selection:NativeSelection):{key:string;field:string}|null{
- const task=selection.task||selection.action_id;
- return task==='reference'?{key:'easel:reference',field:'text'}:task==='learning'?{key:'creator:experience',field:'goal'}:task==='analysis'?{key:'easel:metrics',field:'question'}:null;
+export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
+ return skills.map(skill=>{
+  const id=skill.name,position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0],fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!,label=position?.item.label||skill.name;
+  return {id:id+':native',label,prompt:`帮我做「${label}」`,tab:position?.tab.id||fallback.id,tabLabel:position?.tab.label||fallback.label,group:position?.group.label||'其他内置技能',status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description,selection:{skill_id:id,action_id:'native',task:'native',label,requires_plan:false}};
+ });
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]|undefined{const files=productArtifacts(record(message).output_files);return files.length?files:undefined}
 export function nativeArtifactPath(message:unknown,path:string,kind:'media'|'library'='media'):string|undefined{const rel=path.replace(/^outputs\//,'');const file=array<JsonRecord>(record(message).output_files).find(file=>string(file.source_path)===rel);return file?(kind==='library'?'#/outputs/__workbench__/'+encodeURIComponent(string(file.id))+'/'+encodeURIComponent(string(file.name)):string(file.url)):undefined}
@@ -64,9 +47,9 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const continuationWork=useResource<Work>(search.get('continue')==='1'&&workId&&parentVersion?'/api/works/'+encodeURIComponent(workId)+'/versions/'+encodeURIComponent(parentVersion)+'/view':null),continuationApplied=useRef('');
  const continuationVersion=continuationWork.data?.versions.find(v=>v.id===parentVersion),continuationPath=continuationWork.data?nativeContinuationPath(workProductionRecovery(continuationWork.data,continuationVersion),workId,parentVersion):null;
  useEffect(()=>{if(search.get('continue')!=='1'||!continuationPath||!session||session.pendingTurnId||draft.pending||continuationApplied.current===search.toString())return;continuationApplied.current=search.toString();runtime.state.setState({error:'',feedback:undefined});if(!draft.text.trim()&&!draft.files.length)patch({text:'请继续完成《'+continuationWork.data!.title+'》，沿用所选版本的原始素材、制作要求和保留文件，完成后另存新版本。'})},[continuationPath,session?.pendingTurnId,draft.pending,search.toString()]);
- useEffect(()=>{if(!catalog.data||applied.current===search.toString()||(!versionContext&&draft.command!==undefined))return;const skill=search.get('skill'),version=Number(search.get('skill_version')),actionId=search.get('action');
-  const selected=choices.find(choice=>choice.selection.skill_id===skill&&(!actionId||choice.selection.action_id===actionId));
-  if(selected){applied.current=search.toString();patch({command:{...selected.selection,...(Number.isSafeInteger(version)&&version>0?{version}:{}),...(search.get('trial')==='1'?{trial:true}:{})}});}
+ useEffect(()=>{if(!catalog.data||applied.current===search.toString()||(!versionContext&&draft.command!==undefined))return;const skill=search.get('skill');
+  const selected=choices.find(choice=>choice.selection.skill_id===skill);
+  if(selected){applied.current=search.toString();patch({command:{...selected.selection}});}
  },[catalog.data,id,search.toString()]);
  const confirmedStoppedPath=confirmedContinuation(lastAssistant,id,profileId),historicalError=string(record(lastAssistant).business_error);
  useEffect(()=>{if(!historyBefore&&confirmedStoppedPath&&!session?.pendingTurnId)runtime.restoreStopped(lastTurn,historicalError)},[runtime,historyBefore,confirmedStoppedPath,session?.pendingTurnId,lastTurn,historicalError]);
@@ -83,7 +66,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   if(historyBefore)throw Error('请返回最新消息后继续输入；当前草稿已保留。');
   if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId||session.pendingSubmissionId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
-  const uploads=await vm.service.uploadFiles(draft.files),bindVersion=versionContext&&(!draft.command||['change','review','discuss'].includes(draft.command.action_id)),context:JsonRecord={profile_id:profileId,...(bindVersion&&!draft.command?{action_id:'discuss'}:{}),...(draft.article_mode&&!bindVersion?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,version:draft.command.version,action_id:draft.command.action_id,...(draft.command.source_revision?{skill_revision:draft.command.source_revision}:{}),...(draft.command.trial?{trial:true}:{})}:{}),...(bindVersion?{work_id:workId,parent_version_id:parentVersion}:{})};
+  const uploads=await vm.service.uploadFiles(draft.files),context:JsonRecord={profile_id:profileId,...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.command?{skill_id:draft.command.skill_id,action_id:'native'}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
   await runtime.submit(turn,profileId);
  });
@@ -119,7 +102,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
   composer={{text:draft.text,attachments:draft.files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:text=>patch({text}),onUpload:async files=>patch({files:await vm.service.attach(files,draft.files)}),onRemoveAttachment:fileId=>patch({files:draft.files.filter(file=>file.id!==fileId)}),commands:choices,selectedCommand:selected,
-   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null,target=command&&nativeSkillDestination(command,profileId,versionContext);patch({command:target?null:command,...(text!==undefined?{text}:{})});if(target)vm.navigate(target)},disabled:readOnly||!!historyBefore||busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!readOnly&&!historyBefore&&!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:readOnly?'此对话仅可查看；输入仍保留在本机':historyBefore?'查看历史消息；返回最新消息后可继续输入':'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
+   onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null;patch({command,...(text!==undefined?{text}:{})})},disabled:readOnly||!!historyBefore||busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!readOnly&&!historyBefore&&!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:readOnly?'此对话仅可查看；输入仍保留在本机':historyBefore?'查看历史消息；返回最新消息后可继续输入':'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',status:busy?'原生会话正在执行':unknown?'正在恢复原任务状态，输入已保留':'',registerLayer:vm.navigation.registerLayer}}
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
   notice={<><Notice sources={[resource,catalog,action,{error,feedback}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>

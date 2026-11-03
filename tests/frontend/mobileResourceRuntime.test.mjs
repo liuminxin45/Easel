@@ -15,6 +15,33 @@ function fixture(){
  return {api,client,saved,calls,clock,state,get transport(){return transport},close(){release();client.pauseVisible()}};
 }
 
+test('original skill config uses the visible detail revision and preserves stale-save rejection',async()=>{
+ const f=fixture();try{
+  f.state.response=(path,options)=>options.method==='POST'?json({error:'配置已有新修订'},409):json({name:'ai-image-gen',body:'workflow',configuration_revision:4});
+  await f.api.fetchSkillDetail('ai-image-gen');
+  await assert.rejects(f.api.saveEnv({IMG_API_KEY:'TEMP'}),/配置已有新修订/);
+  const sent=f.calls.find(call=>call.method==='POST'&&call.path==='/api/env');
+  assert.equal(JSON.parse(sent.body).expected_revision,4);
+  assert.equal(JSON.parse(sent.body).updates.IMG_API_KEY,'TEMP');
+ }finally{f.close()}
+});
+
+test('original skill config refuses to invent a revision without a detail read',async()=>{
+ const f=fixture();try{await assert.rejects(f.api.saveEnv({IMG_API_KEY:'TEMP'}),/重新打开技能详情/);assert.equal(f.calls.length,0)}finally{f.close()}
+});
+
+test('a late closed detail read cannot replace the currently opened skill configuration revision',async()=>{
+ const f=fixture();try{
+  let first,second;
+  f.state.response=(path,options)=>options.method==='POST'?json({ok:true,skills:{}}):new Promise(resolve=>{if(path.endsWith('/first'))first=resolve;else second=resolve});
+  const old=f.api.fetchSkillDetail('first'),current=f.api.fetchSkillDetail('second');
+  await new Promise(resolve=>setImmediate(resolve));second(json({name:'second',configuration_revision:6}));await current;
+  first(json({name:'first',configuration_revision:4}));await old;
+  await f.api.saveEnv({IMG_API_KEY:'TEMP'});
+  assert.equal(JSON.parse(f.calls.find(call=>call.method==='POST').body).expected_revision,6);
+ }finally{f.close()}
+});
+
 test('native page reads share the real host cache and expose synchronous snapshots on return',async()=>{
  const f=fixture();try{
   await f.api.fetchOutputs();await f.api.fetchOutputs();

@@ -1,88 +1,11 @@
-import {ExtensionDetails} from './ExtensionDetails';
-import {ActionButton} from './common';
-import {useWorkSummaries} from './hooks/work-summaries';
-import React,{useEffect,useRef,useState} from 'react';
-import {creatorAssetInputs,creatorLaunchPath,creatorLaunchSelection,creatorSkillLabels,creatorCommandResult,array,record,string,number,formatTime,type CreatorBootstrap,type CreatorProfile,type CreatorSkillDetail,type JsonRecord,type DraftAttachment} from '@workbench/core';
-import {useWorkbench,useResource,useDraft,useAsyncAction} from './hooks';
-import {IconSkills,IconSearch,IconProfile,IconPlus,IconAccounts,IconImage,IconText} from './components/icons';
-import {Field,Panel,Drawer,Notice,PageHead,Markdown,Pending,TextRecord,JsonDetails,RecordBody,resultDocument} from './common';
+import {array,record,string,type JsonRecord} from '@workbench/core';
+import {useResource} from './hooks';
+import {Panel,Notice,JsonDetails} from './common';
 
-/** Private version/experience overlays; the native SkillPage remains the catalog. */
-export function Skills({profileId,search}:{profileId:string;search:URLSearchParams}){
- const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap'),item=search.get('item')||'',experience=search.get('pane')==='experience';
- if(experience)return <Drawer open title="整理经验" onClose={()=>vm.replace('/toolbox?section=skills')}><Notice sources={[resource]}/><Experience profileId={profileId} data={resource.data} search={search}/></Drawer>;
- return <><Notice sources={[resource]}/>{item&&resource.data&&<SkillDetail id={item} version={search.get('version')||''} data={resource.data} profileId={profileId}/>}</>;
+/** Read-only compatibility for existing reference-analysis task records. */
+export function SkillTask({id}:{id:string}){
+ const r=useResource<JsonRecord>('/api/creator/experience/'+encodeURIComponent(id),{interval:3000,stopOnTerminal:true}),result=record(r.data?.result),analysis=record(result.analysis);
+ return <Panel title={string(r.data?.status)==='completed'?'拆解完成':'拆解进度'}><Notice sources={[r]} message={string(r.data?.error)}/><p>{string(analysis.summary)||string(result.reason)}</p>{array<JsonRecord>(analysis.suggestions).map((s,i)=><div key={i}><h3>{string(s.name)}</h3><p className="ew-preserve">{array<string>(s.instructions).join('\n')}</p><p>{string(s.reason)}</p></div>)}<JsonDetails title="执行记录" value={r.data}/></Panel>;
 }
-
-export function SkillDetail({id,version,data,profileId,onClose}:{id:string;version:string;data:CreatorBootstrap;profileId:string;onClose?:()=>void}){
- const vm=useWorkbench(),r=useResource<CreatorSkillDetail>('/api/creator/skills/'+encodeURIComponent(id)+(version?'?version='+version:'')),[visible,setVisible]=useState(true),[editing,setEditing]=useState(false),[publishing,setPublishing]=useState(false),action=useAsyncAction(),s=r.data;
- const [draft,patch]=useDraft('creator:skill:'+id+':'+(version||'current'),{prompt:'',reason:'',conditions:''}),[apply,setApply]=useState(false),[tasks,setTasks]=useState<string[]>([]),profile=data.profiles.find(p=>p.id===profileId);
- const publishTrigger=useRef<HTMLButtonElement>(null),publishBack=useRef<HTMLButtonElement>(null),detailScroll=useRef(0),returning=useRef(false);
- useEffect(()=>{setVisible(true);setPublishing(false)},[id,version]);
- useEffect(()=>{if(s&&!draft.prompt)patch({prompt:s.prompt})},[s?.version]);
- useEffect(()=>{
-  if(publishing){const body=publishBack.current?.closest('.drawer');if(body)body.scrollTop=0;publishBack.current?.focus({preventScroll:true})}
-  else if(returning.current){returning.current=false;const body=publishTrigger.current?.closest('.drawer');if(body)body.scrollTop=detailScroll.current;publishTrigger.current?.focus({preventScroll:true})}
- },[publishing]);
- const showPublishing=()=>{detailScroll.current=publishTrigger.current?.closest('.drawer')?.scrollTop||0;setPublishing(true)};
- const returnToDetail=()=>{returning.current=true;setPublishing(false)};
- const close=()=>{if(publishing)returnToDetail();else if(onClose)onClose();else vm.replace('/toolbox?section=skills')};
- // A Back press returns from confirmation without popping the detail's layer.
- const dismiss=()=>{if(publishing){returnToDetail();return false}setVisible(false);onClose?.()};
- return <Drawer open={visible} title={publishing?'发布技能版本':s?.name||'读取技能'} onClose={close} onDismiss={dismiss}>
-  <Notice sources={[r,action]}/>
-  {s&&(publishing?<>
-   <button ref={publishBack} className="btn btn-ghost" onClick={returnToDetail}>返回技能详情</button>
-   <p>候选内容不会自动应用。请选择本次范围：</p>
-   <label className="ew-check"><input type="checkbox" checked={apply} onChange={e=>setApply(e.target.checked)}/>同时应用到画像「{profile?.name}」的指定任务</label>
-   {apply&&array<string>(s.tasks).filter(t=>Object.hasOwn(data.task_policy||{},t)).map(t=><label className="ew-check" key={t}><input type="checkbox" checked={tasks.includes(t)} onChange={e=>setTasks(e.target.checked?[...tasks,t]:tasks.filter(v=>v!==t))}/>{{poster:'贴图',article:'文章',change:'改稿',discuss:'讨论'}[t]||t}</label>)}
-   <p>{apply?'仅更新以上画像与任务。':'仅加入可用技能，不更改画像默认。'}</p>
-   <ExtensionDetails title="发布前差异"><RecordBody value={s.diff}/></ExtensionDetails>
-   <ActionButton action={action} className="btn btn-primary" disabled={action.busy||apply&&!tasks.length} onClick={()=>void action.run(async()=>{
-    await vm.service.creatorCommand('skill-publish',{skill_id:id,version:s.version,expected_published_version:s.published_version,confirm:true,...(apply?{profile_id:profileId,profile_revision:profile?.revision,tasks}:{})});returnToDetail();
-   })}>确认发布此版本</ActionButton>
-  </>:<>
-   <div className="ew-toolbar"><select className="field" aria-label="技能版本" value={s.version} onChange={e=>vm.replace('/toolbox?'+new URLSearchParams({section:'skills',item:id,version:e.target.value}))}>{(data.skills.find(v=>v.id===id)?.versions||[]).map(h=><option key={number(h.version)} value={number(h.version)}>版本 {number(h.version)} · {string(h.status)}</option>)}</select><a className="btn" href={'/api/creator/skills/'+id+'/export?version='+s.version}>导出技能</a></div>
-   <p>{s.description}</p>
-   {s.execution_kind==='workflow'&&<p className="ew-muted">组合技能连接已选子技能；制作方法由各子技能版本提供。</p>}
-   <div className="ew-row">{s.launch_actions?.map((launch,i)=>launch.requires_context?<span className="ew-muted" key={launch.id}>在准确作品版本中{launch.label}</span>:<button className={'btn '+(i===0?'btn-primary':'')} key={launch.id} onClick={()=>vm.navigate(creatorLaunchPath(launch,s,profileId),{intent:'flow'})}>{s.status!=='published'?'本次试用 · ':''}{launch.label}</button>)}{!s.launch_actions?.length&&<span className="ew-muted">此技能尚无可启动的任务入口</span>}<button className="btn" onClick={()=>setEditing(v=>!v)}>编辑方法，另存候选</button>{s.version!==s.published_version&&<button ref={publishTrigger} className="btn" onClick={showPublishing}>确认适用范围并发布</button>}</div>
-   {editing?<>
-    <Field label="完整技能提示词"><textarea className="field" rows={16} value={draft.prompt} onChange={e=>patch({prompt:e.target.value})}/></Field>
-    <Field label="修改理由"><textarea className="field" rows={3} value={draft.reason} onChange={e=>patch({reason:e.target.value})}/></Field>
-    <Field label="适用条件"><input className="field" value={draft.conditions} onChange={e=>patch({conditions:e.target.value})}/></Field>
-    <ActionButton action={action} className="btn btn-primary" disabled={action.busy||!draft.reason.trim()||!draft.prompt.trim()} onClick={()=>void action.run(async()=>{const v=await vm.service.creatorCommand('skill-draft',{skill_id:id,base_version:s.version,prompt:draft.prompt,reason:draft.reason,conditions:{description:draft.conditions},evidence_refs:[]});const skill=record(resultDocument(v).skill);setEditing(false);vm.replace('/toolbox?'+new URLSearchParams({section:'skills',item:id,version:String(skill.version)}))})}>保存候选修订</ActionButton><Pending scope={'creator:skill-draft:'+id}/>
-   </>:<ExtensionDetails open title="技能正文"><Markdown text={s.prompt}/></ExtensionDetails>}
-   <TextRecord title="与前版的差异" value={s.diff}/>
-   <ExtensionDetails title="资源与使用记录">{s.resources.map((r,i)=><p key={i}>{string(r.path)} · {r.available?'原件已冻结':'原件待补'} {!!r.available&&<a href={'/api/creator/skills/'+id+'/resources/'+s.version+'/'+i}>查看</a>}</p>)}<JsonDetails title="实际使用与反馈" value={s.uses}/></ExtensionDetails>
-  </>)}
- </Drawer>;
-}
-
-function Experience({profileId,data,search}:{profileId:string;data:CreatorBootstrap|null;search:URLSearchParams}){
- const vm=useWorkbench(),[input,patch]=useDraft('creator:experience',{profile_id:profileId,goal:'',skill_id:'content-writing',task_id:'',work_ids:[] as string[]}),action=useAsyncAction(),creator=data?creatorLaunchSelection(data,input.profile_id,'learning',search):undefined;
- useEffect(()=>{if(search.has('profile')&&input.profile_id!==profileId)patch({profile_id:profileId,work_ids:[]})},[profileId,search.toString()]);
- return <Panel><p>按需整理原始反馈，分别提出画像和技能候选，确认后才生效。</p>
-  <Field label="画像"><select className="field" value={input.profile_id} onChange={event=>patch({profile_id:event.target.value,work_ids:[]})}>{data?.profiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></Field>
-  <Field label="改进技能"><select className="field" value={input.skill_id} onChange={event=>patch({skill_id:event.target.value})}>{data?.skills.filter(skill=>skill.execution_kind!=='workflow').map(skill=><option key={skill.id} value={skill.id}>{skill.name}</option>)}</select></Field>
-  <Field label="希望改善什么 · 可不填"><textarea className="field" rows={4} value={input.goal} onChange={event=>patch({goal:event.target.value})}/></Field>
-  <ExtensionDetails title="限定作品 · 可选"><ExperienceWorks profileId={input.profile_id} selected={input.work_ids} onChange={work_ids=>patch({work_ids})}/></ExtensionDetails>
-  <p className="ew-muted">执行技能：{creatorSkillLabels(data,creator).join('、')}{creator?.trial?' · 本次明确试用':''}</p>
-  <ActionButton action={action} className="btn btn-primary" disabled={action.busy||!creator} onClick={()=>void action.run(async()=>{const result=await vm.service.creatorCommand('experience-organize',{profile_id:input.profile_id,skill_id:input.skill_id,goal:input.goal,work_ids:input.work_ids,creator});patch({task_id:string(resultDocument(result).task_id)})})}>整理经验</ActionButton>
-  <Pending scope={'creator:experience-organize:'+input.profile_id}/><Notice sources={[action]}/>{input.task_id&&<SkillTask id={input.task_id}/>}
- </Panel>;
-}
-function ExperienceWorks({profileId,selected,onChange}:{profileId:string;selected:string[];onChange:(ids:string[])=>void}){
- const works=useWorkSummaries(profileId);
- return <><Notice sources={[works]}/>{works.loading&&!works.items.length&&<p className="ew-muted" role="status">正在读取作品…</p>}
-  {works.items.map(work=><label className="ew-check" key={work.id}><input type="checkbox" checked={selected.includes(work.id)} onChange={event=>onChange(event.target.checked?[...new Set([...selected,work.id])]:selected.filter(id=>id!==work.id))}/>{work.title}</label>)}
-  {!works.loading&&!works.error&&!works.items.length&&<p className="ew-muted">暂无可选作品。</p>}
-  {works.next_cursor&&<button className="btn btn-sm" disabled={works.loading||works.refreshing} onClick={works.more}>加载更多作品</button>}
- </>;
-}
-export function SkillTask({id}:{id:string}){const vm=useWorkbench(),r=useResource<JsonRecord>('/api/creator/experience/'+encodeURIComponent(id),{interval:3000,stopOnTerminal:true}),result=record(r.data?.result),analysis=record(result.analysis);return <Panel title={string(r.data?.status)==='completed'?'整理完成':'整理与拆解进度'}><Notice sources={[r]} message={string(r.data?.error)}/><p>{string(analysis.summary)||string(result.reason)}</p>{array<JsonRecord>(analysis.suggestions).map((s,i)=><div key={i}><h3>{string(s.name)}</h3><p className="ew-preserve">{array<string>(s.instructions).join('\n')}</p><p>{string(s.reason)}</p></div>)}{result.skill_id&&result.version?<button className="btn btn-primary" onClick={()=>vm.navigate('/toolbox?'+new URLSearchParams({section:'skills',item:string(result.skill_id),version:String(result.version)}))}>核对技能候选差异</button>:null}{!!result.profile_proposal_id&&<ProfileProposal id={string(result.profile_proposal_id)}/>}<JsonDetails title="执行记录" value={r.data}/></Panel>}
-function ProfileProposal({id}:{id:string}){const vm=useWorkbench(),r=useResource<JsonRecord>('/api/creator/profile-proposals/'+id),[selected,setSelected]=useState<string[]>([]),action=useAsyncAction(),p=r.data;return <Panel title="画像候选修改"><Notice sources={[r,action]}/>{p&&<>{Object.entries(record(p.fields)).map(([field,value])=><ExtensionDetails key={field} title={<>{({identity:'作者身份',audience:'目标读者',voice:'表达方式',boundaries:'表达边界'} as Record<string,string>)[field]||field}</>}><label className="ew-check"><input type="checkbox" checked={selected.includes(field)} onChange={e=>setSelected(e.target.checked?[...selected,field]:selected.filter(f=>f!==field))}/>确认此字段</label><TextRecord title="修改前" value={record(p.before)[field]}/><TextRecord title="候选" value={value}/><p>{string(record(p.reasons)[field])}</p></ExtensionDetails>)}<TextRecord title="原始依据" value={p.source_members}/>{p.status==='candidate'?<ActionButton action={action} className="btn btn-primary" disabled={action.busy||!selected.length} onClick={()=>void action.run(async()=>{await vm.service.creatorCommand('profile-proposal-confirm',{proposal_id:id,base_revision:p.base_revision,fields:selected,confirm:true});})}>确认所选画像修改</ActionButton>:p.status==='applied'?<ActionButton action={action} className="btn" disabled={action.busy} onClick={()=>void action.run(async()=>{await vm.service.creatorCommand('profile-proposal-revert',{proposal_id:id,base_revision:p.applied_revision,confirm:true});})}>撤销此修改</ActionButton>:<p>此修改已撤销。</p>}</>}</Panel>}
-
 export {NativeProfiles as Profiles} from './nativeProfiles';
-
-
 export {Accounts} from './PlatformAccounts';

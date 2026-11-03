@@ -100,6 +100,22 @@ def test_missing_native_turn_is_unknown_and_does_not_start_adapter(tmp_path):
     assert canary_worker.verify_image_receipt(root,'missing','op')['status']=='unknown'
 
 
+def test_native_skill_canary_verifies_actual_owned_png_without_private_version_or_artifact_row(tmp_path):
+    root,tid,image=image_database(tmp_path)
+    folder=root/'outputs/op'/tid/'products';folder.mkdir(parents=True)
+    target=folder/'actual.png';target.write_bytes(image.read_bytes())
+    with sqlite3.connect(root/'data/desk.sqlite') as c:
+        turn=json.loads(c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(tid,)).fetchone()[0])
+        turn.update(session_id='op',snapshot=None,work=None,context={'skill_id':'content-production','action_id':'native'})
+        c.execute('UPDATE easel_chat_turns SET document=?',(json.dumps(turn),));c.execute('DELETE FROM artifacts')
+    value=canary_worker.verify_image_receipt(root,tid,'op')
+    assert value['status']=='completed' and value['turn_id']==tid
+    assert 'version_id' not in value and value['images'][0]['artifact_id'] is None
+    assert value['images'][0]['path']==str(target)
+    (folder/'duplicate.png').write_bytes(target.read_bytes())
+    with pytest.raises(ValueError,match='exactly_one'):canary_worker.verify_image_receipt(root,tid,'op')
+
+
 def test_daily_cli_uses_explicit_authority_and_writes_summary(tmp_path,monkeypatch):
     observed=[]
     monkeypatch.setattr(canary,'run_daily',lambda config,root,**kwargs:observed.append(kwargs['execute']) or {'status':'prepared'})

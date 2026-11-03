@@ -64,8 +64,8 @@ def test_new_execution_rejects_wrong_scope_even_with_valid_producers(runtime):
 
 def test_candidate_trial_does_not_bypass_task_scope(runtime):
     detail = runtime.detail('skill', 'topic-research')
-    candidate = runtime.command({'id': 'candidate', 'action': 'skill-draft', 'skill_id': 'topic-research',
-                                 'base_version': 1, 'prompt': detail['prompt'] + '\nCandidate method.', 'reason': 'test'})['result']['skill']
+    with runtime.store.connect() as c:
+        candidate=runtime.propose(c,'topic-research',1,detail['prompt']+'\nCandidate method.','Historical test',operation_id='historical-candidate')
     assert candidate['status'] == 'candidate'
     with pytest.raises(ValueError, match='不适用于本次任务'):
         runtime.resolve(task='article', skill_refs=refs('content-writing', 'delivery-review') +
@@ -136,7 +136,7 @@ def test_launches_derive_from_scope_and_executor_not_known_skill_identity():
 
 def test_invalid_profile_default_is_rejected_without_revision_change(runtime):
     before = runtime.detail('profile', 'oil-pig')
-    with pytest.raises(ValueError, match='不适用于本次任务'):
+    with pytest.raises(ValueError, match='已退役'):
         runtime.command({'id': 'bad-default', 'action': 'profile-save', 'profile_id': 'oil-pig',
                          'base_revision': before['revision'], 'document': {'default_skills': {'poster': ['topic-research']}}})
     assert runtime.detail('profile', 'oil-pig') == before
@@ -149,7 +149,7 @@ def test_invalid_profile_default_is_rejected_without_revision_change(runtime):
 def test_incompatible_exact_pin_is_rejected(runtime, field, value):
     published_variant(runtime, 'content-writing', ['article'])
     before = runtime.detail('profile', 'oil-pig')
-    with pytest.raises(ValueError, match='不适用于本次任务'):
+    with pytest.raises(ValueError, match='已退役'):
         runtime.command({'id': 'bad-pin', 'action': 'profile-save', 'profile_id': 'oil-pig',
                          'base_revision': before['revision'], 'document': {field: value}})
     assert runtime.detail('profile', 'oil-pig') == before
@@ -157,11 +157,11 @@ def test_incompatible_exact_pin_is_rejected(runtime, field, value):
 
 def test_publish_wrong_scope_rolls_back_pointer_event_and_profile(runtime):
     detail = runtime.detail('skill', 'topic-research')
-    runtime.command({'id': 'draft', 'action': 'skill-draft', 'skill_id': 'topic-research', 'base_version': 1,
-                     'prompt': detail['prompt'] + '\nRefined test.', 'reason': 'test'})
+    with runtime.store.connect() as c:
+        runtime.propose(c,'topic-research',1,detail['prompt']+'\nRefined test.','Historical test',operation_id='historical-draft')
     before = runtime.detail('profile', 'oil-pig')
-    with pytest.raises(ValueError, match='不适用于本次任务'):
-        runtime.command({'id': 'bad-publish', 'action': 'skill-publish', 'skill_id': 'topic-research',
+    with pytest.raises(ValueError, match='不适用于本次任务'),runtime.store.connect() as c:
+        runtime._publish(c,{'id': 'bad-publish', 'action': 'skill-publish', 'skill_id': 'topic-research',
                          'version': 2, 'expected_published_version': 1, 'confirm': True,
                          'profile_id': 'oil-pig', 'profile_revision': before['revision'], 'tasks': ['poster']})
     assert runtime.detail('profile', 'oil-pig') == before

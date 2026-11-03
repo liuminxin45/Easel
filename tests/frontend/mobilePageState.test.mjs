@@ -43,13 +43,13 @@ function component(file,api={},options={}){
 }
 
 test('skill search restores per history entry and switching stores does not write another entry',async()=>{
- const a=stateStore({query:'image'}),b=stateStore({query:'audio'}),catalog={items:[],loading:false};
- const f=component('SkillPage');f.render({persona:'p',catalog,viewState:a});let tree=await f.settle();
+ const a=stateStore({query:'image'}),b=stateStore({query:'audio'}),api={fetchSkills:async()=>[]};
+ const f=component('SkillPage',api);f.render({persona:'p',viewState:a});let tree=await f.settle();
  assert.equal(all(tree).find(node=>node.type==='input').props.value,'image');
  all(tree).find(node=>node.type==='input').props.onChange({target:{value:'poster'}});tree=await f.settle();assert.equal(a.read().query,'poster');
- f.render({persona:'p',catalog,viewState:b});tree=await f.settle();assert.equal(all(tree).find(node=>node.type==='input').props.value,'audio');
+ f.render({persona:'p',viewState:b});tree=await f.settle();assert.equal(all(tree).find(node=>node.type==='input').props.value,'audio');
  assert.equal(a.read().query,'poster');assert.equal(b.writes.length,0);
- const again=component('SkillPage');again.render({persona:'p',catalog,viewState:a});tree=await again.settle();assert.equal(all(tree).find(node=>node.type==='input').props.value,'poster');
+ const again=component('SkillPage',api);again.render({persona:'p',viewState:a});tree=await again.settle();assert.equal(all(tree).find(node=>node.type==='input').props.value,'poster');
 });
 
 test('content gallery rehydrates exact directory and filter from metadata without serializing files',async()=>{
@@ -113,15 +113,6 @@ test('calendar drafts remain separate by day and opening another empty form does
  day(0).props.onClick();tree=await f.settle();assert.equal(entries.size,0);input().props.onChange({target:{value:'Day one input'}});tree=await f.settle();close();tree=await f.settle();
  day(1).props.onClick();tree=await f.settle();input().props.onChange({target:{value:'Day two input'}});tree=await f.settle();close();tree=await f.settle();
  day(0).props.onClick();tree=await f.settle();assert.equal(input().props.value,'Day one input');assert.equal(entries.size,2);
-});
-
-test('skill execution input survives close/remount without persisting API credentials',async()=>{
- const store=stateStore(null),detail={name:'image',body:'Native body',needsApi:true,apiConfigured:false,apiSpec:{label:'Image',settings:[],providers:[{id:'p',name:'P',keys:[{env:'SECRET',label:'Key',required:true,secret:true,configured:false,choices:[]}]}]}};
- const props={skillName:'image',persona:'p',onClose(){},onConfigured(){},draftStore:store,services:{loadDetail:async()=>detail}};
- const f=component('SkillDrawer');f.render(props);let tree=await f.settle();
- all(tree).find(node=>node.type==='textarea').props.onChange({target:{value:'Original unsent input'}});tree=await f.settle();
- all(tree).find(node=>node.type==='input'&&node.props.type==='password').props.onChange({target:{value:'do-not-persist'}});await f.settle();assert.equal(store.read(),'Original unsent input');
- const again=component('SkillDrawer');again.render(props);tree=await again.settle();assert.equal(all(tree).find(node=>node.type==='textarea').props.value,'Original unsent input');assert.equal(all(tree).find(node=>node.type==='input'&&node.props.type==='password').props.value,'');
 });
 
 test('chat restores reading position, ignores streaming while scrolled up and resumes following near bottom',async()=>{

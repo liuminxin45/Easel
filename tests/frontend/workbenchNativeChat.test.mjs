@@ -193,7 +193,7 @@ test('opening the confirmed continuation prepares the pinned skill without repla
   assert.ok(!f.calls.resources.includes('/api/works/exact-work')&&!f.calls.resources.includes('/api/works/exact-work/view'),'continuation must not hydrate the entire work or substitute its latest version');
   assert.equal(continuationButtons(ui.chat.notice).length,0,'the continuation page already represents this action');
   const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,'the continuation page must not offer its message action again');
-  assert.equal(f.draft.command.skill_id,'content-production');assert.equal(f.draft.command.version,2);assert.equal(f.draft.command.action_id,'change');
+  assert.equal(f.draft.command.skill_id,'content-production');assert.equal(f.draft.command.version,undefined);assert.equal(f.draft.command.action_id,'native');
   if(text)assert.equal(f.draft.text,text);else assert.match(f.draft.text,/请继续完成《原始贴图》/);
   assert.deepEqual(plain(f.draft.files),files);assert.equal(f.calls.stream.length,0);assert.equal(f.calls.post.length,0);assert.equal(f.calls.navigate.length,0);
  }
@@ -212,15 +212,6 @@ test('editing a draft and identical history polls preserve the native scroll dep
  f.resources.session={...f.resources.session,id:'another-session'};
  assert.notEqual(f.render().chat.session.messages,updated);
  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream.length,0);
-});
-test('native commands come from exact server releases and contextual actions route to their business page',()=>{
- const f=fixture(),choices=f.lib.nativeSkillChoices(catalog,false),production=choices.find(c=>c.selection.action_id==='poster');
- assert.equal(production.label,'生成贴图');assert.equal(production.selection.version,3);
- const learning=choices.find(c=>c.selection.action_id==='learning');assert.ok(learning);
- const path=f.lib.nativeSkillDestination({...learning.selection,trial:true},'p-二');
- assert.deepEqual(Object.fromEntries(new URL(path,'https://example.test').searchParams),{section:'skills',pane:'experience',profile:'p-二',skill:'experience-distillation',skill_version:'3',action:'learning',trial:'1'});
- assert.equal(f.lib.nativeSkillDestination(production.selection,'p'),null);
- assert.equal(f.lib.nativeSkillDestination(choices.find(c=>c.selection.action_id==='change').selection,'p',true),null);
 });
 test('a native first send retains input until actual acceptance and later recovery never clears retyped input',async()=>{
  let accept;const f=fixture({submitOverride:()=>new Promise(resolve=>{accept=resolve})}),initial=plain(f.draft);f.render().chat.onSend();await tick();
@@ -274,10 +265,10 @@ test('a known timeout receipt is reported as execution uncertainty until the sam
  assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().error,'');assert.equal(runtime.state.getState().running,false);
  assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,0);
 });
-test('one production send durably submits exact inputs and only GET subscribes while the server prepares its plan',async()=>{
+test('ordinary skill send durably submits exact inputs without private plan or version flags',async()=>{
  const command={skill_id:'content-production',version:2,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true,trial:true},f=fixture({draft:{text:'原字贴图',files:[{id:'attached',name:'素材.txt'}],command}});
  f.render().chat.onSend();await tick();assert.equal(f.calls.stream.length,1);assert.equal(f.draft.text,'','durable server receipt consumes the input');
- const received=f.calls.submit[0];assert.equal(received.path,'/api/chat/submit');assert.equal(received.body.context.version,2);assert.equal(received.body.context.trial,true);assert.deepEqual(plain(received.body.attachments),[{id:'attached',name:'素材.txt',path:'attached'}]);
+ const received=f.calls.submit[0];assert.equal(received.path,'/api/chat/submit');assert.equal(received.body.context.version,undefined);assert.equal(received.body.context.trial,undefined);assert.equal(received.body.context.action_id,'native');assert.deepEqual(plain(received.body.attachments),[{id:'attached',name:'素材.txt',path:'attached'}]);
  assert.equal(f.calls.post.length,0);assert.equal(f.calls.stream[0][9],received.body.turnId);assert.equal(f.calls.stream[0][10],true);assert.equal(f.calls.stream[0][16].context.plan_token,undefined);assert.equal(f.render().plan,undefined);
  assert.equal(f.render().chat.session.messages.filter(m=>m.role==='user').at(-1).content,'原字贴图');
 });
@@ -332,13 +323,9 @@ test('explicit poster acceptance clears only the consumed news binding and keeps
  assert.equal(f.draft.article_id,undefined);assert.equal(f.draft.pending.context.article_id,'exact-news');
 });
 
-test('native change binds the selected parent, while a new format in the same session creates another work',async()=>{
- for(const action of ['change','article']){const command={skill_id:'content-production',version:2,action_id:action,task:action,label:action,requires_plan:true},f=fixture({draft:{text:'请求',files:[],command},search:'work=exact-work&version=exact-parent'});f.render().chat.onSend();await tick();const context=f.calls.submit[0].body.context;assert.equal(context.work_id,action==='change'?'exact-work':undefined);assert.equal(context.parent_version_id,action==='change'?'exact-parent':undefined)}
- const discussion=fixture({search:'work=exact-work&version=exact-parent'});discussion.render().chat.onSend();await tick();assert.equal(discussion.calls.stream[0][16].context.action_id,'discuss');assert.equal(discussion.calls.stream[0][16].context.parent_version_id,'exact-parent');
-});
-test('business-only skill selection preserves chat input and navigates without creating a model turn',()=>{
- const f=fixture(),ui=f.render();ui.chat.composer.onCommandSelect('experience-distillation:learning','  原字经验  ');
- assert.equal(f.draft.text,'  原字经验  ');assert.equal(f.draft.command,null);assert.equal(f.calls.stream.length,0);assert.match(f.calls.navigate[0],/skill_version=3/);
+test('new skill sends ignore private parent binding while keeping historical source context visible',async()=>{
+ for(const action of ['change','article']){const command={skill_id:'content-production',version:2,action_id:action,task:action,label:action,requires_plan:true},f=fixture({draft:{text:'请求',files:[],command},search:'work=exact-work&version=exact-parent'});f.render().chat.onSend();await tick();const context=f.calls.submit[0].body.context;assert.equal(context.work_id,undefined);assert.equal(context.parent_version_id,undefined);assert.equal(context.action_id,'native')}
+ const discussion=fixture({search:'work=exact-work&version=exact-parent'});discussion.render().chat.onSend();await tick();assert.equal(discussion.calls.stream[0][16].context.action_id,undefined);assert.equal(discussion.calls.stream[0][16].context.parent_version_id,undefined);
 });
 test('historical turn products use registered file IDs and open the exact business version',()=>{
  const f=fixture(),message={turnId:'turn',output_files:[{id:'registered',name:'成品.png',mime:'image/png',url:'/api/files/registered'}],business_receipt:{work_id:'exact-work',version_id:'exact-version'}};
@@ -348,11 +335,11 @@ test('historical turn products use registered file IDs and open the exact busine
  f.resources.session.messages=[{...message,role:'assistant',content:'已生成',library_path:'workbench-exact-work/exact-version'}];assert.match(f.render().chat.session.messages[0].content,/#\/outputs\/workbench-exact-work\/exact-version/);
 });
 function productActionsFixture(work,{navigation={},readWork}={}){
- let cursor=0;const state=[],drafts=new Map(),calls={reads:[],resources:[],actions:[],reviews:[],navigate:[],errors:[],reloads:0,invalidate:[]};
+ let cursor=0;const state=[],drafts=new Map(),calls={reads:[],resources:[],actions:[],reviews:[],navigate:[],errors:[],reloads:0,invalidate:[],opens:[]};
  const react={useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]}};
  const product={work_id:'exact-work',version_id:'completed-v1',can_adopt:true,files:[],text_blocks:[]};
  const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args),manualReview:async(...args)=>calls.reviews.push(args)}};
- const core={...productionRecovery,array,record,string,statusLabel:value=>value,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
+ const core={...productionRecovery,array,record,string,sessionOpenFlows:()=>({open:async input=>{calls.opens.push(input);return {id:'ordinary-session'}}}),statusLabel:value=>value,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
   useWorkbench:()=>vm,useResource:path=>{calls.resources.push(path);return {data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}},
   useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]},
   useAsyncAction:()=>({busy:false,run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}})};
@@ -391,10 +378,9 @@ test('an explicit independent check binds only this version and does not submit 
 test('editing a chat product rereads its exact completed version and navigates with its frozen skill without starting production',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'修改这版').props.onClick();await tick();await tick();
  assert.deepEqual(plain(f.calls.reads),[['/api/works/exact-work/versions/completed-v1/view',true]]);
- const [path,options]=f.calls.navigate[0],destination=new URL(path,'https://example.test');
- assert.equal(destination.pathname,'/chat/original-session');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'completed-v1',action:'change',skill:'content-production',skill_version:'2'});assert.equal(options.intent,'flow');
+ const [path,options]=f.calls.navigate[0];assert.equal(path,'/chat/ordinary-session');assert.equal(options.intent,'flow');const input=f.calls.opens[0];assert.match(input.draft.text,/completed-v1/);assert.equal(input.draft.command.action_id,'native');assert.equal(input.draft.command.version,undefined);assert.equal(input.query,undefined);
  assert.equal(f.calls.navigate.length,1);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
- for(const kind of ['missing-version','unfinished-version','missing-frozen-skill']){
+ for(const kind of ['missing-version','unfinished-version']){
   const work=completedActionWork();if(kind==='missing-version')work.versions.shift();if(kind==='unfinished-version')work.versions[0].status='stopped';if(kind==='missing-session')delete work.native_chat;if(kind==='missing-frozen-skill')work.versions[0].creative.creator.skills=[];
   const blocked=productActionsFixture(completedActionWork(),{readWork:async()=>work});blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();
   assert.equal(blocked.calls.navigate.length,0,kind);assert.equal(blocked.calls.actions.length,0,kind);assert.match(blocked.calls.errors[0],/此版本的制作记录尚未核对|原版制作技能没有准确绑定/,kind);
@@ -409,7 +395,7 @@ test('a delayed product edit uses its pre-read navigation ticket and cannot take
   f.button(f.render(),'修改这版').props.onClick();assert.equal(f.calls.reads.length,1);assert.equal(flows.length,0);
   if(leave)active=2;resolveRead(completed);await tick();await tick();
   assert.equal(flows.length,1);assert.equal(flows[0].ticket.key,1,'ticket belongs to the page where the action was invoked');assert.equal(flows[0].accepted,!leave);
-  assert.equal(new URL(flows[0].path,'https://example.test').searchParams.get('version'),'completed-v1');
+  assert.equal(flows[0].path,'/chat/ordinary-session');assert.match(f.calls.opens[0].draft.text,/completed-v1/);
   assert.equal(f.calls.navigate.length,0,'a rejected finishFlow must not fall back to unconditional navigation');assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
  }
 });
@@ -462,15 +448,15 @@ function legacyEntry({saved={},pending=null,search='draft=old-input',format='pos
  const tree=exports.NativeNewChat({format,profileId:'p',search:new URLSearchParams(search),onCreate:async(...args)=>{calls.create.push(args);return 'created-session'}});
  return {calls,open:()=>nodes(tree).find(n=>n.type==='button').props.onClick()};
 }
-test('legacy new links copy exact input files, source ID and explicit trial version without deleting the old draft',async()=>{
+test('legacy new links retain exact input files and source without reactivating trial or version controls',async()=>{
  const saved={title:' 原始题目 ',material:' 第一行\n第二行 ',guidance:' 原始要求 ',files:[{id:'old-attachment',name:'素材.txt'}]},f=legacyEntry({saved,search:'draft=old-input&article=news-exact&skill=content-production&skill_version=2&trial=1',news:{title:'新闻标题',body:'来源正文'}});
- f.open();await tick();assert.equal(f.calls.errors.length,0);const [profile,command,text,files,article]=f.calls.create[0];assert.equal(profile,'p');assert.equal(command.version,2);assert.equal(command.trial,true);assert.equal(text,' 原始题目 \n\n 第一行\n第二行 \n\n 原始要求 ');assert.deepEqual(plain(files),saved.files);assert.equal(article,'news-exact');assert.equal(saved.material,' 第一行\n第二行 ');
+ f.open();await tick();assert.equal(f.calls.errors.length,0);const [profile,command,text,files,article]=f.calls.create[0];assert.equal(profile,'p');assert.equal(command.version,undefined);assert.equal(command.trial,undefined);assert.equal(command.action_id,'native');assert.equal(text,' 原始题目 \n\n 第一行\n第二行 \n\n 原始要求 ');assert.deepEqual(plain(files),saved.files);assert.equal(article,'news-exact');assert.equal(saved.material,' 第一行\n第二行 ');
 });
 test('a legacy unknown create receipt blocks new native forwarding',async()=>{
  const f=legacyEntry({saved:{material:'保留原字'},pending:{id:'original-unknown'}});f.open();await tick();assert.equal(f.calls.create.length,0);assert.match(f.calls.errors[0],/状态正在恢复/);
 });
 
-test('automatic legacy entry inherits the profile pin instead of the current global release',async()=>{const f=legacyEntry({saved:{material:'原字'},profilePins:{poster:{'content-production':2}}});f.open();await tick();assert.equal(f.calls.create[0][1].version,2);const explicit=legacyEntry({search:'skill=content-production&skill_version=3',profilePins:{poster:{'content-production':2}}});explicit.open();await tick();assert.equal(explicit.calls.create[0][1].version,3)});
+test('legacy entry ignores private profile pins and stale skill version queries',async()=>{const f=legacyEntry({saved:{material:'原字'},profilePins:{poster:{'content-production':2}}});f.open();await tick();assert.equal(f.calls.create[0][1].version,undefined);const explicit=legacyEntry({search:'skill=content-production&skill_version=3',profilePins:{poster:{'content-production':2}}});explicit.open();await tick();assert.equal(explicit.calls.create[0][1].version,undefined)});
 
 test('legacy migration preserves explicit editable recipe and product article intent without inferred controls',async()=>{const f=legacyEntry({format:'article',saved:{material:'原字',article_mode:'product',creative:{recipe:{prompt_text:'  明确可编辑要求\n保留原字  '},intent:{tone:'inferred-control'},values:{text:50}}}});f.open();await tick();const text=f.calls.create[0][2];assert.equal(f.calls.create[0][5],'product');assert.match(text,/明确可编辑要求\n保留原字  /);assert.match(text,/文章类型为产品文章/);assert.ok(!text.includes('inferred-control'));assert.ok(!text.includes('50'))});
 
@@ -519,10 +505,10 @@ test('explicit ordinary retry pins the original skill version and preserves a la
 });
 
 
-test('the upstream brush retains both official groups and places private skills in extensions',()=>{
+test('ordinary project skills use original brush groups without private actions or extensions',()=>{
  const f=fixture(),menu=module('lib/capabilityMenu.ts',{}).CAPABILITY_MENU;
  const originals=menu.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill).map(item=>({id:item.skill,name:item.skill,layer:tab.id==='make'?'produce':'general',origin:'easel',version:1,source_revision:'a'.repeat(64),launch_actions:[{id:'native',label:'使用技能',task:'native',requires_plan:false}]}))));
  const choices=f.lib.nativeSkillChoices([...originals,...catalog]);
- assert.equal(choices.filter(item=>item.tab==='make').length,61);assert.equal(choices.filter(item=>item.tab==='operate').length,52);assert.ok(choices.some(item=>item.tab==='extensions'&&item.label==='生成贴图'));
- const card=choices.find(item=>item.selection.skill_id==='card-quote');assert.equal(card.label,'金句卡 / 数据卡');assert.equal(card.prompt,'帮我做「金句卡 / 数据卡」');assert.equal(card.selection.source_revision,'a'.repeat(64));assert.equal(f.lib.nativeSkillDestination(card.selection,'oil-pig'),null);
+ assert.equal(choices.length,originals.length+catalog.length);assert.ok(choices.every(item=>['make','operate'].includes(item.tab)));assert.ok(choices.every(item=>item.selection.action_id==='native'&&!item.selection.requires_plan));
+ const card=choices.find(item=>item.selection.skill_id==='card-quote');assert.equal(card.label,'金句卡 / 数据卡');assert.equal(card.prompt,'帮我做「金句卡 / 数据卡」');assert.equal(card.selection.source_revision,undefined);
 });

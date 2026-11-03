@@ -6,7 +6,7 @@ export class RequestError extends Error {
   operationScope?:string;operationId?:string;acceptance?:'not_accepted'|'accepted'|'unknown';code?:string;traceId?:string;
   constructor(message:string,properties:Partial<Pick<RequestError,'status'|'uncertain'|'unreachable'|'cancelled'|'timedOut'|'operationScope'|'operationId'|'acceptance'|'code'|'traceId'>>={}){super(message);this.name='RequestError';Object.assign(this,properties)}
 }
-export interface RequestOptions {body?:JsonRecord;csrf?:string;id?:string;raw?:Blob|FormData;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string;readOnly?:boolean;method?:'POST'|'PUT'|'PATCH'|'DELETE';operationProtocol?:2}
+export interface RequestOptions {requestTimeout?:number|null;body?:JsonRecord;csrf?:string;id?:string;raw?:Blob|FormData;name?:string;signal?:AbortSignal;conditional?:boolean;etag?:string;readOnly?:boolean;method?:'POST'|'PUT'|'PATCH'|'DELETE';operationProtocol?:2}
 export interface ConditionalResponse<T> {status:'modified'|'not-modified';data?:T;etag?:string;serverTime?:string}
 export interface TransportOptions {fetcher?:typeof fetch;activities?:ActivityDelegate;onExpired?:()=>void;onConnectivity?:(reachable:boolean)=>void;authEpoch?:()=>number;readTimeout?:number;writeTimeout?:number;uploadTimeout?:number;retryDelay?:number}
 const abortError=()=>new RequestError('读取已取消',{cancelled:true});
@@ -17,6 +17,7 @@ export class ApiTransport {
   private fetcher:typeof fetch;
   constructor(private options:TransportOptions={}){this.fetcher=options.fetcher??((...args)=>globalThis.fetch(...args))}
   async request<T=JsonRecord>(path:string,options:RequestOptions={}):Promise<T>{
+    if(options.requestTimeout!==undefined&&options.requestTimeout!==null&&(!Number.isFinite(options.requestTimeout)||options.requestTimeout<=0))throw new RequestError('请求超时设置无效');
     if(!path.startsWith('/api/')||path.startsWith('//'))throw new RequestError('请求地址无效');
     const write=(options.body!==undefined||options.raw!==undefined)&&!options.readOnly;
     const epoch=this.options.authEpoch?.();
@@ -33,7 +34,8 @@ export class ApiTransport {
   private async attempt<T>(path:string,options:RequestOptions):Promise<T>{
     const post=options.body!==undefined||options.raw!==undefined,write=post&&!options.readOnly,controller=new AbortController(),epoch=this.options.authEpoch?.();
     const release=this.options.activities?.begin(write?'write':'read');
-    const timer=setTimeout(()=>controller.abort(),options.raw?this.options.uploadTimeout??45000:write?this.options.writeTimeout??30000:this.options.readTimeout??30000);
+    const deadline=options.requestTimeout===undefined?(options.raw?this.options.uploadTimeout??45000:write?this.options.writeTimeout??30000:this.options.readTimeout??30000):options.requestTimeout;
+    const timer=deadline===null?undefined:setTimeout(()=>controller.abort(),deadline);
     const stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
     try{
       const multipart=typeof FormData!=='undefined'&&options.raw instanceof FormData;
@@ -56,7 +58,7 @@ export class ApiTransport {
       if(caught instanceof Error&&caught.name==='AbortError')throw new RequestError(write?'提交回执待核对，请保留原操作。':'读取超时，请重试。',{cancelled:!!options.signal?.aborted,timedOut:!options.signal?.aborted,uncertain:write});
       if(caught instanceof TypeError)throw new RequestError(write?'提交回执待核对，请保留原操作。':'暂时无法连接服务器。',{unreachable:true,uncertain:write});
       throw caught;
-    }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',stop);release?.()}
+    }finally{if(timer!==undefined)clearTimeout(timer);options.signal?.removeEventListener('abort',stop);release?.()}
   }
   get<T=JsonRecord>(path:string,signal?:AbortSignal):Promise<T>{return this.request<T>(path,{signal})}
   conditionalGet<T=JsonRecord>(path:string,etag?:string,signal?:AbortSignal):Promise<ConditionalResponse<T>>{return this.request<ConditionalResponse<T>>(path,{conditional:true,etag,signal})}

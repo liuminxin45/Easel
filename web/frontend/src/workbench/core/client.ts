@@ -14,7 +14,7 @@ import {dailyTrendsPath,dailyTrendsDay,beijingDay,nextBeijingDayDelay,emptyDaily
 
 export interface ResourceState {data:unknown;loading:boolean;refreshing?:boolean;error:string;errorStatus?:number;feedback?:InteractionFeedback;revision:number;stale:boolean;checkedAt?:number}
 export interface PendingOperation {method?:'POST'|'PUT'|'PATCH'|'DELETE';scope:string;path:string;body:JsonRecord;id:string;uncertain:boolean;requestSignature?:string;receiptPath?:string;metadataOnly?:boolean;legacyKey?:string;legacyField?:'pending'|'request'|'pendingSave'|'pendingFinalize';legacyUploads?:boolean;receiptProtocol?:2;acceptance?:'accepted'|'unknown';createdAt?:number}
-export interface MutationOptions {preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string;receiptProtocol?:2}
+export interface MutationOptions {requestTimeout?:number|null;preserveBody?:boolean;raw?:FormData;method?:'POST'|'PUT'|'PATCH'|'DELETE';metadataOnly?:boolean;requestSignature?:string;receiptPath?:(id:string)=>string;receiptProtocol?:2}
 export interface OperationState {busy:boolean;pending:PendingOperation|null;error:string;notice:string;result?:unknown;feedback?:InteractionFeedback}
 export interface SessionState {config:Config|null;loading:boolean;error:string;feedback?:InteractionFeedback;expired:boolean;reachable:boolean|null}
 interface ResourceMetadata {etag?:string;checkedAt:number;lastAccess:number;lastAttempt:number;bytes:number;failures?:number;retryAt?:number}
@@ -256,7 +256,7 @@ export class WorkbenchClient {
     const id=(options.preserveBody?'':string(fields.operation_id)||string(fields.id))||crypto.randomUUID(),body=options.preserveBody?fields:{...fields,id,...(['/api/studio/commands','/api/learning/commands','/api/collection/sources'].includes(path)?{operation_id:id}:{})};
     pending={scope,path,...(options.method?{method:options.method}:{}),body:options.metadataOnly?{}:body,id,uncertain:false,...(options.receiptProtocol===2?{receiptProtocol:2 as const,createdAt:this.now()}:{}),...(options.metadataOnly?{metadataOnly:true,requestSignature:options.requestSignature,receiptPath:options.receiptPath!(id)}:{})};
     if(!this.drafts.set('native:pending:'+scope,{operation:pending}))throw new RequestError('原操作标识未能保存，请先核对本机存储；这次尚未提交。');state.setState({pending});
-    return this.execute<T>(pending,body,options.raw);
+    return this.execute<T>(pending,body,options.raw,options.requestTimeout);
   }
   /** Lost acknowledgements are recovered by GET. This never runs a command. */
   reconcile<T=JsonRecord>(scope:string):Promise<T|null>{
@@ -282,13 +282,13 @@ export class WorkbenchClient {
     void this.invalidate(mutationTags(pending.path,pending.body,result)).catch(()=>{/* A refresh failure cannot turn an acknowledged command into an unknown write. */});
   }
   async retry<T=JsonRecord>(scope:string):Promise<T>{const result=await this.reconcile<T>(scope);if(result===null)throw new RequestError('操作结果暂不可用，输入已保留。',{uncertain:true});return result}
-  private async execute<T>(pending:PendingOperation,body=pending.body,raw?:FormData):Promise<T>{
+  private async execute<T>(pending:PendingOperation,body=pending.body,raw?:FormData,requestTimeout?:number|null):Promise<T>{
     const state=this.operation(pending.scope);if(state.getState().busy)throw new RequestError('这项操作正在处理。');state.setState({busy:true,error:'',feedback:undefined,notice:''});
     const csrf=this.session.getState().config?.csrf;if(!csrf){state.setState({busy:false});throw new RequestError('请等待登录校验完成。')}
     const authEpoch=this.authEpoch;
     try{
       this.usage.command(pending.path,pending.body,'attempt',pending.id);
-      const result=await this.api.request<T>(pending.path,{body,csrf,id:pending.id,method:pending.method,raw,operationProtocol:pending.receiptProtocol});
+      const result=await this.api.request<T>(pending.path,{body,csrf,id:pending.id,method:pending.method,raw,operationProtocol:pending.receiptProtocol,requestTimeout});
       if(authEpoch!==this.authEpoch)throw new RequestError('登录状态已变化，原输入已保留。',{uncertain:true});
       const envelope=record(result);
       if(pending.receiptProtocol===2&&envelope.protocol_version===2&&envelope.operation_id!==pending.id)throw new RequestError('对话回执身份尚未核对，请保留原操作。',{uncertain:true,operationScope:pending.scope,operationId:pending.id});

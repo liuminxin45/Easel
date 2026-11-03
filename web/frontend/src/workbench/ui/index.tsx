@@ -23,7 +23,7 @@ import {generateSessionTitle} from '../../lib/store';
 import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
 import type {WorkbenchClient} from '../core/client';
 
-import {Skills,Profiles,Accounts} from './management';
+import {Profiles,Accounts} from './management';
 import {Publishing} from './publishing';
 import {Settings,LocalInputs} from './system';
 import '../../index.css';
@@ -83,7 +83,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  else if(/^\/(posters|articles|works)\/[^/]+$/.test(p)&&!p.endsWith('/history'))page=<WorkLibrary id={decodeURIComponent(p.split('/')[2]!)} versionId={q.get('version')||undefined}/>;
  else if(['/posters','/articles','/works'].includes(p)||p.endsWith('/history'))page=q.get('drafts')==='1'?<LocalInputs/>:<Library format={p==='/articles'?'article':q.get('format')||''} history={p.endsWith('/history')}/>;
  else if(p==='/settings'||p==='/account')page=<Settings/>;
- else if(q.get('section')==='skills')page=<><NativeSkills profileId={profile}/>{(q.get('pane')==='experience'||q.get('pane')==='legacy'||q.has('item'))&&<Skills profileId={profile} search={q}/>}</>;
+ else if(q.get('section')==='skills')page=<NativeSkills profileId={profile}/>;
  else if(q.get('section')==='profiles')page=<Profiles profileId={profile} search={q}/>;
  else if(q.get('section')==='distribution'&&q.get('pane')==='connections')page=<Accounts/>;
  else if(['distribution','publications','calendar'].includes(q.get('section')||''))page=<Publishing profileId={profile} section={q.get('section')||''} search={q}/>;
@@ -119,13 +119,13 @@ function NativeNewChat({format,profileId,search,onCreate}:{format:'poster'|'arti
   if(!catalog.data||!creators.data||(sourceId&&!source.data))return;
   const saved=vm.client.drafts.get<JsonRecord>(key)||{},pending=vm.client.operation('create:'+key).getState().pending;
   if(pending||vm.client.legacyPending().some(item=>item.key===key))throw Object.assign(Error('原草稿状态正在恢复，输入和原操作标识已保留。'),{uncertain:true,...(pending?{operationScope:pending.scope,operationId:pending.id}:{})});
-  const profile=search.get('profile')||string(record(record(saved.creative).creator).profile_id)||profileId,profileData=creators.data.profiles.find(value=>value.id===profile);
-  const choices=nativeSkillChoices(catalog.data),legacy=record(saved.command),skill=search.get('skill')||string(legacy.skill_id)||'content-production',actionId=search.get('action')||string(legacy.action_id)||(search.get('mode')==='research'?'discuss':format),wanted=choices.find(choice=>choice.selection.skill_id===skill&&choice.selection.action_id===actionId),version=Number(search.get('skill_version')||legacy.version||profileData?.task_skill_versions?.[wanted?.selection.task||actionId]?.[skill]||profileData?.skill_versions?.[skill]),command=search.get('mode')==='research'&&!search.has('skill')?undefined:wanted?{...wanted.selection,...(Number.isSafeInteger(version)&&version>0?{version}:{}),...(search.get('trial')==='1'?{trial:true}:{})}:undefined;
+  const profile=search.get('profile')||string(record(record(saved.creative).creator).profile_id)||profileId;
+  const choices=nativeSkillChoices(catalog.data),legacy=record(saved.command),skill=search.get('skill')||string(legacy.skill_id)||'content-production',wanted=choices.find(choice=>choice.selection.skill_id===skill),command=search.get('mode')==='research'&&!search.has('skill')?undefined:wanted?.selection;
   if(!command&&search.get('mode')!=='research')throw Error('准确制作技能尚不可用，旧草稿已保留。请从技能库核对后再打开。');
   const material=string(saved.material)||string(source.data?.body),title=string(saved.title)||string(source.data?.title),text=[title,material,string(saved.guidance),string(record(record(saved.creative).recipe).prompt_text)?'原草稿明确制作要求：\n'+string(record(record(saved.creative).recipe).prompt_text):'',saved.article_mode==='product'?'原草稿明确选择：文章类型为产品文章。':''].filter(Boolean).join('\n\n'),files=array<DraftAttachment>(saved.files);
   await onCreate(profile,command,text,files,sourceId||string(saved.article_id)||undefined,saved.article_mode==='product'?'product':saved.article_mode==='auto'?'auto':undefined);
  });
  useEffect(()=>{if(started.current||!catalog.data||!creators.data||(sourceId&&!source.data))return;started.current=true;open()},[catalog.data,creators.data,source.data]);
- return <div className="ew-loading"><Notice sources={[catalog,creators,source,action]}/><p>正在将材料带入原生对话。原草稿与来源保留，确认方案后才开始制作。</p><ActionButton action={action} className="btn" disabled={action.busy} onClick={open}>重新打开对话</ActionButton><button className="btn btn-ghost" onClick={()=>vm.navigate('/posters?drafts=1')}>查看本机草稿</button></div>;
+ return <div className="ew-loading"><Notice sources={[catalog,creators,source,action]}/><p>正在将材料带入原生对话。原草稿与来源保留，使用 Easel 原生对话执行技能。</p><ActionButton action={action} className="btn" disabled={action.busy} onClick={open}>重新打开对话</ActionButton><button className="btn btn-ghost" onClick={()=>vm.navigate('/posters?drafts=1')}>查看本机草稿</button></div>;
 }
 function ChatLanding({client,sessions,error,fresh,onOpen,onCreate}:{client:WorkbenchClient;sessions:NativeSessions|null;loading:boolean;error:string;fresh:boolean;onOpen:(id:string)=>void;onCreate:()=>void}){const started=useRef(false),{flow}=useSessionOpenFlow(client);useEffect(()=>{if(!sessions||started.current)return;started.current=true;const recent=!fresh&&sessions.sessions.find(session=>!session.archived);if(recent)onOpen(recent.id);else onCreate()},[sessions]);return <SessionOpenStage client={client} flow={flow} error={error} onRetry={onCreate}/>}

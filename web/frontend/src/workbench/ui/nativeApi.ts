@@ -19,6 +19,7 @@ function reader<T>(promise:Promise<T>,signal?:AbortSignal|null):Promise<T>{
 
 /** Keep native protocols while retaining the host's durable operation identity. */
 export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
+ let detailSequence=0,configurationEpoch=-1,configurationRevision:number|undefined;
  const transport:EaselApiTransport={
   peek<T>(path:string){return nativeResourceCacheable(path)?client.peek<T>(path):undefined},
   subscribe<T>(path:string,onData:(value:T)=>void,onError?:(error:Error)=>void){
@@ -34,8 +35,10 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
   async request<T>(path:string,options:RequestInit={}):Promise<T>{
    const method=(options.method||'GET').toUpperCase();
    if(method==='GET'||method==='HEAD'){
+    const detail=new URL(path,'https://workbench.invalid').pathname.startsWith('/api/skill/'),sequence=detail?++detailSequence:0,authentication=client.authenticationEpoch;
+    const remember=(value:T):T=>{const revision=record(value).configuration_revision;if(detail&&sequence===detailSequence&&authentication===client.authenticationEpoch){configurationRevision=typeof revision==='number'?revision:undefined;configurationEpoch=authentication;}return value};
     if(options.signal?.aborted)throw new RequestError('读取已取消',{cancelled:true});
-    if(!nativeResourceCacheable(path))return client.api.get<T>(path,options.signal??undefined);
+    if(!nativeResourceCacheable(path))return remember(await client.api.get<T>(path,options.signal??undefined));
     const force=options.cache==='reload'||options.cache==='no-cache',epoch=client.authenticationEpoch;
     const read=async():Promise<T>=>{
      const value=await client.read<T>(path,force);
@@ -44,11 +47,15 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
      return value;
     };
     const snapshot=force?undefined:client.peek<T>(path);
-    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then<T>(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});const current=client.peek<T>(path);return current===undefined?read():current}),options.signal)}
-    return reader(read(),options.signal);
+    if(snapshot!==undefined){void read().catch(()=>{/* The subscriber exposes refresh failures without discarding the snapshot. */});return reader(Promise.resolve().then<T>(()=>{if(epoch!==client.authenticationEpoch)throw new RequestError('登录状态已变化，读取已取消',{cancelled:true});const current=client.peek<T>(path);return current===undefined?read():current}),options.signal).then(remember)}
+    return reader(read(),options.signal).then(remember);
    }
    if(!['POST','PUT','PATCH','DELETE'].includes(method))throw Error('请求方法不受支持');
    const body:JsonRecord=typeof options.body==='string'?record(JSON.parse(options.body)):{};
+   if(path==='/api/env'&&body.expected_revision===undefined){
+    if(configurationRevision===undefined||configurationEpoch!==client.authenticationEpoch)throw new RequestError('请重新打开技能详情核对配置后再保存。',{status:409});
+    body.expected_revision=configurationRevision;
+   }
    const raw=options.body instanceof FormData?options.body:undefined;
    const fields:unknown[]=[];
    if(raw)for(const [key,value] of raw.entries()){
@@ -59,6 +66,7 @@ export function bindWorkbenchNativeApi(client:WorkbenchClient):()=>void {
    const result=await client.mutate<T>('easel-native:'+method+':'+path,path,body,{
     method:method as 'POST'|'PUT'|'PATCH'|'DELETE',raw,preserveBody:true,metadataOnly:true,requestSignature,
     receiptPath:id=>'/api/native/operations/'+encodeURIComponent(id),
+    ...(method==='POST'&&(path==='/api/skill'||path==='/api/chat')?{requestTimeout:null}:{}),
    });
    return result;
   },

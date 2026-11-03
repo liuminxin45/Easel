@@ -203,7 +203,8 @@ class ProfileService:
         fields = {'name', 'identity', 'audience', 'voice', 'boundaries', 'default_skills', 'skill_versions', 'task_skill_versions', 'asset_refs', 'active','media_defaults'}
         if not isinstance(document, dict) or set(document) - fields:
             raise ValueError('画像只保存身份、读者、表达、技能和资产引用')
-        result = copy.deepcopy(old) if old else {'id': pid, 'account_ids': [], 'default_skills': copy.deepcopy(TASK_DEFAULTS), 'skill_versions': {r['skill_id']: r['version'] for r in c.execute('SELECT skill_id,version FROM creator_skill_pointers WHERE version>0')}, 'asset_refs': [], 'active': True, 'created_at': stamp()}
+        from easel_workbench.features.skills.retirement import native_mode
+        result = copy.deepcopy(old) if old else {'id': pid, 'account_ids': [], 'default_skills': {} if native_mode(self.root) else copy.deepcopy(TASK_DEFAULTS), 'asset_refs': [], 'active': True, 'created_at': stamp()}
         for field in ('name', 'identity', 'audience', 'voice', 'boundaries'):
             result[field] = text(document.get(field, result.get(field, '')), 120 if field == 'name' else 12000, field == 'name')
         if 'media_defaults' in document:
@@ -218,11 +219,13 @@ class ProfileService:
             for skills in result['default_skills'].values():
                 for sid in skills:
                     result.setdefault('skill_versions', {}).setdefault(sid, self._published(c, sid))
-        task_pins = result.setdefault('task_skill_versions', {})
-        for task, skills in result['default_skills'].items():
-            task_pins.setdefault(task, {})
-            for sid in skills:
-                task_pins[task].setdefault(sid, result['skill_versions'].get(sid, self._published(c, sid)))
+        # Ordinary profile edits must not recreate retired skill version pins.
+        if any(field in document for field in ('default_skills','skill_versions','task_skill_versions')):
+            task_pins = result.setdefault('task_skill_versions', {})
+            for task, skills in result['default_skills'].items():
+                task_pins.setdefault(task, {})
+                for sid in skills:
+                    task_pins[task].setdefault(sid, result.get('skill_versions', {}).get(sid, self._published(c, sid)))
         if 'skill_versions' in document:
             if not isinstance(document['skill_versions'], dict) or len(document['skill_versions']) > 40:
                 raise ValueError('画像技能版本格式无效')

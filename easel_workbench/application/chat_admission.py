@@ -33,7 +33,7 @@ class ChatAdmission:
         profile=c.execute('SELECT revision,document FROM creator_profiles WHERE id=?',(session['profile_id'],)).fetchone()
         if not profile:raise ValueError('创作画像不存在')
         anchor={'profile':sha(list(profile)),
-                'skills':[list(row) for row in c.execute('SELECT skill_id,revision,version FROM creator_skill_pointers ORDER BY skill_id')],
+                'skills':[],
                 'settings':self.chat.execution_settings(session),'workspace':sha(self.business._workspace(session))}
         context=value.get('context') or {}
         if context.get('article_id'):
@@ -67,6 +67,9 @@ class ChatAdmission:
                 return old
             if c.execute('SELECT 1 FROM easel_chat_turns WHERE id=? OR operation_id=?',(tid,tid)).fetchone():
                 raise ChatConflict('回合标识已有执行记录，请读取原回执')
+            if any(field in context for field in ('plan_token','work_id','parent_version_id','trial','version','skill_revision')) or context.get('action_id','native')!='native':
+                from easel_workbench.features.skills.retirement import SkillFeatureRetired
+                raise SkillFeatureRetired('legacy-skill-orchestration')
             if self.closing or self.chat._closing:raise ChatConflict('服务正在关闭，请保留草稿')
             session=self.chat._session(c,sid)
             if session.get('archived') or session.get('pendingTurnId') or session.get('pendingSubmissionId'):
@@ -128,12 +131,6 @@ class ChatAdmission:
 
     def _prepare(self,row):
         request=copy.deepcopy(row['request'])
-        if not (request.get('context') or {}).get('plan_token'):
-            selection=self.business._selection(request)
-            if selection[1].get('requires_plan'):
-                plan=self.business.plan(request,selection=selection)
-                request['context']={**request.get('context',{}),'plan_token':plan['plan_token']}
-            else:return request,self.business.prepare(request,selection=selection)
         return request,self.business.prepare(request)
 
     async def _process(self,tid):

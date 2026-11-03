@@ -101,7 +101,7 @@ def supports(path, method=None):
         return False
     routes = (
         r'/api/native/operations/[A-Za-z0-9_-]+', r'/api/upload',
-        r'/api/outputs', r'/api/output-context', r'/api/(?:output|media)/.+',
+        r'/api/outputs', r'/api/library/(?:items|resolve)', r'/api/output-context', r'/api/(?:output|media)/.+',
         r'/api/artifacts/archive', r'/api/personas', r'/api/persona/[^/]+(?:/(?:files|file))?',
         r'/api/profile/build', r'/api/profile/build/status/[^/]+',
         r'/api/ideas(?:/[A-Za-z0-9_-]+)?', r'/api/schedule(?:/(?:context|[A-Za-z0-9_-]+))?',
@@ -136,6 +136,10 @@ class NativeApi:
                 profile_id TEXT NOT NULL, filename TEXT NOT NULL, revision INTEGER NOT NULL,
                 content TEXT NOT NULL, PRIMARY KEY(profile_id,filename,revision))''')
         self.outputs = create_outputs_context(self.root)
+        from easel_workbench.features.works.library_index import LibraryIndex
+        self.library=LibraryIndex(self.root,self._build_library,self._library_revision)
+        self._library_work_cache={};self._library_work_tokens={}
+        self._library_full_at=0
         self.planning = create_planning_context(
             self.root, scripts=Path(__file__).resolve().parents[2] / 'skills/shared/scripts',
             read_ideas=self._ideas, write_ideas=self._save_ideas,
@@ -482,12 +486,41 @@ class NativeApi:
                 c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)', (profile['id'], filename, saved['revision'], content))
         return {'ok': True, 'revision': saved['revision']}
 
-    def _work_tree(self):
+    def _library_revision(self):
+        with self.store.connect() as c:
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='read_cache_revisions'").fetchone():
+                return [list(r) for r in c.execute("SELECT domain,revision FROM read_cache_revisions WHERE domain='works' ORDER BY domain")]
+        return None
+
+    def _build_library(self):
+        # Expensive compatibility projection is background-only. Rebuild only
+        # changed work roots; physical files are reconciled by the same original
+        # scanner so protected directories and manifest semantics stay shared.
+        with self.store.connect() as c:
+            tokens={r[0]:(r[1],r[2],r[3]) for r in c.execute("SELECT w.id,w.updated_at,(SELECT group_concat(id||':'||status) FROM toolbox_jobs j WHERE j.work_id=w.id),(SELECT count(*) FROM artifacts a JOIN toolbox_jobs j ON j.id=a.task_id WHERE j.work_id=w.id) FROM toolbox_works w")}
+        if time.monotonic()-self._library_full_at>300:
+            self._library_work_tokens={};self._library_full_at=time.monotonic()
+        for wid,token in tokens.items():
+            if self._library_work_tokens.get(wid)!=token:
+                self._library_work_cache[wid]=self._work_tree([wid])
+        self._library_work_cache={k:v for k,v in self._library_work_cache.items() if k in tokens}
+        self._library_work_tokens=tokens
+        registered=self._native_tree();sessions={n['meta']['session_id'] for n in registered}
+        with self.store.connect() as c:
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(r[0] for r in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
+        physical=[n for n in self.outputs.api_outputs() if n['path'] not in sessions]
+        return physical+[n for nodes in self._library_work_cache.values() for n in nodes]+registered
+
+    def _work_tree(self,work_ids=None):
         result = []
         with self.store.connect() as c:
             native_ids={row[0] for row in c.execute("SELECT id FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL")} if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone() else set()
-        for work in self.box.works()['items']:
+        if work_ids is None:
+            with self.store.connect() as c:work_ids=[r[0] for r in c.execute('SELECT id FROM toolbox_works ORDER BY updated_at DESC,id DESC')]
+        for wid in work_ids:
+            work={'id':wid}
             full = self.box.work(work['id']); versions = []
+            work['title']=full['title']
             for version in full.get('versions', []):
                 children = []
                 for artifact in version.get('artifacts', []):
@@ -540,10 +573,19 @@ class NativeApi:
         return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
 
     def _output_context(self, wanted):
-        for item in self._work_tree():
-            for candidate in (item, *item['children']):
-                if candidate['path'] == wanted:
-                    return {**{key:candidate['meta'][key] for key in ('work_id','version_id')},'canonical_path':candidate['path']}
+        if not wanted:return {}
+        try:
+            candidate=self.library.resolve(wanted)['nodes'][-1]
+            if candidate.get('meta',{}).get('work_id'):
+                return {**{key:candidate['meta'].get(key,'') for key in ('work_id','version_id')},'canonical_path':candidate['path']}
+        except HTTPException as error:
+            if error.status_code!=404:raise
+        direct=re.fullmatch(r'workbench-([A-Za-z0-9_-]+)(?:/([A-Za-z0-9_-]+))?',wanted)
+        if direct:
+            with self.store.connect() as c:
+                work=c.execute('SELECT id FROM toolbox_works WHERE id=?',(direct[1],)).fetchone()
+                version=c.execute('SELECT id FROM toolbox_jobs WHERE id=? AND work_id=?',(direct[2],direct[1])).fetchone() if direct[2] else None
+            if work and (not direct[2] or version):return {'work_id':direct[1],'version_id':direct[2] or '', 'canonical_path':wanted}
         parts=wanted.rstrip('/').split('/')
         if len(parts)>=3 and parts[2]=='products':
             with self.store.connect() as c:row=c.execute('SELECT document FROM easel_chat_turns WHERE id=? AND session_id=?',(parts[1],parts[0])).fetchone()
@@ -564,9 +606,11 @@ class NativeApi:
         with self.store.connect() as c:
             if not c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():
                 return []
-        from easel_workbench.upstream_skills import UpstreamSkills
         groups = {}
-        for item in UpstreamSkills(self.root, self.box.creator).library()['items']:
+        with self.store.connect() as c:
+            items=[{'turn_id':r[0],'session_id':r[1],'title':r[2] or ''} for r in c.execute("SELECT id,json_extract(document,'$.session_id'),substr(json_extract(document,'$.message'),1,100) FROM easel_chat_turns WHERE json_extract(document,'$.snapshot.task')='native' AND json_extract(document,'$.work.work_id') IS NULL ORDER BY rowid DESC")]
+            for item in items:item['files']=[dict(r) for r in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=?',(item['turn_id'],))]
+        for item in items:
             sid, tid = item['session_id'], item['turn_id']
             children = []
             for artifact in item['files']:
@@ -606,6 +650,8 @@ class NativeApi:
         return value, path
 
     async def _file(self, relative, media=False, *, preview=False):
+        thumb=re.fullmatch(r'__thumb__/([a-f0-9]{64})\.jpg',relative)
+        if media and thumb:return await _offload(self._thumbnail,thumb[1])
         partial=re.fullmatch(r'__partial__/([A-Za-z0-9_.-]+)/([a-f0-9]{64})/([^/]+)',relative)
         if partial:
             from easel_workbench.features.works.products import ChatProducts
@@ -638,6 +684,38 @@ class NativeApi:
             raise HTTPException(403, '系统资料不能经目录别名展示')
         response = await (self.outputs.api_media(relative) if media else self.outputs.api_output(relative))
         return _protect_html_preview(response, preview=preview) if media else response
+
+    def _thumbnail(self,key):
+        import io
+        from PIL import Image,ImageOps,UnidentifiedImageError
+        source=self.library.thumbnail_source(key)
+        try:registered=self._registered_file(source)
+        except (ValueError,FileNotFoundError):raise HTTPException(404,'封面文件不存在') from None
+        if registered:path=registered[1]
+        elif source.startswith('__partial__/'):
+            match=re.fullmatch(r'__partial__/([A-Za-z0-9_.-]+)/([a-f0-9]{64})/([^/]+)',source)
+            if not match:raise HTTPException(404,'封面不存在')
+            from easel_workbench.features.works.products import ChatProducts
+            value,path=ChatProducts(root=self.root,store=self.store,chat=None,work_store=self.box).file(match[1],match[2])
+            if value['name']!=match[3]:raise HTTPException(404,'封面不存在')
+        else:
+            if any(p.startswith(('_','.')) for p in Path(source).parts):raise HTTPException(403,'系统资料不提供封面')
+            path=self.outputs._safe_output_path(source)
+        try:stat=path.stat()
+        except FileNotFoundError:raise HTTPException(404,'封面文件不存在') from None
+        version=hashlib.sha256(f'{key}:{stat.st_size}:{stat.st_mtime_ns}'.encode()).hexdigest()
+        folder=self.root/'data/content-library-thumbnails';folder.mkdir(exist_ok=True)
+        cached=folder/(version+'.jpg')
+        if not cached.exists():
+            try:
+                with Image.open(path) as image:
+                    if image.width*image.height>40000000:raise Image.DecompressionBombError('thumbnail pixel budget exceeded')
+                    image=ImageOps.exif_transpose(image);image.thumbnail((384,384));image=image.convert('RGB')
+                    stream=io.BytesIO();image.save(stream,format='JPEG',quality=75,optimize=True)
+                temporary=folder/(version+'-'+str(time.time_ns())+'.tmp');temporary.write_bytes(stream.getvalue());os.replace(temporary,cached)
+            except (UnidentifiedImageError,OSError,Image.DecompressionBombError):
+                return Response('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><path d="M20 20h56v56H20z" fill="none" stroke="#888"/></svg>',media_type='image/svg+xml',headers={'Cache-Control':'private, max-age=60'})
+        return FileResponse(cached,media_type='image/jpeg',headers={'Cache-Control':'private, max-age=300','ETag':'"'+version+'"'})
 
     def _export_package(self, platform, fields):
         from easel.manual_publish import build_package
@@ -711,6 +789,26 @@ class NativeApi:
         if path == '/api/outputs' and method == 'GET':
             native = await asyncio.to_thread(self.outputs.api_outputs)
             return await _offload(self._outputs_tree, native)
+        if path=='/api/library/items' and method=='GET':
+            q=request.query_params
+            return await _offload(self.library.list,parent=q.get('parent',''),cursor=q.get('cursor'),limit=int(q.get('limit','50')),query=q.get('query',''),kind=q.get('kind',''))
+        if path=='/api/library/resolve' and method=='GET':
+            wanted=request.query_params.get('path','')
+            try:return await _offload(self.library.resolve,wanted)
+            except HTTPException as error:
+                if error.status_code!=404:raise
+                context=await _offload(self._output_context,wanted)
+                if context.get('canonical_path'):return await _offload(self.library.resolve,context['canonical_path'])
+                def alias():
+                    parts=Path(wanted.replace('\\','/')).parts
+                    if not parts or any(p in ('.','..') or p.startswith(('_','.')) for p in parts):raise HTTPException(404,'内容未登记')
+                    candidate=(self.root/'outputs'/wanted).resolve()
+                    if not candidate.is_relative_to((self.root/'outputs').resolve()):raise HTTPException(403,'非法内容路径')
+                    with self.store.connect() as c:
+                        row=c.execute('SELECT id,name FROM artifacts WHERE path=?',(str(candidate),)).fetchone()
+                    if row:return self.library.resolve('__workbench__/'+row['id']+'/'+row['name'])
+                    return self.library.resolve('native-session-'+parts[0]+('/'+'/'.join(parts[1:]) if len(parts)>1 else ''))
+                return await _offload(alias)
         if path == '/api/artifacts/archive' and method == 'GET':
             relative = request.query_params.get('path', '')
             if await _offload(self._registered_file, relative):
@@ -864,18 +962,22 @@ class NativeApi:
         return None
 
 
-async def handle(box, path, request, value=None):
-    """Return a native response, or ``None`` for another application route."""
-    if not supports(path, request.method):
-        return None
+async def adapter(box):
     if not getattr(box, '_native_api', None):
         if not getattr(box, '_native_api_init_lock', None):
             box._native_api_init_lock = asyncio.Lock()
         async with box._native_api_init_lock:
             if not getattr(box, '_native_api', None):
                 box._native_api = await _offload(NativeApi, box)
+    return box._native_api
+
+
+async def handle(box, path, request, value=None):
+    """Return a native response, or ``None`` for another application route."""
+    if not supports(path, request.method):return None
+    native=await adapter(box)
     try:
-        result = await box._native_api.dispatch(path, request, value or {})
+        result = await native.dispatch(path, request, value or {})
         if result is None or isinstance(result, Response):
             return result
         return JSONResponse(result, headers={'Cache-Control': 'no-store'})

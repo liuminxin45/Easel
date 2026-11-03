@@ -37,6 +37,14 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.weekly_periodical import Periodical
     periodical=Periodical(store,root);app.state.periodical=periodical
     app.state.box=box;app.state.auth=auth
+    async def start_content_library():
+        from easel_workbench.runtime.native_api import adapter
+        native=await adapter(box);native.library.start()
+    async def stop_content_library():
+        native=getattr(box,'_native_api',None)
+        if native:await asyncio.to_thread(native.library.close)
+    app.add_event_handler('startup',start_content_library)
+    app.add_event_handler('shutdown',stop_content_library)
     from easel_workbench.settings import service as settings_service,handle as settings_api
     settings=settings_service(box);app.state.settings=settings
     from easel_workbench.runtime.collection_service import CollectionService

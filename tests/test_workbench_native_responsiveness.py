@@ -101,12 +101,12 @@ def test_native_slow_reads_do_not_block_health(tmp_path, route):
         def slow(*args):
             entered.set()
             assert release.wait(2)
-            return {'source': 'exact-temp'} if route.endswith('trends') else []
+            return {'source': 'exact-temp'}
 
         if route.endswith('trends'):
             api._trends = slow
         else:
-            api._work_tree = slow
+            api._output_context = slow
         scope = {'type': 'http', 'method': 'GET', 'path': route, 'query_string': b'', 'headers': []}
         task = asyncio.create_task(api.dispatch(route, Request(scope), {}))
         try:

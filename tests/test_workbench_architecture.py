@@ -43,6 +43,7 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/src/components/AccountsPage.tsx',
     'web/frontend/src/components/CalendarPage.tsx',
     'web/frontend/src/lib/viewState.ts','web/frontend/src/lib/visiblePoll.ts',
+    'web/frontend/src/lib/outputBrowser.ts',
     # Shared download boundary requested by user; no private service imports.
     'web/frontend/src/lib/download.ts','web/frontend/src/components/DownloadLink.tsx',
     # Reviewed generic feedback projection; contains no private dependencies or I/O.

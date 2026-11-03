@@ -330,6 +330,9 @@ class NativeApi:
         groups = []
         for key in selected:
             rows = self.store.collected_day(source=key, day=day)['items']
+            if key in ('hacker-news','product-hunt'):
+                from easel_workbench.runtime.news_overviews import trend_titles
+                rows=trend_titles(rows,self.root)
             if not rows:
                 continue
             latest = status.get(key, {}).get('last_task') or {}

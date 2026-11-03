@@ -37,13 +37,29 @@ def cutover_paused(root):
 
 def validate(value):
     if not isinstance(value,str) or not 12<=len(value)<=120 or len(re.findall(r'[\u3400-\u9fff]',value))<4:raise ValueError('概述必须为12至120字的一句中文')
-    if any(c in value for c in '\r\n<>') or re.search(r'[。！？!?].',value) or not value.endswith('。'):raise ValueError('概述须为一个完整中文句子')
+    sentence=re.sub(r'“[^“”]*”|「[^「」]*」|『[^『』]*』','引用',value)
+    if any(c in value for c in '\r\n<>') or re.search(r'[。！？!?].',sentence) or not value.endswith('。'):raise ValueError('概述须为一个完整中文句子')
     return value
 
 def reading_summary(value):
     """Optional upstream projection. Bad/missing legacy fields need only enrichment."""
     try:return validate(value)
     except (ValueError,TypeError):return None
+
+
+def trend_titles(rows, root):
+    """Read exact persisted Chinese titles, without enqueueing work on a GET."""
+    path=pathlib.Path(root)/'data/news-overviews.sqlite'
+    if not rows or not path.is_file():return []
+    result=[]
+    try:
+        with sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True,timeout=.2) as c:
+            for row in rows:
+                record=c.execute('SELECT input_hash,status,summary FROM overviews WHERE article_id=?',(row['id'],)).fetchone()
+                title=reading_summary(record[2]) if record and record[0]==fingerprint(row) and record[1]=='ready' else None
+                if title:result.append({**row,'title':title})
+    except sqlite3.Error:return []
+    return result
 
 def record_upstream(store,root,document):
     """Persist only an exact read-back projection, without changing the article."""
@@ -73,6 +89,8 @@ def analyze(rows,root=ROOT,*,native_allowed=True):
         from easel_workbench.runtime.task_runtime import contract_prompt,observed_call
         from easel_workbench.readonly_runner import run,recorded_output,project_snapshot,ReadonlyOutputInvalid
         prompt,binding=contract_prompt(root,'news_enhancement','references/news-summary.md',material)
+        if any(r['source_job'] in ('product-hunt','hacker-news') for r in rows):
+            prompt+='\nHacker News 按原始标题和正文表达具体新闻事实；Product Hunt 必须结合来源摘要写出产品名称及具体用途，不能只返回产品名。每条用一个完整中文句子，不增加来源未支持的能力或实测结论。'
         native_binding=binding if native_allowed and project_snapshot(binding) else None
         if native_binding is None:
             login=subprocess.run([str(CODEX),'login','status'],timeout=30,**options)
@@ -101,6 +119,35 @@ class Overviews:
             c.execute('CREATE TABLE IF NOT EXISTS overview_sources(article_id TEXT PRIMARY KEY,input_hash TEXT NOT NULL,origin TEXT NOT NULL,source_run TEXT NOT NULL)')
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20,factory=Connection);c.row_factory=sqlite3.Row;c.execute('PRAGMA journal_mode=WAL');return c
+    def reconcile_completed(self,receipt_path,*,sources,day):
+        """Explicitly inspect a completed original call; never send a model request."""
+        receipt_path=pathlib.Path(receipt_path).resolve()
+        if not receipt_path.is_relative_to((self.root/'data/readonly-receipts').resolve()):raise ValueError('receipt outside registry')
+        receipt=json.loads(receipt_path.read_text(encoding='utf-8'))
+        raw=receipt.get('model_output_text','')
+        if receipt.get('status')!='completed' or receipt.get('completion_received') is not True or hashlib.sha256(raw.encode()).hexdigest()!=receipt.get('model_output_sha256'):
+            raise ValueError('original completion not proven')
+        with self.store.connect() as c:
+            matches=[{'input':json.loads(r[1])} for r in c.execute("SELECT json_extract(document,'$.prompt'),json_extract(document,'$.input') FROM creator_model_calls WHERE json_extract(document,'$.task')='news_enhancement'") if hashlib.sha256((r[0] or '').encode()).hexdigest()==receipt.get('prompt_sha256')]
+        if len(matches)!=1:raise ValueError('original input binding ambiguous')
+        inputs=matches[0]['input'];answers=json.loads(raw)['items']
+        if len(answers)!=len(inputs) or {r['id'] for r in answers}!={r['id'] for r in inputs}:raise ValueError('original output identities mismatch')
+        by_id={r['id']:r for r in inputs};values={r['id']:r['summary'] for r in answers}
+        observed=[r for source in sources for r in self.store.collected_day(source,day)['items']]
+        accepted=invalid=0
+        with locked(self.root/'data/news-overviews.lock',timeout=.1),self.connect() as c:
+            for row in observed:
+                original=by_id.get(row['id'])
+                if not original or any(original.get(k)!=row[k] for k in ('title','url','source_job')) or original.get('body')!=row['body'][:6000]:continue
+                old=c.execute('SELECT input_hash,status FROM overviews WHERE article_id=?',(row['id'],)).fetchone()
+                if not old or old['input_hash']!=fingerprint(row) or old['status']=='ready':continue
+                value=reading_summary(values[row['id']])
+                if value:
+                    c.execute("UPDATE overviews SET status='ready',summary=?,error=NULL,retry_at=0,updated_at=? WHERE article_id=?",(value,stamp(),row['id']));accepted+=1
+                else:
+                    c.execute("UPDATE overviews SET status='error',error='原调用已完成但句子格式无效',retry_at=0,updated_at=? WHERE article_id=?",(stamp(),row['id']));invalid+=1
+                c.execute('INSERT OR REPLACE INTO overview_sources VALUES(?,?,?,?)',(row['id'],fingerprint(row),'completed_receipt_reconciled',receipt['id']))
+        return {'recovered':accepted,'completed_invalid':invalid,'model_calls':0}
     def project(self,rows):
         with self.connect() as c:
             records={r['article_id']:dict(r) for r in c.execute('SELECT * FROM overviews')}
@@ -118,10 +165,14 @@ class Overviews:
             provenance=sources.get(row['id']) or {}
             result.append({**row,'original_title':row['title'],'title':summary or '【'+label.get(status,'中文概述待生成')+'】'+row['title'],'overview':summary,'overview_status':status,'overview_error':current['error'] if current else None,'overview_source':provenance.get('origin') if provenance.get('input_hash')==fingerprint(row) else ('overview_model' if summary else None)})
         return result
-    def tick(self,runner=None,limit=16,sources=None):
+    def tick(self,runner=None,limit=16,sources=None,day=None):
         with locked(self.root/'data/news-overviews.lock',timeout=.1):
             registry=self.store.sources(include_deleted=True)
             with self.store.connect() as c:rows=[dict(r) for r in c.execute('SELECT * FROM articles ORDER BY CASE WHEN source_job IN (\'xinquji\',\'github-trending\',\'product-hunt\',\'hacker-news\') THEN 0 ELSE 1 END,run_at DESC,id')]
+            if day:
+                if not sources:raise ValueError('day requires explicit sources')
+                observed={r['id'] for source in sources for r in self.store.collected_day(source,day)['items']}
+                rows=[r for r in rows if r['id'] in observed]
             now=time.time();pending=[]
             with self.connect() as c:
                 for row in rows:
@@ -185,11 +236,11 @@ def background(service,stop):
         stop.wait(20)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--batches',type=int,default=1);parser.add_argument('--source',action='append');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--batches',type=int,default=1);parser.add_argument('--source',action='append');parser.add_argument('--day');args=parser.parse_args()
     if not 1<=args.batches<=100:parser.error('--batches must be 1..100')
     service=Overviews(Store());completed=0
     for _ in range(args.batches):
-        count=service.tick(sources=args.source);completed+=count
+        count=service.tick(sources=args.source,day=args.day);completed+=count
         if not count:break
     print(json.dumps({'processed':completed,'states':service.status()},ensure_ascii=False))
 if __name__=='__main__':main()

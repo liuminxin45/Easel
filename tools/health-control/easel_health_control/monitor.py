@@ -17,6 +17,7 @@ import uuid
 
 from .policy import assess, consume, number
 from .usage import project as usage_projection
+from .content_library import project as library_projection
 
 HEALTH_PATH = '/_workbench/health'
 
@@ -133,6 +134,7 @@ class Monitor:
                       'ownership_verified': owner, 'controls_valid': controls, 'needs_repair': False}
             performance = inspected.get('performance')
             result['usage'] = usage_projection(inspected.get('usage'))
+            result['content_library'] = library_projection(inspected.get('content_library'))
             if isinstance(performance, dict):
                 result['performance'] = {'status': performance.get('status') if performance.get('status') in (
                     'healthy', 'degraded', 'unavailable') else 'unavailable', **{
@@ -174,6 +176,9 @@ class Monitor:
                 elif local.get('seconds', 0) > self.config.get('slow_seconds', 2): result['status'] = 'endpoint_slow'
                 elif business.get('external_provider') is True: result['status'] = 'provider_degraded'
                 elif business.get('ok') is False: result['status'] = 'business_degraded'
+                elif result['content_library']['status'] in ('stale','error') or result['content_library']['performance_degraded']: result['status'] = 'content_library_degraded'
+                elif result['content_library']['status']=='building': result['status'] = 'content_library_building'
+                elif 'content_library' in inspected and result['content_library']['status']=='unavailable': result['status'] = 'content_library_unknown'
                 elif result.get('performance', {}).get('status') == 'degraded': result['status'] = 'performance_degraded'
                 elif business.get('ok') is None: result['status'] = 'business_unknown'
                 else: result['status'] = 'healthy'

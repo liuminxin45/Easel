@@ -169,18 +169,25 @@ def test_restart_resumes_saved_request_but_never_replays_existing_turn(business,
     asyncio.run(scenario())
 
 
-def test_actual_work_registration_failure_rolls_back_and_releases_intake(business,monkeypatch):
+def test_native_turn_registration_failure_rolls_back_and_releases_intake(business,monkeypatch):
     _,admissions,adapter=setup(business,monkeypatch)
     with business.store.connect() as c:
-        c.execute("CREATE TRIGGER admission_fail_call BEFORE INSERT ON creator_model_calls BEGIN SELECT RAISE(ABORT,'TEMP call register'); END")
+        c.execute("CREATE TRIGGER admission_fail_turn AFTER INSERT ON easel_chat_turns BEGIN SELECT RAISE(ABORT,'TEMP native turn register'); END")
     async def scenario():
         try:
             receipt=await admissions.receive(fixtures.value('poster','poster-one'));assert receipt['id']=='poster-one'
             await finish(admissions,'poster-one')
-            assert admissions.get_turn('poster-one')['admission_failed'] and not adapter.requests
+            failed=admissions.get_turn('poster-one')
+            assert failed['admission_failed'] and 'IntegrityError' in failed['error']
+            assert not adapter.requests and 'poster-one' not in admissions.chat._owned_turns
             with business.store.connect() as c:
                 for table in ('easel_chat_turns','toolbox_works','toolbox_jobs','creator_model_calls'):
                     assert c.execute('SELECT count(*) FROM '+table).fetchone()[0]==0,table
             assert not admissions.chat.history('test-chat')['session'].get('pendingSubmissionId')
+            with business.store.connect() as c:c.execute('DROP TRIGGER admission_fail_turn')
+            await admissions.receive(request('after-register-failure'))
+            await finish(admissions,'after-register-failure')
+            assert len(adapter.requests)==1
+            assert admissions.get_turn('after-register-failure')['status']=='completed'
         finally:await admissions.close();await admissions.chat.close()
     asyncio.run(scenario())

@@ -2,10 +2,11 @@ import DownloadLink from '../../components/DownloadLink';
 import EaselDrawer from '../../components/Drawer';
 import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import {fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
-import {useWorkbench,useOperation,useSessionMediaImage} from './hooks';
+import {useWorkbench,useOperation,useResource,useSessionMediaImage} from './hooks';
 import {renderMarkdown} from './lib/sanitize';
 import {InteractionNotice} from '../../components/InteractionNotice';
 import {DetailChevron} from './ExtensionDetails';
+import {useResourceVisibility} from './hooks/visibility';
 
 /** Host reads stay quiet; actual errors and recovery warnings use the original UI. */
 export function Notice({message,sources=[]}:{message?:string;sources?:InteractionSource[]}){
@@ -51,9 +52,21 @@ function MountedDrawer({title,onClose,onDismiss,children}:HostDrawerProps){
  return <EaselDrawer title={title} onClose={onClose} panelRef={panel} container={container.current}>{children}</EaselDrawer>;
 }
 export function ArtifactView({file}:{file:Artifact}){const image=useSessionMediaImage(file);return <figure className="ew-artifact">{file.mime.startsWith('image/')?<img src={image.src||fileUrl(file)} alt={file.name}/>:file.mime.startsWith('video/')?<video src={fileUrl(file)} controls preload="metadata"/>:file.mime.startsWith('audio/')?<audio src={fileUrl(file)} controls preload="metadata"/>:<p>{file.name}</p>}<figcaption><DownloadLink href={fileDownload(file)} download={file.name}>{file.name} · 下载原件</DownloadLink></figcaption></figure>}
-function RecordDetails({title,children}:{title:string;children:ReactNode}){const [open,setOpen]=useState(false);return <><button className="ew-record-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><span>{title}</span><DetailChevron/></button><Drawer open={open} title={title} onClose={()=>setOpen(false)}>{children}</Drawer></>}
-export function JsonDetails({value,title='详细记录'}:{value:unknown;title?:string}){return <RecordDetails title={title}><pre className="ew-preserve">{JSON.stringify(value,null,2)}</pre></RecordDetails>}
+function RecordDetails({title,renderContent}:{title:string;renderContent:()=>ReactNode}){const [open,setOpen]=useState(false);return <><button className="ew-record-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><span>{title}</span><DetailChevron/></button><Drawer open={open} title={title} onClose={()=>setOpen(false)}>{open?renderContent():null}</Drawer></>}
+export function JsonDetails({value,title='详细记录'}:{value:unknown;title?:string}){return <RecordDetails title={title} renderContent={()=><pre className="ew-preserve">{JSON.stringify(value,null,2)}</pre>}/>}
 export const resultDocument=(v:unknown)=>record(record(v).result??v);
 export function PageHead({title,children}:{title:string;children?:ReactNode}){const {back}=useWorkbench();return <header className="ew-page-head"><div className="ew-row"><button className="btn btn-ghost" aria-label="返回" onClick={back}>←</button><h1 className="page-title">{title}</h1></div><div className="ew-row">{children}</div></header>}
-export function TextRecord({title,value}:{title:string;value:unknown}){return <RecordDetails title={title}><pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre></RecordDetails>}
+export function TextRecord({title,value}:{title:string;value:unknown}){return <RecordDetails title={title} renderContent={()=><pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre>}/>}
+/** Mounted disclosures keep their last text while closed without reformatting it. */
+export function RecordBody({value}:{value:unknown}){
+ const visible=useResourceVisibility(),snapshot=useRef<{value:unknown;text:string}|null>(null);
+ if(visible&&(!snapshot.current||snapshot.current.value!==value))snapshot.current={value,text:typeof value==='string'?value:JSON.stringify(value,null,2)};
+ return <pre className="ew-preserve">{snapshot.current?.text}</pre>;
+}
+/** Full receipt bodies belong to the explicit original drawer, not list reads. */
+export function RemoteRecord({title,path,field}:{title:string;path:string;field?:string}){return <RecordDetails title={title} renderContent={()=><ReadRecord path={path} field={field}/>}/>}
+function ReadRecord({path,field}:{path:string;field?:string}){
+ const resource=useResource(path),value=field?record(resource.data)[field]:resource.data;
+ return <><Notice sources={[resource]}/>{resource.error&&<button className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取</button>}{resource.loading&&!resource.data?<p className="ew-muted" role="status">正在读取记录…</p>:resource.data&&<pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre>}</>;
+}
 export function SourceLink({value}:{value:unknown}){const url=string(value);return /^https?:\/\//.test(url)?<a href={url} target="_blank" rel="noreferrer">原始来源 ↗</a>:null}

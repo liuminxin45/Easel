@@ -880,9 +880,38 @@ class DistributionService:
             c.execute('INSERT INTO distribution_operations VALUES(?,?,?,?,?,?)', (value['operation_id'], signature, actor, value['action'], pack(result), stamp()))
         return result
 
-    def bootstrap(self, work_id=None):
+    def detail(self, kind, record_id):
+        if kind not in ('revisions','deliveries'):raise ValueError('分发详情类型无效')
+        with self.store.connect() as c:
+            c.execute('BEGIN')
+            value=self._get(c,kind,record_id)
+            if kind=='revisions':
+                try:self._validate_revision(c,value);value.update(valid=True,invalid_reason=None)
+                except (ValueError,OSError) as error:value.update(valid=False,invalid_reason=str(error))
+                return {'revision':_public(value)}
+            attempts=[json.loads(row['document']) for row in c.execute("SELECT document FROM distribution_attempts WHERE json_extract(document,'$.delivery_id')=? ORDER BY rowid",(record_id,))]
+            return {'delivery':_public(value),'attempts':_public(attempts)}
+
+    def bootstrap(self, work_id=None, view=None):
         if work_id is not None:
             ident(work_id)
+        if view=='summary':
+            from .read_views import records,publications
+            with self.store.connect() as c:
+                c.execute('BEGIN')
+                result={kind:records(c,kind,work_id=work_id) for kind in ('connections','revisions','approvals','deliveries','attempts','batches','runners')}
+                result['publications']=publications(c,work_id=work_id)
+                for item in result['connections']:
+                    internal=self._get(c,'connections',item['id'])
+                    item['capabilities']={action:self._capability(internal,action) for action in ('draft','publish','verify')}
+            for item in result['publications']:
+                item.update(self.studio.publication_metadata(item));item.pop('distribution_receipt',None)
+            for batch in result['batches']:
+                states=[item['status'] for item in result['deliveries'] if item['batch_id']==batch['id']]
+                batch['status']='approved' if not states else 'succeeded' if len(states)==batch['approval_count'] and all(state=='succeeded' for state in states) else 'partial' if 'succeeded' in states else 'needs_attention' if any(state in ('unknown','failed','blocked') for state in states) else 'cancelled' if all(state=='cancelled' for state in states) else 'queued'
+            result.update(schema_version=1,work_id=work_id,platforms=list(copy.deepcopy(PLATFORMS)),counts={key:len(value) for key,value in result.items()})
+            return _public(result)
+        if view is not None:raise ValueError('分发读取视图无效')
         with self.store.connect() as c:
             # A read never expires leases or changes a production decision.
             revisions = [item for item in self._records(c, 'revisions') if work_id is None or item['work_id'] == work_id]

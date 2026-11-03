@@ -6,6 +6,7 @@ import {interactionFeedback,type InteractionFeedback} from "../../../lib/interac
 import type {ActivityDelegate,JsonRecord,NavigationDelegate,StudioAction} from "../../core/models";
 import type {ViewStateStore} from '../../../lib/viewState';
 import {ViewStateRepository} from '../../platform/view-state';
+import {useResourceVisibility} from './visibility';
 
 const Context=createContext<{client:WorkbenchClient;navigation?:NavigationDelegate}|null>(null);
 const fallbackNavigation:NavigationDelegate={get path(){return typeof location==='undefined'?'/toolbox':location.pathname+location.search},navigate:path=>location.assign(path),replace:path=>location.replace(path),back:()=>history.back()};
@@ -37,10 +38,11 @@ export function useViewState<T>(scope:string,initial:T):ViewStateStore<T>{
 }
 const emptyResource=createStore<ResourceState>(()=>({data:null,loading:false,error:'',revision:0,stale:false}));
 export interface ResourceResult<T> {data:T|null;loading:boolean;refreshing?:boolean;error:string;feedback?:InteractionFeedback;revision:number;reload:()=>Promise<T|null>}
-export function useResource<T=JsonRecord>(path:string|null|undefined,options:{interval?:number}={}):ResourceResult<T>{
-  const {client}=useWorkbench(),store=useMemo(()=>path?client.resource(path):emptyResource,[client,path]),state=useStore(store);
-  const reload=useCallback(()=>path?client.read<T>(path,true):Promise.resolve(null),[client,path]);
-  useEffect(()=>{if(!path)return;const unwatch=client.watch(path,options.interval);void client.read<T>(path);return unwatch},[client,path,options.interval]);
+export function useResource<T=JsonRecord>(path:string|null|undefined,options:{interval?:number;stopOnTerminal?:boolean}={}):ResourceResult<T>{
+  const {client}=useWorkbench(),visible=useResourceVisibility(),store=useMemo(()=>path?client.resource(path):emptyResource,[client,path]),state=useStore(store);
+  const reload=useCallback(()=>path&&visible?client.read<T>(path,true):Promise.resolve(store.getState().data as T|null),[client,path,visible,store]);
+  const terminal=options.stopOnTerminal&&['completed','failed','stopped','cancelled'].includes(String((state.data as JsonRecord|null)?.status||'')),interval=terminal?undefined:options.interval;
+  useEffect(()=>{if(!path||!visible)return;const unwatch=client.watch(path,interval);void client.read<T>(path);return unwatch},[client,path,visible,interval]);
   return {...state,data:state.data as T|null,reload};
 }
 export type DraftPatch<T> = Partial<T>|((previous:T)=>T);

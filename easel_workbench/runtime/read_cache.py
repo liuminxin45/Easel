@@ -35,7 +35,13 @@ class Policy:
  foundation:bool=False
  overviews:bool=False
 
-def policy(path):
+def policy(path,query=None):
+ view=(query or {}).get('view')
+ # Metadata selectors deliberately have no filesystem/foundation dependency.
+ # Do not stat every artifact twice just to return a page of IDs and titles.
+ if path=='/api/works' and view=='summary':return Policy(('works','creator'))
+ if path=='/api/studio/bootstrap' and view=='publications':return Policy(('studio',),3)
+ if path=='/api/distribution/bootstrap' and view=='summary':return Policy(('distribution','studio'),0)
  if path=='/api/news' or re.fullmatch(r'/api/news/[A-Za-z0-9_-]+',path):return Policy(('news','works'),overviews=True)
  if path=='/api/works':return Policy(('works',),assets=True)
  if re.fullmatch(r'/api/works/[A-Za-z0-9_-]+',path):return Policy(('works','studio','creative_quality','creator'),3,assets=True)

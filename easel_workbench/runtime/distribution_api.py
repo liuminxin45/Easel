@@ -86,10 +86,13 @@ async def handle(service, path, request, session, same, raw, api_csrf, credentia
     if path == '/api/distribution/credentials/form' and method in ('GET','HEAD'):
         return credentials_page(service,session,request.query_params.get('connection_id',''))
     if path == '/api/distribution/bootstrap' and method in ('GET','HEAD'):
-        data=await asyncio.to_thread(service.bootstrap,request.query_params.get('work_id') or None)
+        data=await asyncio.to_thread(service.bootstrap,request.query_params.get('work_id') or None,view=request.query_params.get('view'))
         from easel_workbench.runtime import distribution_discovery as distribution_discovery
         if not getattr(service.runtime,'extension_retired',False):data['discovery']={'bridge':bridge_status(service),'observation':await asyncio.to_thread(distribution_discovery.latest,service)}
         return reply(data)
+    detail=re.fullmatch(r'/api/distribution/(revisions|deliveries)/([A-Za-z0-9_-]{1,160})',path)
+    if detail and method in ('GET','HEAD'):
+        return reply(await asyncio.to_thread(service.detail,*detail.groups()))
     if path == '/api/distribution/discovery' and method in ('GET','HEAD'):
         from easel_workbench.runtime import distribution_discovery as distribution_discovery
         return reply({'bridge':bridge_status(service),'observation':await asyncio.to_thread(distribution_discovery.latest,service)})

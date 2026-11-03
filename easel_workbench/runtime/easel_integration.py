@@ -534,23 +534,42 @@ class EaselIntegration:
         with self.store.connect() as c:
             return self._public_job(self._job(c, jid))
 
-    def work(self, wid, c, summary=False):
-        jobs = [json.loads(r['document']) for r in c.execute('SELECT document FROM media_jobs WHERE work_id=? ORDER BY rowid', (wid,))]
+    def work(self, wid, c, summary=False, *, version_id=None, include_history=False, lean=False):
+        scoped = version_id is not None
+        if scoped or lean:
+            # SQLite projects small fields without decoding frozen prompts/configs.
+            fields=('id','work_id','status','stage','format','created_at','related_work_id','artifacts')
+            query=','.join("json_extract(document,'$."+key+"') AS "+key for key in fields)
+            rows=c.execute("SELECT "+query+",json_extract(document,'$.creator.profile') AS profile FROM media_jobs WHERE work_id=? ORDER BY rowid",(wid,)).fetchall()
+            jobs=[{**{k:r[k] for k in fields},'creator':{'profile':json.loads(r['profile'])},'artifacts':json.loads(r['artifacts'] or '[]')} for r in rows]
+        else:
+            jobs = [json.loads(r['document']) for r in c.execute('SELECT document FROM media_jobs WHERE work_id=? ORDER BY rowid', (wid,))]
         if not jobs:
             return None
         work = dict(c.execute('SELECT * FROM toolbox_works WHERE id=?', (wid,)).fetchone())
         decisions = [dict(r) for r in c.execute("SELECT id,kind,candidate_id,created_at,status,text FROM toolbox_jobs WHERE work_id=? AND kind IN ('accept','reject','feedback') ORDER BY rowid", (wid,))]
-        versions = [{**self._public_job(j), 'label': 'v' + str(i + 1).zfill(2), 'decisions': [d for d in decisions if d['candidate_id'] == j['id']]} for i, j in enumerate(jobs)]
+        versions=[]
+        for i,j in enumerate(jobs):
+            if summary or scoped and j['id']!=version_id:continue
+            selected=json.loads(c.execute('SELECT document FROM media_jobs WHERE id=?',(j['id'],)).fetchone()['document']) if scoped else j
+            if scoped and not include_history:
+                selected={k:v for k,v in selected.items() if k not in ('creator','config','instruction','source_snapshot','options')}
+                selected['creator']={'profile':j['creator']['profile']}
+            versions.append({**self._public_job(selected),'label':'v'+str(i+1).zfill(2),'decisions':[d for d in decisions if d['candidate_id']==j['id']]})
         latest = next((j for j in reversed(jobs) if j['status'] == 'completed'), None)
         decision = next((d for d in reversed(decisions) if d['kind'] in ('accept', 'reject')), None)
         pending = [{'id': j['id'], 'kind': j['stage'], 'status': j['status']} for j in jobs if j['status'] in ('queued', 'running')]
         state = 'working' if pending else 'accepted' if decision and decision['kind'] == 'accept' else 'rejected' if decision else 'review' if latest else jobs[-1]['status']
         work.update(format=jobs[0]['format'], creator={k: jobs[0]['creator']['profile'][k] for k in ('id', 'name', 'revision')},
-                    versions=versions, latest_version=latest['id'] if latest else None, latest_version_label=next((v['label'] for v in versions if latest and v['id'] == latest['id']), None),
+                    versions=versions, latest_version=latest['id'] if latest else None, latest_version_label=next(('v'+str(i+1).zfill(2) for i,j in enumerate(jobs) if latest and j['id']==latest['id']),None),
                     state=state, pending=pending, decision=decision, review_needed=bool(latest and (not decision or decision['candidate_id'] != latest['id'])),
                     thumbnail=next((a for a in (latest or {}).get('artifacts', []) if a['mime'].startswith('image/')), None),
-                    history=decisions, discussions=[], draft={}, retryable=[], production_issue=None, recovery=None,
+                    history=decisions if not scoped else [d for d in decisions if include_history and d['candidate_id']==version_id], discussions=[], draft={}, retryable=[], production_issue=None, recovery=None,
                     media=True, related_work_id=jobs[0].get('related_work_id'))
+        if scoped:
+            work['version_summaries']=[{k:v[k] for k in ('id','status','created_at')}|{'label':'v'+str(i+1).zfill(2)} for i,v in enumerate(jobs)]
+            if version_id and not versions:raise ValueError('此准确版本不存在')
+            work.pop('material',None)
         return {k: v for k, v in work.items() if k not in ('versions', 'history', 'material', 'discussions', 'draft', 'retryable')} if summary else work
 
 

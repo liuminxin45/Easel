@@ -418,7 +418,8 @@ class NativeApi:
                 c.execute(f'INSERT INTO {history} VALUES(?,?,?)', (document['id'], document['revision'], raw))
 
     def _profiles(self):
-        return self.box.creator.bootstrap()['profiles']
+        with self.store.connect() as c:
+            return [json.loads(row['document']) for row in c.execute('SELECT document FROM creator_profiles ORDER BY rowid')]
 
     def _profile(self, name):
         profiles = self._profiles()

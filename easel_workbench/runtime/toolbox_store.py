@@ -223,37 +223,63 @@ class Toolbox:
             rows=list(c.execute("SELECT w.id FROM toolbox_works w LEFT JOIN toolbox_work_options o ON o.work_id=w.id WHERE ?='' OR coalesce(o.format,'poster')=? ORDER BY w.updated_at DESC,w.id DESC",(format,format)))
             result=[self.work(row['id'],_summary=True,_connection=c) for row in rows]
         return {'items':result}
-    def work(self,wid,*,_summary=False,_connection=None):
+    def work_summaries(self,limit=50,cursor='',profile_id='',format=''):
+        from easel_workbench.runtime.work_summaries import read
+        return read(self,limit=limit,cursor=cursor,profile_id=profile_id,format=format)
+    def version_view(self,wid,version_id='',*,include_history=False):
+        """Read one version's body; current-work authority stays with work()."""
+        with self.store.connect() as c:
+            c.execute('BEGIN')
+            summary=self.work(wid,_summary=True,_connection=c,_lean=True)
+            result=self.work(wid,_connection=c,_only_version=version_id,_latest_version=summary['latest_version'],_lean=True,_include_history=include_history)
+            result.update(summary)
+            if result.get('media'):
+                return result
+            rows=c.execute("SELECT id,status,created_at FROM toolbox_jobs WHERE work_id=? AND kind IN ('create','change') ORDER BY rowid",(wid,)).fetchall()
+            result['version_summaries']=[{'id':r['id'],'label':'v'+str(i+1).zfill(2),'status':r['status'],'created_at':r['created_at']} for i,r in enumerate(rows)]
+            if version_id and not result['versions']:raise ValueError('此准确版本不存在')
+            result.pop('material',None)
+            if not include_history:result.pop('completion',None)
+            return result
+    def work(self,wid,*,_summary=False,_connection=None,_only_version=None,_latest_version=None,_lean=False,_include_history=False):
         with self.store.connect() if _connection is None else contextlib.nullcontext(_connection) as media_connection:
             # Only the media registry owns these new stages; historical jobs keep
             # their original outcome/recovery contracts.
             if media_connection.execute("SELECT 1 FROM sqlite_master WHERE name='media_jobs'").fetchone() and media_connection.execute("SELECT 1 FROM media_jobs WHERE work_id=? LIMIT 1", (wid,)).fetchone():
                 from easel_workbench.runtime.easel_integration import service as easel_service
-                media_work=easel_service(self).work(wid,media_connection,_summary)
+                media_work=easel_service(self).work(wid,media_connection,_summary,version_id=_only_version,include_history=_include_history) if _only_version is not None else easel_service(self).work(wid,media_connection,_summary,lean=_lean)
                 if media_work is not None:return media_work
         from easel_workbench.runtime.publish_content import from_artifacts
         from easel_workbench.runtime.browser_cleanup import public_reply
         with self.store.connect() if _connection is None else contextlib.nullcontext(_connection) as c:
             row=c.execute('SELECT * FROM toolbox_works WHERE id=?',(ident(wid),)).fetchone()
             if not row:raise ValueError('作品不存在')
-            work={**dict(row),**self.options(wid,c)};jobs=[dict(r) for r in c.execute('SELECT * FROM toolbox_jobs WHERE work_id=? ORDER BY rowid',(wid,))]
+            work={**dict(row),**self.options(wid,c)}
+            if _lean:
+                jobs=[dict(r) for r in c.execute("SELECT id,work_id,kind,candidate_id,status,created_at,started_at,finished_at,turn_id,error,dispatch_started,queue_id,rollout_offset,'' AS text,'[]' AS scope,'[]' AS files,'' AS signature,'' AS reply FROM toolbox_jobs WHERE work_id=? ORDER BY rowid",(wid,))]
+                for i,job in enumerate(jobs):
+                    if _only_version is not None and (job['id']==_only_version or job['candidate_id']==_only_version and (_include_history or job['kind'] in ('accept','reject'))):
+                        jobs[i]=dict(c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(job['id'],)).fetchone())
+            else:jobs=[dict(r) for r in c.execute('SELECT * FROM toolbox_jobs WHERE work_id=? ORDER BY rowid',(wid,))]
             from easel_workbench.runtime.creator_runtime import read_owner
             binding=read_owner(c,wid)
             owner=c.execute("SELECT json_extract(document,'$.snapshot.profile.id') AS id,json_extract(document,'$.snapshot.profile.name') AS name,json_extract(document,'$.snapshot.profile.revision') AS revision FROM creator_task_runs WHERE work_id=? ORDER BY rowid DESC LIMIT 1",(wid,)).fetchone()
             work['creator']=dict(owner) if owner else ({'id':binding['profile_id'],'name':binding['profile']['name'],'revision':binding['profile_revision']} if binding else {'id':'oil-pig','name':'油猪大侠','revision':None})
-            versions=[]
+            versions=[];version_index=0
             for job in jobs:
                 if job['kind'] not in ('create','change'):continue
+                version_index+=1
+                if _only_version is not None and job['id']!=_only_version:continue
                 if _summary:
                     versions.append({'id':job['id'],'status':job['status'],'decisions':[{'kind':j['kind']} for j in jobs if j['candidate_id']==job['id'] and j['kind'] in ('accept','reject')]})
                     continue
                 artifacts=[dict(r) for r in c.execute('SELECT * FROM artifacts WHERE task_id=? ORDER BY rowid',(job['id'],))]
-                versions.append({'id':job['id'],'label':'v'+str(len(versions)+1).zfill(2),'status':job['status'],'created_at':job['created_at'],'reply':job['reply'] or '',
+                versions.append({'id':job['id'],'label':'v'+str(version_index).zfill(2),'status':job['status'],'created_at':job['created_at'],'reply':job['reply'] or '',
                     'artifacts':[{k:a[k] for k in ('id','name','mime')} for a in artifacts],'copy':from_artifacts(artifacts,self.root/'data/artifacts'),
                     'decisions':[{'kind':j['kind'],'scope':json.loads(j['scope']),'status':j['status'],'text':j['text']} for j in jobs if j['candidate_id']==job['id'] and j['kind'] in ('accept','reject')]})
             from easel_workbench.runtime.article_drafts import read as read_draft, job_work
             from easel_workbench.runtime.work_discussions import freeze,production_token
-            if _summary:
+            if _summary or _only_version:
                 draft=c.execute('SELECT revision,submitted_revision FROM toolbox_article_drafts WHERE work_id=?',(wid,)).fetchone()
                 work['draft']=dict(draft) if draft else {'revision':0,'submitted_revision':0}
             else:
@@ -261,7 +287,7 @@ class Toolbox:
                 work['draft']['files']=[dict(f) for fid in work['draft']['files'] for f in c.execute('SELECT id,name,mime,size FROM toolbox_files WHERE id=?',(fid,))]
             completed=[v for v in versions if v['status']=='completed']
             # List cards need no transcript token when no saved draft can be submitted.
-            token=freeze(c,wid,completed[-1]['id'] if completed else None,bounded=False)['discussion_token'] if not _summary or work['draft']['revision']>0 else None
+            token=freeze(c,wid,_latest_version if _only_version is not None else completed[-1]['id'] if completed else None,bounded=False)['discussion_token'] if (not _summary and not _only_version) or _summary and work['draft']['revision']>0 else None
             work['draft'].update(discussion_token=token,can_finalize=work['draft']['revision']>0 and (work['draft']['revision']!=work['draft']['submitted_revision'] or token!=production_token(c,wid)))
             if work['format']=='article':
                 from easel_workbench.runtime.article_delivery import from_artifacts as article_from_artifacts
@@ -276,6 +302,8 @@ class Toolbox:
             for version in reversed(completed) if _summary else versions:
                 job=by_id[version['id']];outcome=read_outcome(c,job['id'])
                 if version['status']=='completed':
+                    if _lean and _summary:
+                        job=dict(c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(job['id'],)).fetchone());by_id[job['id']]=job
                     if work['format']=='article' and version.get('article') is None:
                         artifacts=[dict(r) for r in c.execute('SELECT * FROM artifacts WHERE task_id=?',(version['id'],))]
                         version['article']=article_from_artifacts(artifacts,self.root/'data/artifacts',job_work(work,version['id'],c)['article_mode'])
@@ -286,13 +314,14 @@ class Toolbox:
                     version['status']=outcome['status']
                 version['recovery']=job_recovery(job,c,outcome=outcome)
                 from easel_workbench.runtime.learning_execution import public_learning
-                version['learning']=public_learning(self,c,version['id'])
+                learning=None if _lean and _summary else public_learning(self,c,version['id'])
+                version['learning']={k:v for k,v in (learning or {}).items() if k in ('quality','quality_revision','run_id','text_origin')} if _lean and learning else learning
                 version['production_issue']=production_issue(job,outcome,recovery=version['recovery'])
                 version['available_scopes']=outcome.get('available_scopes',[]) if outcome else []
                 if _summary and version['status']=='completed':break
             pending=[{'id':j['id'],'kind':j['kind'],'status':j['status'],'error':j['error'],'recovery':job_recovery(j,c)} for j in jobs if j['status'] in ACTIVE]
             complete=[v for v in versions if v['status']=='completed'];latest=complete[-1] if complete else None
-            if latest:
+            if latest and _only_version is None:
                 from easel_workbench.runtime.production_title import from_artifacts as title_from_artifacts
                 artifacts=[dict(r) for r in c.execute('SELECT name,path,mime FROM artifacts WHERE task_id=?',(latest['id'],))]
                 work['title']=title_from_artifacts(artifacts,self.root/'data/artifacts',work['format']) or work['title']
@@ -331,7 +360,7 @@ class Toolbox:
             # per-row request or download the original image into a tiny box.
             work['thumbnail']=None
             work['latest_version_label']='v'+str(next(index for index,item in enumerate(versions) if item['id']==latest['id'])+1).zfill(2) if latest else None
-            if latest:
+            if latest and _only_version is None:
                 from easel_workbench.runtime.media_cache import service as display_media
                 for image in c.execute("SELECT id,name,mime,path FROM artifacts WHERE task_id=? AND mime LIKE 'image/%' ORDER BY rowid",(latest['id'],)):
                     try:
@@ -351,17 +380,18 @@ class Toolbox:
                 work.update(latest_version=latest['id'] if latest else None,state=state,pending=pending)
                 return {k:work[k] for k in ('id','title','article_id','format','updated_at','state','latest_version','latest_version_label','thumbnail','pending','decision','review_needed','production_issue','recovery','completion','creator')}
             from easel_workbench.runtime.local_operations import execution_mode
+            history_jobs=[j for j in jobs if _only_version is None or _include_history and (j['id']==_only_version or j['candidate_id']==_only_version)]
             work.update(versions=versions,latest_version=latest['id'] if latest else None,state=state,pending=pending,retryable=[{'id':j['id'],'error':j['error'],'recovery':r} for j in jobs if execution_mode(c,j['id'])=='agent' and (r:=job_recovery(j,c)) and r['can_retry']],
                 history=[{**{k:j[k] for k in ('id','kind','text','candidate_id','status','created_at','finished_at','error','reply')},'scope':json.loads(j['scope']),'execution_mode':execution_mode(c,j['id']),'recovery':job_recovery(j,c,outcome=read_outcome(c,j['id'])) if execution_mode(c,j['id'])=='agent' else None,
                     'reply':public_reply(j['reply']) if j['kind'] in ('accept','reject') else j['reply'],
                     'files':[dict(f) for fid in json.loads(j['files']) for f in c.execute('SELECT id,name FROM toolbox_files WHERE id=?',(fid,))],
-                    'artifacts':[dict(a) for a in c.execute('SELECT id,name FROM artifacts WHERE task_id=? ORDER BY rowid',(j['id'],))]} for j in jobs])
+                    'artifacts':[dict(a) for a in c.execute('SELECT id,name FROM artifacts WHERE task_id=? ORDER BY rowid',(j['id'],))]} for j in history_jobs])
             work['discussions']=[j for j in work['history'] if j['kind']=='discuss']
             from easel_workbench.runtime.task_runtime import projection as task_projection
-            for entry in work['history']:
+            for entry in [] if _lean else work['history']:
                 execution=task_projection(c,entry['id'])
                 if execution:entry['execution']=execution
-            for version in versions:
+            for version in [] if _lean else versions:
                 execution=task_projection(c,version['id'])
                 if execution:version['execution']=execution
             for entry in work['history']:
@@ -382,7 +412,7 @@ class Toolbox:
                 if version['status']=='completed' or can_continue_partial(c,by_id[version['id']]):
                     from easel_workbench.runtime.content_studio import source as studio_source,frozen_options
                     version['editable_text']=studio_source(self,c,wid,version['id'])[0]
-                    version['creative']=frozen_options(c,version['id'])
+                    version['creative']=self._version_creative_identity(c,version['id']) if _lean and not _include_history else frozen_options(c,version['id'])
                     version['human_text']=bool(c.execute('SELECT 1 FROM toolbox_text_versions WHERE job_id=?',(version['id'],)).fetchone())
                     if version['human_text']:
                         raw=version['editable_text']
@@ -390,8 +420,14 @@ class Toolbox:
                         if version.get('article'):version['article'].update(title=raw['title'],body=raw['body'])
             work['input_history']=[{'id':row['id'],'created_at':row['created_at'],'revision':json.loads(row['result'])['revision'],
                 'input':{key:json.loads(row['document']).get(key,'') for key in ('title','material','guidance')}}
-                for row in c.execute('SELECT id,created_at,result,document FROM toolbox_article_draft_ops WHERE work_id=? ORDER BY julianday(created_at),rowid',(wid,))]
+                for row in ([] if _lean else c.execute('SELECT id,created_at,result,document FROM toolbox_article_draft_ops WHERE work_id=? ORDER BY julianday(created_at),rowid',(wid,)))]
             return work
+    @staticmethod
+    def _version_creative_identity(c,jid):
+        row=c.execute("SELECT json_extract(document,'$.creation_options.creator') FROM toolbox_review_inputs WHERE job_id=?",(jid,)).fetchone()
+        if not row or not row[0]:return None
+        creator=json.loads(row[0]);skills=creator.get('skills',[])
+        return {'creator':{**{k:creator[k] for k in ('profile_id','profile_revision','trial') if k in creator},'skills':[{k:s[k] for k in ('id','version','sha256') if k in s} for s in skills]}}
     def upload(self,jid,name,body):
         """Existing HTTP attachment limit; storage is shared with local exports."""
         import io

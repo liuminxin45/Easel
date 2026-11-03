@@ -228,19 +228,11 @@ class CreatorRuntime:
             accounts.append(account)
         return accounts
 
-    def bootstrap(self):
+    def bootstrap(self,summary=False):
+        from easel_workbench.features.skills.bootstrap_reads import profiles as read_profiles,skills as read_skills
         with self.store.connect() as c:
-            profiles = [json.loads(row['document']) for row in c.execute('SELECT document FROM creator_profiles ORDER BY rowid')]
-            skills = []
-            for row in c.execute('SELECT id FROM creator_skills ORDER BY rowid'):
-                if row['id'] in RETIRED_EASEL_SKILLS:continue
-                item = self._skill(c, row['id'], with_content=False)
-                item['versions'] = [{'version': r['version'], 'status': self._skill(c, row['id'], r['version'], False)['status'], 'created_at': json.loads(r['document'])['created_at']} for r in c.execute('SELECT version,document FROM creator_skill_versions WHERE skill_id=? ORDER BY version DESC', (row['id'],))]
-                item.pop('prompt', None)
-                item.pop('base_prompt', None)
-                item.pop('history', None)
-                item.update(launch_metadata(item))
-                skills.append(item)
+            c.execute('BEGIN')
+            profiles=read_profiles(c,summary=summary);skills=read_skills(c)
             return {'schema_version': 1, 'default_profile_id': DEFAULT_PROFILE, 'profiles': profiles,
                     'skills': skills, 'accounts': self.accounts(c), 'task_defaults': copy.deepcopy(TASK_DEFAULTS),
                     'task_policy': task_policy(skills),

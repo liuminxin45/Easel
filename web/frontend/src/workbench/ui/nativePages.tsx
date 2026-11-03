@@ -32,7 +32,7 @@ export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTo
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  return <DashboardPage persona={profileId} gatewayStatus={status.data?.gateway===true?'connected':'disconnected'}
   apiDirect={status.data?.runtime==='api'} agentRuntime={string(status.data?.runtime)||'codex'}
-  persistAnalytics={false} verifyAccountsOnMount={false} trendsEmptyState={null} listMaxHeight={compact?undefined:360}
+  persistAnalytics={false} verifyAccountsOnMount={false} trendsEmptyState={null} listMaxHeight={compact?null:360}
   onContentReady={onContentReady} viewState={viewState} outputsSource={outputsSource}
   onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic}/>;
 }
@@ -86,9 +86,9 @@ export function NativeCalendar(){
 }
 
 export function NativeBreakdown({profileId,search}:{profileId:string;search:URLSearchParams}){
- const vm=useWorkbench(),creators=useResource<CreatorBootstrap>('/api/creator/bootstrap');
+ const vm=useWorkbench(),creators=useResource<CreatorBootstrap>('/api/creator/bootstrap?view=summary');
  const [draft,patch]=useDraft('easel:reference',{text:'',goal:'',task_id:''});
- const task=useResource<JsonRecord>(draft.task_id?'/api/creator/experience/'+encodeURIComponent(draft.task_id):null,{interval:3000});
+ const task=useResource<JsonRecord>(draft.task_id?'/api/creator/experience/'+encodeURIComponent(draft.task_id):null,{interval:3000,stopOnTerminal:true});
  const busy=!!draft.task_id&&!['completed','failed','stopped','cancelled'].includes(string(task.data?.status));
  const analyze=async(input:string)=>{
   if(!creators.data)throw Error('画像与准确技能版本正在读取，请稍后重试。');
@@ -120,7 +120,7 @@ export function WorkbenchNativePage({page,profileId,onUseTopic,search=new URLSea
 }
 
 export function WorkLibrary({id,versionId}:{id:string;versionId?:string}){
- const resource=useResource<import('@workbench/core').Work>('/api/works/'+encodeURIComponent(id));
+ const resource=useResource<import('@workbench/core').Work>('/api/works/'+encodeURIComponent(id)+'/view');
  const vid=versionId||resource.data?.latest_version||resource.data?.versions.at(-1)?.id;
  return resource.data?<NativeLibrary jumpPath={'workbench-'+id+(vid?'/'+vid:'')}/>:<div className="page-scroll"><Notice sources={[resource]}/>{resource.error&&<button className="btn" onClick={()=>void resource.reload()}>重试</button>}</div>;
 }

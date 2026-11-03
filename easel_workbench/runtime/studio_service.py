@@ -646,7 +646,19 @@ CREATE TABLE IF NOT EXISTS studio_operations(operation_id TEXT PRIMARY KEY,actio
    with self.store.connect() as c:
     c.execute('BEGIN IMMEDIATE');current=self._get(c,'analyses',oid);current.update(status=job['status'],error=None);current=self._put(c,'analyses',current);result={'operation_id':oid,'action':value['action'],'status':'completed','result':{'analysis':current,'job':job}};c.execute("UPDATE studio_operations SET status='completed',result=? WHERE operation_id=?",(pack(result),oid))
    return result
- def bootstrap(self):
+ def publication_detail(self,publication_id):
+  with self.store.connect() as c:
+   publication=self._get(c,'publications',ident(publication_id))
+  publication.update(self.publication_metadata(publication))
+  return {'publication':publication}
+ def bootstrap(self,view=None):
+  if view=='publications':
+   from easel_workbench.features.distribution.read_views import publications
+   with self.store.connect() as c:items=publications(c)
+   for item in items:
+    item.update(self.publication_metadata(item));item.pop('distribution_receipt',None)
+   return {'schema_version':1,'publications':items,'total':len(items)}
+  if view is not None:raise ValueError('运营读取视图无效')
   foundation=self.foundation();works=self.box.works()['items']
   from easel_workbench.runtime.completion_service import CompletionService
   completion=getattr(self.box,'completion',None)

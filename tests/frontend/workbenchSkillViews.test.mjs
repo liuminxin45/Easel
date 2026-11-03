@@ -7,13 +7,13 @@ import {test} from 'node:test';
 const require=createRequire(new URL('../../web/frontend/package.json',import.meta.url)),ts=require('typescript');
 const element=(type,props)=>({type,props}),jsx={jsx:element,jsxs:element,Fragment:'fragment'};
 const record=value=>value&&typeof value==='object'?value:{},array=value=>Array.isArray(value)?value:[],plain=value=>JSON.parse(JSON.stringify(value));
-const common=Object.fromEntries(['ActionButton','Drawer','Notice','Field','Panel','PageHead','Markdown','Pending','TextRecord','JsonDetails'].map(name=>[name,name]));
+const common=Object.fromEntries(['ActionButton','Drawer','Notice','Field','Panel','PageHead','Markdown','Pending','TextRecord','JsonDetails','RecordBody'].map(name=>[name,name]));
 common.resultDocument=value=>record(record(value).result??value);
 function nodes(value){if(Array.isArray(value))return value.flatMap(nodes);if(!value||typeof value!=='object')return [];return [value,...nodes(value.props?.children)];}
 function text(value){if(Array.isArray(value))return value.map(text).join('');if(value&&typeof value==='object')return text(value.props?.children);return value==null?'':String(value);}
 function load(name,imports,suffix=''){
  imports['@workbench/core']={useViewState:(_,initial)=>({read:()=>initial,write(){}}),...imports['@workbench/core']};
- imports={...imports,'./hooks':imports['@workbench/core']};
+ imports={...imports,'./hooks':imports['@workbench/core'],'./hooks/work-summaries':{useWorkSummaries:()=>({items:[],loading:false,error:'',next_cursor:null})}};
  const source=readFileSync(new URL('../../web/frontend/src/workbench/ui/'+name,import.meta.url),'utf8')+suffix,exports={};
  const {outputText}=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}});
  runInNewContext(outputText,{exports,URLSearchParams,require:id=>id==='react/jsx-runtime'?jsx:id==='./common'?common:id==='./ExtensionDetails'?{ExtensionDetails:'ExtensionDetails'}:id==='./components/icons'?{}:id==='./nativeProfiles'?{NativeProfiles:()=>{}}:id==='./PlatformAccounts'?{Accounts:()=>{}}:id in imports?imports[id]:assert.fail('Unexpected import '+id)});
@@ -47,7 +47,7 @@ test('skill publishing stays in one official drawer and shows its exact diff inl
  assert.equal(nodes(confirm).filter(node=>node.type==='Drawer').length,1);
  assert.equal(nodes(confirm).filter(node=>node.type==='TextRecord'||node.type==='JsonDetails').length,0);
  const diff=nodes(confirm).find(node=>node.type==='ExtensionDetails'&&node.props.title==='发布前差异');
- assert.equal(text(diff.props.children),JSON.stringify(f.detail.diff,null,2));
+ assert.equal(diff.props.children.type,'RecordBody');assert.equal(diff.props.children.props.value,f.detail.diff);
  assert.equal(f.calls.writes.length,0);
 });
 

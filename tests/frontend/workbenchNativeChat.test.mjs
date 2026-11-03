@@ -9,21 +9,21 @@ const sourceRoot=new URL('../../web/frontend/src/',import.meta.url),jsx={jsx:(ty
 const plain=value=>JSON.parse(JSON.stringify(value));
 const record=value=>value&&typeof value==='object'?value:{},string=value=>typeof value==='string'?value:'',array=value=>Array.isArray(value)?value:[];
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
-function module(file,imports,globals={}){imports={...imports,'./hooks':imports['@workbench/core']};const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
+function module(file,imports,globals={}){imports={'./hooks/visibility':{ResourceVisibility:()=>{}},...imports,'./hooks':imports['@workbench/core']};const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
 const {RequestError}=module('workbench/core/transport.ts',{'./models':{record,string}},{Error});
 const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
 const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
 function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride}={}){
- let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],navigate:[],invalidate:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
+ let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],navigate:[],invalidate:[],resources:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
  const react={useCallback:(fn)=>fn,useMemo:(fn,deps)=>{const index=cursor++,old=hooks[index];if(!old||!deps||!old.deps||deps.length!==old.deps.length||deps.some((value,i)=>!Object.is(value,old.deps[i])))hooks[index]={deps,value:fn()};return hooks[index].value},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
  const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{if(path==='/api/chat/submit'){calls.submit.push({path,body,csrf});return submitOverride?submitOverride(path,body,csrf):{id:body.turnId,session_id:body.sessionId,accepted_by_server:true}}calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
  vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/ui/hooks/context.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,useContext:()=>({client:vm.client}),Context:{},useEffect:react.useEffect,interactionFeedback,Error,RequestError});
  const viewStates=new Map();
- const core={...productionRecovery,useViewState:(scope,initial)=>{if(!viewStates.has(scope))viewStates.set(scope,{value:initial});const state=viewStates.get(scope);return {read:()=>state.value,write:value=>{state.value=value}}},useWorkbench:()=>vm,useResource:path=>({data:path==='/api/skills'?catalog:path?.startsWith('/api/chat/products/')?resources.product||null:path?.startsWith('/api/works/')?resources.work||null:path?resources:null,error:'',reload:async()=>resources}),useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
+ const core={...productionRecovery,useViewState:(scope,initial)=>{if(!viewStates.has(scope))viewStates.set(scope,{value:initial});const state=viewStates.get(scope);return {read:()=>state.value,write:value=>{state.value=value}}},useWorkbench:()=>vm,useResource:path=>{if(path)calls.resources.push(path);return {data:path==='/api/skills'?catalog:path?.startsWith('/api/chat/products/')?resources.product||null:path?.startsWith('/api/works/')?resources.work||null:path?resources:null,error:'',reload:async()=>resources}},useDraft:()=>[draft,patch=>{draft=typeof patch==='function'?patch(draft):{...draft,...patch}}],useAsyncAction:hookExports.useAsyncAction,draftFingerprint:JSON.stringify,fileDownload:file=>'/api/files/'+file.id+'?download=1',array,record,string,workPath:(work,version)=>'/works/'+work.id+(version?'?version='+version:'')};
  const presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
  const components={...presentation,ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{},ArtifactGallery:()=>{},CopyableText:()=>{},Completion:()=>{}};
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Drawer:()=>{},Field:()=>{},ActionButton:'button'}});
@@ -177,6 +177,8 @@ test('opening the confirmed continuation prepares the pinned skill without repla
   f.resources.session.messages=[message];f.resources.work={id:'exact-work',title:'原始贴图',versions:[{id:'interrupted-version',recovery:message.business_recovery}]};
   f.resources.product={work_id:'exact-work',version_id:'interrupted-version',files:[]};
   const ui=f.render();for(const effect of [...f.effects])effect();await tick();
+  assert.ok(f.calls.resources.includes('/api/works/exact-work/versions/interrupted-version/view'),'continuation reads only its accurate interrupted parent');
+  assert.ok(!f.calls.resources.includes('/api/works/exact-work')&&!f.calls.resources.includes('/api/works/exact-work/view'),'continuation must not hydrate the entire work or substitute its latest version');
   assert.equal(continuationButtons(ui.chat.notice).length,0,'the continuation page already represents this action');
   const extra=ui.chat.renderMessageExtra(message),wrapper=extra.type(extra.props);assert.equal(continuationButtons(wrapper.type(wrapper.props)).length,0,'the continuation page must not offer its message action again');
   assert.equal(f.draft.command.skill_id,'content-production');assert.equal(f.draft.command.version,2);assert.equal(f.draft.command.action_id,'change');
@@ -334,12 +336,12 @@ test('historical turn products use registered file IDs and open the exact busine
  f.resources.session.messages=[{...message,role:'assistant',content:'已生成',library_path:'workbench-exact-work/exact-version'}];assert.match(f.render().chat.session.messages[0].content,/#\/outputs\/workbench-exact-work\/exact-version/);
 });
 function productActionsFixture(work,{navigation={},readWork}={}){
- let cursor=0;const state=[],drafts=new Map(),calls={reads:[],actions:[],reviews:[],navigate:[],errors:[],reloads:0,invalidate:[]};
+ let cursor=0;const state=[],drafts=new Map(),calls={reads:[],resources:[],actions:[],reviews:[],navigate:[],errors:[],reloads:0,invalidate:[]};
  const react={useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],next=>{state[index]=typeof next==='function'?next(state[index]):next}]}};
  const product={work_id:'exact-work',version_id:'completed-v1',can_adopt:true,files:[],text_blocks:[]};
  const vm={navigation,client:{read:async(...args)=>{calls.reads.push(args);return readWork?await readWork(...args):work},invalidate:tags=>calls.invalidate.push(tags)},navigate:(...args)=>calls.navigate.push(args),service:{workAction:async(...args)=>calls.actions.push(args),manualReview:async(...args)=>calls.reviews.push(args)}};
  const core={...productionRecovery,array,record,string,statusLabel:value=>value,workPath:(value,version)=>'/works/'+value.id+'?version='+version,
-  useWorkbench:()=>vm,useResource:path=>({data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}),
+  useWorkbench:()=>vm,useResource:path=>{calls.resources.push(path);return {data:path.startsWith('/api/chat/products/')?product:work,reload:async()=>{calls.reloads++}}},
   useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]},
   useAsyncAction:()=>({busy:false,run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}})};
  const common={Notice:()=>{},Drawer:'dialog',Field:'label',ActionButton:'button',Pending:()=>{},TextRecord:()=>{},Markdown:()=>{}},presentation={...module('workbench/ui/ExtensionDetails.tsx',{react}),...module('workbench/ui/TaskStatus.tsx',{react})};
@@ -354,6 +356,21 @@ const completedActionWork=()=>({id:'exact-work',title:'准确作品',format:'pos
  {id:'newer-v2',status:'completed',creative:{creator:{skills:[{id:'content-production',version:9}]}}}
 ]});
 
+test('version controls load only their exact view and expand frozen records separately',()=>{
+ const work=completedActionWork();work.version_summaries=[{id:'completed-v1',label:'v01'},{id:'newer-v2',label:'v02'}];work.versions=work.versions.slice(0,1);
+ const f=productActionsFixture(work),initial=f.render();
+ assert.equal(f.calls.resources[0],'/api/works/exact-work/versions/completed-v1/view');
+ assert.equal(f.calls.resources.some(path=>path.includes('include=history')),false);
+ const selector=nodes(initial).find(node=>node.type==='select'&&node.props['aria-label']==='作品版本');
+ assert.deepEqual(plain(nodes(selector).filter(node=>node.type==='option').map(node=>node.props.value)),['completed-v1','newer-v2']);
+ const disclosure=nodes(initial).find(node=>node.props?.title==='版本与记录');
+ assert.equal(disclosure.props.children,false);
+ disclosure.props.onToggle({currentTarget:{open:true}});
+ const opened=nodes(f.render()).find(node=>node.props?.title==='版本与记录');
+ const records=opened.props.children;records.type(records.props);
+ assert.equal(f.calls.resources.at(-1),'/api/works/exact-work/versions/completed-v1/view?include=history');
+});
+
 test('an explicit independent check binds only this version and does not submit production',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'独立检查').props.onClick();await tick();await tick();
  assert.deepEqual(plain(f.calls.reviews),[['exact-work','completed-v1']]);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.navigate.length,0);
@@ -361,7 +378,7 @@ test('an explicit independent check binds only this version and does not submit 
 
 test('editing a chat product rereads its exact completed version and navigates with its frozen skill without starting production',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'修改这版').props.onClick();await tick();await tick();
- assert.deepEqual(plain(f.calls.reads),[['/api/works/exact-work',true]]);
+ assert.deepEqual(plain(f.calls.reads),[['/api/works/exact-work/versions/completed-v1/view',true]]);
  const [path,options]=f.calls.navigate[0],destination=new URL(path,'https://example.test');
  assert.equal(destination.pathname,'/chat/original-session');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'completed-v1',action:'change',skill:'content-production',skill_version:'2'});assert.equal(options.intent,'flow');
  assert.equal(f.calls.navigate.length,1);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
@@ -428,7 +445,7 @@ test('resumed HTTP 401 ends the existing stream without a second POST',async()=>
 
 function legacyEntry({saved={},pending=null,search='draft=old-input',format='poster',news=null,profilePins={}}={}){
  const source=readFileSync(new URL('workbench/ui/index.tsx',sourceRoot),'utf8'),ast=ts.createSourceFile('index.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),declaration=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='NativeNewChat'),exports={},calls={create:[],errors:[]};
- const f=fixture(),core={useWorkbench:()=>({client:{drafts:{get:()=>saved},operation:()=>({getState:()=>({pending})}),legacyPending:()=>[]},navigate:()=>{}}),useResource:path=>({data:path==='/api/skills'?catalog:path==='/api/creator/bootstrap'?{profiles:[{id:'p',task_skill_versions:profilePins}]}:news,error:''}),useAsyncAction:()=>({busy:false,error:'',run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}}),useRef:value=>({current:value}),useEffect:()=>{}};
+ const f=fixture(),core={useWorkbench:()=>({client:{drafts:{get:()=>saved},operation:()=>({getState:()=>({pending})}),legacyPending:()=>[]},navigate:()=>{}}),useResource:path=>({data:path==='/api/skills'?catalog:path==='/api/creator/bootstrap?view=summary'?{profiles:[{id:'p',task_skill_versions:profilePins}]}:news,error:''}),useAsyncAction:()=>({busy:false,error:'',run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}}),useRef:value=>({current:value}),useEffect:()=>{}};
  runInNewContext(ts.transpileModule('export '+declaration.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,URLSearchParams,record,string,array,nativeSkillChoices:f.lib.nativeSkillChoices,...core,Notice:()=>{},ActionButton:'button',refreshViews:(...reads)=>reads.forEach(read=>void read()),require:id=>id==='react/jsx-runtime'?jsx:assert.fail(id)});
  const tree=exports.NativeNewChat({format,profileId:'p',search:new URLSearchParams(search),onCreate:async(...args)=>{calls.create.push(args);return 'created-session'}});
  return {calls,open:()=>nodes(tree).find(n=>n.type==='button').props.onClick()};

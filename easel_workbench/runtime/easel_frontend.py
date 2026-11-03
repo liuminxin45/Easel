@@ -33,8 +33,10 @@ class EaselFrontend:
     def topics(self):
         # Existing work drafts remain available; board changes never alter a
         # frozen work version or imply production, adoption or publication.
-        drafts=[work for work in self.box.works()['items'] if work['state'] in ('draft','discussing')]
+        from easel_workbench.features.works.topic_read_views import drafts as read_drafts
         with self.store.connect() as c:
+            c.execute('BEGIN')
+            drafts=read_drafts(c,self.box)
             saved={row['id']:json.loads(row['document']) for row in c.execute('SELECT * FROM easel_topics ORDER BY rowid DESC')}
         bound={value.get('work_id') for value in saved.values()}
         for work in drafts:

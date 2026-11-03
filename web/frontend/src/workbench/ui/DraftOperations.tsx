@@ -13,7 +13,7 @@ export function DraftOperations({work}:{work:Work}){
   if(!data)throw Error('画像与技能尚未读取，草稿已保留');
   const submitted={...draft},original=record(work.draft);
   if(JSON.stringify(submitted)!==JSON.stringify(original))await vm.service.saveDraft(work.id,{...submitted,revision:original.revision,files:array<DraftAttachment>(submitted.files)});
-  const current=await vm.client.read<Work>('/api/works/'+work.id,true);if(!current)throw Error('原草稿尚未读回');
+  const current=await vm.client.read<Work>('/api/works/'+encodeURIComponent(work.id)+'/view',true);if(!current)throw Error('原草稿尚未读回');
   const fields={revision:current.draft.revision,discussion_token:current.draft.discussion_token,creative:production},plan=await vm.service.prepareProduction('finalize',fields,work.id);
   await vm.service.finalize(work.id,{...fields,...record(plan.production_input),creative:{...production,...record(record(plan.production_input).creative),context_revision:plan.revision_token}});
   void vm.client.invalidate(['works','chat']);

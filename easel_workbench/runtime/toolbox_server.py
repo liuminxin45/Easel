@@ -235,7 +235,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if read_cache.matches(headers.get('if-none-match'),etag):return Response(status_code=304,headers=media_headers)
             if variant=='thumb-256':return Response(content,media_type=value['mime'],headers=media_headers)
             return file_response(value,file,headers,etag_override=etag,cache_control=media_headers['Cache-Control'])
-        cache_policy=read_cache.policy(path) if method in ('GET','HEAD') and not bypass_read_cache else None
+        cache_policy=read_cache.policy(path,request.query_params) if method in ('GET','HEAD') and not bypass_read_cache else None
         if cache_policy:
             async def load_read_view():
                 response=await dispatch(path.removeprefix('/'),request,trace,True)
@@ -446,7 +446,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if operation_receipt:
             from easel_workbench.runtime.operation_receipts import read as read_operation_receipt
             return reply(await asyncio.to_thread(read_operation_receipt,store,operation_receipt[1],q.get('path',''),collection=collection))
-        if path=='/api/creator/bootstrap':return reply(await asyncio.to_thread(creator.bootstrap))
+        if path=='/api/creator/bootstrap':return reply(await asyncio.to_thread(creator.bootstrap,summary=q.get('view')=='summary'))
         profile_proposal=re.fullmatch(r'/api/creator/profile-proposals/([A-Za-z0-9_-]+)',path)
         if profile_proposal:
             from easel_workbench.runtime.profile_learning import get as profile_proposal_get
@@ -568,7 +568,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if learning_detail:
             try:return reply(await asyncio.to_thread(learning.detail,*learning_detail.groups()))
             except ValueError as exc:return error(404,str(exc))
-        if path=='/api/studio/bootstrap':return reply(await asyncio.to_thread(studio.bootstrap))
+        if path=='/api/studio/bootstrap':return reply(await asyncio.to_thread(studio.bootstrap,view=q.get('view')))
+        publication_detail=re.fullmatch(r'/api/studio/publications/([A-Za-z0-9_-]+)',path)
+        if publication_detail:return reply(await asyncio.to_thread(studio.publication_detail,publication_detail[1]))
         if path=='/api/studio/foundation':return reply(await asyncio.to_thread(studio.foundation))
         if path=='/api/studio/context':return reply(await asyncio.to_thread(studio.context,q.get('work_id') or None,{'format':q.get('format','poster')},candidate_id=q.get('candidate_id') or None))
         def picture_links(value):
@@ -608,7 +610,9 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path=='/api/style-presets':
             from easel_workbench.runtime.content_studio import catalog
             return reply(await asyncio.to_thread(catalog,box,q.get('format','poster')))
-        if path=='/api/works':return reply(await asyncio.to_thread(box.works,q.get('format','')))
+        if path=='/api/works':
+            if q.get('view')=='summary':return reply(await asyncio.to_thread(box.work_summaries,limit=int(q.get('limit','50')),cursor=q.get('cursor',''),profile_id=q.get('profile_id',''),format=q.get('format','')))
+            return reply(await asyncio.to_thread(box.works,q.get('format','')))
         review_match=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/versions/([A-Za-z0-9_-]+)/review',path)
         if review_match:
             from easel_workbench.runtime.work_review import read as read_review
@@ -620,7 +624,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if match:
             import tempfile,zipfile
             def image_files():
-                work=box.work(match[1]);version=next((v for v in work['versions'] if v['id']==match[2] and v['status']=='completed'),None)
+                work=box.version_view(match[1],match[2]);version=next((v for v in work['versions'] if v['id']==match[2] and v['status']=='completed'),None)
                 if version is None:raise ValueError('作品版本不存在')
                 images=[a for a in version['artifacts'] if a['mime'].startswith('image/')]
                 if not images:raise ValueError('此版本还没有图片文件')
@@ -644,11 +648,12 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 finally:stream.close()
             from starlette.background import BackgroundTask
             return StreamingResponse(zip_chunks(),media_type='application/zip',headers=zip_headers,background=BackgroundTask(stream.close))
-        if path.startswith('/api/works/'):
-            result=await asyncio.to_thread(box.work,path.rsplit('/',1)[-1])
+        scoped_work=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)(?:/versions/([A-Za-z0-9_-]+))?/view',path)
+        if scoped_work or re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)',path):
+            result=await asyncio.to_thread(box.version_view,scoped_work[1],scoped_work[2] or '',include_history=q.get('include')=='history') if scoped_work else await asyncio.to_thread(box.work,path.rsplit('/',1)[-1])
             with store.connect() as c:
-                linked=c.execute("SELECT session_id,document FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id')=? ORDER BY rowid DESC LIMIT 1",(result['id'],)).fetchone()
-            if linked:result['native_chat']={'session_id':linked['session_id'],**json.loads(linked['document'])['work']}
+                linked=c.execute("SELECT session_id,json_extract(document,'$.work') AS work FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id')=? ORDER BY rowid DESC LIMIT 1",(result['id'],)).fetchone()
+            if linked:result['native_chat']={'session_id':linked['session_id'],**json.loads(linked['work'])}
             for version in result['versions']:version['artifacts']=[picture_links(value) for value in version['artifacts']]
             return reply(result)
         if path.startswith('/api/tasks/'):return reply(await asyncio.to_thread(box.job,path.rsplit('/',1)[-1]))

@@ -49,8 +49,10 @@ class ChatBusiness:
         from easel_workbench.skills import launch_metadata
         from easel_workbench.project_skill_sync import matches_source
         result=[];revision=self.catalog.revision()
+        from easel_workbench.features.skills.catalog_reads import release_metadata
         for item in self.catalog.entries():
-            try:release=self.creator.detail('skill',item['id'])
+            try:
+                with self.store.connect() as c:release=release_metadata(c,item['id'])
             except ValueError:continue
             available=matches_source(self.creator,release)
             row={'id':item['id'],'skill_id':item['id'],'name':item['id'],'display_name':item['name'],'origin':'workbench',

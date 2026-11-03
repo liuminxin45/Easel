@@ -80,6 +80,7 @@ function hostFixture() {
     react: {...react, useRef: value => ({current: value}), useEffect: effect => effects.push(effect)},
     '../../components/DownloadLink': () => null, '../../components/Drawer': 'EaselDrawer',
     '@workbench/core': core, './hooks': hooks, './lib/sanitize': {},
+    './hooks/visibility': {useResourceVisibility:()=>true},
     '../../components/InteractionNotice': {}, './ExtensionDetails': {},
   }, {document, HTMLElement: Element, getComputedStyle: () => ({visibility: 'visible'}),
     requestAnimationFrame: fn => {fn();return 1;}, cancelAnimationFrame() {}, queueMicrotask: fn => fn()});

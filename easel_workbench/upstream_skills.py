@@ -25,6 +25,8 @@ class UpstreamSkills:
         self.root, self.creator = Path(root).resolve(), creator
         self.source=Path(source_root or root).resolve()
         self.store = creator.store
+        self._catalog_hashes = {}
+        self._frozen_catalog = None
 
     def _read(self, path):
         path = Path(path)
@@ -83,26 +85,73 @@ class UpstreamSkills:
         if version is not None and version!=next_version:raise ValueError('所选 Easel 技能版本已变化，请重新选择')
         resources=[{'path':name,'sha256':fingerprints[name],'size':len(raw),'available':True,'required':True,
                     'kind':'native_source','scope':'on-demand'} for name,raw in sorted(files.items()) if name!=item['entry']]
-        release={**{k:item[k] for k in ('id','entry','description','layer','prompt')},'origin':'easel','name':sid,
-                 'version':next_version,'source_revision':revision,'tasks':['native'],'executor':'agent',
+        return self._new_release(item,next_version,revision,resources)
+
+    def _new_release(self,item,version,revision,resources):
+        release={**{k:item[k] for k in ('id','entry','description','layer','prompt')},'origin':'easel','name':item['id'],
+                 'version':version,'source_revision':revision,'tasks':['native'],'executor':'agent',
                  'input_contract':{'required':['user_message']},'output_contract':{'required':['actual_result']},
                  'status':'published','resources':resources,'execution_role':'active','created_at':stamp()}
         release['sha256']=self.creator._release_hash(release)
         return release
+
+    def _listing_sources(self):
+        """Use the verified immutable bundle's file inventory for list metadata.
+
+        Mutable workspaces continue hashing actual bytes. Selected detail,
+        snapshot and accept always use the original fresh resource validation.
+        """
+        manifest=self.source/'workbench-release.json'
+        if self.source!=self.root and manifest.is_file():
+            if self._frozen_catalog is None:
+                entries=self.entries();inventory=json.loads(manifest.read_text(encoding='utf-8'))['files']
+                directories={str(Path(item['entry']).parent).replace('\\','/')+'/' for item in entries}
+                fingerprints={}
+                for name,sha in sorted(inventory.items()):
+                    path=Path(name)
+                    if not name.startswith('skills/') or not(name.startswith('skills/shared/') or any(name.startswith(prefix) for prefix in directories)):continue
+                    if any(part in ('__pycache__','node_modules','.git','workbench') for part in path.parts[1:]) or path.suffix in ('.pyc','.pyo') or path.name.startswith('.env'):continue
+                    fingerprints[name]=sha
+                sizes={name:(self.source/name).stat().st_size for name in fingerprints}
+                self._frozen_catalog=(entries,fingerprints,sizes,digest(packed(fingerprints)))
+            return self._frozen_catalog
+        entries=self.entries();common=self._common(entries)
+        fingerprints={name:digest(raw) for name,raw in sorted(common.items())}
+        return entries,fingerprints,{name:len(raw) for name,raw in common.items()},digest(packed(fingerprints))
 
     def items(self):
         # Listing is read-only. Import history is created only with an accepted
         # explicit invocation, in the same transaction as its native turn.
         result=[]
         environment=self.environment() if hasattr(self,'environment') else {}
-        entries=self.entries();common=self._common(entries)
-        fingerprints={name:digest(raw) for name,raw in sorted(common.items())};revision=digest(packed(fingerprints))
+        entries,fingerprints,sizes,revision=self._listing_sources()
+        if sum(sizes.values())>40*1024*1024:raise ValueError('本技能资源包超过40MB，请拆分依赖')
         with self.store.connect() as c:
             history={}
-            for row in c.execute('SELECT skill_id,document FROM creator_skill_versions ORDER BY version DESC'):
-                history.setdefault(row[0],[]).append(json.loads(row[1]))
+            # A menu needs identities, not every historical frozen dependency
+            # package. SQLite projects scalars before Python sees the document.
+            for row in c.execute("""SELECT skill_id,version,
+                json_extract(document,'$.origin') AS origin,
+                json_extract(document,'$.source_revision') AS source_revision,
+                json_extract(document,'$.sha256') AS sha256
+                FROM creator_skill_versions WHERE skill_id IN ("""+','.join('?' for _ in entries)+') ORDER BY version DESC',[item['id'] for item in entries]) if entries else []:
+                history.setdefault(row['skill_id'],[]).append({key:row[key] for key in ('version','origin','source_revision','sha256')})
         for item in entries:
-            release=self.release(item['id'],entries=entries,common=common,rows=history.get(item['id'],[]),fingerprints=fingerprints,revision=revision)
+            rows=history.get(item['id'],[])
+            if any(row['origin']!='easel' for row in rows):raise ValueError('技能身份已被其它能力占用')
+            release=next((row for row in rows if row['source_revision']==revision),None)
+            if release is None:
+                version=max((row['version'] for row in rows),default=0)+1
+                cache_key=(item['id'],revision,version)
+                release=self._catalog_hashes.get(cache_key)
+                if release is None:
+                    resources=[{'path':name,'sha256':sha,'size':sizes[name],'available':True,'required':True,'kind':'native_source','scope':'on-demand'} for name,sha in fingerprints.items() if name!=item['entry']]
+                    full=self._new_release(item,version,revision,resources)
+                    release={key:full[key] for key in ('version','sha256','source_revision')}
+                    # Content-addressed, bounded metadata only; source bytes are
+                    # rehashed above, and invocation retains fresh validation.
+                    if len(self._catalog_hashes)>1024:self._catalog_hashes.clear()
+                    self._catalog_hashes[cache_key]=release
             status=skill_status(item['id'],environment);configured=status['apiConfigured']
             result.append({**{k:item[k] for k in ('id','description','layer','entry')},'skill_id':item['id'],'name':item['id'],
                 'origin':'easel','version':release['version'],'sha256':release['sha256'],'source_revision':release['source_revision'],

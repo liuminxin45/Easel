@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { fetchTrendSources, fetchTrends, createIdea,peekApiData,subscribeApiData } from '../lib/api';
 import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { TrendGroup, TrendSource } from '../lib/api';
-import {IconFire,IconRefresh,IconBookmark,IconCheck} from './icons';
+import { IconFire, IconRefresh, IconBookmark, IconCheck, IconChat } from './icons';
 import TrendSourcesDialog from './TrendSourcesDialog';
 
 interface TrendsPageProps {
@@ -176,13 +176,15 @@ function TrendsPanel({ onUseTopic, onRead, refreshAll, listLimit = 15, quietBack
                       onClick={event=>{if(onRead&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey&&event.button===0){event.preventDefault();onRead(it.id)}}} title={it.title}>{it.title}</a>
                     {it.hot && <span className="trend-hot">{it.hot}</span>}
                   </div>
-                  <button className="trend-save" title={saved.has(`${g.platform}:${it.id}`) ? '已收藏到选题库' : '收藏到选题库'}
-                    aria-label={`收藏选题：${it.title}`}
-                    onClick={() => save(`${g.platform}:${it.id}`, it.title, g.label, it.id)}>
-                    {saved.has(`${g.platform}:${it.id}`) ? <IconCheck size={14} /> : <IconBookmark size={14} />}
-                  </button>
-                  <button className="trend-use" title="做成内容"
-                    onClick={() => onUseTopic(it.title,it.id)}>做内容</button>
+                  <div className="trend-item-actions">
+                    <button className="trend-save" title={saved.has(`${g.platform}:${it.id}`) ? '已收藏到选题库' : '收藏到选题库'}
+                      aria-label={`${saved.has(`${g.platform}:${it.id}`) ? '已收藏' : '收藏选题'}：${it.title}`}
+                      onClick={() => save(`${g.platform}:${it.id}`, it.title, g.label, it.id)}>
+                      {saved.has(`${g.platform}:${it.id}`) ? <IconCheck size={14} /> : <IconBookmark size={14} />}
+                    </button>
+                    <button className="trend-use" title="做成内容" aria-label={`做成内容：${it.title}`}
+                      onClick={() => onUseTopic(it.title,it.id)}><IconChat size={14} /></button>
+                  </div>
                 </div>
               ))}
             </div>

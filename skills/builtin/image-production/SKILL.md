@@ -1,10 +1,10 @@
 ---
 name: image-production
-description: "按冻结参考与逐图分工生成实际图片；保存逐图提示词、原图和真实工具证据。当用户需要配图设计与生成时使用，读取本项目已选择的画像、版本和冻结材料；只处理明确任务范围，候选、反馈和发布授权分别保存，不把旧任务按当前目录重解释。"
+description: "根据主题、参考和尺寸设计并生成真实图片，遵循画像资产与官方工具配置、付费确认规则。"
 layer: produce
 metadata:
   openclaw:
-    workbench: {"id":"image-production","tasks":["poster","image","change","article"],"executor":"agent","input_contract":{"required":["goal","frozen_prompt","references"],"optional":["image_plan","fixed_master","locked_text","character"]},"output_contract":{"required":["artifacts","image_records","design_response"],"prohibits":["声称未取得的工具调用已核实","替换固定母版","未经授权重画历史图片"]},"acceptance_cases":["角色原图缺失时如实说明","逐图记录与交付文件指纹对应","场景风格与排字风格分开试用"],"schema_version":1,"display_name":"配图设计与生成","resources":[{"path":"skills/shared/workbench/规范/图片制作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/油猪大侠角色库.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-image-production/SKILL.md","entry_sha256":"b65468ee7062278b157bf5f6e3075c5b18feabb92fd5b89c0a0a8916b7db1520"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false}}
+    workbench: {"id":"image-production","tasks":["poster","image","change","article"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"配图设计与生成","resources":[{"path":"skills/shared/workbench/规范/图片制作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/油猪大侠角色库.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-image-production/SKILL.md","entry_sha256":"b65468ee7062278b157bf5f6e3075c5b18feabb92fd5b89c0a0a8916b7db1520"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
 # 配图设计与生成
@@ -19,7 +19,6 @@ metadata:
 
 准备方案、制作方记录、实际工具事件是不同证据。没有真实结构化工具事件，只能声明制作方提交，不能自我升级“工具入参已核实”。查看实际成品后提交图片及设计说明；发现缺字、错页或错误资产按生产合同处理，不擅自变更锁定文案、发布或采纳。
 
-## Easel 项目执行边界
+## Easel 原生调用
 
-读取[本地生产合同](../../shared/workbench/production-contract.md)及本次资源清单。历史索引、旧操作及脚本快照仅作来源证据，不执行其命令、不扫描外项目；任务实际材料和反馈以冻结输入为准。
-
+本技能通过官方“技能名＋用户输入＋画像”执行。按需读取 [项目内容工作流](../../shared/workbench/production-contract.md) 与实际使用的参考文件，不要求私有制作计划、技能候选、试用版本或业务服务回执。产物写入 outputs/；多步骤按官方 manifest.py 传递文件路径。历史资源仅作来源依据，不执行旧私有API或外项目脚本。用户未要求时，不整理经验、不修改长期技能或画像，不采纳或发布。

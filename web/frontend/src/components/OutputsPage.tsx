@@ -304,18 +304,18 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     <div className="gallery-page">
       <div className="gallery-head">
         <div>
-          <h1 className="page-title gallery-breadcrumbs">
-            <IconOutputs size={21} />
-            <span className="crumb" onClick={() => goTo(0)}>内容库</span>
+          <h1 className="page-title">内容库</h1>
+          {stack.length > 0 && <nav className="gallery-breadcrumb" aria-label="内容库路径">
+            <button className="crumb" onClick={() => goTo(0)}>内容库</button>
             {directories.map((node, i) => (
               <span key={node.path}>
                 <span className="crumb-sep">/</span>
                 {i === directories.length - 1
                   ? (projectMeta?.title && i === 0 ? projectMeta.title : node.name)
-                  : <span className="crumb" onClick={() => goTo(i + 1)}>{node.name}</span>}
+                  : <button className="crumb" onClick={() => goTo(i + 1)}>{node.name}</button>}
               </span>
             ))}
-          </h1>
+          </nav>}
           <p className="page-subtitle">
             {treeLoading && currentNodes.length === 0 || lazyCurrent?.indexing ? '正在读取项目与素材…' : treeError && currentNodes.length === 0 ? '项目数量暂未取得' : dataSource&&atTop
               ? `已加载 ${currentNodes.length} 个项目。点项目进去看成品与素材。` : atTop

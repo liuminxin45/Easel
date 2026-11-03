@@ -42,7 +42,8 @@ interface DashboardProps {
   onUseTopic: (title: string, sourceId?: string, note?: string) => void;
   persistAnalytics?: boolean;
   verifyAccountsOnMount?: boolean;
-  listMaxHeight?: number;
+  /** Undefined keeps the official default; null lets the host own a flat scroll. */
+  listMaxHeight?: number|null;
   onContentReady?:()=>void;
   viewState?:ViewStateStore<DashboardViewState>;
   trendsEmptyState?:ReactNode;
@@ -175,9 +176,11 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
       .finally(() => anaPending.current.delete(platform));
   };
 
-  const board = (id: string, label: string, children: ReactNode) => listMaxHeight === undefined ? children : (
+  const board = (id: string, label: string, children: ReactNode) => typeof listMaxHeight==='number' ? (
     <div className="dash-card-list" style={{maxHeight: listMaxHeight, overflowY: 'auto'}} role="region" aria-label={label} tabIndex={0} data-native-scroll-region={'dashboard:'+id}>{children}</div>
-  );
+  ) : listMaxHeight===undefined&&id==='news' ? (
+    <div className="dash-trend-list" tabIndex={0} role="region" aria-label={label}>{children}</div>
+  ) : children;
 
   const hour = new Date().getHours();
   const greet = hour < 6 ? '夜深了' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
@@ -212,7 +215,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   return (
     <div className="page-scroll dash-page">
       <div className="dash-hero">
-        <h1 className="page-title" style={{ fontSize: 26 }}>{greet} 👋</h1>
+        <h1 className="page-title">{greet} 👋</h1>
         <p className="page-subtitle">
           {apiDirect ? (gatewayStatus === 'connected' ? '仅聊天模式已配置，可开始对话。' : '请先配置仅聊天模式的模型 API。')
             : agentRuntime !== 'openclaw' ? (gatewayStatus === 'connected'

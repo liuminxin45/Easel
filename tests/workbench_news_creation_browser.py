@@ -5,7 +5,7 @@ Only the Agent executor is synthetic; no production database or model is used.
 """
 from __future__ import annotations
 
-import argparse,asyncio,base64,datetime,hashlib,importlib.util,json,shutil,sys,time
+import argparse,asyncio,base64,datetime,hashlib,importlib.util,json,re,shutil,sys,time
 from pathlib import Path
 from urllib.parse import parse_qs,urlencode,urlsplit
 from unittest.mock import patch
@@ -103,11 +103,12 @@ def choose(page,drawer,label,name,expect):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('backend','native','out'):parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--allow-manual-close',action='store_true',help='Exploratory old-candidate probe only; never final acceptance')
     args=parser.parse_args();backend=args.backend.resolve();native=args.native.resolve();out=args.out.resolve();out.mkdir(parents=True,exist_ok=True)
     binding=frozen(backend,'workbench-release.json');native_binding=frozen(native,'native-manifest.json')
     helper,application,native_app=infrastructure(backend,native)
     from playwright.sync_api import sync_playwright,expect
-    report={'passed':False,'backend':binding,'native':native_binding,'checks':[],'screenshots':{},'requests':{},'page_errors':[],'real_model_calls':0,'platform_writes':0,'production_data_access':False,'physical_device_tested':False,'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py')}
+    report={'passed':False,'backend':binding,'native':native_binding,'checks':[],'screenshots':{},'requests':{},'page_errors':[],'manual_post_submit_drawer_closures':[],'exploratory_manual_close_allowed':args.allow_manual_close,'real_model_calls':0,'platform_writes':0,'production_data_access':False,'physical_device_tested':False,'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py')}
     catalog=read(backend/'skills/shared/workbench/规范/创作方案/目录.json');entries={item['id']:item for item in catalog['components']}
     def mark(case,name,**details):report['checks'].append({'case':case,'check':name,'passed':True,**details});print('PASS',case,name,flush=True)
     try:
@@ -133,10 +134,19 @@ def main():
                     requests.append(row)
             page.on('request',requested)
             def shot(name):
+                page.evaluate('()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))')
                 file=out/(case+'-'+name+'.png');page.screenshot(path=str(file));report['screenshots'][file.name]=sha(file)
             def creation_drawer(format):
                 page.get_by_role('button',name='制作内容',exact=True).click();drawer=page.get_by_role('dialog',name='制作内容',exact=True);expect(drawer).to_be_visible();drawer.get_by_role('button',name=format,exact=True).click();return drawer
             def post_bodies():return [r['body'] for r in requests if r['path']=='/api/chat/submit' and r['method']=='POST']
+            def close_finished_drawer(stage):
+                drawer=page.get_by_role('dialog',name='制作内容',exact=True)
+                if not args.allow_manual_close:
+                    expect(drawer).not_to_be_visible(timeout=5000)
+                    return
+                if drawer.count() and drawer.is_visible():
+                    report.setdefault('manual_post_submit_drawer_closures',[]).append({'case':case,'stage':stage})
+                    drawer.get_by_role('button',name='关闭',exact=True).click()
             def current_context(profile):
                 response=page.request.get(f['origin']+'/api/news/'+article+'/creation-context?profile_id='+profile);assert response.ok,response.text();return response.json()
             try:
@@ -193,6 +203,7 @@ def main():
                 assert turn_document(f,poster['turnId'])['context']['creation']['style']['character']=='wuxia-pig'
                 review=page.request.get(f['origin']+'/api/chat/turns/'+poster['turnId']+'/creation');assert review.ok and all('path' not in i for i in review.json()['material_manifest']['files'])
                 mark(case,'same-session poster explicitly invokes native content-production once with exact reference copies and isolated style override',reference_sha256=sorted(expect_hashes))
+                close_finished_drawer('poster')
                 # The next format shares this same news conversation but has its own draft.
                 drawer=creation_drawer('文章');expect(drawer.get_by_role('button',name='设置配图风格',exact=True)).to_be_visible()
                 assert drawer.get_by_role('button',name='角色呈现',exact=True).count()==0
@@ -203,6 +214,7 @@ def main():
                 package=material_files(f,article_turn['turnId']);assert package['creation']['style']=={'writing':writing['id']}
                 assert not any(i['role'] in ('identity','reference') for i in package['material_manifest']['files'])
                 mark(case,'same conversation switches to explicit article production; optional illustration settings remain absent')
+                close_finished_drawer('article')
                 drawer=creation_drawer('贴图');choose(page,drawer,'角色呈现',entries['simple-pig']['name'],expect)
                 drawer.get_by_label('补充要求',exact=True).fill('TEMP 简笔小猪准确身份参考 '+case)
                 drawer.get_by_role('button',name='开始制作贴图',exact=True).click()
@@ -213,6 +225,7 @@ def main():
                 assert simple_hashes and simple_hashes<={i['sha256'] for i in simple_package['material_manifest']['files']}
                 assert simple_package['creation']['style']['character']=='simple-pig' and current_context(profile)['defaults']['poster']==style
                 mark(case,'simple-pig selection binds its separate canonical reference hashes without overwriting precise wuxia history',reference_sha256=sorted(simple_hashes))
+                close_finished_drawer('simple-pig')
                 # Inspect exact previous material through the read-only original Drawer.
                 page.get_by_role('button',name='本轮创作设置',exact=True).last.click();review_drawer=page.get_by_role('dialog',name='本轮创作设置',exact=True);expect(review_drawer.get_by_text('本轮参考材料',exact=True)).to_be_visible();shot('turn-materials');review_drawer.get_by_role('button',name='关闭',exact=True).click()
                 goto(page,f['origin'],'/works?path=TEMP-news-created/run-3/正文.md');expect(page.get_by_text('TEMP_NEWS_PRODUCT_3',exact=False).first).to_be_visible();shot('library-product')
@@ -228,8 +241,7 @@ def main():
                     page.wait_for_timeout(100)
                 assert state['status']=='unknown','Synthetic admitted failure must remain an unknown receipt'
                 admitted=len(f['adapter'].requests);page.reload(wait_until='domcontentloaded');expect(page.get_by_role('textbox',name='对话输入')).to_be_visible();page.wait_for_timeout(400)
-                goto(page,f['origin'],'/news/a/'+article);open_button=page.get_by_role('button',name='查看会话',exact=True)
-                if open_button.count()==0:open_button=page.get_by_role('button',name='继续讨论',exact=True)
+                goto(page,f['origin'],'/news/a/'+article);open_button=page.get_by_role('button',name=re.compile(r'^(查看会话|继续讨论)$'))
                 expect(open_button).to_be_enabled();open_button.click();expect(page.get_by_role('textbox',name='对话输入')).to_be_visible();assert session_id(page)==sid
                 assert len(f['adapter'].requests)==admitted and len(post_bodies())==5
                 assert not any(r['method']=='POST' and r['path'] in ('/api/chat/plan','/api/creative/commands') for r in requests)
@@ -242,8 +254,12 @@ def main():
                 raise
             finally:context.close()
         browser.close()
-      assert not report['page_errors'];report['passed']=True
+      assert not report['page_errors']
+      if not args.allow_manual_close:assert not report['manual_post_submit_drawer_closures']
+      report['passed']=True
     finally:(out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     return 0
 
 if __name__=='__main__':raise SystemExit(main())
+
+

@@ -51,7 +51,7 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
    {image&&<img className="ew-news-style-preview" loading="lazy" src={image} alt={selected!.name+'参考图'}/>}
    {slot==='writing'&&format==='article'&&<button type="button" className="btn" aria-expanded={illustrations} disabled={busy} onClick={()=>{setIllustrations(!illustrations);if(illustrations)patch({style:{...draft.style,visual:'',character:''}})}}>{illustrations?'移除配图风格':'设置配图风格'}</button>}
   </div>})}
-  <label className="ew-news-field">补充要求<textarea className="field" rows={4} maxLength={40000} value={draft.note} disabled={busy} onChange={event=>patch({note:event.target.value})} placeholder="仅用于这一次制作，例如想强调的观点、需要避开的内容"/></label>
+  <label className="ew-news-field">补充要求<textarea aria-label="补充要求" className="field" rows={4} maxLength={40000} value={draft.note} disabled={busy} onChange={event=>patch({note:event.target.value})} placeholder="仅用于这一次制作，例如想强调的观点、需要避开的内容"/></label>
   {missing.length>0&&<p className="ew-news-muted">还需选择：{missing.map(slot=>newsSlotLabels[slot]).join('、')}</p>}
   {error&&<div className="ew-news-error" role="alert">{error}<button type="button" className="btn btn-sm" disabled={busy} onClick={()=>void reload()}>重新读取设置</button></div>}
   {saved&&<p className="ew-news-muted" role="status">已保存为画像默认，本次尚未开始制作。</p>}

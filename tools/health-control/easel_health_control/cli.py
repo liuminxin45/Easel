@@ -11,6 +11,7 @@ import time
 from .adapter import ApplicationAdapter
 from .monitor import Monitor
 from .state import StateStore
+from .usage import render as render_usage
 
 
 def reconcile_pending(adapter, store):
@@ -37,12 +38,14 @@ def reconcile_pending(adapter, store):
 def report(store):
     status = store.read('status.json', {})
     daily = store.read('daily-status.json', {})
-    value = {'monitor': status, 'daily': daily,
+    value = {'monitor': status, 'daily': daily, 'browser_journey': store.read('journey-status.json', {}),
         'observed_age_seconds': max(0, time.time()-status.get('at', 0)) if status else None}
     body = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     body += '<title>Easel 健康报告</title><style>body{font:16px/1.6 system-ui;max-width:960px;margin:32px auto;padding:0 20px;color:#18212b}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f8;padding:20px;border-radius:10px}a{color:#135e98}</style>'
     body += '<h1>Easel 独立健康报告</h1><p>本报告只在检测完成后更新。入口连通、业务完成、性能与每日真实制作分别记录。</p>'
     body += '<p>生成时间：' + html.escape(dt.datetime.now().astimezone().isoformat(timespec='seconds')) + '</p>'
+    body += '<style>.usage-table{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #dde2e7;padding:8px;overflow-wrap:anywhere}</style>'
+    body += render_usage(status.get('observation', {}).get('usage'))
     body += '<pre>' + html.escape(json.dumps(value, ensure_ascii=False, indent=2)) + '</pre>'
     # No script, credentials, business payload or external asset dependencies.
     target = store.root/'report.html'
@@ -81,6 +84,15 @@ def main(argv=None):
         monitor = Monitor(config, store, inspect_target=adapter.inspect, recovery_bridge=adapter.recover)
         deadline = time.monotonic() + max(0, min(options.duration, 50))
         while True:
+            try:
+                from .journey import scheduled_tick
+                scheduled_tick(config, store)
+            except Exception as error:
+                # Browser acceptance is a separate business check. A missing
+                # app/bundle must not stop independent liveness monitoring.
+                store.write('journey-status.json', {'schema': 1, 'at': time.time(),
+                    'status': 'unavailable', 'reason': 'browser_journey_preflight_unavailable',
+                    'error_type': type(error).__name__, 'real_model_calls': 0, 'production_data_access': False})
             if config.get('auto_repair') is True:
                 try:
                     reconcile_pending(adapter, store)

@@ -14,5 +14,7 @@
   "slow_seconds": 2,
   "daily_hour": 9,
   "daily_minute": 10,
-  "daily_real_agent_authorized": true
+  "daily_real_agent_authorized": true,
+  "daily_browser_journey_enabled": true,
+  "browser_journey_timeout_seconds": 240
 }

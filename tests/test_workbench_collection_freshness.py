@@ -44,9 +44,9 @@ def test_a_live_process_with_blocked_business_cycle_does_not_report_fresh(monkey
     assert group['stale'] and group['error']['code']=='collection_unavailable'
 
 
-def test_failed_source_result_keeps_the_real_failure_ahead_of_the_age_warning(monkeypatch):
+def test_failed_task_stays_in_diagnostics_while_actual_overdue_results_remain_visible(monkeypatch):
     group=trends(monkeypatch,outcome='failed')
-    assert group['error']['code']=='collection_failed' and group['collection_status']=='failed'
+    assert group['error']['code']=='collection_overdue' and group['collection_status']=='failed'
 
 
 def test_paused_collection_never_claims_that_old_results_are_current(monkeypatch):

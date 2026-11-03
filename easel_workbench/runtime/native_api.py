@@ -349,7 +349,6 @@ class NativeApi:
             key for key in requested.split(',') if key in available))
         limit = max(1, min(int(request.query_params.get('limit', '1000')), 1000))
         groups = []
-        warnings = []
         for key in selected:
             rows = self.store.article_day(source=key)['items']
             latest = status.get(key, {}).get('last_task') or {}
@@ -357,17 +356,19 @@ class NativeApi:
             incomplete = outcome in {'failed', 'blocked', 'partial', 'cancelled'}
             busy = latest.get('status') in {'queued', 'running'}
             source_warnings = [str(value) for value in latest.get('warnings', []) if value]
-            warnings.extend(available[key]['label'] + '：' + value for value in source_warnings)
             message = str(latest.get('error') or latest.get('message') or '上次采集未完成')
             age_error = _trend_freshness(available[key], status.get(key, {}), service_status.get('heartbeat'),
                                          time.time(), rows[0].get('run_at') if rows else None)
             if service_status.get('enabled') is False:
                 age_error = {'code': 'collection_paused', 'message': '自动采集已暂停，显示已保存结果'}
-            stale = incomplete or busy or bool(age_error)
+            # A task warning belongs to its stage record, not a permanent page
+            # banner. Existing results stay readable; actual overdue/service
+            # failures still surface through the independently checked freshness.
+            stale = busy or bool(age_error)
             if outcome == 'partial' and not latest.get('error'):
                 message = '本轮采集不完整，已保留实际结果'
             groups.append({'platform': key, 'label': available[key]['label'], 'ok': not incomplete and not age_error,
-                           'status': 'stale' if stale and rows else 'error' if incomplete or age_error else 'fresh',
+                           'status': 'stale' if (stale or incomplete) and rows else 'error' if incomplete or age_error else 'fresh',
                            'stale': stale and bool(rows), 'fetched_at': rows[0].get('run_at') if rows else None,
                            'checked_at': status.get(key, {}).get('last_success_at'),
                            'next_run_at': status.get(key, {}).get('next_run_at'),
@@ -375,12 +376,12 @@ class NativeApi:
                            'finished_at': latest.get('finished_at'), 'collection_status': outcome,
                            'warnings': source_warnings,
                            'error': {'code': 'busy', 'message': '正在采集，先显示已保存结果'} if busy else
-                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete else age_error,
+                                    {'code': 'collection_' + str(outcome), 'message': message} if incomplete and not rows else age_error,
                            'items': [{'id': item['id'], 'title': item['title'], 'hot': str(item.get('hot') or ''),
                                       'url': item.get('url', ''), 'published_at': item.get('published_at'),
                                       'heat': {'value': None, 'text': str(item.get('hot') or ''), 'unit': ''}}
                                      for item in rows[:limit]]})
-        return {'version': 1, 'trends': groups, 'updated': int(time.time()), 'warnings': list(dict.fromkeys(warnings))}
+        return {'version': 1, 'trends': groups, 'updated': int(time.time()), 'warnings': []}
 
     def _ideas(self):
         return [{**item, 'created': item.get('created', _seconds(item.get('created_at')))}

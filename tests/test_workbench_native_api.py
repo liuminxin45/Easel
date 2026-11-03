@@ -232,7 +232,8 @@ def test_native_trends_only_reads_existing_results(commands, monkeypatch):
     response, data = call(commands, '/api/trends')
     assert response.status_code == 200
     group = data['trends'][0]
-    assert group['stale'] and group['status'] == 'stale'
+    assert not group['stale'] and group['status'] == 'stale'
+    assert group['error'] is None
     assert group['items'][0]['title'] == '准确原标题'
     api._collection_service.status = lambda: {'sources': [{'id': 'native-source', 'last_task': {'status': 'queued'}}]}
     _, pending = call(commands, '/api/trends')
@@ -257,12 +258,20 @@ def test_native_trends_report_incomplete_collection_truthfully(commands, monkeyp
     group = value['trends'][0]
     assert group['items'] == [{**{k: row[k] for k in ('id', 'title')}, 'hot': '', 'url': '', 'published_at': None,
                                'heat': {'value': None, 'text': '', 'unit': ''}} for row in rows]
-    assert not group['ok'] and group['stale'] is has_results
+    assert not group['ok'] and not group['stale']
     assert group['status'] == ('stale' if has_results else 'error')
-    assert group['error']['code'] == 'collection_' + status
+    if has_results:
+        assert group['error'] is None  # Task failures do not become permanent reading-page banners.
+    else:
+        assert group['error']['code'] == 'collection_' + status
     assert group['collection_status'] == status and group['finished_at'] == '2026-11-01T00:04:00+08:00'
     assert group['warnings'] == ['Missing source: HTTP 500']
-    assert value['warnings'] == ['News source：Missing source: HTTP 500']
+    assert value['warnings'] == []  # Detail remains on the task/group, never a global notice.
+    api._collection_service.status = lambda: {'sources': [{'id': 'source', 'last_task': {'status': 'completed'}}]}
+    _, recovered = call(commands, '/api/trends')
+    assert recovered['warnings'] == [] and recovered['trends'][0]['warnings'] == []
+    assert recovered['trends'][0]['error'] is None
+    assert recovered['trends'][0]['collection_status'] == 'completed'
 
 
 def test_native_manual_export_uses_original_builder_and_never_marks_published(commands):

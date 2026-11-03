@@ -7,3 +7,9 @@
 验收：英文新闻、单词产品名、缺失/失败/无效概述、原文变化失效、当天来源筛选、无GET写入、unknown不重放；共用接口覆盖首页和列表。相关测试与构建、准确冻结及空闲/队列/历史核对后配对部署，仅推自有fork。状态：实现中。
 
 现场核对：当天Product Hunt已生成10条，但接口未使用；Hacker News10条在旧批次因引用标题“WTF Ubuntu?”内问号被误判多句，整批记录error。原回执 `82dff80d5b8542f091c3b78b4028094f` 已completed且保存原输出。修复引号内标点判定，显式恢复只核对完成状态、输出SHA、原prompt SHA及原始input/当前原文；只写准确来源/当天的概述投影，不重发模型。仍不合格的已完成结果独立保留失败，并沿用原次数上限；unknown拒绝恢复及重发。相关组合193项、最终专项13项通过，不相加冒称独立总数。
+
+最终状态：2026-11-03已提交推送并上线。运行源码 `7987f718d3141b304639f32fe7f8d72a0d132f1c`；后端 `workbench-20261103-045635` / `7da2bdeed3d05433d8b996d334536dee42a4e3fd4f57b06e4048335922aae241`，复用未变前端 `native-session-recovery-20261103-r2` / `03bcd1dcb9cca48c6d5b7c7b1526917e45d71ea5080750e88b7cbe0d7f8870c8`，167项构建输入与1184项后端成员已核对。前端类型/架构检查通过；冻结TEMP浏览器26项与线上桌面/模拟手机4页通过。线上两个来源各10条合格中文标题，热点页DOM逐项等于接口，首页保持官方limit6/展示3的行为，无官方组件/CSS修改。
+
+恢复保留原文与creator_model_calls；第一次回收10条后，切换前旧后台仍用旧校验重新否定含问号那条。等待原后台任务647906bdf2e741a3925c2b278f1b4066自然结束后切换，新版再从同一原回执回收该1条，未重发其恢复请求。两次回收均0模型调用，原回执和旧失败不改写。上线后7角色、原库inode/19张历史表及只读smoke通过，未知任务未重放。
+
+证据 `.local/workbench-validation/chinese-titles-20261103/`：acceptance.json、recovery-before-switch.json、recovery-after-switch.json、postflight.json、browser/report.json、live-browser.json及两来源桌面/手机截图。最初线上辅助校验错误地将首页API数量当作列表总数，失败日志保留；最终按请求limit验证，热点页仍严格检查各10条，未修改产品行为。手机为Windows Edge模拟视口，未冒称实体vivo验收。独立中控当天已跑过旧配对的巡检不会重复执行，新配对由本轮冻结浏览器验收覆盖。

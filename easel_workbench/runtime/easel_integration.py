@@ -22,7 +22,9 @@ import uuid
 
 from easel_workbench.runtime.desk import stamp
 from easel_workbench.contracts.values import ident, pack, text
+from easel_workbench.runtime.easel_source import OFFICIAL_SCRIPTS,media_source,require_media_source,MediaSourceMismatch
 
+# Legacy SOURCE.json is provenance only, never a current Python import/runner.
 SOURCE = pathlib.Path(__file__).resolve().parent / 'vendor/easel'
 CHANNELS = {'transcribe': '语音转写', 'speech': '配音', 'image': '生图', 'video': '视频', 'music': '音乐'}
 FORMATS = {'audio': '配音', 'video': '视频', 'music': '音乐', 'image': '图片', 'transcript': '转写'}
@@ -39,7 +41,7 @@ def digest(value):
 
 
 def load_catalog():
-    spec = importlib.util.spec_from_file_location('easel_model_catalog', SOURCE / 'scripts/model_registry.py')
+    spec = importlib.util.spec_from_file_location('easel_model_catalog', OFFICIAL_SCRIPTS / 'model_registry.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     result = copy.deepcopy(module.MODEL_GROUPS)
@@ -124,7 +126,8 @@ class EaselIntegration:
                 actual=next((j for j in jobs if (j.get('config') or {}).get('id')==config['id'] and (j.get('config') or {}).get('revision')==config['revision'] and j['status']=='completed' and j.get('execution_mode')=='model'),None)
                 if actual:config.update(verification='artifact_verified',verification_job_id=actual['id'])
         return {'schema_version': 1, 'channels': CHANNELS, 'catalog': self.catalog, 'configs': configs, 'jobs': jobs,
-                'source': json.loads((SOURCE / 'SOURCE.json').read_text(encoding='utf-8')),
+                'source': media_source(),
+                'historical_vendor_source': json.loads((SOURCE / 'SOURCE.json').read_text(encoding='utf-8')),
                 'execution_host': {'name': platform.node(), 'system': platform.system(), 'python': sys.version.split()[0]},
                 'formats': FORMATS, 'learning': {'mode': 'manual', 'profile': '身份、读者与已确认偏好', 'skill': '制作方法与检查标准', 'feedback': '具体作品版本的原话与证据'}}
 
@@ -228,7 +231,7 @@ class EaselIntegration:
                 'format': 'video' if stage == 'compose' else 'audio' if stage == 'speech' else 'transcript' if stage == 'transcribe' else stage,
                 'prompt': prompt, 'instruction': body, 'creator': snapshot, 'config': config, 'files': sources, 'options': options,
                 'work_id': work_id, 'parent_version': parent['id'] if parent else None, 'related_work_id': value.get('related_work_id'),
-                'source_snapshot': copy.deepcopy(value.get('source_snapshot') or {}), 'source_release': json.loads((SOURCE / 'SOURCE.json').read_text())['source_tree_sha256']}
+                'source_snapshot': copy.deepcopy(value.get('source_snapshot') or {}), 'source_release': media_source()['source_tree_sha256']}
         if plan['related_work_id']:
             ident(plan['related_work_id'])
             if not c.execute('SELECT 1 FROM toolbox_works WHERE id=?', (plan['related_work_id'],)).fetchone():
@@ -410,6 +413,7 @@ class EaselIntegration:
         return payload,environment.python if environment.python.is_file() else pathlib.Path(sys.executable)
 
     def _invoke_worker(self,payload,python):
+        require_media_source(payload)
         if self.runner:return self.runner(payload)
         result=subprocess.run([str(python),str(pathlib.Path(__file__).with_name('easel_media_worker.py'))],input=pack(payload),capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=3600,
                               creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
@@ -427,6 +431,7 @@ class EaselIntegration:
         call_id=None
         try:
             payload,python=self._payload(job)
+            require_media_source(payload)
             if job['execution_mode']=='model':
                 from easel_workbench.runtime.task_runtime import begin_call
                 actual={'stage':job['stage'],'text':job['prompt'] if job['stage']=='speech' else job['instruction'],'files':job['files'],
@@ -437,11 +442,11 @@ class EaselIntegration:
                 from easel_workbench.runtime.task_runtime import step
                 step(c,jid,'production','running',call_id=call_id)
             self._invoke_worker(payload,python)
-        except Exception:
+        except Exception as error:
             with self.store.connect() as c:
                 job=self._job(c,jid)
                 known=job['send_state']=='not_sent'
-                job.update(status='failed' if known else 'unknown',error='发送前准备未完成，可在补齐依赖后继续原任务' if known else '执行结果待核对；保留原任务，不自动重发',finished_at=stamp())
+                job.update(status='failed' if known else 'unknown',error=str(error) if known and isinstance(error,MediaSourceMismatch) else '发送前准备未完成，可在补齐依赖后继续原任务' if known else '执行结果待核对；保留原任务，不自动重发',finished_at=stamp())
                 self._put_job(c,job)
                 from easel_workbench.runtime.task_runtime import step
                 step(c,jid,'production',job['status'],error=job['error'])

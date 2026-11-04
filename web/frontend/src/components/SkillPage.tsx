@@ -21,6 +21,7 @@ interface SkillPageProps {
   persona: string;
   viewState?:ViewStateStore<{query:string}>;
   onContentReady?:()=>void;
+  icons?:Readonly<Record<string,IconC>>;
 }
 
 type IconC = ComponentType<{ size?: number }>;
@@ -80,7 +81,7 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona,viewState,onContentReady }: SkillPageProps) {
+export default function SkillPage({ persona,viewState,onContentReady,icons }: SkillPageProps) {
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -157,7 +158,7 @@ export default function SkillPage({ persona,viewState,onContentReady }: SkillPag
             <div className="skill-grid">
               {grouped[layer.key].map((s) => {
                 const meta = Object.hasOwn(LAYER_META, s.layer) ? LAYER_META[s.layer] : OTHER;
-                const Icon = iconFor(s.name, meta.Icon);
+                const Icon = icons?.[s.name]||iconFor(s.name, meta.Icon);
                 return (
                   <div
                     key={s.name}

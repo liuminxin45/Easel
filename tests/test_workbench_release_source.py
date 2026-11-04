@@ -32,6 +32,19 @@ def test_release_rejects_parallel_dirty_or_untracked_source(tmp_path):
         release.committed_source(tmp_path)
 
 
+def test_baseline_record_is_authoritative_and_overlay_mismatch_is_rejected(tmp_path):
+    directory=tmp_path/'docs/workbench';directory.mkdir(parents=True)
+    base=directory/'upstream-base.json';overlays=directory/'upstream-overlays.json'
+    for commit in ('1'*40,'2'*40):
+        base.write_text(json.dumps({'upstream_commit':commit}),encoding='utf-8')
+        assert release.upstream_baseline(tmp_path)['upstream_commit']==commit
+    base.write_text(json.dumps({'upstream_commit':'0f43dc9'}),encoding='utf-8')
+    with pytest.raises(ValueError,match='full official baseline'):release.upstream_baseline(tmp_path)
+    base.write_text(json.dumps({'upstream_commit':'1'*40}),encoding='utf-8')
+    overlays.write_text(json.dumps({'full_upstream_baseline':'2'*40}),encoding='utf-8')
+    with pytest.raises(ValueError,match='overlay ledger'):release.upstream_baseline(tmp_path)
+
+
 @pytest.mark.parametrize('isolated', [False, True])
 def test_actual_freeze_respects_candidate_destination_and_preserves_raw_inputs(tmp_path, monkeypatch, isolated):
     def git(*args):
@@ -42,8 +55,11 @@ def test_actual_freeze_respects_candidate_destination_and_preserves_raw_inputs(t
     raw=b'---\nname: temp-skill\nlayer: general\nmetadata:\n  openclaw:\n    workbench:\n      schema_version: 1\n      id: temp-skill\n      tasks: [discuss]\n---\nTEMP exact bytes.\n'
     skill.write_bytes(raw)
     (tmp_path/'agents/workspace/AGENTS.md').write_bytes(b'TEMP workspace.\r\n')
+    (tmp_path/'docs/workbench').mkdir(parents=True)
+    baseline=json.loads((release.ROOT/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))
+    (tmp_path/'docs/workbench/upstream-base.json').write_text(json.dumps(baseline),encoding='utf-8')
     (tmp_path/'.gitignore').write_text('.local/\nworkbench-releases/\nnative-releases/\n', encoding='utf-8')
-    git('init', '-q');git('add', '.gitignore', 'skills', 'agents')
+    git('init', '-q');git('add', '.gitignore', 'skills', 'agents', 'docs')
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', 'commit', '-qm', 'freeze fixture')
     native=tmp_path/'native-releases/native-fixture';native.mkdir(parents=True)
     (native/'index.html').write_bytes(b'TEMP native shell')
@@ -60,6 +76,12 @@ def test_actual_freeze_respects_candidate_destination_and_preserves_raw_inputs(t
     manifest=release.verify(package,result['manifest_sha256'])
     release.validate_source_binding(manifest,tmp_path)
     assert manifest['source_commit'] == git('rev-parse', 'HEAD')
+    assert manifest['upstream_commit']==manifest['easel_base']==baseline['upstream_commit']
+    assert manifest['upstream_baseline']['sha256']==release.sha(package/'docs/workbench/upstream-base.json')
     assert (package/'skills/builtin/temp-skill/SKILL.md').read_bytes() == raw
     assert (package/'agents/workspace/AGENTS.md').read_bytes() == b'TEMP workspace.\r\n'
     assert manifest['files']['skills/builtin/temp-skill/SKILL.md'] == hashlib.sha256(raw).hexdigest()
+    original=(tmp_path/'docs/workbench/upstream-base.json').read_bytes()
+    (tmp_path/'docs/workbench/upstream-base.json').write_bytes(original+b'\n')
+    with pytest.raises(ValueError,match='baseline record changed'):
+        release.validate_source_binding(manifest,tmp_path)

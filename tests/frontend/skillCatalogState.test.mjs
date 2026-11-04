@@ -24,11 +24,19 @@ function fixture(){
  const imports={react,'react/jsx-runtime':jsx,'../lib/viewState':viewStateModule(react),'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','./InteractionNotice':{StatusCard:'StatusCard'},'../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
  Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:id=>imports[id]??assert.fail('Unexpected import '+id)});
- const render=()=>{cursor=0;const tree=exports.default({persona:'author'});effects.splice(0).forEach(effect=>effect());return tree};
+ const render=(props={})=>{cursor=0;const tree=exports.default({persona:'author',...props});effects.splice(0).forEach(effect=>effect());return tree};
  return {render,requests,get fetches(){return fetches}};
 }
 const cards=tree=>nodes(tree).filter(node=>node.props?.className?.split(' ').includes('skill-card'));
 const search=tree=>nodes(tree).find(node=>node.type==='input');
+
+test('the host supplies private icons while the same standalone page retains its native default',async()=>{
+ const f=fixture(),PrivateIcon=()=>null;f.render();f.requests[0].resolve([{...skill,name:'content-production'}]);await tick();
+ const icon=tree=>nodes(cards(tree)[0]).find(node=>node.props?.className==='skill-card-icon').props.children.type;
+ assert.notEqual(icon(f.render()),PrivateIcon);
+ assert.equal(icon(f.render({icons:{'content-production':PrivateIcon}})),PrivateIcon);
+ assert.notEqual(icon(f.render()),PrivateIcon,'no global registry can leak a previous host icon into standalone Easel');
+});
 
 test('standalone Easel skill loading and refresh use the same no-false-empty contract',async()=>{
  const f=fixture();let tree=f.render();assert.equal(f.fetches,1);assert.equal(tree.props['data-catalog-state'],'loading');assert.doesNotMatch(text(tree),/没有匹配|暂无可用/);

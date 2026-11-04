@@ -7,7 +7,6 @@ import json
 import shutil
 import subprocess
 import sys
-import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -36,6 +35,13 @@ def validate_source_binding(package,root):
         raise ValueError('Skill source changed after candidate validation')
     if package.get('workspace_sha256')!=workspace_revision(root):
         raise ValueError('Workspace instructions changed after candidate validation')
+    if package.get('upstream_baseline'):
+        baseline=upstream_baseline(root)
+        reference=package['upstream_baseline']
+        if (reference.get('ledger')!='docs/workbench/upstream-base.json'
+                or baseline['upstream_commit']!=package.get('upstream_commit')
+                or sha(Path(root)/reference['ledger'])!=reference.get('sha256')):
+            raise ValueError('Official baseline record changed after candidate validation')
 
 
 def validate_published_skills(root, *, source_root=None):
@@ -116,8 +122,22 @@ def committed_source(root=None):
     return subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
 
 
+def upstream_baseline(root):
+    """The integrated baseline record is authoritative; overlays are separate."""
+    import re
+    root=Path(root)
+    value=json.loads((root/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))
+    if not re.fullmatch('[a-f0-9]{40}',value.get('upstream_commit','')):
+        raise ValueError('A full official baseline commit is required')
+    overlay=root/'docs/workbench/upstream-overlays.json'
+    if overlay.is_file() and json.loads(overlay.read_text(encoding='utf-8'))['full_upstream_baseline']!=value['upstream_commit']:
+        raise ValueError('PR overlay ledger must reference the integrated baseline')
+    return value
+
+
 def freeze(native, *, candidate_path=None):
     revision=committed_source()
+    baseline=upstream_baseline(ROOT)
     validate_published_skills(ROOT)
     native=ROOT/'native-releases'/native
     n=json.loads((native/'native-manifest.json').read_text(encoding='utf-8'))
@@ -130,6 +150,8 @@ def freeze(native, *, candidate_path=None):
         shutil.copytree(ROOT/folder,target/folder,ignore=shutil.ignore_patterns('__pycache__','*.pyc','trend-sources.json','workbench-trend-sources.json','trend-collectors'))
     shutil.copytree(ROOT/'agents/workspace',target/'agents/workspace',ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     if (ROOT/'AGENTS.md').is_file():shutil.copy2(ROOT/'AGENTS.md',target/'AGENTS.md')
+    (target/'docs/workbench').mkdir(parents=True,exist_ok=True)
+    shutil.copy2(ROOT/'docs/workbench/upstream-base.json',target/'docs/workbench/upstream-base.json')
     overlay_path=ROOT/'docs/workbench/upstream-overlays.json'
     overlays=json.loads(overlay_path.read_text(encoding='utf-8')) if overlay_path.is_file() else None
     if overlays:
@@ -156,12 +178,13 @@ main()
     import importlib.metadata
     dependencies=sorted(d.metadata['Name']+'=='+d.version for d in importlib.metadata.distributions())
     value={'schema':1,'release':name,'architecture':'easel-workbench-extension','session_creation_protocol':2,
-        'easel_base':'0f43dc98277eac85fb48952878acad349731d3fc','files':files,
+        'easel_base':baseline['upstream_commit'],'files':files,
         'native':{'release':n['release'],'manifest_sha256':sha(native/'native-manifest.json')},
         'python':sys.version,'python_executable':sys.executable,'installed_dependencies':dependencies,
         'capabilities_type':'easel_project_builtin','capabilities_sha256':capabilities,
         'workspace_sha256':workspace,
-        'upstream_commit':'0f43dc98277eac85fb48952878acad349731d3fc',
+        'upstream_commit':baseline['upstream_commit'],
+        'upstream_baseline':{'ledger':'docs/workbench/upstream-base.json','sha256':sha(target/'docs/workbench/upstream-base.json')},
         'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
     if overlays:value['upstream_pr_overlays']={'ledger':'docs/workbench/upstream-overlays.json','sha256':sha(target/'docs/workbench/upstream-overlays.json'),'pull_requests':[item['number'] for item in overlays['pull_requests']]}

@@ -1,23 +1,15 @@
 """Route frozen configurations to original Easel engines, with no model client."""
 from __future__ import annotations
 import base64
-import json
 from pathlib import Path
-import uuid
-from easel.direct_api import stream_chat, history_path, DirectAPIError
+from types import SimpleNamespace
+from easel.direct_api import stream_chat
 from easel.harnesses.base import HarnessError
 
 
-async def run(service, turn, request, emit, ask, bind):
-    if turn['runtime'] == 'openclaw':
-        from easel.harnesses.openclaw import OpenClawAdapter
-        from dataclasses import replace
-        environment = dict(request.env)
-        environment.update(service.settings.openclaw_environment(turn['execution_settings']))
-        await OpenClawAdapter().run(replace(request, env=environment), emit, ask, bind)
-        return
-    native = request.native_id or str(uuid.uuid4())
-    bind(native)
+async def run(service, turn, request, emit, ask, bind, *, on_dispatch=None, stop_requested=None):
+    """Adapt private attachment IDs and receipts to the common API supervisor."""
+    from easel.web_services.chat import create_chat_context
     content = [{'type': 'text', 'text': turn['actual_prompt']}]
     for file in turn.get('attachments', []):
         descriptor, path = service.box.file(file['id'])
@@ -27,17 +19,13 @@ async def run(service, turn, request, emit, ask, bind):
             content.append({'type':'text','text':Path(path).read_text(encoding='utf-8')})
         else:
             raise HarnessError('API 仅聊天只支持文本和模型支持的图片附件')
-    completed = False
-    try:
-        async for kind, text in stream_chat(request.env, content, system=request.frozen_instructions or '',
-                history_file=history_path(service.sessions_dir, native), timeout=request.timeout):
-            if kind == 'finish':
-                completed = True
-            else:
-                emit(kind, text)
-    except DirectAPIError as error:
-        raise HarnessError(str(error)) from None
-    if not completed:
-        raise HarnessError('API 未返回明确完成回执')
-    # API chat has no server thread/turn ID. Keep that distinction in receipts.
-    turn['completion_evidence'] = 'api_finish_stop'
+    async def questions(_session, items, _emit):return await ask(items)
+    context=create_chat_context(service.root,backend=lambda sid:'api',environment=request.env,
+        snapshot=lambda *args:None,ask=questions,scrub=str,running=service._native_controls,
+        api_stream=stream_chat)
+    # Closing an HTTP stream is not a provider-side stop acknowledgement.
+    def completed():turn['completion_evidence']='api_finish_stop'
+    await context._run_direct_chat(SimpleNamespace(turnId=turn['id']),turn['session_id'],
+        content,request.frozen_instructions or '',emit,timeout=request.timeout,run_request=request,
+        on_dispatch=on_dispatch,stop_requested=stop_requested,on_complete=completed,bind_native=bind,
+        propagate_errors=True)

@@ -182,6 +182,78 @@ def test_api_mode_runs_original_stream_but_rejects_tools_before_acceptance(setti
     asyncio.run(scenario())
 
 
+def test_api_stop_after_dispatch_keeps_unknown_without_provider_ack(settings,monkeypatch):
+    from easel_workbench import settings_execution
+    calls=[]
+    async def scenario():
+        entered=asyncio.Event()
+        async def stream(env,content,**options):
+            calls.append(content);entered.set()
+            yield 'token','partial retained'
+            await asyncio.Event().wait()
+        monkeypatch.setattr(settings_execution,'stream_chat',stream)
+        await save(settings,'api')
+        chat=ChatService(settings.box);chat.create_session({'id':'api-create','session_id':'api-stop'})
+        turn=await chat.submit({'id':'api-stop-turn','sessionId':'api-stop','message':'TEMP'},
+            snapshot=settings.box.creator.resolve(task='discuss'),actual_prompt='TEMP')
+        await asyncio.wait_for(entered.wait(),5)
+        assert chat._native_controls['api-stop']._task is chat._tasks[turn['id']]
+        result=await chat.stop('api-stop',turn['id'])
+        assert not result['stopped'] and result['status']=='unknown'
+        receipt=chat.get_turn(turn['id'])
+        assert receipt['stop_requested'] and not receipt.get('interrupt_confirmed')
+        assert receipt['output']=='partial retained' and len(calls)==1
+        await chat.close()
+    asyncio.run(scenario())
+
+
+def test_api_stop_while_waiting_for_shared_session_lock_never_dispatches(settings,monkeypatch):
+    from easel_workbench import settings_execution
+    from easel.web_services.chat import SessionFileLock
+    async def forbidden(*args,**kwargs):
+        pytest.fail('A stopped queued turn must not send a model request')
+        yield
+    monkeypatch.setattr(settings_execution,'stream_chat',forbidden)
+    async def scenario():
+        await save(settings,'api')
+        chat=ChatService(settings.box);chat.create_session({'id':'api-create','session_id':'api-queued'})
+        lock=SessionFileLock(chat.sessions_dir,'api-queued');assert lock.acquire(0)
+        try:
+            turn=await chat.submit({'id':'api-queued-turn','sessionId':'api-queued','message':'TEMP'},
+                snapshot=settings.box.creator.resolve(task='discuss'),actual_prompt='TEMP')
+            result=await chat.stop('api-queued',turn['id'])
+            assert result['stopped'] and chat.get_turn(turn['id'])['delivery_state']=='not_started'
+        finally:
+            lock.release();await chat.close()
+    asyncio.run(scenario())
+
+
+def test_openclaw_uses_shared_supervisor_with_frozen_environment(settings,monkeypatch):
+    from easel.harnesses.openclaw import OpenClawAdapter
+    calls=[]
+    async def scenario():
+        entered=asyncio.Event()
+        async def run(adapter,request,emit,ask,bind):
+            calls.append(request);bind('openclaw-native');entered.set()
+            await asyncio.Event().wait()
+        monkeypatch.setattr(OpenClawAdapter,'run',run)
+        await save(settings,'openclaw')
+        chat=ChatService(settings.box);chat.create_session({'id':'claw-create','session_id':'claw'})
+        turn=await chat.submit({'id':'claw-turn','sessionId':'claw','message':'TEMP'},
+            snapshot=settings.box.creator.resolve(task='discuss'),actual_prompt='TEMP')
+        await asyncio.wait_for(entered.wait(),5)
+        assert chat._native_controls['claw']._task is chat._tasks[turn['id']]
+        request=calls[0]
+        assert request.env['OPENCLAW_CONFIG_PATH'].endswith('openclaw.json')
+        assert settings.current()['revision']==turn['execution_settings']['revision']
+        result=await chat.stop('claw',turn['id'])
+        assert not result['stopped'] and result['status']=='unknown'
+        assert len(calls)==1 and chat.get_turn(turn['id'])['stop_requested']
+        assert not any(event['data']=='已停止' for event in chat.read_events(turn['id']))
+        await chat.close()
+    asyncio.run(scenario())
+
+
 def test_real_status_distinguishes_installation_from_web_reachability(settings,monkeypatch):
     monkeypatch.setattr(harnesses,'describe',lambda runtime:{'installed':False})
     result=asyncio.run(settings.status())

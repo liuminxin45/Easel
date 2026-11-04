@@ -133,6 +133,9 @@ def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,m
     module=release_module();monkeypatch.setattr(module,'ROOT',tmp_path)
     for folder in ('easel_workbench','easel','config'):
         (tmp_path/folder).mkdir()
+    ledger=tmp_path/'docs/workbench/upstream-base.json'
+    ledger.parent.mkdir(parents=True)
+    shutil.copy2(PROJECT/'docs/workbench/upstream-base.json',ledger)
     git=shutil.which('git')
     assert git,'Git is required to verify the frozen source revision'
     def git_run(*args):
@@ -149,6 +152,8 @@ def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,m
     selected=module.freeze(native.name)
     frozen=tmp_path/'workbench-releases'/selected['release']
     manifest=module.verify(frozen,selected['manifest_sha256'])
+    assert (frozen/'docs/workbench/upstream-base.json').read_bytes()==ledger.read_bytes()
+    assert manifest['upstream_baseline']['sha256']==module.sha(ledger)
     assert manifest['capabilities_type']=='easel_project_builtin'
     assert manifest['capabilities_sha256']==module.capabilities_revision(tmp_path)==module.capabilities_revision(frozen)
     assert manifest['workspace_sha256']==module.workspace_revision(frozen)

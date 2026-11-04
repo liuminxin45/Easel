@@ -7,7 +7,12 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(path.join(root,'web/frontend/package.json'));
 const ts=require('typescript'),postcss=require('postcss');
-export const OFFICIAL_BASELINE='0f43dc98277eac85fb48952878acad349731d3fc';
+export function readOfficialBaseline(base=root){
+ const value=JSON.parse(fs.readFileSync(path.join(base,'docs/workbench/upstream-base.json'),'utf8'));
+ if(!/^[a-f0-9]{40}$/.test(value.upstream_commit||''))throw Error('A full official baseline commit is required');
+ return value;
+}
+export const OFFICIAL_BASELINE=readOfficialBaseline().upstream_commit;
 const hostWrappers=new Set(['ew-page','ew-app','ew-main','ew-settings-host']);
 const protectedClasses=new Set(['nav-item','persona-select','theme-toggle','accounts-page','accounts-grid']);
 
@@ -28,6 +33,40 @@ export function inspectSource(source,file='view.tsx'){
  };
  visit(ast);
  return {ast,imports,elements,functions,violations};
+}
+
+/** Resolve actual module edges, including re-exports and static dynamic loads. */
+export function inspectCommonDependencies(source,file='web/frontend/src/components/View.tsx'){
+ const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),violations=[];
+ const literal=node=>ts.isStringLiteralLike(node)?node.text:ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.PlusToken?(literal(node.left)??'')+(literal(node.right)??''):undefined;
+ const inspect=(node,value)=>{
+  if(typeof value!=='string')return;
+  const resolved=value.startsWith('.')?path.posix.normalize(path.posix.join(path.posix.dirname(file.replaceAll('\\','/')),value)):value;
+  if(resolved.startsWith('@workbench/')||/(?:^|\/)workbench(?:\/|$)/.test(resolved)||/(?:^|\/)easel_workbench(?:\/|$)/.test(resolved))
+   violations.push({file,line:ast.getLineAndCharacterOfPosition(node.getStart(ast)).line+1,rule:'common-module-cannot-depend-on-private-host',target:value});
+ };
+ const visit=node=>{
+  if((ts.isImportDeclaration(node)||ts.isExportDeclaration(node))&&node.moduleSpecifier)inspect(node,literal(node.moduleSpecifier));
+  if(ts.isImportTypeNode(node)&&ts.isLiteralTypeNode(node.argument))inspect(node,literal(node.argument.literal));
+  if(ts.isCallExpression(node)&&(node.expression.kind===ts.SyntaxKind.ImportKeyword||ts.isIdentifier(node.expression)&&node.expression.text==='require')&&node.arguments[0])inspect(node,literal(node.arguments[0]));
+  ts.forEachChild(node,visit);
+ };
+ visit(ast);return violations;
+}
+
+/** Explicit initial reads use the shared status shell; refresh remains silent. */
+export function inspectPrivateFeedback(source,file='publishing.tsx'){
+ const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),violations=[];
+ const visit=node=>{
+  if(ts.isJsxOpeningElement(node)||ts.isJsxSelfClosingElement(node)){
+   const role=node.attributes.properties.find(value=>ts.isJsxAttribute(value)&&value.name.getText(ast)==='role');
+   const value=role?.initializer;
+   const status=value&&(ts.isStringLiteral(value)?value.text:ts.isJsxExpression(value)&&value.expression&&ts.isStringLiteral(value.expression)?value.expression.text:undefined);
+   if(['p','span','div'].includes(node.tagName.getText(ast))&&status==='status')violations.push({file,line:ast.getLineAndCharacterOfPosition(node.getStart(ast)).line+1,rule:'private-feedback-must-use-shared-status-card'});
+  }
+  ts.forEachChild(node,visit);
+ };
+ visit(ast);return violations;
 }
 
 export function inspectNativeUse(source,component,importPath,file){
@@ -186,6 +225,11 @@ export function auditEaselBase(base=root){
   ['web/frontend/src/components/SkillPage.tsx','SkillDrawer','./SkillDrawer'],
   ['web/frontend/src/workbench/ui/system.tsx','SettingsPanel','../../components/SettingsPanel']];
  for(const [file,component,target] of nativeUse)violations.push(...inspectNativeUse(read(file),component,target,file));
+ const frontend='web/frontend/src';
+ for(const name of fs.readdirSync(path.join(base,frontend),{recursive:true}).filter(name=>/\.[cm]?tsx?$/.test(name)&&!name.replaceAll('\\','/').startsWith('workbench/'))){
+  const file=frontend+'/'+name.replaceAll('\\','/');violations.push(...inspectCommonDependencies(read(file),file));
+ }
+ violations.push(...inspectPrivateFeedback(read('web/frontend/src/workbench/ui/publishing.tsx'),'web/frontend/src/workbench/ui/publishing.tsx'));
  const privateUi='web/frontend/src/workbench/ui';
  for(const name of fs.readdirSync(path.join(base,privateUi),{recursive:true}).filter(name=>name.endsWith('.tsx'))){
   const file=privateUi+'/'+name.replaceAll('\\','/');violations.push(...inspectOfficialPresentation(read(file),file));
@@ -206,19 +250,24 @@ export function auditEaselBase(base=root){
  for(const file of ['easel_workbench/runtime/settings_upstream.py','scripts/extract_workbench_settings.py']){
   if(fs.existsSync(path.join(base,file)))violations.push({file,rule:'generated-native-source-copy'});
  }
- const manifestFile='docs/workbench/upstream-base.json';let manifest;
- try{manifest=JSON.parse(read(manifestFile));if(manifest.upstream_commit!==OFFICIAL_BASELINE)violations.push({file:manifestFile,rule:'official-baseline-mismatch'});}
+ const manifestFile='docs/workbench/upstream-base.json';let baseline;
+ try{baseline=readOfficialBaseline(base).upstream_commit;}
  catch{violations.push({file:manifestFile,rule:'tracked-upstream-manifest-required'});}
- const ancestry=spawnSync('git',['merge-base','--is-ancestor',OFFICIAL_BASELINE,'HEAD'],{cwd:base,encoding:'utf8'});
+ const overlaysFile='docs/workbench/upstream-overlays.json';
+ if(fs.existsSync(path.join(base,overlaysFile))){
+  try{if(JSON.parse(read(overlaysFile)).full_upstream_baseline!==baseline)violations.push({file:overlaysFile,rule:'overlay-baseline-must-match-integrated-base'});}
+  catch{violations.push({file:overlaysFile,rule:'valid-overlay-ledger-required'});}
+ }
+ const ancestry=spawnSync('git',['merge-base','--is-ancestor',baseline||'INVALID_BASELINE','HEAD'],{cwd:base,encoding:'utf8'});
  if(ancestry.status!==0)violations.push({rule:'official-baseline-must-be-ancestor'});
- const officialStyles=spawnSync('git',['show',`${OFFICIAL_BASELINE}:web/frontend/src/index.css`],{cwd:base,encoding:'utf8'});
+ const officialStyles=spawnSync('git',['show',`${baseline}:web/frontend/src/index.css`],{cwd:base,encoding:'utf8'});
  if(officialStyles.status!==0||officialStyles.stdout.replaceAll('\r\n','\n')!==read('web/frontend/src/index.css').replaceAll('\r\n','\n'))
   violations.push({file:'web/frontend/src/index.css',rule:'native-style-entry-must-match-official'});
  const packageJson=JSON.parse(read('web/frontend/package.json'));
  if(packageJson.scripts.build!=='tsc -b && vite build')violations.push({file:'web/frontend/package.json',rule:'standalone-native-build-must-remain-independent'});
  const main=inspectSource(read('web/frontend/src/main.tsx'),'main.tsx');
  if(!main.imports.some(value=>value.path==='./App.tsx'))violations.push({file:'web/frontend/src/main.tsx',rule:'standalone-native-entry-required'});
- return {passed:violations.length===0,upstream_commit:OFFICIAL_BASELINE,
+ return {passed:violations.length===0,upstream_commit:baseline,
   head:execFileSync('git',['rev-parse','HEAD'],{cwd:base,encoding:'utf8'}).trim(),violations};
 }
 

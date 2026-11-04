@@ -121,7 +121,10 @@ def profile_request():
     return Request({'type':'http','method':'POST','path':'/api/profile/build','query_string':b'',
                     'headers':[(b'x-operation-id',b'original-profile-once')],'scheme':'https','server':('native.test',443)})
 
-def test_original_wizard_protocol_persists_stable_identity_and_original_form_once(commands):
+def test_original_wizard_protocol_persists_stable_identity_and_original_form_once(commands,monkeypatch):
+    from easel.web_services import profiles
+    jobs=[];start=profiles.start_profile_enhancement
+    monkeypatch.setattr(profiles,'start_profile_enhancement',lambda *args,**options:start(*args,**options,background=jobs.append))
     api=NativeApi(commands);commands._native_api=api
     form={'name':'TEMP-original','direction':'准确原始方向','platforms':['公众号'],'links':{'公众号':'https://example.test/original'},'accountStage':'已有账号','avoid':'不变的原话'}
     async def run():
@@ -129,7 +132,8 @@ def test_original_wizard_protocol_persists_stable_identity_and_original_form_onc
         second=await handle(commands,'/api/profile/build',profile_request(),{'name':'TEMP-original','form':form})
         return first,second
     first,second=asyncio.run(run());assert first.status_code==second.status_code==200
-    result=json.loads(first.body);assert result==json.loads(second.body) and result['created'] and result['async'] is False
+    result=json.loads(first.body);assert result==json.loads(second.body) and result['created'] and result['async'] is True
+    assert len(jobs)==1 and api._profile_build_status(result['name'])['state']=='running'
     assert result['name'].startswith('profile-') and result['name']!='TEMP-original'
     profile=commands.creator.detail('profile',result['name'])
     assert profile['identity']==baseline_profile_files('TEMP-original',form)['identity.md']

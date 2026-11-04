@@ -49,6 +49,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const runtimeStatus=useResource<JsonRecord>(vm.ready?'/api/status':null,{interval:30000});
  useEffect(()=>{const reload=()=>void runtimeStatus.reload();window.addEventListener('workbench:settings-changed',reload);return()=>window.removeEventListener('workbench:settings-changed',reload)},[runtimeStatus.reload]);
  const nativeId=p.startsWith('/chat/')?decodeURIComponent(p.slice(6)):q.get('session')||'',activeSession=sessions.data?.sessions.find(session=>session.id===nativeId),profile=q.get('profile')||activeSession?.profile_id||activeSession?.persona||selected.profile_id;
+ useEffect(()=>{const profiles=creators.data?.profiles;if(!profiles||activeSession)return;const current=profiles.find(value=>value.id===selected.profile_id);if(current?.active===false){const fallback=profiles.find(value=>value.active!==false);if(fallback)patch({profile_id:fallback.id});}},[creators.data,activeSession,selected.profile_id,patch]);
  const {owner:sessionFlows,flow:sessionFlow}=useSessionOpenFlow(vm.client);
  useEffect(()=>{if(vm.ready&&p==='/chat'&&q.get('flow'))sessionFlows.restore(q.get('flow')!)},[vm.ready,p,q.get('flow'),sessionFlows]);
  useEffect(()=>bindOutputNavigation(path=>vm.navigate('/works?'+new URLSearchParams({path}),{intent:'object'})),[vm.navigation]);
@@ -114,7 +115,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   onOpenSettings:()=>open('/settings'),theme,onThemeChange,
   assetUrl:nativeAsset,
   rootRef:sidebar,rootLabel:'工作导航',navigationLabel:'工作台导航',
-  personaOptions:[...(creators.data?.profiles.map(value=>({value:value.id,label:value.name}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
+  personaOptions:[...(creators.data?.profiles.filter(value=>value.active!==false||activeSession?.profile_id===value.id||activeSession?.persona===value.id).map(value=>({value:value.id,label:value.name+(value.active===false?'（原会话画像）':'')}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
   navigation:config?.tools.map(tool=>({id:tool.id,label:tool.name,icon:icons[tool.id]||<IconDashboard size={18}/>,active:active(tool.id,shownPath),onSelect:()=>open(tool.path)}))||[],
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
  notice:<Notice sources={[{error:chatAction.error,feedback:chatAction.feedback}]}/>,

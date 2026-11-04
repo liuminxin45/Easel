@@ -952,14 +952,8 @@ async def api_persona_file_save(name: str, req: PersonaFileRequest):
 @app.delete("/api/persona/{name}")
 async def api_persona_delete(name: str):
     """删除整个画像目录。"""
-    if not _valid_persona_name(name):
-        raise HTTPException(400, "画像名非法")
-    pd = (PROFILES_DIR / name).resolve()
-    if PROFILES_DIR.resolve() not in pd.parents or not pd.is_dir():
-        raise HTTPException(404, "画像不存在")
-    import shutil
-    shutil.rmtree(pd)
-    return {"ok": True, "deleted": name}
+    from easel.web_services.profiles import delete_profile
+    return await delete_profile(name, PROFILES_DIR)
 
 
 app.get("/api/skills")(api_skills)
@@ -1479,92 +1473,6 @@ from easel.web_services.chat import bind as _bind_shared_chat
 _bind_shared_chat(into=globals())
 
 
-async def _run_direct_chat(req: ChatRequest, sk: str, content, system: str, emit) -> str:
-    """Run one API turn with the same stop/recovery/session locking as Gateway chat."""
-    pk = f"web:{sk}"
-    turn_id = req.turnId or uuid.uuid4().hex
-    full_text = []
-    clean_end = False
-    reason = "error"
-    error_message = ""
-    lock = _session_lock(sk)
-    xlock = _CrossProcLock(sk)
-    proc = _GatewayHttpProc()
-    acquired = False
-    claimed = False
-    locked = False
-    settings = read_settings(ENV_FILE)
-    task = asyncio.current_task()
-    _DIRECT_CHAT_TASKS.add(task)
-    if lock.locked():
-        emit("activity", "⏳ 这个会话上一条还在跑，排队等它结束…")
-    try:
-        await lock.acquire()
-        locked = True
-        deadline = time.monotonic() + min(TIMEOUT_CHAT, 300)
-        while True:
-            acquired = xlock.acquire(0)
-            if acquired:
-                break
-            xlock.release()
-            if time.monotonic() >= deadline:
-                break
-            await asyncio.sleep(0.2)
-        if not acquired:
-            raise DirectAPIError("这个会话正在另一个窗口运行，请稍候再试")
-        # Existing OpenClaw conversations have different histories. Require a new
-        # session rather than silently discard their context when switching modes.
-        if (_transport_pin_file(sk).is_file()
-                or (OPENCLAW_SESSIONS_DIR / f"{_openclaw_session_id(sk)}.jsonl").is_file()
-                or (OPENCLAW_SESSIONS_DIR / f"{_openclaw_session_id(pk)}.jsonl").is_file()):
-            raise DirectAPIError("此会话属于 OpenClaw，请新建会话使用 API 直连")
-        _save_turn(pk, "running", "", {"turn_id": turn_id})
-        claimed = True
-        proc._task = asyncio.current_task()
-        _RUNNING_CHAT[sk] = proc
-        emit("activity", "🧠 正在通过 API 思考…")
-
-        async def consume():
-            nonlocal clean_end, reason
-            async for kind, text in stream_chat(
-                    settings, content, system=system,
-                    history_file=history_path(SESSIONS_DIR, sk), timeout=TIMEOUT_CHAT):
-                if kind == "finish":
-                    clean_end, reason = True, text
-                else:
-                    if kind == "token":
-                        full_text.append(text)
-                    emit(kind, text)
-
-        await asyncio.wait_for(consume(), timeout=TIMEOUT_CHAT)
-    except asyncio.CancelledError:
-        reason = "user_stopped" if sk in _STOPPED_CHAT else "cancelled"
-        if reason != "user_stopped":
-            raise
-    except (DirectAPIError, asyncio.TimeoutError) as error:
-        error_message = str(error) or "API 请求超时"
-        emit("error", error_message)
-    except OSError:
-        error_message = "会话历史保存失败，请检查项目 outputs 目录权限"
-        emit("error", error_message)
-    finally:
-        proc.finish()
-        snapshot = "".join(full_text) + (f"\n\n❌ {error_message}" if error_message else "")
-        try:
-            if claimed:
-                _save_turn(pk, "done", snapshot, {
-                    "turn_id": turn_id, "clean_end": clean_end, "stop_reason": reason,
-                })
-        finally:
-            if _RUNNING_CHAT.get(sk) is proc:
-                _RUNNING_CHAT.pop(sk, None)
-            if claimed:
-                _STOPPED_CHAT.discard(sk)
-            xlock.release()
-            if locked:
-                lock.release()
-            _DIRECT_CHAT_TASKS.discard(task)
-    return "".join(full_text)
 
 
 @app.get("/api/chat/last/{session_id}")
@@ -2381,10 +2289,7 @@ app.get('/api/output/{path:path}')(api_output)
 app.get('/api/media/{path:path}')(api_media)
 
 
-UPLOAD_EXTS = IMAGE_EXTS | VIDEO_EXTS | {
-    ".pdf", ".txt", ".md", ".markdown", ".csv", ".json", ".srt", ".vtt",
-    ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".mp3", ".wav", ".m4a"}
-MAX_UPLOAD_MB = 50
+from easel.web_services.uploads import MAX_UPLOAD_MB, UPLOAD_EXTS, stream_upload, upload_limits
 
 
 def _unique_upload_path(dest: Path, filename: str) -> Path:
@@ -2424,23 +2329,7 @@ async def api_upload(
         # （超限的多 GB 文件会把 web 进程撑爆）才报 413。
         cap = MAX_UPLOAD_MB * 1024 * 1024
         target = _unique_upload_path(dest, name)
-        size = 0
-        try:
-            with open(target, 'wb') as out:
-                while True:
-                    chunk = await f.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    if size > cap:
-                        raise HTTPException(413, f'{name} 超过 {MAX_UPLOAD_MB}MB 上限')
-                    out.write(chunk)
-        except HTTPException:
-            try:
-                target.unlink()
-            except OSError:
-                pass
-            raise
+        await stream_upload(f, target, max_bytes=cap)
         rel = f"_inbox/{scope}/{batch}/{target.name}"
         saved.append({"id": _attachment_id(scope, rel), "name": target.name, "path": rel})
     if not saved:
@@ -2451,7 +2340,7 @@ async def api_upload(
 @app.get("/api/upload/limits")
 async def api_upload_limits():
     """当前上传上限（MB）——前端在文件超限时据此切换到本地复制通道。"""
-    return {"ok": True, "max_mb": MAX_UPLOAD_MB}
+    return upload_limits()
 
 
 @app.post("/api/upload/local")
@@ -2472,12 +2361,7 @@ async def api_upload_local(
         if ext not in UPLOAD_EXTS:
             raise HTTPException(400, f'不支持的文件类型：{ext or name}')
         target = _unique_upload_path(dest, name)
-        with open(target, 'wb') as out:
-            while True:
-                chunk = await f.read(1024 * 1024)
-                if not chunk:
-                    break
-                out.write(chunk)
+        await stream_upload(f, target, max_bytes=None)
         rel = f"_inbox/{scope}/{batch}/{target.name}"
         saved.append({"id": _attachment_id(scope, rel), "name": target.name, "path": rel})
     if not saved:
@@ -2829,20 +2713,9 @@ async def api_profile_build(req: ProfileBuildRequest):
     if pd.exists():
         raise HTTPException(409, f'画像「{name}」已存在，请换一个名字')
     _write_baseline_profile(name, req.form or {})
-    instruction = _form_to_instruction(name, req.form or {})
-    msg = (f"请执行 /skill-profile-builder 完善已存在的画像「{name}」。用户已通过表单提供以下信息，我已按此写好 profiles/{name}"
-           f"/ 的基线六维文件。请：①尽力抓取用户给的社媒链接分析已发内容/风格/受众（抓不到就降级，标注[待补充]，勿臆造）②据分析结果润色/补全各维度文件 ③给出一句话完成度摘要。表单信息如下：\n\n{instruction}")
-
-    _write_profile_status(name, 'running', 'AI 正在分析并增强画像…')
-
-    def _enhance() -> None:
-        try:
-            log = run_agent_sync(msg, TIMEOUT_PRODUCE)
-            _write_profile_status(name, 'done', log)
-        except Exception as e:  # noqa: BLE001
-            _write_profile_status(name, 'failed', f'AI 增强失败（基线画像已可用）：{e}')
-
-    threading.Thread(target=_enhance, daemon=True).start()
+    from easel.web_services.profiles import start_profile_enhancement
+    start_profile_enhancement(name, req.form or {}, execute=run_agent_sync,
+                              write_status=_write_profile_status)
     # 基线已写、画像立即可用；增强在后台，前端轮询状态
     return {'created': pd.is_dir(), 'name': name, 'async': True, 'status': 'running'}
 
@@ -2877,19 +2750,7 @@ async def api_profile_build_status(name: str):
     return {'state': 'unknown', 'log': ''}
 
 
-def _form_to_instruction(name: str, form: dict) -> str:
-    def g(k: str, default: str = '（未填）') -> str:
-        v = form.get(k)
-        if isinstance(v, list):
-            return '、'.join(str(x) for x in v) if v else default
-        return str(v).strip() if v not in (None, '') else default
-    links = form.get('links') or {}
-    links_txt = '\n'.join(f'  - {p}: {u}' for p, u in links.items() if u) or '  （未提供）'
-    return (f"画像名：{name}\n运营平台：{g('platforms')}\n起号状态：{g('accountStage')}"
-            f"\n社媒主页链接：\n{links_txt}\n想做的方向：{g('direction')}"
-            f"\n为什么做/我的优势：{g('reason')}\n运营目标：{g('goal')}"
-            f"\n想产出的形式：{g('formats')}\n喜欢看的内容/对标账号：{g('likes')}"
-            f"\n期望调性：{g('tone')}\n不做的内容/红线：{g('avoid')}\n")
+from easel.web_services.profiles import form_to_instruction as _form_to_instruction
 
 
 def _write_baseline_profile(name: str, form: dict) -> None:

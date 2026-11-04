@@ -120,7 +120,9 @@ def test_pending_resolve_and_alias_wait_off_event_loop(tmp_path,alias):
         time.sleep(.12)
         if alias and not path.startswith('native-session-'):raise HTTPException(404,'TEMP unregistered alias')
         return {'nodes':[{'path':path}]}
-    api.library=SimpleNamespace(resolve=resolve);api._output_context=lambda path:{}
+    api.library=SimpleNamespace(resolve=resolve,generation=lambda:'TEMP-generation');api._output_context=lambda path:{}
+    from easel_workbench.features.works.library_deletion import LibraryDeletion
+    api.deletions=LibraryDeletion(api)
     request=Request({'type':'http','method':'GET','path':'/api/library/resolve','query_string':b'path=session/turn/products/result.md','headers':[]})
     async def scenario():
         pending=asyncio.create_task(api.dispatch('/api/library/resolve',request,None))

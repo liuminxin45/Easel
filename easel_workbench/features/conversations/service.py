@@ -146,6 +146,9 @@ class ChatService:
                 if harness_store.binding(self.sessions_dir, session_id):
                     raise ChatConflict('此原生会话已有绑定，请保留原历史并新建对话')
                 profile_id = identity(value.get('profile_id') or 'oil-pig')
+                profile = c.execute('SELECT document FROM creator_profiles WHERE id=?',(profile_id,)).fetchone()
+                if profile and json.loads(profile['document']).get('active',True) is False:
+                    raise ChatConflict('此画像已从活动列表删除，请选择其他画像新建对话；历史会话保留')
                 persona = value.get('persona')
                 if persona is not None:
                     text(persona, 200, True)
@@ -831,24 +834,31 @@ class ChatService:
                                  on_native_turn=native_turn, on_native_interrupt=native_interrupt,
                                  on_execution_receipt=execution_receipt,
                                  frozen_instructions=turn['frozen_instructions'])
-            if turn['runtime'] in ('api','openclaw'):
+            def dispatch():
+                nonlocal native_invoked
+                native_invoked=True
+            if turn['runtime'] == 'api':
                 from easel_workbench.settings_execution import run as configured_run
-                native_invoked = True
-                await asyncio.wait_for(configured_run(self, turn, request, emit, ask, bind), self.timeout)
+                await configured_run(self, turn, request, emit, ask, bind,on_dispatch=dispatch,
+                    stop_requested=lambda:turn_id in self._stop_requested)
             else:
                 from types import SimpleNamespace
                 from easel.web_services.chat import create_chat_context
                 async def questions(_session, items, _emit):return await ask(items)
-                def dispatch():
-                    nonlocal native_invoked
-                    native_invoked=True
+                adapter=None
+                if turn['runtime']=='openclaw':
+                    from dataclasses import replace
+                    from easel.harnesses.openclaw import OpenClawAdapter
+                    request=replace(request,env={**request.env,
+                        **self.settings.openclaw_environment(turn['execution_settings'])})
+                    adapter=OpenClawAdapter()
                 native=create_chat_context(self.root,backend=lambda sid:turn['runtime'],
                     environment=environment,snapshot=lambda *args:None,ask=questions,scrub=scrub,running=self._native_controls)
                 await native._run_harness_chat(SimpleNamespace(turnId=turn_id),turn['session_id'],
                     turn['actual_prompt'],turn['runtime'],{'models':{turn['runtime']:turn['model']},**configuration},
                     emit,self.timeout,interactive=turn.get('interactive',True),run_request=request,
                     bind_native=bind,propagate_errors=True,stop_requested=lambda:turn_id in self._stop_requested,
-                    on_dispatch=dispatch)
+                    on_dispatch=dispatch,adapter=adapter)
             turn.update(status='completed', delivery_state='accepted')
         except asyncio.CancelledError:
             confirmed = turn_id in self._stop_requested and (not native_invoked or turn.get('interrupt_confirmed') is True)
@@ -863,11 +873,11 @@ class ChatService:
             turn.update(status='stopped' if confirmed_timeout else 'unknown',
                         delivery_state='interrupted' if confirmed_timeout else 'unknown',
                         error=scrub(str(error)) if isinstance(error, HarnessError) else
-                        'Codex 本轮超时，原生接口已确认中断；原回合与文件保留，未重新制作。' if confirmed_timeout else
-                        'Codex 本轮超时，等待核对原回合。')
+                        '本轮超时，原生接口已确认中断；原回合与文件保留，未重新制作。' if confirmed_timeout else
+                        '本轮超时，等待核对原回合。')
             emit('error', turn['error'])
         except Exception as error:
-            turn.update(status='unknown', delivery_state='unknown', error='Codex 执行或结果记录异常，请核对原回合。', error_type=type(error).__name__)
+            turn.update(status='unknown', delivery_state='unknown', error='执行或结果记录异常，请核对原回合。', error_type=type(error).__name__)
             emit('error', turn['error'])
         finally:
             if started_hook_task:

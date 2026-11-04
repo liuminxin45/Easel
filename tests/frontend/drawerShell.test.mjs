@@ -4,6 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
+import {OFFICIAL_BASELINE} from '../../scripts/audit_easel_base.mjs';
 
 const require = createRequire(new URL('../../web/frontend/package.json', import.meta.url));
 const ts = require('typescript'), react = require('react'), jsx = require('react/jsx-runtime');
@@ -27,7 +28,7 @@ const children = node => Array.isArray(node.props.children) ? node.props.childre
 const normalizeSemantics = html => html.replace(/ (?:id|role|aria-label|aria-labelledby|aria-modal)="[^"]*"/g, '');
 
 test('the shared shell renders the original official SkillDrawer DOM and heading layout', () => {
-  const original = execFileSync('git', ['show', '0f43dc98277eac85fb48952878acad349731d3fc:web/frontend/src/components/SkillDrawer.tsx'], {
+  const original = execFileSync('git', ['show', `${OFFICIAL_BASELINE}:web/frontend/src/components/SkillDrawer.tsx`], {
     cwd: root, encoding: 'utf8',
   });
   const hooks = {...react, useState: value => [value, () => {}], useEffect: () => {},

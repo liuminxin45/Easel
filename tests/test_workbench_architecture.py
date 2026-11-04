@@ -65,7 +65,6 @@ UPSTREAM_PATCH_ALLOWLIST.add('web/frontend/src/lib/trendValidation.ts')
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/assets/workbench/README.md',
     'web/frontend/src/assets/workbench/oil-pig-avatar.jpg',
     'web/frontend/src/components/skillIconsProduce.tsx',
-    'web/frontend/src/components/skillIconsWorkbench.tsx',
     'web/frontend/src/lib/skillDisplayNames.ts'})
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
@@ -86,6 +85,8 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'easel/web_services/accounts.py', 'easel/web_services/settings.py',
     'easel/web_services/planning.py', 'easel/web_services/outputs.py',
     'easel/web_services/environment.py',
+    # One bounded upload writer and parser, used by both entry points.
+    'easel/web_services/uploads.py',
     'easel/web_services/analytics.py',
     # Original web Agent supervisor/process locks extracted once; both hosts call it.
     'easel/web_services/chat.py',
@@ -257,7 +258,8 @@ def private_ts_edge(relative,specifier):
     if specifier.startswith('@workbench/'):return True
     if specifier.startswith('.'):
         resolved=(FRONTEND/relative).parent/specifier
-        return resolved.resolve().is_relative_to(PRIVATE_UI.resolve())
+        return any(resolved.resolve().is_relative_to(directory.resolve())
+                   for directory in (PRIVATE_UI,FRONTEND/'assets/workbench'))
     return False
 
 
@@ -348,6 +350,7 @@ const lazy=()=>import('./workbench/'+'host');
     assert len(edges)==3
     assert all(private_ts_edge('App.tsx',edge['specifier']) for edge in edges)
     assert {edge['kind'] for edge in edges}=={'import','export','dynamic'}
+    assert private_ts_edge('components/View.tsx','../assets/workbench/oil-pig-avatar.jpg?inline')
 
 
 @pytest.mark.parametrize('source',[

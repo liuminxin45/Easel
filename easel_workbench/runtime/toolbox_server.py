@@ -147,8 +147,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if method not in ('GET','HEAD','POST') and not (method in ('PUT','PATCH','DELETE') and native_api.supports(path,method)):return error(405,'method rejected')
         if target.startswith('//') or '\\' in target or '#' in target or headers.get('upgrade') or len(headers.getlist('authorization'))>1:return error(400,'请求格式无效')
         if method in ('GET','HEAD') and (headers.get('transfer-encoding') or int(headers.get('content-length','0'))):return error(400,'GET 不接受请求内容')
-        raw=await body(request,20*1024*1024 if path in ('/api/uploads','/api/upload') else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 512000) if method in ('POST','PUT','PATCH','DELETE') else b''
-        request._body=raw
+        streamed_upload=(method=='POST' and (path=='/api/uploads' or path=='/api/upload' and
+                         headers.get('content-type','').split(';')[0].lower()=='multipart/form-data'))
+        raw=await body(request,20*1024*1024 if path=='/api/uploads' else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 512000) if method in ('POST','PUT','PATCH','DELETE') and not streamed_upload else b''
+        if not streamed_upload:request._body=raw
         pairs=[(key.decode('latin1'),value.decode('latin1')) for key,value in headers.raw];ctx=Context(method,target,pairs,raw)
         ctx.auth_id=trace
         ctx.auth_event=lambda reason,status:journal.emit('authentication',trace_id=ctx.auth_id,route=path,status=status,phase=reason)
@@ -287,7 +289,16 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             if len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
             if path=='/api/uploads':
                 if headers.get('content-type','').split(';')[0]!='application/octet-stream':return error(415,'请求类型无效')
-                return reply(await asyncio.to_thread(box.upload,ident(headers.get('x-operation-id')),urllib.parse.unquote(headers.get('x-file-name',''),errors='strict'),raw))
+                if len(headers.getlist('x-operation-id'))!=1:return error(400,'附件缺少唯一操作身份')
+                from easel.web_services.uploads import stream_request_upload,DEFAULT_MAX_BYTES
+                from tempfile import TemporaryDirectory
+                operation=ident(headers.get('x-operation-id'))
+                filename=urllib.parse.unquote(headers.get('x-file-name',''),errors='strict')
+                with TemporaryDirectory(prefix='easel-upload-') as temporary:
+                    staged=pathlib.Path(temporary)/'upload'
+                    async with asyncio.timeout(45):
+                        await stream_request_upload(request,staged,filename,allow_empty=False)
+                    return reply(await asyncio.to_thread(box.register_file,operation,filename,staged,max_bytes=DEFAULT_MAX_BYTES))
             if headers.get('content-type','').split(';')[0]!='application/json':return error(415,'请求类型无效')
             value=json.loads(raw)
             if not isinstance(value,dict):raise ValueError('请求需要 JSON 对象')

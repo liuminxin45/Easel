@@ -139,7 +139,7 @@ def test_native_never_exposes_frozen_system_inputs_or_deletes_originals(commands
         response, _ = call(commands, path)
         assert response.status_code == 403
     deleted, _ = call(commands, '/api/output/project', 'DELETE', {}, 'do-not-delete')
-    assert deleted.status_code == 403 and secret.read_text(encoding='utf-8') == 'FROZEN PRIVATE INPUT'
+    assert deleted.status_code == 404 and secret.read_text(encoding='utf-8') == 'FROZEN PRIVATE INPUT'
 
 
 def test_native_writes_obey_cutover_and_admission(commands):

@@ -95,7 +95,7 @@ def test_host_viewport_cannot_introduce_a_second_font_system():
 def test_official_source_manifest_and_native_build_remain_verifiable():
     report=inspect('auditEaselBase',[str(ROOT)])
     assert report['passed'],report['violations']
-    assert report['upstream_commit']=='0f43dc98277eac85fb48952878acad349731d3fc'
+    assert report['upstream_commit']==json.loads((ROOT/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))['upstream_commit']
 
 
 def test_shared_backend_has_no_private_dependencies_or_runtime_source_copies():
@@ -119,3 +119,13 @@ def test_neutral_modules_still_reject_reverse_dependency_injection():
                    'from easel_workbench.runtime import native_api',
                    'importlib.import_module("easel_workbench.chat")'):
         assert GUARDS['upstream_private_edges'](source,'easel/web_services/accounts.py')
+
+
+def test_both_native_chat_paths_bind_the_actual_shared_function_code(tmp_path):
+    from easel.web_services import chat
+    context=chat.create_chat_context(tmp_path,backend=lambda:'api',environment={},
+        snapshot=lambda *args:None,ask=lambda *args:None,scrub=lambda value:value)
+    original=chat.bind(into={})
+    for name in ('_run_harness_chat','_run_direct_chat'):
+        assert getattr(context,name).__code__ is getattr(chat,name).__code__
+        assert getattr(original,name).__code__ is getattr(chat,name).__code__

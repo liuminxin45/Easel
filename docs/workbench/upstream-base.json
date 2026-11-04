@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "upstream_url": "https://github.com/ZJU-REAL/Easel.git",
   "upstream_commit": "0f43dc98277eac85fb48952878acad349731d3fc",
   "local_baseline_commit": "e70d6dcddec803ee1598ba1de8c7acdd740fcf1a",
@@ -16,9 +17,10 @@
   "exceptions": [
     "project Python source protocol",
     "server-owned sessions and frozen revisions",
-    "15 visible trend rows and 360px dashboard lists"
+    "private source revisions and original collection records"
   ],
   "integration_status": "integrated",
+  "selected_pr_overlays": "docs/workbench/upstream-overlays.json",
   "previous_upstream_commit": "5a597e5f3ef5b01098b53f36caf719dd9a32b7bf",
   "validated_private_commit": "2fa12825958db102c73d743ca906b7ddee0af7c0",
   "integration_record": "docs/workbench/upstream-versions/2026-11-02-0f43dc9.json",

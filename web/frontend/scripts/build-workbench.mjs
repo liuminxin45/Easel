@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {build} from 'vite';
 import react from '@vitejs/plugin-react';
+import {readOfficialBaseline} from '../../../scripts/audit_easel_base.mjs';
 
 const frontend=path.resolve(import.meta.dirname,'..'),root=path.resolve(frontend,'../..');
 if(process.version!=='v24.19.0')throw Error('Node 24.19.0 required');
@@ -21,7 +22,7 @@ const sources=()=>{
     .filter(n=>fs.statSync(path.join(frontend,'src',n)).isFile())
     .map(n=>'web/frontend/src/'+n.replaceAll('\\','/'));
   files.push(...['package.json','package-lock.json','tsconfig.workbench.json','workbench.html','auth.html','scripts/build-workbench.mjs'].map(n=>'web/frontend/'+n),
-    'web/static/easel-icon-transparent.png','web/static/dropdown.css','scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','docs/workbench/upstream-base.json','scripts/audit_easel_base.mjs','LICENSE');
+    'web/static/easel-icon-transparent.png','web/static/dropdown.css','scripts/audit_workbench_interactions.mjs','easel_workbench/assets/native-reconnect.js','easel_workbench/assets/native-sw-template.js','docs/workbench/import-baseline.json','docs/workbench/upstream-base.json','docs/workbench/upstream-overlays.json','scripts/audit_easel_base.mjs','LICENSE');
   return Object.fromEntries(files.sort().map(n=>[n,sha(fs.readFileSync(path.join(root,n)))]));
 };
 const inputs=sources();
@@ -31,7 +32,10 @@ fs.renameSync(path.join(out,'workbench.html'),path.join(out,'index.html'));
 for(const file of ['index.html','auth.html']){const p=path.join(out,file);fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('__NATIVE_RELEASE__',release));}
 fs.mkdirSync(path.join(out,'licenses'));fs.copyFileSync(path.join(root,'LICENSE'),path.join(out,'licenses/Easel-LICENSE.txt'));
 fs.copyFileSync(path.join(root,'docs/workbench/import-baseline.json'),path.join(out,'licenses/Workbench-SOURCE.json'));
-fs.writeFileSync(path.join(out,'licenses/Easel-NOTICE.txt'),'Easel, Apache-2.0. Source: https://github.com/ZJU-REAL/Easel\nLocal fork base: 514caf8089f89b4793063aeae867690cc69bf8b8\nPrivate workflow adaptation: easel_workbench and web/frontend/src/workbench.\n');
+const baseline=readOfficialBaseline(root);
+fs.copyFileSync(path.join(root,'docs/workbench/upstream-base.json'),path.join(out,'licenses/Easel-BASELINE.json'));
+fs.copyFileSync(path.join(root,'docs/workbench/upstream-overlays.json'),path.join(out,'licenses/Easel-PR-OVERLAYS.json'));
+fs.writeFileSync(path.join(out,'licenses/Easel-NOTICE.txt'),`Easel, Apache-2.0. Source: ${baseline.upstream_url.replace(/\.git$/,'')}\nIntegrated official base: ${baseline.upstream_commit}\nSelected PR overlays are recorded separately in Easel-PR-OVERLAYS.json; this does not claim all newer upstream commits are integrated.\nPrivate workflow adaptation: easel_workbench and web/frontend/src/workbench.\n`);
 fs.copyFileSync(path.join(root,'easel_workbench/assets/native-reconnect.js'),path.join(out,'reconnect.js'));
 const assets=fs.readdirSync(out,{recursive:true}).filter(n=>fs.statSync(path.join(out,n)).isFile()&&/\.(js|css|woff2?|svg|png|webp)$/.test(n)).map(n=>'/native-assets/'+release+'/'+n.replaceAll('\\','/'));
 fs.writeFileSync(path.join(out,'sw.js'),`const VERSION=${JSON.stringify(release)},CACHE='native-static-'+VERSION,SHELL='native-shell-'+VERSION,ASSETS=${JSON.stringify(assets)};\n`+fs.readFileSync(path.join(root,'easel_workbench/assets/native-sw-template.js'),'utf8'));

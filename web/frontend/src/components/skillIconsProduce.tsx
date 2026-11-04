@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react';
-import {workbenchSkillIcons} from './skillIconsWorkbench';
 
 type Icon = ComponentType<{ size?: number }>;
 // Each symbol is drawn on the same 24-unit grid as the application's other icons.
@@ -60,8 +59,8 @@ const paths: Record<string, string> = {
   'xhs-note-creator': 'M5 3h14v18H5zM8 7h8M8 10h8M8 14h5m2 3h4m-2-2v4',
 };
 
-export const produceSkillIcons: Record<string, Icon> = {...Object.fromEntries(
+export const produceSkillIcons: Record<string, Icon> = Object.fromEntries(
   Object.entries(paths).map(([name, d]) => [name, ({ size = 18 }: { size?: number }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
   )]),
-),...workbenchSkillIcons};
+);

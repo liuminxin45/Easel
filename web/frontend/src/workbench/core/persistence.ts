@@ -68,7 +68,7 @@ export async function draftFile(id:string,value?:StoredDraftFile,activities?:Act
     return await new Promise<StoredDraftFile|undefined>((resolve,reject)=>{const tx=db!.transaction('files',value===undefined?'readonly':'readwrite'),store=tx.objectStore('files'),request=value===undefined?store.get(id):store.put(value,id);let result:StoredDraftFile|undefined;request.onsuccess=()=>{result=request.result as StoredDraftFile|undefined};tx.oncomplete=()=>resolve(value===undefined?result:value);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??Error('附件保存中断'))});
   }finally{db?.close();release?.()}
 }
-export async function attachFiles(files:Iterable<File>,existing:DraftAttachment[]=[],activities?:ActivityDelegate,maxBytes=20*1024*1024):Promise<DraftAttachment[]>{
+export async function attachFiles(files:Iterable<File>,existing:DraftAttachment[]=[],activities?:ActivityDelegate,maxBytes=50*1024*1024):Promise<DraftAttachment[]>{
   const next=[...existing];for(const file of files){if(file.size>maxBytes)throw Error('单个附件不能超过'+Math.round(maxBytes/1024/1024)+'MB');if(next.length>=12)throw Error('最多添加12个附件');const id='local-'+crypto.randomUUID(),uploadId=crypto.randomUUID();await draftFile(id,{blob:file,name:file.name,uploadId},activities);next.push({id,name:file.name,mime:file.type,size:file.size,local:true,uploadId})}return next;
 }
 export async function uploadFiles(files:(DraftAttachment|string)[],api:ApiTransport,csrf:string,activities?:ActivityDelegate):Promise<Artifact[]>{

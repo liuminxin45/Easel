@@ -481,3 +481,21 @@ def test_accept_hook_failure_rolls_back_work_turn_and_pending_session(service):
         assert s.history('workbench-session')['session']['pendingTurnId'] is None and not a.requests
         await s.close()
     asyncio.run(scenario())
+
+
+def test_inactive_profile_cannot_start_new_session_but_keeps_old_receipt(service):
+    chat,_=service
+    creator=chat.box.creator
+    document={'name':'TEMP original profile'}
+    profile=creator.command({'id':'create-inactive-profile','action':'profile-save',
+        'profile_id':'historical-profile','base_revision':0,'document':document})['result']['profile']
+    command={'id':'original-profile-session','session_id':'profile-session','profile_id':profile['id']}
+    original=chat.create_session(command)
+    creator.command({'id':'deactivate-profile','action':'profile-save','profile_id':profile['id'],
+        'base_revision':profile['revision'],'document':{'active':False}})
+    assert chat.create_session(command)==original
+    assert chat.history('profile-session')['session']['profile_id']==profile['id']
+    with pytest.raises(ChatConflict,match='画像已从活动列表删除'):
+        chat.create_session({'id':'new-inactive-session','session_id':'new-inactive','profile_id':profile['id']})
+    with chat.store.connect() as connection:
+        assert not connection.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?',('new-inactive',)).fetchone()

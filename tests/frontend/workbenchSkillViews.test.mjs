@@ -5,9 +5,10 @@ import {moduleLoader} from './helpers/modules.mjs';
 const jsx={jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
 
 test('private skill host renders the original page with default official catalog and drawer services',()=>{
- const view={read:()=>({query:'kept query'}),write(){}},ready=()=>{},load=moduleLoader({imports:{react:{useCallback:fn=>fn},'react/jsx-runtime':jsx,'../../components/SkillPage':'OriginalSkillPage','./hooks':{useWorkbench:()=>({navigation:{entryKey:'entry',contentReady:ready}}),useViewState:()=>view}}});
+ const icons={'content-production':()=>null},view={read:()=>({query:'kept query'}),write(){}},ready=()=>{},load=moduleLoader({imports:{react:{useCallback:fn=>fn},'react/jsx-runtime':jsx,'../../components/SkillPage':'OriginalSkillPage','./skillIcons':{workbenchSkillIcons:icons},'./hooks':{useWorkbench:()=>({navigation:{entryKey:'entry',contentReady:ready}}),useViewState:()=>view}}});
  const page=load('workbench/ui/NativeSkills.tsx').NativeSkills({profileId:'author'});
  assert.equal(page.type,'OriginalSkillPage');assert.equal(page.props.persona,'author');assert.equal(page.props.viewState,view);
+ assert.equal(page.props.icons,icons);
  for(const prop of ['headerActions','renderDrawer','catalog'])assert.equal(prop in page.props,false,prop);
  assert.equal(typeof page.props.onContentReady,'function');
 });

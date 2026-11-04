@@ -140,9 +140,11 @@ def _collection(root, now, grace_seconds):
                   'late_source_count': 0, 'max_late_seconds': 0,
                   'max_success_age_seconds': 0, 'schedule_unobserved_source_count': 0,
                   'external_provider_source_count': 0, 'external_provider': False,
+                  'latest_empty_source_count': 0,
                   'execution_grace_seconds': grace_seconds}
         observed_revisions = set()
-        for source, status, raw, error, warnings in connection.execute('''SELECT t.source_id,t.status,t.source_snapshot,t.error,t.warnings FROM collection_tasks t
+        task_id_column='t.id' if any(row[1]=='id' for row in connection.execute('PRAGMA table_info(collection_tasks)')) else 'NULL'
+        for source, status, raw, error, warnings, fetched, task_id in connection.execute('''SELECT t.source_id,t.status,t.source_snapshot,t.error,t.warnings,t.fetched,'''+task_id_column+''' FROM collection_tasks t
                 JOIN (SELECT source_id,MAX(rowid) latest_row FROM collection_tasks GROUP BY source_id) latest ON t.rowid=latest.latest_row'''):
             if source not in enabled:
                 continue
@@ -151,16 +153,25 @@ def _collection(root, now, grace_seconds):
                 continue
             observed_revisions.add(source)
             counts['unobserved_source_count'] -= 1
-            if status == 'failed': counts['latest_failed_source_count'] += 1
+            if status in ('failed', 'blocked'): counts['latest_failed_source_count'] += 1
             elif status == 'partial': counts['latest_partial_source_count'] += 1
             elif status in ('completed', 'empty'): counts['latest_completed_source_count'] += 1
             elif status in ('queued', 'running'): counts['latest_active_source_count'] += 1
             else: counts['unobserved_source_count'] += 1
+            if status in ('completed','empty') and not fetched:
+                counts['latest_empty_source_count'] += 1
             # Classify only explicit provider HTTP evidence, never arbitrary
             # process failures or missing raw rows as an external outage.
+            diagnostic=str(error or '')+' '+str(warnings or '')
+            if status in ('failed','partial','blocked') and isinstance(task_id,str) and re.fullmatch('[A-Za-z0-9_-]{1,128}',task_id):
+                try:
+                    coverage=_json(root/'data/collection/tasks'/task_id/'coverage.json')
+                    diagnostic+=' '+str(coverage.get('errors',[]))
+                except (OSError,ValueError):
+                    pass
             if status in ('failed', 'partial', 'blocked') and re.search(
                     r'\bHTTPError\b|\bHTTP(?:\s+Error|[_ :])\s*5\d\d\b|\bupstream[_ : -]+5\d\d\b',
-                    str(error or '') + ' ' + str(warnings or ''), re.IGNORECASE):
+                    diagnostic, re.IGNORECASE):
                 counts['external_provider_source_count'] += 1
         schedule_states = {row[0]: {'next_run_at': _at(row[1]), 'last_slot': row[2], 'schedule_hash': row[3]}
             for row in connection.execute('SELECT source_id,next_run_at,last_slot,schedule_hash FROM collection_schedule_state')}
@@ -170,6 +181,21 @@ def _collection(root, now, grace_seconds):
             SELECT source_id,coalesce(json_extract(source_snapshot,'$.revision'),0),max(julianday(finished_at))
             FROM collection_tasks WHERE status='completed' AND finished_at IS NOT NULL
             GROUP BY source_id,coalesce(json_extract(source_snapshot,'$.revision'),0)''') if value is not None}
+        # A partial/empty/failed check was executed; it is not a missed schedule.
+        # Prefer the exact scheduler's durable slot-to-task receipt. Legacy
+        # schemas without slots retain their terminal timestamp observation.
+        has_slots=connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='collection_slots'").fetchone() is not None
+        if has_slots:
+            execution_rows=connection.execute('''SELECT s.source_id,coalesce(json_extract(t.source_snapshot,'$.revision'),0),max(julianday(s.scheduled_for))
+                FROM collection_slots s JOIN collection_tasks t ON t.id=s.task_id
+                WHERE s.source_id=t.source_id AND t.status IN ('completed','empty','partial','failed','blocked') AND t.finished_at IS NOT NULL
+                GROUP BY s.source_id,coalesce(json_extract(t.source_snapshot,'$.revision'),0)''')
+        else:
+            execution_rows=connection.execute('''SELECT source_id,coalesce(json_extract(source_snapshot,'$.revision'),0),max(julianday(finished_at))
+                FROM collection_tasks WHERE status IN ('completed','empty','partial','failed','blocked') AND finished_at IS NOT NULL
+                GROUP BY source_id,coalesce(json_extract(source_snapshot,'$.revision'),0)''')
+        executions={(source,revision):(value-2440587.5)*86400 for source,revision,value in execution_rows if value is not None}
+        counts['schedule_evidence']='slot_receipt' if has_slots else 'terminal_outcome'
         boundary = dt.datetime.fromtimestamp(now-grace_seconds, TZ)
         for source, entry in enabled.items():
             state = schedule_states.get(source)
@@ -190,10 +216,12 @@ def _collection(root, now, grace_seconds):
             success = successes.get((source, entry['revision']))
             if success is not None:
                 counts['max_success_age_seconds'] = max(counts['max_success_age_seconds'], round(max(0, now-success), 2))
-            if success is None or success + 1 < required:
+            execution=executions.get((source,entry['revision']))
+            if execution is None or execution + 1 < required:
                 counts['late_source_count'] += 1
                 counts['max_late_seconds'] = max(counts['max_late_seconds'], round(max(0, now-required-grace_seconds), 2))
         counts['external_provider'] = counts['external_provider_source_count'] > 0
+        counts['coverage_status']='failed' if counts['latest_failed_source_count'] else 'partial' if counts['latest_partial_source_count'] else 'observed'
         return counts
 
 
@@ -266,7 +294,7 @@ def snapshot(root, *, now=None, max_age=180, collection_grace=900):
                     results[role].update(outcomes)
                     if outcomes['late_source_count']:
                         results[role].update(status='degraded', ok=False, reason='scheduled_sources_late')
-                    elif outcomes['latest_failed_source_count'] or outcomes['latest_partial_source_count']:
+                    elif outcomes['latest_failed_source_count']:
                         results[role].update(status='degraded', ok=False, reason='latest_source_tasks_need_attention')
                     elif (outcomes['unobserved_source_count'] or outcomes['schedule_unobserved_source_count']) and results[role]['ok'] is True:
                         results[role].update(status='unknown', ok=None, reason='current_sources_not_observed')

@@ -1,6 +1,6 @@
 import {useId,type ComponentType} from 'react';
 // JPEG is inlined because the native static route and offline cache do not serve .jpg assets.
-import avatar from '../assets/workbench/oil-pig-avatar.jpg?inline';
+import avatar from '../../assets/workbench/oil-pig-avatar.jpg?inline';
 
 type Icon=ComponentType<{size?:number}>;
 /** Exact approved character pixels, shared by the seven project skill identities. */

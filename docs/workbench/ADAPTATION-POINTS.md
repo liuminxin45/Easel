@@ -20,6 +20,7 @@
 | `web/frontend/src/App.tsx` | `ApplicationFrame` 唯一绘制侧栏、子导航和页面容器；不传 `host` 时运行原 `NativeApp` | `workbench/ui/index.tsx` 组装服务器会话、路由转换和页面内容，不另画应用壳 |
 | `web/frontend/src/lib/api.ts`、`lib/whoami.ts` | 原页面仍调用原 API 函数；无绑定时沿用原 fetch、账号显示缓存和自动核验默认策略 | `workbench/ui/nativeApi.ts` 连接鉴权客户端、操作身份和内存缓存；入口按客户端与认证修订完成绑定后才挂载原页面；缓存代数拒绝旧宿主的迟到响应；私有绑定关闭自动核验，手动及扫码后的明确核验仍走原服务 |
 | 原页面的可选 props | `IdeasPage`、`ProfilePage` 的草稿存储，`DashboardPage` 的缓存/读取策略，预览与发布页的回调均保留默认行为 | `nativePages.tsx`、`nativeProfiles.tsx`、`nativePublishing.ts` 只转换数据、批准输入和业务回调；仍渲染完整原组件 |
+| `components/SkillPage.tsx` 的可选 `icons` | 不传宿主时仅使用官方图标映射，不导入项目头像或工作台模块 | `NativeSkills` 从私有 `workbench/ui/skillIcons.tsx` 注入精确技能 ID 映射；批准原图与用途角标保持，映射不写入模块全局 |
 | `easel/web_services/{accounts,settings,planning,outputs,environment,analytics,skills,profiles}.py` | 从 `web/app.py` 移出的单一函数实现；原路由继续绑定同一代码；技能七项依赖/脱敏与画像六维基线也只保留一份 | 工厂接收目录、环境、执行器、存储和检查回调；不得导入 `easel_workbench`；私有层只补准确版本与配置修订 |
 | `easel/web_services/binding.py` | 用同一函数代码建立独立上下文；原 `web/app.py` 绑定自身命名空间，保留原测试入口 | 仅工厂组装上下文，不复制源码、不修改进程环境，不把此桥接扩展成通用依赖注入框架 |
 | `easel/web_services/concurrency.py` | 原共享 planning 与私有服务共用同一阻塞 I/O 线程边界 | 通用 helper 不含私有依赖；取消时等待线程真实结束，不提前释放调用者持有的写锁或操作身份。共通规划函数仍只有一份，通用响应性修复可单独维护 |
@@ -33,6 +34,12 @@
 ## 维护边界和已知约束
 
 后台显示策略集中在私有 `Notice` 与资源读取层：正常 `busy/refreshing` 不生成全页提示，真实错误及显式断连/未知回执反馈保留到成功。`TrendsPage.quietBackgroundRefresh` 默认关闭，仅私有宿主启用以消除忙碌来源重试的状态行跳动；详见 [静默刷新记录](QUIET-POLLING-20261031.md)。
+
+发布确认仅首次读取准确渠道稿时使用共用 `StatusCard`；已有修订的后台刷新不闪烁状态卡。批准按钮仍须绑定已核对的 revision ID/hash 与原授权，错误继续由 `Notice` 显示。
+
+官方完整集成基线唯一数据来源为 `upstream-base.json` 的 `upstream_commit`。审计器、冻结运行时和前端许可证说明均读取它；新快照同时保存原记录及 SHA。`upstream-overlays.json` 独立登记已选择的 PR，核对其基线一致，不将这些 PR 冒称为后续所有官方提交已集成。当前准确基线仍为既有 `0f43dc9`；本次没有同步新的 upstream 版本。
+
+生产审计器通过 TypeScript AST 检查共通代码的 import、re-export、动态导入、require 和类型导入，拒绝反向依赖工作台或其私有资产；发布确认的原始平铺 status 元素也受检查。负例测试与共享聊天函数代码身份测试检查真实边界。`easel-base.yml` 现覆盖 main 的这些合同与冻结基线；已有 `workbench-mobile-state.yml` 继续运行全部前端回归、类型检查及原生/私有独立构建，不重复新增整套构建链。
 
 - **组装集中在宿主入口。** API/缓存绑定、共享服务工厂、鉴权和停止钩子均由组装层负责。原组件只接收通用接口；业务判断不得放进组件或共享服务。一个文档只运行一个应用宿主，不能依赖模块级 API 绑定同时支持多个 App。
 - **绑定上下文是兼容桥。** 共享函数从自己的 `__globals__` 读取依赖；返回对象是命名空间快照。运行后直接给对象重赋属性不会可靠改变函数依赖，标量状态更新也未必反映到快照属性。调用者只用工厂参数及公开方法；后续可用只读上下文句柄集中消除此差异，不在页面或业务层追加 monkeypatch。未来若新增闭包、类方法或配置校验器，须单独确认其依赖仍能隔离。

@@ -27,6 +27,7 @@ import urllib.parse
 import base64
 
 from easel_workbench.runtime.easel_connection_support import safe_env
+from easel_workbench.runtime.easel_source import OFFICIAL_SCRIPTS,MediaSourceMismatch,require_media_source
 
 
 class TaskPending(RuntimeError):
@@ -96,13 +97,17 @@ def atomic(path, value):
     os.replace(temporary, path)
 
 
-def run_vendor(name, args, source, images=None):
+def run_official(name, args, source, images=None):
+    if pathlib.Path(source).resolve()!=OFFICIAL_SCRIPTS.resolve() or name not in ('voice_clone','ai_image','ai_video','ai_music'):
+        raise ValueError('媒体执行仅允许主树官方脚本')
     sys.argv = [str(source / (name + '.py')), *[str(a) for a in args]]
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         try:
             if name=='ai_image' and images and len(images)>1:
-                import importlib
-                module=importlib.import_module('ai_image')
+                import importlib.util
+                spec=importlib.util.spec_from_file_location('_easel_official_ai_image',source/'ai_image.py')
+                module=importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
                 original_encode=module._encode_multipart
                 def encode(fields, files):
                     extra=[('image[]',f'reference-{i}'+pathlib.Path(p).suffix,mimetypes.guess_type(p)[0] or 'image/png',pathlib.Path(p).read_bytes()) for i,p in enumerate(images)]
@@ -211,6 +216,12 @@ def main():
         receipt=previous;receipt['outputs']=[]
     from easel_workbench.infrastructure.processes import process_identity
     receipt.update(worker_pid=os.getpid(),worker_identity=process_identity(os.getpid()))
+    if payload.get('mode')!='reconcile':
+        try:receipt['implementation_source']=require_media_source(payload)
+        except MediaSourceMismatch as error:
+            receipt.update(status='failed',send_state='not_sent',error=str(error))
+            atomic(receipt_path,receipt)
+            return 0
     atomic(receipt_path, receipt)
     env = safe_env(payload['env'], directory)
     if payload.get('tool_bin'):env['PATH']=payload['tool_bin']+os.pathsep+env.get('PATH','')
@@ -218,7 +229,7 @@ def main():
     os.environ.update(env)
     os.chdir(directory)
     (directory / '.env').write_text('', encoding='utf-8')
-    source = pathlib.Path(__file__).resolve().parent / 'vendor/easel/scripts'
+    source = OFFICIAL_SCRIPTS
     sys.path.insert(0, str(source))
     original = urllib.request.OpenerDirector.open
 
@@ -279,7 +290,7 @@ def main():
             args = ['clone', '--provider', payload['config']['provider'], '--text', payload['prompt'], '-o', output]
             if options.get('voice_id'):
                 args += ['--voice-id', options['voice_id']]
-            run_vendor('voice_clone', args, source)
+            run_official('voice_clone', args, source)
         elif stage == 'image':
             images = list(dict.fromkeys([p for p in payload['source_paths'] if (mimetypes.guess_type(p)[0] or '').startswith('image/')]+payload.get('reference_paths',[])))
             args = ['img2img' if images else 'text2img', '--prompt', payload['instruction'], '-o', output]
@@ -289,7 +300,7 @@ def main():
                 args += ['--size', options['size']]
             if options.get('mode') in ('sync', 'async'):
                 args += ['--mode', options['mode']]
-            run_vendor('ai_image', args, source,images)
+            run_official('ai_image', args, source,images)
         elif stage == 'video':
             images = [p for p in payload['source_paths'] if (mimetypes.guess_type(p)[0] or '').startswith('image/')]
             args = ['image2video' if images else 'text2video', '--provider', payload['config']['provider'], '--prompt', payload['instruction'], '-o', output]
@@ -297,12 +308,12 @@ def main():
                 args += ['--image', images[0]]
             if options.get('duration'):
                 args += ['--duration', int(options['duration'])]
-            run_vendor('ai_video', args, source)
+            run_official('ai_video', args, source)
         elif stage == 'music':
             args = ['generate', '--provider', payload['config']['provider'], '--prompt', payload['instruction'], '--instrumental', '-o', output]
             if options.get('duration'):
                 args += ['--duration', int(options['duration'])]
-            run_vendor('ai_music', args, source)
+            run_official('ai_music', args, source)
         elif stage == 'transcribe':
             # httpx transcription has a conservative dispatch fence too.
             if payload['config']['provider'] != 'local':

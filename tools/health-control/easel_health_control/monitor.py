@@ -116,7 +116,7 @@ class Monitor:
             numeric_fields = {'age_seconds', 'enabled_source_count', 'latest_failed_source_count',
                 'latest_partial_source_count', 'latest_completed_source_count', 'latest_active_source_count',
                 'unobserved_source_count', 'late_source_count', 'max_late_seconds', 'max_success_age_seconds',
-                'schedule_unobserved_source_count', 'external_provider_source_count', 'execution_grace_seconds'}
+                'schedule_unobserved_source_count', 'external_provider_source_count', 'execution_grace_seconds', 'latest_empty_source_count'}
             for role, signal in business.get('roles', {}).items() if isinstance(business.get('roles'), dict) else []:
                 if role not in known_roles or not isinstance(signal, dict): continue
                 safe = {key: signal[key] for key in numeric_fields if key in signal and number(signal[key])}
@@ -125,6 +125,10 @@ class Monitor:
                 safe['ok'] = signal.get('ok') if type(signal.get('ok')) is bool else None
                 if isinstance(signal.get('reason'), str) and re.fullmatch('[a-z_]{1,64}', signal['reason']):
                     safe['reason'] = signal['reason']
+                if signal.get('coverage_status') in ('observed','partial','failed'):
+                    safe['coverage_status']=signal['coverage_status']
+                if signal.get('schedule_evidence') in ('slot_receipt','terminal_outcome'):
+                    safe['schedule_evidence']=signal['schedule_evidence']
                 safe_business['roles'][role] = safe
             safe_business['degraded_roles'] = [role for role in business.get('degraded_roles', [])
                 if isinstance(role, str) and re.fullmatch(r'[a-z_]{1,32}', role)] if isinstance(business.get('degraded_roles', []), list) else []

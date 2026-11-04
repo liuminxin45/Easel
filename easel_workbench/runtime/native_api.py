@@ -100,7 +100,7 @@ def supports(path, method=None):
     if is_host_media_protocol(path):
         return False
     routes = (
-        r'/api/native/operations/[A-Za-z0-9_-]+', r'/api/upload',
+        r'/api/native/operations/[A-Za-z0-9_-]+', r'/api/upload(?:/limits)?',
         r'/api/outputs', r'/api/library/(?:items|resolve)', r'/api/output-context', r'/api/(?:output|media)/.+',
         r'/api/artifacts/archive', r'/api/personas', r'/api/persona/[^/]+(?:/(?:files|file))?',
         r'/api/profile/build', r'/api/profile/build/status/[^/]+',
@@ -131,15 +131,19 @@ class NativeApi:
         self._write_lock = asyncio.Lock()
         self._repository_lock = threading.RLock()
         self._operation = ''
+        self._profile_enhancements = set()
         with self.store.connect() as c:
             c.execute('''CREATE TABLE IF NOT EXISTS native_profile_documents(
                 profile_id TEXT NOT NULL, filename TEXT NOT NULL, revision INTEGER NOT NULL,
                 content TEXT NOT NULL, PRIMARY KEY(profile_id,filename,revision))''')
+            c.execute('CREATE TABLE IF NOT EXISTS native_profile_builds(profile_id TEXT PRIMARY KEY,document TEXT NOT NULL)')
         self.outputs = create_outputs_context(self.root)
         from easel_workbench.features.works.library_index import LibraryIndex
         self.library=LibraryIndex(self.root,self._build_library,self._library_revision)
         self._library_work_cache={};self._library_work_tokens={}
         self._library_full_at=0
+        from easel_workbench.features.works.library_deletion import LibraryDeletion
+        self.deletions=LibraryDeletion(self)
         self.planning = create_planning_context(
             self.root, scripts=Path(__file__).resolve().parents[2] / 'skills/shared/scripts',
             read_ideas=self._ideas, write_ideas=self._save_ideas,
@@ -205,6 +209,14 @@ class NativeApi:
         with self.store.connect() as c:
             c.execute('UPDATE easel_ui_operations SET result=? WHERE id=?', (pack(saved), operation))
 
+    def commit_local_result(self,c,result,*,operation=None):
+        """Join a local repository change to its already-reserved receipt."""
+        operation=operation or self._operation
+        saved={'id':operation,'native_protocol':True,'state':'completed','result':result}
+        changed=c.execute("UPDATE easel_ui_operations SET result=? WHERE id=? AND json_extract(result,'$.state')='unavailable' AND json_extract(result,'$.native_protocol')=1",
+                          (pack(saved),operation))
+        if changed.rowcount!=1:raise HTTPException(409,'本次操作身份未登记，未修改内容库')
+
     def _require_admission(self):
         state = self.root / '.local/workbench-deployment'
         controlled = (state / 'admission.json').exists() or os.environ.get('EASEL_WORKBENCH_ADMISSION') == '1'
@@ -228,51 +240,38 @@ class NativeApi:
                 raise HTTPException(503, '业务写入身份暂不可核对') from None
 
     async def _upload(self, request):
-        from email import policy
-        from email.parser import BytesParser
-        content_type = request.headers.get('content-type', '')
-        if not content_type.lower().startswith('multipart/form-data;') or any(char in content_type for char in '\r\n\x00'):
-            raise HTTPException(415, '附件需要 multipart/form-data')
-        raw_body = await request.body()
-        if len(raw_body) > 50 * 1024 * 1024:
-            raise HTTPException(413, '单次附件请求需在50MB以内')
-        message = BytesParser(policy=policy.default).parsebytes(
-            b'Content-Type: ' + content_type.encode('ascii') + b'\r\nMIME-Version: 1.0\r\n\r\n' + raw_body)
-        if not message.is_multipart() or message.defects:
-            raise HTTPException(400, '附件表单格式无效')
-        scope = None
-        payloads = []
-        for part in message.iter_parts():
-            name = part.get_param('name', header='content-disposition')
-            raw = part.get_payload(decode=True)
-            if not isinstance(raw, bytes):
-                raise HTTPException(400, '附件格式无效')
-            if name == 'sessionId' and part.get_filename() is None:
-                if scope is not None:
-                    raise HTTPException(400, '会话标识不能重复')
-                scope = ident(raw.decode('utf-8'))
-            elif name == 'files':
-                if not 0 < len(raw) <= 20 * 1024 * 1024:
-                    raise HTTPException(413, '每个附件需在20MB以内')
-                payloads.append((part.get_filename() or 'file', raw))
-            else:
-                raise HTTPException(400, '附件表单含有不支持的字段')
-        if scope is None or not 1 <= len(payloads) <= 16:
-            raise HTTPException(400, '请选择1至16个附件及准确会话')
-        proof = {'sessionId': scope, 'files': [{'name': name, 'sha256': hashlib.sha256(raw).hexdigest()}
-                                             for name, raw in payloads]}
-        def save(_):
-            with self.store.connect() as c:
-                table = c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_sessions'").fetchone()
-                if not table or not c.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?', (scope,)).fetchone():
-                    raise HTTPException(404, '原生会话不存在')
-            saved = []
-            for index, (name, raw) in enumerate(payloads):
-                file_id = 'native-upload-' + hashlib.sha256((self._operation + ':' + str(index)).encode()).hexdigest()[:32]
-                value = self.box.upload(file_id, name, raw)
-                saved.append({'id': value['id'], 'name': value['name'], 'path': value['id']})
-            return {'ok': True, 'files': saved}
-        return await self._mutate(request, proof, save)
+        from easel.web_services.uploads import parse_upload_form, stream_upload, DEFAULT_MAX_BYTES
+        from starlette.datastructures import UploadFile
+        ident(request.headers.get('x-operation-id'))
+        form = await parse_upload_form(request)
+        try:
+            entries = form.multi_items()
+            scopes = [value for name, value in entries if name == 'sessionId' and isinstance(value, str)]
+            payloads = [value for name, value in entries if name == 'files' and isinstance(value, UploadFile)]
+            if len(scopes) != 1 or not 1 <= len(payloads) <= 16 or len(entries) != 1 + len(payloads):
+                raise HTTPException(400, '请选择1至16个附件及准确会话')
+            scope = ident(scopes[0])
+            with tempfile.TemporaryDirectory(prefix='easel-native-upload-') as temporary:
+                staged = []
+                for index, upload in enumerate(payloads):
+                    target = Path(temporary) / str(index)
+                    value = await stream_upload(upload, target, allow_empty=False)
+                    staged.append((upload.filename or 'file', target, value['sha256']))
+                proof = {'sessionId': scope, 'files': [{'name': name, 'sha256': digest} for name, _, digest in staged]}
+                def save(_):
+                    with self.store.connect() as c:
+                        table = c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_sessions'").fetchone()
+                        if not table or not c.execute('SELECT 1 FROM easel_chat_sessions WHERE id=?', (scope,)).fetchone():
+                            raise HTTPException(404, '原生会话不存在')
+                    saved = []
+                    for index, (name, source, _) in enumerate(staged):
+                        file_id = 'native-upload-' + hashlib.sha256((self._operation + ':' + str(index)).encode()).hexdigest()[:32]
+                        value = self.box.register_file(file_id, name, source, max_bytes=DEFAULT_MAX_BYTES)
+                        saved.append({'id': value['id'], 'name': value['name'], 'path': value['id']})
+                    return {'ok': True, 'files': saved}
+                return await self._mutate(request, proof, save)
+        finally:
+            await form.close()
 
     def _collection(self):
         if not getattr(self, '_collection_service', None):
@@ -419,7 +418,7 @@ class NativeApi:
 
     def _profiles(self):
         with self.store.connect() as c:
-            return [json.loads(row['document']) for row in c.execute('SELECT document FROM creator_profiles ORDER BY rowid')]
+            return [json.loads(row['document']) for row in c.execute("SELECT document FROM creator_profiles WHERE coalesce(json_extract(document,'$.active'),1)!=0 ORDER BY rowid")]
 
     def _profile(self, name):
         profiles = self._profiles()
@@ -440,7 +439,7 @@ class NativeApi:
                 files.append({'filename': filename, 'content': row['content'] if row else ''})
         return {'name': profile['id'], 'display_name': profile['name'], 'revision': profile['revision'], 'files': files}
 
-    def _build_profile(self, fields):
+    def _build_profile(self, fields, *, chat=None, loop=None):
         from easel.persona import valid_persona_name
         from easel.web_services.profiles import baseline_profile_files
         name=fields.get('name');form=fields.get('form')
@@ -468,8 +467,64 @@ class NativeApi:
         result=self.box.creator.command({'id':'native-profile-'+self._operation,'action':'profile-save',
                                          'base_revision':0,'document':document},before_commit=documents)
         profile=result['result']['profile']
+        self._start_profile_enhancement(profile, form, files, chat=chat, loop=loop)
         return {'created':True,'name':profile['id'],'display_name':profile['name'],
-                'files':list(files),'async':False,'revision':profile['revision']}
+                'files':list(files),'async':True,'status':'running','revision':profile['revision']}
+
+    def _profile_build_status(self, profile_id):
+        with self.store.connect() as c:
+            row = c.execute('SELECT document FROM native_profile_builds WHERE profile_id=?', (profile_id,)).fetchone()
+        value = json.loads(row[0]) if row else {'state':'unknown','log':''}
+        if value['state'] == 'running' and profile_id not in self._profile_enhancements:
+            return {'state':'unknown','log':'增强任务的完成状态尚未核对，基线画像仍可使用；不会自动重发。'}
+        return value
+
+    def _start_profile_enhancement(self, profile, form, files, *, chat, loop):
+        from easel.web_services.profiles import start_profile_enhancement
+        pid, revision = profile['id'], profile['revision']
+        operation = 'profile-enhance-' + hashlib.sha256((pid+':'+str(revision)).encode()).hexdigest()[:24]
+        def status(name, state, log):
+            with self.store.connect() as c:
+                c.execute('INSERT INTO native_profile_builds VALUES(?,?) ON CONFLICT(profile_id) DO UPDATE SET document=excluded.document',
+                          (pid,pack({'state':state,'log':log,'base_revision':revision,'operation_id':operation})))
+            if state != 'running': self._profile_enhancements.discard(pid)
+        async def execute_native(message):
+            if chat is None: raise RuntimeError('原生执行服务未连接，基线画像已保留')
+            settings = await _offload(chat.settings.current)
+            if settings['runtime'] == 'api':
+                raise RuntimeError('API 模式不执行本机画像增强技能，基线画像已可使用')
+            sid = 'profile-' + operation
+            await _offload(chat.create_internal_session, {'id':operation,'session_id':sid,'profile_id':pid})
+            turn = await chat.submit({'sessionId':sid,'turnId':operation,'message':'完善画像：'+profile['name'],
+                'attachments':[],'context':{'profile_id':pid}}, snapshot=None, actual_prompt=message, interactive=False)
+            async for _ in chat.events(turn['id']): pass
+            final = await _offload(chat.get_turn, turn['id'])
+            if final['status'] != 'completed': raise RuntimeError('原生增强未完成，原回执保留，不会自动重发')
+            return final.get('output','')
+        def execute(message, timeout):
+            if loop is None or loop.is_closed(): raise RuntimeError('原生执行服务未连接，基线画像已保留')
+            # The native service owns timeout, durable turns and shutdown. No second client or replay loop.
+            return asyncio.run_coroutine_threadsafe(execute_native(message), loop).result()
+        def apply(log):
+            text = log.strip()
+            if text.startswith('```'): text = text.split('\n',1)[1].rsplit('```',1)[0].strip()
+            value = json.loads(text)
+            documents = value.get('files') if isinstance(value,dict) else None
+            if not isinstance(documents,dict) or set(documents) != set(files) or any(not isinstance(v,str) or len(v)>12000 or '\x00' in v for v in documents.values()):
+                raise ValueError('增强输出不是完整六维文件，基线与历史均保留')
+            def extras(c,result):
+                for filename in EXTRA_PROFILE_FILES:
+                    c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)',
+                              (pid,filename,result['profile']['revision'],documents[filename]))
+            # Existing creator CAS rejects a manual save/deletion after enhancement started.
+            self.box.creator.command({'id':operation+'-apply','action':'profile-save','profile_id':pid,
+                'base_revision':revision,'document':{field:documents[name] for name,field in PROFILE_FILES.items()}},before_commit=extras)
+        suffix = ('\n\n存储边界：画像由版本仓库管理，禁止直接修改磁盘 profiles 或任何业务文件。'
+                  '请仅返回 JSON 对象 {"files": {文件名: 完整正文}}，包含以下六个文件，不使用 Markdown 包裹。'
+                  '当前基线：'+pack(files))
+        self._profile_enhancements.add(pid)
+        start_profile_enhancement(profile['name'], form, execute=execute, write_status=status,
+                                  apply=apply, message_suffix=suffix)
 
     def _save_profile_file(self, name, fields):
         profile = self._profile(name)
@@ -487,11 +542,25 @@ class NativeApi:
                 c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)', (profile['id'], filename, saved['revision'], content))
         return {'ok': True, 'revision': saved['revision']}
 
+    def _profile_deletion(self,name,fields):
+        profile=self._profile(name)
+        if profile['id']=='oil-pig':raise HTTPException(403,'默认画像受保护，请另建画像使用')
+        if type(fields.get('expected_revision')) is not int or fields['expected_revision']!=profile['revision']:
+            raise HTTPException(409,'画像已有新修订，请重新核对后删除')
+        return {**profile,'_deletion_name':name,'_deletion_operation':self._operation}
+
+    def _remove_profile(self,profile):
+        operation=profile['_deletion_operation']
+        self.box.creator.command({'id':'native-profile-delete-'+operation,'action':'profile-save',
+            'profile_id':profile['id'],'base_revision':profile['revision'],'document':{'active':False}},
+            before_commit=lambda c,result:self.commit_local_result(c,{'ok':True,'deleted':profile['_deletion_name']},operation=operation))
+
     def _library_revision(self):
         with self.store.connect() as c:
+            deleted=c.execute("SELECT count(*),coalesce(max(json_extract(document,'$.at')),'') FROM native_library_deletions").fetchone()
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='read_cache_revisions'").fetchone():
-                return [list(r) for r in c.execute("SELECT domain,revision FROM read_cache_revisions WHERE domain='works' ORDER BY domain")]
-        return None
+                return [list(deleted)]+[list(r) for r in c.execute("SELECT domain,revision FROM read_cache_revisions WHERE domain='works' ORDER BY domain")]
+        return [list(deleted)]
 
     def _build_library(self):
         # Expensive compatibility projection is background-only. Rebuild only
@@ -510,7 +579,7 @@ class NativeApi:
         with self.store.connect() as c:
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(r[0] for r in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
         physical=[n for n in self.outputs.api_outputs() if n['path'] not in sessions]
-        return physical+[n for nodes in self._library_work_cache.values() for n in nodes]+registered
+        return self.deletions.apply(physical+[n for nodes in self._library_work_cache.values() for n in nodes]+registered)
 
     def _work_tree(self,work_ids=None):
         result = []
@@ -571,7 +640,7 @@ class NativeApi:
         with self.store.connect() as c:
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(row[0] for row in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
         native = [item for item in native if item['path'] not in sessions]
-        return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
+        return sorted(self.deletions.apply(native + self._work_tree() + registered), key=lambda item: item.get('mtime', 0), reverse=True)
 
     def _output_context(self, wanted):
         if not wanted:return {}
@@ -782,6 +851,9 @@ class NativeApi:
 
     async def dispatch(self, path, request, body):
         method = request.method
+        if path == '/api/upload/limits' and method == 'GET':
+            from easel.web_services.uploads import upload_limits
+            return upload_limits()
         if path == '/api/upload' and method == 'POST':
             return await self._upload(request)
         receipt = re.fullmatch(r'/api/native/operations/([A-Za-z0-9_-]+)', path)
@@ -792,10 +864,20 @@ class NativeApi:
             return await _offload(self._outputs_tree, native)
         if path=='/api/library/items' and method=='GET':
             q=request.query_params
-            return await _offload(self.library.list,parent=q.get('parent',''),cursor=q.get('cursor'),limit=int(q.get('limit','50')),query=q.get('query',''),kind=q.get('kind',''))
+            result=await _offload(self.library.list,parent=q.get('parent',''),cursor=q.get('cursor'),limit=int(q.get('limit','50')),query=q.get('query',''),kind=q.get('kind',''))
+            def filter_pending():
+                hidden=self.deletions.pending_paths(result['items'],result['revision'])
+                items=[item for item in result['items'] if item['path'] not in hidden]
+                return {**result,'items':items,'total':max(0,result['total']-len(result['items'])+len(items))}
+            return await _offload(filter_pending)
         if path=='/api/library/resolve' and method=='GET':
             wanted=request.query_params.get('path','')
-            try:return await _offload(self.library.resolve,wanted)
+            def resolve_visible():
+                result=self.library.resolve(wanted)
+                if self.deletions.pending_paths(result['nodes'],self.library.generation()):
+                    raise HTTPException(410,'内容已从内容库删除，历史原件仍保留')
+                return result
+            try:return await _offload(resolve_visible)
             except HTTPException as error:
                 if error.status_code!=404:raise
                 context=await _offload(self._output_context,wanted)
@@ -825,16 +907,21 @@ class NativeApi:
             return await self._file(unquote(file_match[2]), file_match[1] == 'media',
                                     preview=request.query_params.get('download') != '1')
         if file_match and method == 'DELETE':
-            raise HTTPException(403, '原件与历史版本保留，请在准确作品版本中归档')
+            if file_match[1]!='output':raise HTTPException(405,'请使用内容库删除入口')
+            relative=unquote(file_match[2])
+            return await self._mutate(request,body,lambda fields:self.outputs.delete_output(
+                relative,resolve=self.deletions.resolve,remove=self.deletions.remove))
         if path == '/api/personas' and method == 'GET':
             profiles = await _offload(self._profiles)
             return [{'name': item['id'], 'display_name': item['name'], 'description': item['identity']}
                     for item in profiles if item.get('active', True)]
         if path == '/api/profile/build' and method == 'POST':
-            return await self._mutate(request,body,self._build_profile)
+            loop = asyncio.get_running_loop()
+            chat = getattr(getattr(request.scope.get('app'), 'state', None), 'chat', None)
+            return await self._mutate(request,body,lambda fields:self._build_profile(fields,chat=chat,loop=loop))
         if path.startswith('/api/profile/build/status/') and method == 'GET':
             profile=await _offload(self._profile,unquote(path.rsplit('/',1)[-1]))
-            return {'state':'done','name':profile['id'],'log':'六维画像基线已保存；未请求额外 AI 增强。'}
+            return await _offload(self._profile_build_status,profile['id'])
         persona = re.fullmatch(r'/api/persona/([^/]+)(?:/(files|file))?', path)
         if persona:
             name = unquote(persona[1])
@@ -846,7 +933,10 @@ class NativeApi:
             if method == 'PUT' and persona[2] == 'file':
                 return await self._mutate(request, body, lambda fields: self._save_profile_file(name, fields))
             if method == 'DELETE':
-                raise HTTPException(403, '画像历史须保留；请在画像扩展中停用')
+                if persona[2] is not None:raise HTTPException(405,'请使用画像删除入口')
+                from easel.web_services.profiles import delete_profile
+                return await self._mutate(request,body,lambda fields:delete_profile(name,
+                    resolve=lambda target:self._profile_deletion(target,fields),remove=self._remove_profile))
         if path == '/api/ideas' or path.startswith('/api/ideas/'):
             if method == 'GET' and path == '/api/ideas':
                 return await self.planning.api_ideas_list()

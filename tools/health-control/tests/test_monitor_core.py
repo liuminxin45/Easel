@@ -95,6 +95,18 @@ class MonitorFaultTests(unittest.TestCase):
         self.assertEqual(self.monitor().tick(allow_repair=True)['decision'], 'deferred')
         self.assertEqual(self.calls, [])
 
+    def test_partial_or_empty_collector_coverage_never_restarts_a_healthy_service(self):
+        self.healthy()
+        for coverage,empty in [('partial',0),('observed',1)]:
+            self.inspection['business']={'status':'healthy','ok':True,'roles':{'collector':{
+                'status':'healthy','ok':True,'coverage_status':coverage,'schedule_evidence':'slot_receipt',
+                'latest_partial_source_count':int(coverage=='partial'),'latest_empty_source_count':empty,'late_source_count':0}}}
+            result=self.monitor().tick(allow_repair=True)
+            self.assertEqual(result['decision'],'healthy')
+            self.assertEqual(result['observation']['business']['roles']['collector']['coverage_status'],coverage)
+            self.assertFalse(result['observation']['needs_repair'])
+        self.assertEqual(self.calls,[])
+
     def test_http_hung_but_busy_or_unknown_receipt_is_never_restarted(self):
         for field in ('busy', 'unknown_receipts'):
             with self.subTest(field=field):

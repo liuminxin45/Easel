@@ -1001,6 +1001,8 @@ def test_web_and_host_share_the_same_native_supervisor_function(tmp_path):
         snapshot=lambda *args:None,ask=ask,scrub=str)
     assert web._run_harness_chat.__code__ is chat._run_harness_chat.__code__
     assert context._run_harness_chat.__code__ is chat._run_harness_chat.__code__
+    assert web._run_direct_chat.__code__ is chat._run_direct_chat.__code__
+    assert context._run_direct_chat.__code__ is chat._run_direct_chat.__code__
     assert web._HarnessProc is chat._HarnessProc
     assert isinstance(web._CrossProcLock('same-source'),chat.SessionFileLock)
 

@@ -2,7 +2,22 @@ name: Easel base alignment
 
 on:
   push:
-    branches: ['codex/easel-base-alignment']
+    branches: [main]
+    paths:
+      - 'easel/**'
+      - 'easel_workbench/**'
+      - 'web/**'
+      - 'tests/test_easel*'
+      - 'tests/test_workbench_architecture.py'
+      - 'tests/test_workbench_release_source.py'
+      - 'tests/test_shared_upload_streaming.py'
+      - 'tests/test_workbench_native_upload_http.py'
+      - 'tests/test_workbench_profile_enhancement.py'
+      - 'scripts/audit_easel_base.mjs'
+      - 'scripts/workbench_release.py'
+      - 'docs/workbench/upstream-base.json'
+      - 'docs/workbench/upstream-overlays.json'
+      - '.github/workflows/easel-base.yml'
   pull_request:
     paths:
       - 'easel/**'
@@ -10,8 +25,14 @@ on:
       - 'web/**'
       - 'tests/test_easel*'
       - 'tests/test_workbench_architecture.py'
+      - 'tests/test_workbench_release_source.py'
+      - 'tests/test_shared_upload_streaming.py'
+      - 'tests/test_workbench_native_upload_http.py'
+      - 'tests/test_workbench_profile_enhancement.py'
       - 'scripts/audit_easel_base.mjs'
+      - 'scripts/workbench_release.py'
       - 'docs/workbench/upstream-base.json'
+      - 'docs/workbench/upstream-overlays.json'
       - '.github/workflows/easel-base.yml'
   workflow_dispatch:
 
@@ -44,12 +65,6 @@ jobs:
       - name: Verify shared services and private business boundaries
         env:
           PYTHONUTF8: '1'
-        run: python -m pytest -q tests/test_easel_shared_services.py tests/test_easel_base_alignment.py tests/test_workbench_architecture.py tests/test_workbench_settings.py tests/test_workbench_skill_policy.py tests/test_workbench_skill_commands.py
-      - name: Build original Easel independently
-        working-directory: web/frontend
-        run: npm run build
-      - name: Check and build private host using the same components
-        working-directory: web/frontend
-        run: |
-          npm run check:workbench
-          npm run build:workbench
+        run: python -m pytest -q tests/test_easel_shared_services.py tests/test_easel_base_alignment.py tests/test_workbench_architecture.py tests/test_workbench_release_source.py tests/test_shared_upload_streaming.py tests/test_workbench_native_upload_http.py tests/test_workbench_profile_enhancement.py
+      # workbench-mobile-state.yml already runs every frontend regression,
+      # host type/interaction checks and both independent builds on main.

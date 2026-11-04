@@ -122,11 +122,12 @@ def collection_fixture(root):
 
 
 @pytest.mark.parametrize('status,key', [('failed', 'latest_failed_source_count'), ('partial', 'latest_partial_source_count')])
-def test_watching_does_not_hide_latest_failed_or_partial_source(tmp_path, status, key):
+def test_latest_failure_and_partial_coverage_remain_distinct(tmp_path, status, key):
     with collection_fixture(tmp_path) as connection:
         connection.execute('INSERT INTO collection_tasks(source_id,status,source_snapshot) VALUES(?,?,?)', ('active', status, '{"revision":0}'))
     result = snapshot(tmp_path, now=1000)
-    assert result['status'] == 'degraded' and result['roles']['collector'][key] == 1
+    assert result['status'] == ('degraded' if status=='failed' else 'healthy') and result['roles']['collector'][key] == 1
+    assert result['roles']['collector']['coverage_status']==('failed' if status=='failed' else 'partial')
     assert result['roles']['collector']['enabled_source_count'] == 1
 
 
@@ -262,3 +263,46 @@ def test_explicit_upstream_500_is_separate_and_no_error_payload_is_returned(tmp_
     assert result['external_provider'] is True
     assert result['roles']['collector']['external_provider_source_count'] == 1
     assert 'DO-NOT-RETURN' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('status',['partial','empty','completed','failed','blocked'])
+def test_actual_terminal_slot_is_executed_even_with_no_rows_or_partial_coverage(tmp_path,status):
+    now=dt.datetime(2026,11,5,0,45,tzinfo=TZ)
+    with collection_fixture(tmp_path) as c:
+        scheduled(tmp_path,c,now,{'kind':'daily','times':['00:00']},next_run=now+dt.timedelta(days=1),last_slot=now.replace(hour=0,minute=0))
+        c.execute('ALTER TABLE collection_tasks ADD COLUMN id TEXT')
+        c.execute('CREATE TABLE collection_slots(source_id TEXT,scheduled_for TEXT,task_id TEXT)')
+        c.execute('INSERT INTO collection_tasks(id,source_id,status,source_snapshot,finished_at,fetched) VALUES(?,?,?,?,?,?)',
+            ('actual','active',status,'{"revision":0}',now.replace(minute=6).isoformat(),0))
+        c.execute('INSERT INTO collection_slots VALUES(?,?,?)',('active',now.replace(minute=0).isoformat(),'actual'))
+    result=snapshot(tmp_path,now=now.timestamp());collector=result['roles']['collector']
+    assert collector['late_source_count']==0 and collector['schedule_evidence']=='slot_receipt'
+    assert collector['coverage_status']==('partial' if status=='partial' else 'failed' if status in ('failed','blocked') else 'observed')
+    assert collector['ok'] is (status not in ('failed','blocked'))
+
+
+@pytest.mark.parametrize('status',['queued','running','cancelled','skipped'])
+def test_slot_pointer_alone_cannot_claim_execution_or_replay_unknown_work(tmp_path,status):
+    now=dt.datetime(2026,11,5,0,45,tzinfo=TZ)
+    with collection_fixture(tmp_path) as c:
+        scheduled(tmp_path,c,now,{'kind':'daily','times':['00:00']},next_run=now+dt.timedelta(days=1),last_slot=now.replace(minute=0))
+        c.execute('ALTER TABLE collection_tasks ADD COLUMN id TEXT')
+        c.execute('CREATE TABLE collection_slots(source_id TEXT,scheduled_for TEXT,task_id TEXT)')
+        c.execute('INSERT INTO collection_tasks(id,source_id,status,source_snapshot,finished_at) VALUES(?,?,?,?,?)',('pending','active',status,'{"revision":0}',None))
+        c.execute('INSERT INTO collection_slots VALUES(?,?,?)',('active',now.replace(minute=0).isoformat(),'pending'))
+    assert snapshot(tmp_path,now=now.timestamp())['roles']['collector']['late_source_count']==1
+    with sqlite3.connect(tmp_path/'data/desk.sqlite') as c:
+        assert c.execute('SELECT status FROM collection_tasks').fetchone()[0]==status
+
+
+def test_partial_provider_evidence_can_live_in_bounded_stage_diagnostics_without_leaking_it(tmp_path):
+    now=dt.datetime(2026,11,5,0,45,tzinfo=TZ)
+    with collection_fixture(tmp_path) as c:
+        scheduled(tmp_path,c,now,{'kind':'daily','times':['00:00']},next_run=now+dt.timedelta(days=1),last_slot=now.replace(minute=0))
+        c.execute('ALTER TABLE collection_tasks ADD COLUMN id TEXT')
+        c.execute('INSERT INTO collection_tasks(id,source_id,status,source_snapshot,finished_at) VALUES(?,?,?,?,?)',('partial-task','active','partial','{"revision":0}',now.replace(minute=6).isoformat()))
+    put(tmp_path,'data/collection/tasks/partial-task/coverage.json',{'errors':[{'source':'sub-provider','error':'HTTPError private key=DO-NOT-RETURN'}]})
+    result=snapshot(tmp_path,now=now.timestamp())
+    assert result['roles']['collector']['late_source_count']==0 and result['roles']['collector']['coverage_status']=='partial'
+    assert result['external_provider'] and result['roles']['collector']['external_provider_source_count']==1
+    assert 'DO-NOT-RETURN' not in json.dumps(result) and 'sub-provider' not in json.dumps(result)

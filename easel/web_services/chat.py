@@ -11,6 +11,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from dataclasses import replace
 if os.name == 'nt':
     import msvcrt
 else:
@@ -18,7 +19,7 @@ else:
 from easel import harnesses
 from easel.harnesses import store as harness_store
 from easel.harnesses.base import RunRequest, HarnessError
-from easel.direct_api import read_settings
+from easel.direct_api import read_settings, stream_chat, history_path, DirectAPIError
 from easel.timeouts import TIMEOUT_CHAT
 from fastapi import HTTPException
 from .binding import bind_functions
@@ -137,7 +138,7 @@ class SessionFileLock:
 async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: str,
                             config: dict, emit, timeout: int = TIMEOUT_CHAT, *, interactive=True,
                             run_request=None, bind_native=None, propagate_errors=False,
-                            stop_requested=None, on_dispatch=None) -> str:
+                            stop_requested=None, on_dispatch=None, adapter=None) -> str:
     pk = f"web:{sk}"
     turn_id = req.turnId or uuid.uuid4().hex
     full_text: list[str] = []
@@ -196,28 +197,28 @@ async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: st
                              session_key=sk, codex_auto_approve=config.get("codex_auto_approve", False))
         if stop_requested and stop_requested():raise asyncio.CancelledError()
         if on_dispatch is not None:on_dispatch()
-        await asyncio.wait_for(harnesses.adapter(runtime).run(
+        await asyncio.wait_for((adapter or harnesses.adapter(runtime)).run(
             request, receive, ask,
             bind_native or (lambda identifier: harness_store.bind(SESSIONS_DIR, sk, runtime, identifier))), timeout)
         clean_end = True
         reason = "completed"
     except asyncio.CancelledError:
         reason = "stopped" if sk in _STOPPED_CHAT or stop_requested and stop_requested() else "shutdown"
-        emit("activity", "已停止" if reason == "stopped" else "服务关闭，本轮已取消")
         if propagate_errors:raise
+        emit("activity", "已停止" if reason == "stopped" else "服务关闭，本轮已取消")
     except asyncio.TimeoutError:
         reason = "timeout"
         error_message = "Agent 执行超时，已终止本轮进程"
-        emit("error", error_message)
         if propagate_errors:raise
+        emit("error", error_message)
     except (HarnessError, HTTPException) as error:
         error_message = _scrub_secrets(str(error.detail if isinstance(error, HTTPException) else error))
-        emit("error", error_message)
         if propagate_errors:raise
+        emit("error", error_message)
     except Exception:
         error_message = "Agent 执行失败，请检查本机 CLI、登录和模型配置"
-        emit("error", error_message)
         if propagate_errors:raise
+        emit("error", error_message)
     finally:
         if claimed:
             snapshot = "".join(full_text) + (f"\n\n❌ {error_message}" if error_message else "")
@@ -240,11 +241,128 @@ async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: st
 
 
 
+async def _run_direct_chat(req: ChatRequest, sk: str, content, system: str, emit, *,
+                           timeout=None, run_request=None, stop_requested=None,
+                           on_dispatch=None, on_complete=None, bind_native=None,
+                           propagate_errors=False) -> str:
+    """Run one API turn with the same stop/recovery/session locking as Gateway chat."""
+    timeout = TIMEOUT_CHAT if timeout is None else timeout
+    pk = f"web:{sk}"
+    turn_id = req.turnId or uuid.uuid4().hex
+    full_text = []
+    clean_end = False
+    reason = "error"
+    error_message = ""
+    lock = _session_lock(sk)
+    xlock = _CrossProcLock(sk)
+    proc = _GatewayHttpProc()
+    acquired = False
+    claimed = False
+    locked = False
+    settings = run_request.env if run_request is not None else read_settings(ENV_FILE)
+    task = asyncio.current_task()
+    _DIRECT_CHAT_TASKS.add(task)
+    if lock.locked():
+        emit("activity", "⏳ 这个会话上一条还在跑，排队等它结束…")
+    try:
+        await lock.acquire()
+        locked = True
+        deadline = time.monotonic() + min(timeout, 300)
+        while True:
+            acquired = xlock.acquire(0)
+            if acquired:
+                break
+            xlock.release()
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(0.2)
+        if not acquired:
+            raise DirectAPIError("这个会话正在另一个窗口运行，请稍候再试")
+        # Existing OpenClaw conversations have different histories. Require a new
+        # session rather than silently discard their context when switching modes.
+        if run_request is None and (_transport_pin_file(sk).is_file()
+                or (OPENCLAW_SESSIONS_DIR / f"{_openclaw_session_id(sk)}.jsonl").is_file()
+                or (OPENCLAW_SESSIONS_DIR / f"{_openclaw_session_id(pk)}.jsonl").is_file()):
+            raise DirectAPIError("此会话属于 OpenClaw，请新建会话使用 API 直连")
+        if run_request is not None:
+            record = harness_store.binding(SESSIONS_DIR, sk)
+            if (_chat_backend(sk) != 'api' or record.get('runtime', 'api') != 'api'
+                    or record.get('native_id', '') != run_request.native_id):
+                raise DirectAPIError("API 会话绑定已变化；没有启动新请求")
+        if stop_requested and stop_requested():
+            raise asyncio.CancelledError()
+        if run_request is not None:
+            native = run_request.native_id or str(uuid.uuid4())
+            if bind_native is not None:
+                bind_native(native)
+            else:
+                harness_store.bind(SESSIONS_DIR, sk, 'api', native)
+            run_request = replace(run_request, native_id=native)
+        _save_turn(pk, "running", "", {"turn_id": turn_id})
+        claimed = True
+        proc._task = asyncio.current_task()
+        _RUNNING_CHAT[sk] = proc
+        emit("activity", "🧠 正在通过 API 思考…")
+
+        async def consume():
+            nonlocal clean_end, reason
+            async for kind, text in stream_chat(
+                    settings, content, system=system,
+                    history_file=history_path(SESSIONS_DIR, run_request.native_id if run_request is not None else sk), timeout=timeout):
+                if kind == "finish":
+                    clean_end, reason = True, text
+                else:
+                    if kind == "token":
+                        full_text.append(text)
+                    emit(kind, text)
+
+        if on_dispatch is not None:
+            on_dispatch()
+        await asyncio.wait_for(consume(), timeout=timeout)
+        if run_request is not None and not clean_end:
+            raise DirectAPIError("API 未返回明确完成回执")
+        if clean_end and on_complete is not None:
+            on_complete()
+    except asyncio.CancelledError:
+        reason = "user_stopped" if sk in _STOPPED_CHAT or stop_requested and stop_requested() else "cancelled"
+        if propagate_errors or reason != "user_stopped":
+            raise
+    except (DirectAPIError, asyncio.TimeoutError) as error:
+        error_message = str(error) or "API 请求超时"
+        if propagate_errors:
+            raise
+        emit("error", error_message)
+    except OSError:
+        error_message = "会话历史保存失败，请检查项目 outputs 目录权限"
+        if propagate_errors:
+            raise
+        emit("error", error_message)
+    finally:
+        proc.finish()
+        snapshot = "".join(full_text) + (f"\n\n❌ {error_message}" if error_message else "")
+        try:
+            if claimed:
+                _save_turn(pk, "done", snapshot, {
+                    "turn_id": turn_id, "clean_end": clean_end, "stop_reason": reason,
+                })
+        finally:
+            if _RUNNING_CHAT.get(sk) is proc:
+                _RUNNING_CHAT.pop(sk, None)
+            if claimed:
+                _STOPPED_CHAT.discard(sk)
+            xlock.release()
+            if locked:
+                lock.release()
+            _DIRECT_CHAT_TASKS.discard(task)
+    return "".join(full_text)
+
+
+
 def bind(*, into):
-    return bind_functions(__import__(__name__, fromlist=['']), ('_run_harness_chat',), into=into)
+    return bind_functions(__import__(__name__, fromlist=['']), ('_run_harness_chat', '_run_direct_chat'), into=into)
 
 
-def create_chat_context(root, *, backend, environment, snapshot, ask, scrub, running=None):
+def create_chat_context(root, *, backend, environment, snapshot, ask, scrub, running=None, api_stream=None):
     root = Path(root).resolve()
     sessions = root / 'outputs/_sessions'
     locks = {}
@@ -255,5 +373,6 @@ def create_chat_context(root, *, backend, environment, snapshot, ask, scrub, run
              '_chat_backend': backend, '_save_turn': snapshot, '_harness_ask': ask,
              '_scrub_secrets': scrub, 'read_settings': lambda path: environment,
              '_proxy_env': lambda: {}, '_STOPPED_CHAT': set(),
-             '_RUNNING_CHAT': running if running is not None else {}, '_HARNESS_TASKS': set()}
-    return bind_functions(__import__(__name__, fromlist=['']), ('_run_harness_chat',), ports)
+             '_RUNNING_CHAT': running if running is not None else {}, '_HARNESS_TASKS': set(),
+             '_DIRECT_CHAT_TASKS': set(), 'stream_chat': api_stream or stream_chat}
+    return bind_functions(__import__(__name__, fromlist=['']), ('_run_harness_chat', '_run_direct_chat'), ports)

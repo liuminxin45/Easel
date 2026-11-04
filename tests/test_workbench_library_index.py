@@ -131,6 +131,8 @@ def test_library_protocol_and_old_registered_physical_alias_do_not_walk_tree(tmp
     leaf={'type':'file','path':'__workbench__/file-id/file.md','name':'file.md','kind':'text'}
     tree={'type':'dir','path':'native-session-session','name':'registered session','children':[{'type':'dir','path':'native-session-session/turn','name':'turn','children':[leaf]}]}
     api=NativeApi.__new__(NativeApi);api.root=tmp_path;api.store=SimpleNamespace(connect=connect);api.library=LibraryIndex(tmp_path,lambda:[tree]);api.library.rebuild()
+    from easel_workbench.features.works.library_deletion import LibraryDeletion
+    api.deletions=LibraryDeletion(api)
     def forbidden(*args):raise AssertionError('legacy full tree called')
     api._work_tree=forbidden;api._outputs_tree=forbidden
     def request(path,query):return Request({'type':'http','method':'GET','path':path,'query_string':query.encode(),'headers':[]})

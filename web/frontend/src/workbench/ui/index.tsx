@@ -114,7 +114,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   onOpenSettings:()=>open('/settings'),theme,onThemeChange,
   assetUrl:nativeAsset,
   rootRef:sidebar,rootLabel:'工作导航',navigationLabel:'工作台导航',
-  personaOptions:[...(creators.data?.profiles.map(value=>({value:value.id,label:value.name}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
+  personaOptions:[...(creators.data?.profiles.filter(value=>value.active!==false||activeSession?.profile_id===value.id||activeSession?.persona===value.id).map(value=>({value:value.id,label:value.name+(value.active===false?'（原会话画像）':'')}))||[{value:'oil-pig',label:'油猪大侠'}]),{value:'__new__',label:'+ 新建画像…'}],
   navigation:config?.tools.map(tool=>({id:tool.id,label:tool.name,icon:icons[tool.id]||<IconDashboard size={18}/>,active:active(tool.id,shownPath),onSelect:()=>open(tool.path)}))||[],
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
  notice:<Notice sources={[{error:chatAction.error,feedback:chatAction.feedback}]}/>,

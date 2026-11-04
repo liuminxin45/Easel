@@ -63,8 +63,8 @@ class LibraryIndex:
         value.update(changes)
         c.execute("INSERT OR REPLACE INTO metadata VALUES('state',?)",(json.dumps(value),))
 
-    def rebuild(self):
-        with locked(self.root/'data/content-library.lock',timeout=.1):
+    def rebuild(self, *, lock_timeout=.1):
+        with locked(self.root/'data/content-library.lock',timeout=lock_timeout):
             with contextlib.closing(_connect(self.path)) as c,c:
                 requested,_=_refresh_counts(c)
                 self._state(c,building=True,status='building',build_started_at=time.time())
@@ -206,6 +206,24 @@ class LibraryIndex:
                 if not row:raise HTTPException(404,'内容尚未登记或已归档')
                 nodes.append(json.loads(row['document']));path=row['parent']
         return {'nodes':list(reversed(nodes))}
+
+    def subtree(self,path, *, with_revision=False):
+        """Exact indexed descendants for a user-selected storage operation."""
+        self._resolve_indexed(path)
+        with contextlib.closing(_read(self.path)) as c:
+            c.execute('BEGIN')
+            revision=c.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()[0]
+            nodes=[json.loads(row[0]) for row in c.execute('''
+                WITH RECURSIVE selected(path,document) AS (
+                    SELECT path,document FROM nodes WHERE path=?
+                    UNION ALL SELECT n.path,n.document FROM nodes n JOIN selected s ON n.parent=s.path
+                ) SELECT document FROM selected''',(path,))]
+        return {'nodes':nodes,'revision':revision} if with_revision else nodes
+
+    def generation(self):
+        with contextlib.closing(_read(self.path)) as c:
+            row=c.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()
+        return row[0] if row else None
 
     def thumbnail_source(self,key):
         with contextlib.closing(_read(self.path)) as c:

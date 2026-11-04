@@ -251,8 +251,9 @@ export function savePersonaFile(name: string, filename: string, content: string,
   });
 }
 
-export function deletePersona(name: string): Promise<{ ok: boolean; deleted: string }> {
-  return request(`/api/persona/${encodeURIComponent(name)}`, { method: 'DELETE' });
+export function deletePersona(name: string, expectedRevision?:number): Promise<{ ok: boolean; deleted: string }> {
+  return request(`/api/persona/${encodeURIComponent(name)}`, { method: 'DELETE',
+    ...(expectedRevision===undefined?{}:{body:JSON.stringify({expected_revision:expectedRevision})}) });
 }
 
 // ---- 热点雷达 ----

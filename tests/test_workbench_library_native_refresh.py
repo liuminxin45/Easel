@@ -8,6 +8,12 @@ from easel_workbench.features.works.library_index import LibraryIndex,request_re
 from easel_workbench.application.chat import ChatBusiness
 
 
+@pytest.fixture
+def receipt_store(tmp_path):
+    from easel_workbench.runtime.desk import Store
+    return Store(tmp_path/'receipt.sqlite')
+
+
 def file_node(name):return {'type':'file','path':name,'name':name,'kind':'text','mtime':1,'size':10}
 def wait(predicate,timeout=4):
     deadline=time.monotonic()+timeout
@@ -72,27 +78,27 @@ def test_resolve_waits_for_requested_publication_without_building_inside_read(tm
 
 
 @pytest.mark.parametrize('status',['completed','stopped','failed','unknown'])
-def test_every_terminal_native_run_requests_refresh_without_changing_its_receipt(tmp_path,status):
+def test_every_terminal_native_run_requests_refresh_without_changing_its_receipt(tmp_path,status,receipt_store):
     calls=[];index=SimpleNamespace(invalidate=lambda:calls.append(1));turn={'id':'native-turn','session_id':'original-session','status':status,'output':'Original preserved reply'}
-    business=SimpleNamespace(root=tmp_path,box=SimpleNamespace(_native_api=SimpleNamespace(library=index)))
+    business=SimpleNamespace(root=tmp_path,store=receipt_store,box=SimpleNamespace(_native_api=SimpleNamespace(library=index)))
     before=json.dumps(turn,sort_keys=True)
     assert ChatBusiness.finished(business,turn)=={'session_id':'original-session','model_status':status}
     assert calls==[1] and json.dumps(turn,sort_keys=True)==before
 
 
-def test_refresh_signal_failure_does_not_turn_a_real_native_result_into_hook_failure(tmp_path,monkeypatch):
+def test_refresh_signal_failure_does_not_turn_a_real_native_result_into_hook_failure(tmp_path,monkeypatch,receipt_store):
     from easel_workbench.runtime import server_logging
     events=[];monkeypatch.setattr(server_logging,'exception',lambda *args,**kwargs:events.append((args,kwargs)))
     def fail():raise OSError('TEMP index unavailable')
-    business=SimpleNamespace(root=tmp_path,box=SimpleNamespace(_native_api=SimpleNamespace(library=SimpleNamespace(invalidate=fail))))
+    business=SimpleNamespace(root=tmp_path,store=receipt_store,box=SimpleNamespace(_native_api=SimpleNamespace(library=SimpleNamespace(invalidate=fail))))
     turn={'session_id':'original','status':'completed','output':'actual result remains intact'}
     assert ChatBusiness.finished(business,turn)=={'session_id':'original','model_status':'completed'}
     assert turn['output']=='actual result remains intact' and len(events)==1
 
 
-def test_adapter_not_created_can_leave_a_durable_signal_for_existing_index(tmp_path):
+def test_adapter_not_created_can_leave_a_durable_signal_for_existing_index(tmp_path,receipt_store):
     index=LibraryIndex(tmp_path,lambda:[]);index.rebuild();index.close()
-    business=SimpleNamespace(root=tmp_path,box=SimpleNamespace())
+    business=SimpleNamespace(root=tmp_path,store=receipt_store,box=SimpleNamespace())
     ChatBusiness.finished(business,{'session_id':'original','status':'stopped'})
     assert LibraryIndex(tmp_path,lambda:[]).list()['indexing'] is True
     assert request_refresh(tmp_path/'no-index-yet') is False
@@ -103,6 +109,7 @@ def test_pending_resolve_and_alias_wait_off_event_loop(tmp_path,alias):
     import asyncio,contextlib,sqlite3
     from starlette.requests import Request
     from easel_workbench.runtime.native_api import NativeApi
+    from easel_workbench.features.works.library_deletion import LibraryDeletion
     database=tmp_path/'temp.sqlite'
     with sqlite3.connect(database) as c:c.execute('CREATE TABLE artifacts(id TEXT,name TEXT,path TEXT)')
     def connection():
@@ -114,7 +121,8 @@ def test_pending_resolve_and_alias_wait_off_event_loop(tmp_path,alias):
         time.sleep(.12)
         if alias and not path.startswith('native-session-'):raise HTTPException(404,'TEMP unregistered alias')
         return {'nodes':[{'path':path}]}
-    api.library=SimpleNamespace(resolve=resolve);api._output_context=lambda path:{}
+    api.library=SimpleNamespace(resolve=resolve,generation=lambda:'TEMP-generation');api._output_context=lambda path:{}
+    api.deletions=LibraryDeletion(api)
     request=Request({'type':'http','method':'GET','path':'/api/library/resolve','query_string':b'path=session/turn/products/result.md','headers':[]})
     async def scenario():
         pending=asyncio.create_task(api.dispatch('/api/library/resolve',request,None))

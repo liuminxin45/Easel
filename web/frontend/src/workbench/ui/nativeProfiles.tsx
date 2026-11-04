@@ -24,8 +24,8 @@ export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;pro
   personaLabel={id=>resource.data?.profiles.find(value=>value.id===id)?.name||id}
   onUsePersona={id=>vm.navigate('/chat?fresh=1&profile='+encodeURIComponent(id))}
   onNewProfile={()=>vm.navigate('/toolbox?section=profiles&item=new')}
-  onDeleted={()=>{void resource.reload();vm.replace('/toolbox?section=profiles')}}
-  allowAccountImport={false} allowDelete={false} onFileSaved={()=>{void vm.client.invalidate(['creator']);void resource.reload()}}
+  onDeleted={id=>{const current=vm.client.drafts.get<{profile_id:string}>('creator:current');if(current?.profile_id===id)vm.client.drafts.set('creator:current',{profile_id:'oil-pig'});void vm.client.invalidate(['creator']);void resource.reload();vm.replace('/toolbox?section=profiles')}}
+  allowDelete={id=>id!=='oil-pig'} onFileSaved={()=>{void vm.client.invalidate(['creator']);void resource.reload()}}
   draftStore={draftStore}
   renderDetailExtension={id=>{const current=resource.data?.profiles.find(value=>value.id===id);return current&&resource.data?<ProfileBindingsDisclosure key={id} profileId={id} data={resource.data} reload={resource.reload}/>:null}}/>
  </>;

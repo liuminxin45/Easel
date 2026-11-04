@@ -952,14 +952,8 @@ async def api_persona_file_save(name: str, req: PersonaFileRequest):
 @app.delete("/api/persona/{name}")
 async def api_persona_delete(name: str):
     """删除整个画像目录。"""
-    if not _valid_persona_name(name):
-        raise HTTPException(400, "画像名非法")
-    pd = (PROFILES_DIR / name).resolve()
-    if PROFILES_DIR.resolve() not in pd.parents or not pd.is_dir():
-        raise HTTPException(404, "画像不存在")
-    import shutil
-    shutil.rmtree(pd)
-    return {"ok": True, "deleted": name}
+    from easel.web_services.profiles import delete_profile
+    return await delete_profile(name,PROFILES_DIR)
 
 
 app.get("/api/skills")(api_skills)

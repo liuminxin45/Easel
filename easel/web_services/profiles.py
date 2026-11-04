@@ -4,6 +4,25 @@ The six-document builder is extracted from web/app.py without changing its text.
 The ordinary host writes files; authenticated hosts retain versioned documents.
 """
 from __future__ import annotations
+import asyncio
+import inspect
+import shutil
+from pathlib import Path
+from fastapi import HTTPException
+from easel.persona import valid_persona_name
+
+
+async def delete_profile(name, root=None, *, resolve=None, remove=None):
+    """The native delete action with an optional historical storage adapter."""
+    if not valid_persona_name(name):raise HTTPException(400,'画像名非法')
+    def filesystem():
+        base=Path(root).resolve();target=(base/name).resolve()
+        if base not in target.parents or not target.is_dir():raise HTTPException(404,'画像不存在')
+        return target
+    target=await asyncio.to_thread(resolve,name) if resolve else await asyncio.to_thread(filesystem)
+    result=await asyncio.to_thread(remove or shutil.rmtree,target)
+    if inspect.isawaitable(result):await result
+    return {'ok':True,'deleted':name}
 
 def baseline_profile_files(name: str, form: dict) -> dict:
     """从表单确定性生成六维基线文件。链接派生字段标 [待 AI 分析]。"""

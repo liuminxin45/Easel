@@ -144,14 +144,23 @@ def main():
                     expect(page.locator('.ew-news-prose > p').first).to_be_visible()
                 page.get_by_role('button',name='制作内容',exact=True).click();drawer=page.get_by_role('dialog',name='制作内容',exact=True);expect(drawer).to_be_visible();drawer.get_by_role('button',name=format,exact=True).click();return drawer
             def post_bodies():return [r['body'] for r in requests if r['path']=='/api/chat/submit' and r['method']=='POST']
+            def no_turn_settings(stage):
+                expect(page.get_by_role('button',name='本轮创作设置',exact=True)).to_have_count(0)
+                expect(page.get_by_role('dialog',name='本轮创作设置',exact=True)).to_have_count(0)
+                expect(page.locator('.drawer-overlay')).to_have_count(0)
+                links=page.get_by_role('link',name='这条新闻',exact=True)
+                assert links.count()>0,stage
+                assert all(article in link.get_attribute('href') for link in links.all()),stage
             def close_finished_drawer(stage):
                 drawer=page.get_by_role('dialog',name='制作内容',exact=True)
                 if not args.allow_manual_close:
                     expect(drawer).not_to_be_visible(timeout=5000)
+                    no_turn_settings(stage)
                     return
                 if drawer.count() and drawer.is_visible():
                     report.setdefault('manual_post_submit_drawer_closures',[]).append({'case':case,'stage':stage})
                     drawer.get_by_role('button',name='关闭',exact=True).click()
+                no_turn_settings(stage)
             def current_context(profile):
                 response=page.request.get(f['origin']+'/api/news/'+article+'/creation-context?profile_id='+profile);assert response.ok,response.text();return response.json()
             try:
@@ -182,6 +191,11 @@ def main():
                 assert not list((f['root']/'outputs').glob('TEMP-news-created/run-*'))
                 assert history['session']['source_article_id']==article
                 assert history['session']['title']==TITLE,'News session must use the selected headline, not a generic discussion instruction'
+                discussion_package=material_files(f,discussion['turnId'])
+                assert discussion_package['creation']['intent']=='discuss'
+                discussion_source=next(item for item in discussion_package['material_manifest']['files'] if item['role']=='source')
+                assert read(f['root']/discussion_source['path'])['body']==BODY
+                no_turn_settings('initial-discussion')
                 # Deliberately use SPA navigation: a full document reload would
                 # hide stale creation-context cache and admit a duplicate turn.
                 assert page.get_by_role('button',name='新闻详情',exact=True).count()==0
@@ -227,6 +241,7 @@ def main():
                 assert submitted['context']['article_id']==article and 'creation' not in submitted['context']
                 assert len(f['adapter'].requests)==2 and page.get_by_role('dialog').count()==0
                 native_package=material_files(f,native_product['turnId'])
+                no_turn_settings('native-production')
                 assert native_package['creation']['mode']=='native-defaults' and 'format' not in native_package['creation']
                 assert native_package['creation']['defaults']['poster']==style
                 native_files=native_package['material_manifest']['files']
@@ -296,8 +311,16 @@ def main():
                 assert simple_package['creation']['style']['character']=='simple-pig' and current_context(profile)['defaults']['poster']==style
                 mark(case,'simple-pig selection binds its separate canonical reference hashes without overwriting precise wuxia history',reference_sha256=sorted(simple_hashes))
                 close_finished_drawer('simple-pig')
-                # Inspect exact previous material through the read-only original Drawer.
-                page.get_by_role('button',name='本轮创作设置',exact=True).last.click();review_drawer=page.get_by_role('dialog',name='本轮创作设置',exact=True);expect(review_drawer.get_by_text('本轮参考材料',exact=True)).to_be_visible();shot('turn-materials');review_drawer.get_by_role('button',name='关闭',exact=True).click()
+                # Reloaded historical messages keep source links and exact server
+                # materials without exposing an extra per-turn settings surface.
+                page.reload(wait_until='domcontentloaded');expect(page.get_by_role('textbox',name='对话输入')).to_be_visible()
+                reloaded=helper.wait_history(page,f['origin'],sid)
+                expect(page.get_by_text('TEMP_NEWS_PRODUCT_6',exact=False).first).to_be_visible()
+                assert reloaded['session']['messages'][-1]['turnId']==simple_turn['turnId']
+                no_turn_settings('reloaded-history')
+                for prior in (discussion,native_product,native_modified,poster,article_turn,simple_turn):material_files(f,prior['turnId'])
+                shot('history-without-turn-settings')
+                mark(case,'discussion and production history retain exact material hashes and news links without a turn-settings button or details Drawer')
                 goto(page,f['origin'],'/works?path=TEMP-news-created/run-3/正文.md');expect(page.get_by_text('TEMP_NEWS_PRODUCT_3',exact=False).first).to_be_visible();shot('library-product')
                 mark(case,'new actual Agent output is indexed and previewed through the original content library')
                 goto(page,f['origin'],'/news/a/'+article);expect(page.get_by_role('button',name='继续讨论',exact=True)).to_be_enabled();before_calls=len(f['adapter'].requests);page.get_by_role('button',name='继续讨论',exact=True).click();expect(page.get_by_role('textbox',name='对话输入')).to_be_visible();assert session_id(page)==sid and len(f['adapter'].requests)==before_calls

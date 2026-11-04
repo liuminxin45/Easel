@@ -1,5 +1,5 @@
 import {ChatTurnProducts,productArtifacts} from './ChatTurnProducts';
-import {useCallback,useEffect,useRef,useMemo,useState} from 'react';
+import {useCallback,useEffect,useRef,useMemo} from 'react';
 import {useStore} from 'zustand';
 import {sessionRuntime,type FrozenTurn,type SessionDraft} from './chatRuntime';
 import ChatPage,{type ChatCommand,type ChatViewState} from '../../components/ChatPage';
@@ -10,8 +10,7 @@ import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
 import {displayName} from '../../lib/skillDisplayNames';
 import {nativeContinuationPath,workProductionRecovery,type Work,array,record,string,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
-import {Notice,JsonDetails} from './common';
-import Drawer from '../../components/Drawer';
+import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
 
@@ -32,11 +31,7 @@ export function NewsMessageLink({articleId,navigate}:{articleId:string;navigate:
  const path='/news/a/'+encodeURIComponent(articleId);
  return <div className="ew-news-message-source"><a href={'?path='+encodeURIComponent(path)} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigate(path)}}>这条新闻</a></div>;
 }
-export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{record(message).creation&&<CreationTurnRecord turnId={string(record(message).turnId||record(message).id)}/>}</>}
-function CreationTurnRecord({turnId}:{turnId:string}){
- const [open,setOpen]=useState(false),resource=useResource<JsonRecord>(open?'/api/chat/turns/'+encodeURIComponent(turnId)+'/creation':null),creation=record(resource.data?.creation),files=array<JsonRecord>(record(resource.data?.material_manifest).files);
- return <><button className="btn btn-sm ew-news-turn-record" onClick={()=>setOpen(true)}>本轮创作设置</button>{open&&<Drawer title="本轮创作设置" onClose={()=>setOpen(false)}><Notice sources={[resource]}/>{resource.loading&&!resource.data&&<p>正在读取本轮材料…</p>}{resource.data&&<><p>{creation.intent==='discuss'?'讨论新闻':creation.format==='poster'?'制作贴图':'写文章'}</p>{creation.note&&<p className="ew-preserve">{string(creation.note)}</p>}<h3>本轮参考材料</h3><ul>{files.map(file=><li key={string(file.name)}>{string(file.label)||string(file.name)}</li>)}</ul><JsonDetails title="查看校验记录" value={resource.data.material_manifest}/></>}</Drawer>}</>;
-}
+export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/></>}
 /** Bind server-authorized continuation to this view's exact stopped version. */
 export function confirmedContinuation(message:unknown,sessionId:string,profileId:string):string|null{
  const value=record(message),work=record(value.work),versionId=string(value.turnId||value.id),workId=string(work.work_id),link=record(record(value.business_recovery).continuation);

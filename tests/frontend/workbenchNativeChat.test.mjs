@@ -35,8 +35,7 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const continuationButtons=value=>nodes(value).filter(node=>node.type==='button'&&node.props.children==='继续制作');
-// NativeTurnOutputs now includes the independent creation-record sibling. Keep
-// these history tests focused on the exact shared product subtree as before.
+// History tests inspect the original shared product subtree.
 const productTree=wrapper=>{const product=nodes(wrapper).find(node=>typeof node.type==='function'&&node.type.name==='ChatTurnProducts');assert.ok(product,'the shared product component must remain present');return product.type(product.props)};
 const renderedProducts=(ui,message)=>{const extra=ui.chat.renderMessageExtra(message);return productTree(extra.type(extra.props))};
 function interruptedMessage(){return {role:'assistant',content:'已保留原文件',status:'stopped',turnId:'interrupted-version',work:{work_id:'exact-work',version_id:'interrupted-version'},business_recovery:{job_id:'interrupted-version',failure_kind:'production',send_state:'submitted',action:'edit_materials',error_code:'native_interrupted',can_continue:true,continuation:{session_id:'session-one',work_id:'exact-work',version_id:'interrupted-version',profile_id:'oil-pig',skill_id:'content-production',skill_version:2}}};}
@@ -551,4 +550,14 @@ test('private native production skills expose Chinese names without version labe
  const choice=choices.find(c=>c.selection.skill_id==='content-production');
  assert.equal(choice.label,'制作贴图 / 文章');assert.equal(choice.selection.skill_id,'content-production');
  assert.doesNotMatch(choice.label,/\bv\d+/i);
+});
+
+
+test('news discussions and production show no creation-settings control',()=>{
+ const f=fixture();for(const intent of ['discuss','produce']){
+  const tree=f.lib.NativeTurnOutputs({message:{role:'assistant',turnId:'x',creation:{intent}}});
+  assert.equal(nodes(tree).some(n=>n.type==='button'&&n.props.children==='本轮创作设置'),false);
+  assert.ok(nodes(tree).some(n=>typeof n.type==='function'&&n.type.name==='ChatTurnProducts'));
+ }
+ assert.equal(f.calls.resources.some(p=>String(p).includes('/creation')),false);
 });

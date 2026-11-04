@@ -62,7 +62,7 @@ def idle(database=None):
         ref=evidence[key];p=OLD/ref['path']
         if sha(p)!=ref['sha256']:raise ValueError('Historical audit changed')
         return {**ref,'document':read(p)}
-    database=Path(database or OLD/'data/desk.sqlite').resolve()
+    database=Path(database or ROOT/'data/desk.sqlite').resolve()
     with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row
         with archived_reads(ROOT,OLD,base,automation):
@@ -78,7 +78,13 @@ def idle(database=None):
                     if table=='media_account_sessions':active=value.get('state') in ('login','checking')
                     if table=='easel_chat_submissions':active=value.get('status') in ('queued','preparing','admitting')
                     if table=='easel_chat_turns':
-                        active=active or value.get('status')=='unknown' or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending'
+                        retained=None
+                        if value.get('status')=='unknown':
+                            from native_chat_receipt_retention import retained as reviewed_chat_retention
+                            retained=reviewed_chat_retention(ROOT,ident,raw)
+                            if retained:status.setdefault('retained_chat_unknown',[]).append(retained)
+                        active=(active or (value.get('status')=='unknown' and not retained)
+                                or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending')
                     if active:
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
         if base.exists_table(c,'easel_chat_creation_intents'):
@@ -324,7 +330,7 @@ def execute(apply=False):
         file=(native/member).resolve()
         if not file.is_relative_to(native.resolve()) or sha(file)!=expected:raise ValueError('Frontend asset changed')
     validate_source_binding(package,ROOT)
-    status=idle()
+    status=idle(OLD/'data/desk.sqlite')
     if status['busy']:return {'status':'waiting','busy':status,'production_changed':False}
     held,parents=identities()
     plan={'candidate':choice,'old_processes':{str(pid):{'name':r['name'],'created':h.creation_ticks} for pid,(h,r) in held.items()},'idle':status}
@@ -338,13 +344,13 @@ def execute(apply=False):
         client=authenticate();stopped=False;admitted=False;startup_disabled=False;process=None
         try:
             queue=queue_idle()
-            status=idle()
+            status=idle(OLD/'data/desk.sqlite')
             if status['busy']:return {'status':'waiting','busy':status,'production_changed':False}
             # A writer transaction closes the last admission window. Every held
             # process is stopped before this lock is released for the final copy.
             with sqlite3.connect(OLD/'data/desk.sqlite',timeout=30,isolation_level=None) as fence:
                 fence.execute('BEGIN IMMEDIATE')
-                if idle()['busy']:raise ValueError('Work started before the writer fence')
+                if idle(OLD/'data/desk.sqlite')['busy']:raise ValueError('Work started before the writer fence')
                 for handle,_ in held.values():handle.close()
                 held,parents=identities()
                 atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'fenced','candidate':choice})

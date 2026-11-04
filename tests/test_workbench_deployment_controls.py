@@ -435,3 +435,29 @@ def test_different_creation_microsecond_rejects_and_closes_handle(monkeypatch):
     with pytest.raises(ValueError,match='identity changed'):
         processes.checked_identity({'pid':4321,'creation_ticks':'133116604567890130'})
     assert len(created)==1 and created[0].closed
+
+
+@pytest.mark.parametrize('extra_pending',[False,True])
+def test_idle_retains_reviewed_unknown_but_still_blocks_live_writers(tmp_path,monkeypatch,extra_pending):
+    from types import SimpleNamespace
+    monkeypatch.syspath_prepend(str(PROJECT/'scripts'))
+    module=load('workbench_native_idle_controls',PROJECT/'scripts/activate_workbench.py')
+    old=tmp_path/'old';evidence=old/'evidence/simplify-workbench-20261029';evidence.mkdir(parents=True)
+    audit=evidence/'audit.json';audit.write_text('{}',encoding='utf-8')
+    reference={'path':audit.relative_to(old).as_posix(),'sha256':module.sha(audit)}
+    module.atomic(evidence/'activation-evidence.json',{'historical_unknown_audit':reference,'collection_historical_unknown_audit':reference})
+    root=tmp_path/'owner';database=root/'data/desk.sqlite';database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as connection:
+        connection.execute('CREATE TABLE easel_chat_turns(id TEXT PRIMARY KEY,document TEXT NOT NULL)')
+        connection.execute('INSERT INTO easel_chat_turns VALUES(?,?)',('historical',json.dumps({'status':'unknown','hook_status':'pending' if extra_pending else 'completed'})))
+    monkeypatch.setattr(module,'OLD',old);monkeypatch.setattr(module,'ROOT',root)
+    monkeypatch.setattr(module,'legacy',lambda:(SimpleNamespace(exists_table=lambda c,t:bool(c.execute("SELECT 1 FROM sqlite_master WHERE name=?",(t,)).fetchone())),SimpleNamespace(busy_state=lambda *_:{'busy':False,'retained_collection_unknown':[]})))
+    monkeypatch.setitem(sys.modules,'native_chat_receipt_retention',SimpleNamespace(retained=lambda *_:{'id':'historical','replayed':False}))
+    result=module.idle(database)
+    assert result['busy'] is extra_pending
+    assert module.idle()['busy'] is extra_pending
+    assert result['retained_chat_unknown']==[{'id':'historical','replayed':False}]
+    with sqlite3.connect(database) as connection:
+        connection.execute('INSERT INTO easel_chat_turns VALUES(?,?)',('live',json.dumps({'status':'running'})))
+    result=module.idle(database)
+    assert result['busy'] and {'table':'easel_chat_turns','id':'live'} in result['additional']

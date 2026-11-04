@@ -15,6 +15,10 @@ on:
       - 'tests/test_workbench_profile_enhancement.py'
       - 'scripts/audit_easel_base.mjs'
       - 'scripts/workbench_release.py'
+      - 'scripts/activate_workbench.py'
+      - 'scripts/native_chat_receipt_retention.py'
+      - 'tests/test_workbench_native_chat_retention.py'
+      - 'tests/test_workbench_deployment_controls.py'
       - 'docs/workbench/upstream-base.json'
       - 'docs/workbench/upstream-overlays.json'
       - '.github/workflows/easel-base.yml'
@@ -31,6 +35,10 @@ on:
       - 'tests/test_workbench_profile_enhancement.py'
       - 'scripts/audit_easel_base.mjs'
       - 'scripts/workbench_release.py'
+      - 'scripts/activate_workbench.py'
+      - 'scripts/native_chat_receipt_retention.py'
+      - 'tests/test_workbench_native_chat_retention.py'
+      - 'tests/test_workbench_deployment_controls.py'
       - 'docs/workbench/upstream-base.json'
       - 'docs/workbench/upstream-overlays.json'
       - '.github/workflows/easel-base.yml'
@@ -65,6 +73,6 @@ jobs:
       - name: Verify shared services and private business boundaries
         env:
           PYTHONUTF8: '1'
-        run: python -m pytest -q tests/test_easel_shared_services.py tests/test_easel_base_alignment.py tests/test_workbench_architecture.py tests/test_workbench_release_source.py tests/test_shared_upload_streaming.py tests/test_workbench_native_upload_http.py tests/test_workbench_profile_enhancement.py
+        run: python -m pytest -q tests/test_easel_shared_services.py tests/test_easel_base_alignment.py tests/test_workbench_architecture.py tests/test_workbench_release_source.py tests/test_shared_upload_streaming.py tests/test_workbench_native_upload_http.py tests/test_workbench_profile_enhancement.py tests/test_workbench_native_chat_retention.py tests/test_workbench_deployment_controls.py
       # workbench-mobile-state.yml already runs every frontend regression,
       # host type/interaction checks and both independent builds on main.

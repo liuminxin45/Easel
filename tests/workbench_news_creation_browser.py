@@ -148,7 +148,8 @@ def main():
             def no_turn_settings(stage):
                 links=page.get_by_role('link',name='这条新闻',exact=True)
                 expect(links.first).to_be_visible()
-                assert all(article in link.get_attribute('href') for link in links.all()),stage
+                hrefs=links.evaluate_all('(nodes)=>nodes.map(node=>node.getAttribute("href"))')
+                assert hrefs and all(href and article in href for href in hrefs),stage
                 expect(page.get_by_role('button',name='本轮创作设置',exact=True)).to_have_count(0)
                 expect(page.get_by_role('dialog',name='本轮创作设置',exact=True)).to_have_count(0)
                 expect(page.get_by_text('已选新闻素材',exact=True)).to_have_count(0)

@@ -20,7 +20,14 @@ export class DraftRepository {
     });
   }
   private persistenceError(error:string):void{if(this.persistence.getState().error!==error)this.persistence.setState({error})}
-  private indexInput(key:string,value:JsonRecord):void{this.inputIndex?.set(key,value);if(value.pending||value.pendingId||value.request||value.operation||value.pendingSave||value.pendingFinalize)this.pendingKeys.add(key);else this.pendingKeys.delete(key)}
+  private indexInput(key:string,value:JsonRecord):void{
+    this.inputIndex?.set(key,value);
+    // Session-open keeps its original request as recovery/history evidence.
+    // Only an acknowledged session makes that request terminal; separate
+    // pending operation/write markers continue to fence an unsafe upgrade.
+    const openedSession=key.startsWith('session-open:')&&['opened','ready'].includes(string(value.phase))&&typeof value.session_id==='string'&&value.session_id.trim().length>0;
+    if(value.pending||value.pendingId||value.operation||value.pendingSave||value.pendingFinalize||value.request&&!openedSession)this.pendingKeys.add(key);else this.pendingKeys.delete(key);
+  }
   private indexedInputs():Map<string,JsonRecord>{
     if(this.inputIndex)return this.inputIndex;
     this.inputIndex=new Map();this.pendingKeys.clear();

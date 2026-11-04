@@ -155,6 +155,23 @@ def test_preparing_stop_or_anchor_change_never_runs_model(business,monkeypatch,s
     asyncio.run(scenario())
 
 
+def test_stop_in_admitting_transaction_prevents_the_native_handoff(business,monkeypatch):
+    _,admissions,adapter=setup(business,monkeypatch)
+    async def scenario():
+        try:
+            admissions._receive(request('at-handoff'))
+            admissions._stage('at-handoff','admitting')
+            result=await admissions.stop('test-chat','at-handoff')
+            assert result['stopped'] and result['native_started'] is False
+            row={'request':request('at-handoff')}
+            original,prepared=admissions._prepare(row)
+            with pytest.raises(ValueError):
+                await admissions.chat.submit(original,**prepared,admission_id='at-handoff')
+            assert not adapter.requests and admissions.get_turn('at-handoff')['status']=='stopped'
+        finally:await admissions.close();await admissions.chat.close()
+    asyncio.run(scenario())
+
+
 def test_restart_resumes_saved_request_but_never_replays_existing_turn(business,monkeypatch):
     _,old,adapter=setup(business,monkeypatch)
     old._receive(request())

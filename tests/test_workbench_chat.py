@@ -63,6 +63,50 @@ async def completed(service,turn_id):
     if task:await asyncio.shield(task)
 
 
+def test_stop_during_native_start_waits_for_the_exact_turn_identity(service,monkeypatch):
+    async def scenario():
+        s,_=service
+        entered,release=asyncio.Event(),asyncio.Event()
+        class StartingAdapter:
+            count=0
+            cancelled=False
+            async def run(self,request,emit,ask,bind):
+                self.count+=1;entered.set()
+                try:await release.wait()
+                except asyncio.CancelledError:
+                    self.cancelled=True
+                    raise AssertionError('Native start cancelled before its identity was known')
+                bind('starting-thread');request.on_native_turn('starting-thread','starting-turn')
+                try:await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    self.cancelled=True;request.on_native_interrupt('starting-thread','starting-turn');raise
+        adapter=StartingAdapter();monkeypatch.setattr(harnesses,'adapter',lambda runtime:adapter)
+        try:
+            turn=await s.submit(value(),snapshot=snapshot(s),actual_prompt='Frozen')
+            await entered.wait()
+            result=await s.stop('workbench-session',turn['id'])
+            assert result['stop_requested'] and not result['stopped'] and not adapter.cancelled
+            assert s.get_turn(turn['id'])['stop_requested']
+            release.set();await completed(s,turn['id'])
+            final=s.get_turn(turn['id'])
+            assert final['status']=='stopped' and final['interrupt_confirmed'] and adapter.count==1
+            assert (await s.stop('workbench-session',turn['id']))['stopped']
+        finally:release.set();await s.close()
+    asyncio.run(scenario())
+
+
+def test_stop_of_a_completed_turn_does_not_cancel_a_newer_turn(service):
+    async def scenario():
+        s,adapter=service
+        first=await s.submit(value(),snapshot=snapshot(s),actual_prompt='First');await completed(s,first['id'])
+        adapter.hold=asyncio.Event()
+        second=await s.submit(value('second'),snapshot=snapshot(s),actual_prompt='Second')
+        result=await s.stop('workbench-session',first['id'])
+        assert result['status']=='completed' and not result['stopped'] and not adapter.cancelled
+        adapter.hold.set();await completed(s,second['id']);await s.close()
+    asyncio.run(scenario())
+
+
 def test_session_metadata_commands_are_versioned_and_preserve_native_binding(service):
     s,_=service
     initial=s.list_sessions()['sessions'][0]

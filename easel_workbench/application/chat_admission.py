@@ -119,6 +119,7 @@ class ChatAdmission:
             c.execute('BEGIN IMMEDIATE');row=self._row(c,tid)
             if not row or row['status'] in ('failed','stopped','dispatched'):return None
             if expected is not None and row['status'] not in expected:return None
+            if status=='stopped' and c.execute('SELECT 1 FROM easel_chat_turns WHERE id=?',(tid,)).fetchone():return None
             session=self.chat._session(c,row['session_id'])
             if anchor and row['anchor']!=self._anchor(c,row['request'],session):
                 raise ChatConflict('准备期间画像、技能默认版本或原始依据已变化，请重新核对；未调用模型')
@@ -174,14 +175,13 @@ class ChatAdmission:
         with self.store.connect() as c:
             row=self._row(c,tid)
             if not row or row['session_id']!=sid:raise ValueError('回合与会话不一致')
-        if row['status'] in ('queued','preparing'):
-            stopped=await run_sync(self._stage,tid,'stopped',expected=('queued','preparing'))
-            if stopped:return {'stopped':True,'turn_id':tid,'native_started':False}
-        task=self.tasks.get(tid)
-        if task:await asyncio.shield(task)
+        if row['status'] in ('queued','preparing','admitting'):
+            stopped=await run_sync(self._stage,tid,'stopped',expected=('queued','preparing','admitting'))
+            if stopped:return {'stopped':True,'status':'stopped','turn_id':tid,'session_id':sid,'native_started':False,'delivery_state':'not_started'}
         with self.store.connect() as c:actual=c.execute('SELECT 1 FROM easel_chat_turns WHERE id=?',(tid,)).fetchone()
         if actual:return await self.chat.stop(sid,tid)
-        return {'stopped':row['status']=='stopped','turn_id':tid}
+        with self.store.connect() as c:row=self._row(c,tid)
+        return {'stopped':row['status']=='stopped','status':row['status'],'turn_id':tid,'session_id':sid,'native_started':False}
 
     async def events(self,tid,after=0):
         # Waiting/subscribing never creates a model call or replays a POST.

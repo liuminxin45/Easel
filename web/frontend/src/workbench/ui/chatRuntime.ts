@@ -6,7 +6,7 @@ import {draftFingerprint,record,string,type WorkbenchClient,type DraftAttachment
 import type {NativeSelection} from './ChatSessionView';
 import type {NewsCreationRequest} from './newsCreation';
 
-export interface FrozenTurn {turnId:string;message:string;attachments:UploadedFile[];context:JsonRecord;initial_title?:string;inputs:{text:string;files:DraftAttachment[];command?:NativeSelection|null;article_id?:string;article_mode?:'auto'|'product';creation?:NewsCreationRequest};state:'connecting'|'accepted'|'rejected'|'unknown';accepted?:boolean}
+export interface FrozenTurn {turnId:string;message:string;attachments:UploadedFile[];context:JsonRecord;initial_title?:string;inputs:{text:string;files:DraftAttachment[];command?:NativeSelection|null;article_id?:string;article_mode?:'auto'|'product';creation?:NewsCreationRequest};state:'connecting'|'accepted'|'rejected'|'unknown';accepted?:boolean;stopRequested?:boolean}
 export interface SessionDraft {text:string;files:DraftAttachment[];article_id?:string;article_mode?:'auto'|'product';creation?:NewsCreationRequest;command?:NativeSelection|null;pending?:FrozenTurn}
 const emptyStream=():StreamState=>({content:'',thinking:'',activity:'',questions:[]});
 const recovering=():InteractionFeedback=>({kind:'status',message:'连接暂时中断，正在恢复原任务状态。输入已保留。'});
@@ -16,17 +16,18 @@ export class SessionRuntime {
  readonly blocked=new Set<string>();readonly completed=new Set<string>();readonly closed=new Set<string>();
  private controller?:AbortController;private owner?:object;private activeTurn?:string;
  private recoveryTimer?:ReturnType<typeof setTimeout>;
+ private stopping?:Promise<void>;
  constructor(readonly client:WorkbenchClient,readonly id:string){}
- private patch(value:Partial<SessionDraft>){const key='chat:'+this.id;this.client.drafts.set(key,{...this.client.drafts.get<SessionDraft>(key)||{text:'',files:[]},...value})}
+ private patch(value:Partial<SessionDraft>){const key='chat:'+this.id,previous=this.client.drafts.get<SessionDraft>(key);if(value.pending&&previous?.pending?.turnId===value.pending.turnId&&previous.pending.stopRequested)value={...value,pending:{...value.pending,stopRequested:true}};this.client.drafts.set(key,{...previous||{text:'',files:[]},...value})}
  private reload(){return this.client.read('/api/chat/sessions/'+encodeURIComponent(this.id)+'?limit=50',true)}
  private finishDraft(turn:FrozenTurn,receipt:JsonRecord){
   const current=this.client.drafts.get<SessionDraft>('chat:'+this.id);
-  const restore=receipt.admission_failed===true&&current&&!current.text&&!current.files.length&&!current.command;
+  const restore=(receipt.admission_failed===true||receipt.execution_status==='stopped'&&receipt.delivery_state==='not_started')&&current&&!current.text&&!current.files.length&&!current.command;
   this.patch({...(restore?turn.inputs:{}),pending:undefined});
  }
  private acknowledge(turn:FrozenTurn){
   const current=this.client.drafts.get<SessionDraft>('chat:'+this.id),same=current&&draftFingerprint({text:current.text,files:current.files,command:current.command,article_id:current.article_id,article_mode:current.article_mode,...(current.creation?{creation:current.creation}:{})})===draftFingerprint(turn.inputs);
-  this.patch({...(same&&!current?.pending?.accepted?{text:'',files:[],command:null,...(current?.creation?{creation:undefined}:{}),...((['poster','article','change'].includes(string(turn.context.action_id))||string(turn.context.action_id)==='native'&&!!turn.inputs.article_id&&turn.context.article_id===turn.inputs.article_id)?{article_id:undefined,article_mode:undefined}:{})}:{}),pending:{...turn,state:'accepted',accepted:true}});this.state.setState({accepted:true});
+  this.patch({...(same&&!current?.pending?.accepted?{text:'',files:[],command:null,...(current?.creation?{creation:undefined}:{}),...((['poster','article','change'].includes(string(turn.context.action_id))||string(turn.context.action_id)==='native'&&!!turn.inputs.article_id&&turn.context.article_id===turn.inputs.article_id)?{article_id:undefined,article_mode:undefined}:{})}:{}),pending:{...turn,state:'accepted',accepted:true,...(current?.pending?.turnId===turn.turnId&&current.pending.stopRequested?{stopRequested:true}:{})}});this.state.setState({accepted:true});
  }
  private clearRecovery(){if(this.recoveryTimer)clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined}
  private scheduleRecovery(turn:FrozenTurn,profileId:string,delay=1500){
@@ -34,7 +35,7 @@ export class SessionRuntime {
   const epoch=this.client.authenticationEpoch;
   const timer=setTimeout(()=>{this.recoveryTimer=undefined;void(async()=>{
    if(epoch!==this.client.authenticationEpoch||this.client.session.getState().expired||this.saved()?.turnId!==turn.turnId)return;
-   if(this.owner||typeof document!=='undefined'&&document.hidden){this.scheduleRecovery(turn,profileId,delay);return}
+   if(this.owner&&!this.saved()?.stopRequested||typeof document!=='undefined'&&document.hidden){this.scheduleRecovery(turn,profileId,delay);return}
    try{
     const receipt=await this.client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(this.id)+'?turn_id='+encodeURIComponent(turn.turnId),AbortSignal.timeout(3000));
     if(epoch!==this.client.authenticationEpoch||this.saved()?.turnId!==turn.turnId)return;
@@ -42,9 +43,17 @@ export class SessionRuntime {
     if(string(receipt.turn_id)===turn.turnId){
      if(receipt.delivery_state!=='unknown'){
      if(['completed','stopped','failed'].includes(status)){
+      this.owner=undefined;this.controller?.abort();
       this.acknowledge(turn);this.completed.add(turn.turnId);this.blocked.delete(turn.turnId);this.finishDraft(turn,receipt);this.state.setState({running:false,stream:undefined,feedback:undefined,error:status==='failed'?string(receipt.error):''});void this.reload();void this.client.invalidate(['chat','works','studio']);return;
      }
-      if(['running','accepted','submitting'].includes(status)){this.blocked.delete(turn.turnId);this.connect(turn,profileId,true);return}
+      if(['running','accepted','submitting'].includes(status)){
+       if(this.saved()?.stopRequested){
+        this.acknowledge(turn);
+        if(receipt.stop_requested!==true)await this.stop();
+        this.scheduleRecovery(turn,profileId,Math.min(delay*2,15000));return;
+       }
+       this.blocked.delete(turn.turnId);this.connect(turn,profileId,true);return
+      }
      }
      this.state.setState({feedback:awaitingReceipt(receipt),error:string(receipt.error)});
      this.scheduleRecovery(turn,profileId,Math.min(delay*2,15000));return;
@@ -102,7 +111,7 @@ export class SessionRuntime {
   if(this.owner||this.completed.has(turn.turnId))return;
   this.clearRecovery();this.controller?.abort();const token={};this.owner=token;this.activeTurn=turn.turnId;
   this.state.setState({running:true,accepted:resumeOnly||turn.state==='accepted',error:'',feedback:undefined,stream:{...emptyStream(),activity:resumeOnly||turn.state==='accepted'?'AI已接收，正在处理':''}});
-  this.patch({pending:{...turn,state:resumeOnly?turn.state:'connecting'}});
+  this.patch({pending:{...turn,state:resumeOnly?turn.state:'connecting',...(this.saved()?.turnId===turn.turnId&&this.saved()?.stopRequested?{stopRequested:true}:{})}});
   const active=()=>this.owner===token;
   const change=(update:(stream:StreamState)=>StreamState)=>{if(active())this.state.setState({error:'',feedback:undefined,stream:update(this.state.getState().stream||emptyStream())})};
   let finalizing=false,transportInterrupted=false;
@@ -131,13 +140,39 @@ export class SessionRuntime {
     if(!active()||!transportInterrupted)return;transportInterrupted=false;
     if(this.state.getState().error===interruptionMessage)this.state.setState({error:'',feedback:undefined});
    }});
+  if(this.saved()?.stopRequested)void this.stop();
  }
  saved(){return this.client.drafts.get<SessionDraft>('chat:'+this.id)?.pending}
- async stop(){const turn=this.saved();if(!turn)return;const epoch=this.client.authenticationEpoch;
-  const result=await this.client.api.post<JsonRecord>('/api/chat/stop',{sessionId:this.id,turnId:turn.turnId},this.client.session.getState().config?.csrf||'');
-  if(epoch!==this.client.authenticationEpoch)return;
-  if(result.stopped!==true)throw Error('尚未确认原任务已经停止，请继续核对回执');
-  this.owner=undefined;this.controller?.abort();this.state.setState({running:false,stream:undefined,error:'',feedback:undefined});this.clearRecovery();this.completed.add(turn.turnId);this.finishDraft(turn,{admission_failed:result.native_started===false});void this.reload();
+ stop():Promise<void>{
+  if(this.stopping)return this.stopping;
+  const operation=this.performStop();this.stopping=operation;
+  void operation.finally(()=>{if(this.stopping===operation)this.stopping=undefined}).catch(()=>{});
+  return operation;
+ }
+ private async performStop(){
+  const turn=this.saved();if(!turn)return;const epoch=this.client.authenticationEpoch;
+  this.patch({pending:{...turn,stopRequested:true}});
+  const stream=this.state.getState().stream;
+  this.state.setState({error:'',feedback:undefined,...(stream?{stream:{...stream,activity:'正在停止…'}}:{})});
+  // The submit acknowledgement owns clearing the matching input. A stop made
+  // while it is in flight is retained and applied to that exact accepted turn.
+  if(turn.state==='connecting'&&!turn.accepted)return;
+  const profile=string(turn.context.profile_id)||'oil-pig';
+  try{
+   const result=await this.client.api.post<JsonRecord>('/api/chat/stop',{sessionId:this.id,turnId:turn.turnId},this.client.session.getState().config?.csrf||'');
+   if(epoch!==this.client.authenticationEpoch||this.saved()?.turnId!==turn.turnId)return;
+   if(result.turn_id&&string(result.turn_id)!==turn.turnId||result.session_id&&string(result.session_id)!==this.id)throw Error('停止回执身份不匹配');
+   if(result.stopped===true){
+    this.owner=undefined;this.controller?.abort();this.state.setState({running:false,stream:undefined,error:'',feedback:undefined});this.clearRecovery();this.completed.add(turn.turnId);this.finishDraft(turn,{admission_failed:result.native_started===false});void this.reload();return;
+   }
+   // False can mean completion won the race or interruption is still pending.
+   // Read the authoritative receipt rather than fabricate either outcome.
+   this.scheduleRecovery(turn,profile,250);
+  }catch(error){
+   if(epoch!==this.client.authenticationEpoch||this.saved()?.turnId!==turn.turnId)return;
+   this.state.setState({feedback:{kind:'status',message:'停止请求正在核对，输入和已生成内容保留。'}});
+   this.scheduleRecovery(turn,profile);
+  }
  }
 }
 const coordinators=new WeakMap<WorkbenchClient,Map<string,SessionRuntime>>();

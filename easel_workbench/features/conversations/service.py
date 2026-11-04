@@ -47,6 +47,7 @@ class ChatService:
         self.on_accept = on_accept
         self.timeout = timeout
         self._tasks = {}
+        self._native_controls = {}
         self._admissions = set()
         self._ownership_lock = threading.Lock()
         self._owned_turns = set()
@@ -637,23 +638,35 @@ class ChatService:
 
     async def stop(self, session_id, turn_id=None):
         with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
             session = self._session(c, session_id)
-        active = session.get('pendingTurnId')
-        if turn_id is not None and turn_id != active:
-            raise ChatConflict('停止操作不属于当前回合')
+            active = turn_id or session.get('pendingTurnId')
+            if not active:return {'stopped':False,'status':'idle','session_id':session_id}
+            current = self._turn(c, active)
+            if current['session_id']!=session_id:raise ChatConflict('停止操作不属于当前会话')
+            if current['status'] in TERMINAL:
+                return {'stopped':current['status']=='stopped','status':current['status'],
+                        'turn_id':active,'session_id':session_id,'delivery_state':current.get('delivery_state')}
+            if session.get('pendingTurnId')!=active:raise ChatConflict('停止操作不属于当前回合')
+            # Persist intent before acknowledging it. Cancellation of an RPC
+            # still starting a native turn can lose the only usable turn ID.
+            current.update(stop_requested=True,stop_requested_at=now())
+            self._put_turn(c,current)
+        self._stop_requested.add(active)
         task = self._tasks.get(active)
         if not task or task.done():
-            return {'stopped': False}
-        with self.store.connect() as c:
-            current = self._turn(c, active)
-        if current['status'] in TERMINAL:
-            return {'stopped': False}  # native completion and business hooks are separate
-        self._stop_requested.add(active)
-        if not task.cancelling():
-            task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+            return {'stopped':False,'status':current['status'],'stop_requested':True,'turn_id':active,'session_id':session_id}
+        if (current.get('execution_identity') or current['runtime'] not in ('codex','acp','opencode')) and not task.cancelling():
+            control=self._native_controls.get(session_id)
+            if control is not None and control._task is task:control.terminate()
+            else:task.cancel()
+        # A stop is owned by the server task, not the lifetime of this HTTP
+        # waiter. Slow native acknowledgement remains an ordinary pending stop.
+        await asyncio.wait((task,),timeout=1)
         state = self.get_turn(active)
-        return {'stopped': state['status'] == 'stopped', 'status': state['status']}
+        return {'stopped':state['status']=='stopped','status':state['status'],
+                'stop_requested':True,'turn_id':active,'session_id':session_id,'delivery_state':state.get('delivery_state'),
+                'native_started':state.get('delivery_state')!='not_started'}
 
     async def close(self):
         self._closing = True
@@ -676,6 +689,7 @@ class ChatService:
         path = self._event_path(turn_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         started_hook_task = None
+        native_invoked = False
         secret_values = [value for key, value in environment.items()
                          if any(marker in key.upper() for marker in ('KEY', 'TOKEN', 'SECRET', 'PASSWORD'))
                          and isinstance(value, str) and len(value) >= 4]
@@ -687,8 +701,12 @@ class ChatService:
             return result
 
         def persist():
+            if turn_id in self._stop_requested:turn['stop_requested']=True
             turn['updated_at'] = now()
             with self.store.connect() as c:
+                if turn.get('stop_requested') and not turn.get('stop_requested_at'):
+                    previous=self._turn(c,turn_id)
+                    if previous.get('stop_requested_at'):turn['stop_requested_at']=previous['stop_requested_at']
                 self._put_turn(c, turn)
             self._save_last(turn)
 
@@ -731,6 +749,13 @@ class ChatService:
             else:
                 turn.update(native_turn_id=native_turn_id,execution_identity={'kind':'native_turn','id':native_turn_id})
             start_execution()
+            if turn_id in self._stop_requested:
+                task=self._tasks.get(turn_id)
+                if task and not task.done() and not task.cancelling():
+                    # The adapter installs its interruption handler after this
+                    # synchronous callback, before the next event-loop turn.
+                    control=self._native_controls.get(turn['session_id'])
+                    asyncio.get_running_loop().call_soon(control.terminate if control is not None and control._task is task else task.cancel)
 
         def start_execution():
             nonlocal started_hook_task
@@ -787,6 +812,9 @@ class ChatService:
                 self._questions.pop(identifier, None)
 
         try:
+            if turn.get('stop_requested') or turn_id in self._stop_requested:
+                self._stop_requested.add(turn_id)
+                raise asyncio.CancelledError()
             owned_output_path(self.root,'outputs/_sessions')
             record = harness_store.binding(self.sessions_dir, turn['session_id'])
             if record and record['runtime'] != turn['runtime']:
@@ -805,14 +833,27 @@ class ChatService:
                                  frozen_instructions=turn['frozen_instructions'])
             if turn['runtime'] in ('api','openclaw'):
                 from easel_workbench.settings_execution import run as configured_run
+                native_invoked = True
                 await asyncio.wait_for(configured_run(self, turn, request, emit, ask, bind), self.timeout)
             else:
-                await asyncio.wait_for(harnesses.adapter(turn['runtime']).run(request, emit, ask, bind), self.timeout)
+                from types import SimpleNamespace
+                from easel.web_services.chat import create_chat_context
+                async def questions(_session, items, _emit):return await ask(items)
+                def dispatch():
+                    nonlocal native_invoked
+                    native_invoked=True
+                native=create_chat_context(self.root,backend=lambda sid:turn['runtime'],
+                    environment=environment,snapshot=lambda *args:None,ask=questions,scrub=scrub,running=self._native_controls)
+                await native._run_harness_chat(SimpleNamespace(turnId=turn_id),turn['session_id'],
+                    turn['actual_prompt'],turn['runtime'],{'models':{turn['runtime']:turn['model']},**configuration},
+                    emit,self.timeout,interactive=turn.get('interactive',True),run_request=request,
+                    bind_native=bind,propagate_errors=True,stop_requested=lambda:turn_id in self._stop_requested,
+                    on_dispatch=dispatch)
             turn.update(status='completed', delivery_state='accepted')
         except asyncio.CancelledError:
-            confirmed = turn_id in self._stop_requested and turn.get('interrupt_confirmed') is True
+            confirmed = turn_id in self._stop_requested and (not native_invoked or turn.get('interrupt_confirmed') is True)
             turn.update(status='stopped' if confirmed else 'unknown',
-                        delivery_state='interrupted' if confirmed else 'unknown')
+                        delivery_state=('interrupted' if native_invoked else 'not_started') if confirmed else 'unknown')
             emit('activity', '已停止' if confirmed else '未取得明确停止回执，原回合等待核对；不会自动重发。')
         except (HarnessError, asyncio.TimeoutError) as error:
             # wait_for cancels the native adapter before raising TimeoutError.

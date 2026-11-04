@@ -79,10 +79,26 @@ test('confirmed explicit stop clears stale connection notices while preserving a
  assert.deepEqual(plain(f.draft),later);assert.equal(f.calls.stream.length,1);assert.equal(f.calls.post.length,1);assert.equal(f.calls.post[0].path,'/api/chat/stop');
  callbacks[3]('迟到分片不能复活已停止回合');callbacks[8]();assert.equal(runtime.state.getState().stream,undefined);assert.equal(runtime.state.getState().feedback,undefined);
 });
-test('an unconfirmed stop preserves the unresolved turn and later editable input',async()=>{
+test('completion winning a stop is reconciled without a false error or resend',async()=>{
  const f=fixture({postOverride:()=>({stopped:false})});f.render().chat.onSend();await tick();f.calls.stream[0][16].onAccepted();f.calls.stream[0][8]();
  f.draft={...retainedDraft(),pending:f.draft.pending};const before=plain(f.draft),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one'),state=runtime.state.getState();
- await assert.rejects(runtime.stop(),/尚未确认/);assert.deepEqual(plain(f.draft),before);assert.equal(runtime.state.getState(),state);assert.equal(f.calls.stream.length,1);
+ await runtime.stop();assert.deepEqual(plain(f.draft),{...before,pending:{...before.pending,stopRequested:true}});assert.equal(runtime.state.getState().error,'');assert.equal(f.calls.stream.length,1);
+ await f.runRecovery();assert.deepEqual(plain(f.draft),retainedDraft());assert.equal(runtime.state.getState().running,false);assert.equal(f.calls.submit.length,1);
+});
+test('stop during the submit acknowledgement is retained for the same accepted turn',async()=>{
+ let acknowledge;const ack=new Promise(resolve=>{acknowledge=resolve});
+ const f=fixture({submitOverride:()=>ack});f.render().chat.onSend();await tick();
+ const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ await runtime.stop();assert.equal(f.calls.post.length,0);assert.equal(f.draft.pending.stopRequested,true);
+ acknowledge({id:'exact-turn',session_id:'session-one',accepted_by_server:true});await tick();await tick();
+ assert.equal(f.calls.submit.length,1);assert.equal(f.calls.post.length,1);assert.equal(f.calls.post[0].body.turnId,'exact-turn');
+ assert.equal(f.draft.pending,undefined);assert.equal(runtime.state.getState().error,'');
+});
+test('an unknown stop receipt remains unresolved and preserves later input',async()=>{
+ const f=fixture({postOverride:()=>({stopped:false,status:'unknown'}),receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}});
+ f.render().chat.onSend();await tick();f.draft={...retainedDraft(),pending:f.draft.pending};
+ const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');await runtime.stop();await f.runRecovery();
+ assert.equal(f.draft.pending.turnId,'exact-turn');assert.equal(f.draft.text,retainedDraft().text);assert.equal(runtime.completed.has('exact-turn'),false);assert.equal(f.calls.submit.length,1);
 });
 test('server-confirmed history restores either a fresh saved turn or an existing runtime before automatic resume',async()=>{
  for(const mode of ['fresh-saved','existing-runtime','existing-runtime-without-saved']){

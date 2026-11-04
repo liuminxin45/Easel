@@ -87,6 +87,8 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     'easel/web_services/planning.py', 'easel/web_services/outputs.py',
     'easel/web_services/environment.py',
     'easel/web_services/analytics.py',
+    # Original web Agent supervisor/process locks extracted once; both hosts call it.
+    'easel/web_services/chat.py',
     'web/frontend/src/components/ThemeToggle.tsx',
     # Shared responsive native navigation wrapper, retained in our own fork.
     'web/frontend/src/components/ResponsiveSidebar.tsx',

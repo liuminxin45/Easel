@@ -294,7 +294,7 @@ def main():
                           and bool(discussion_source['provenance']))
                     page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)||'{}').pending", arg=sid)
                     composer = page.get_by_role('textbox', name='对话输入', exact=True)
-                    expect(page.get_by_text('已选新闻素材', exact=True)).to_be_visible()
+                    expect(page.get_by_text('已选新闻素材', exact=True)).to_have_count(0)
                     original = 'TEMP 明确制作：沿用所选热点准确来源，保留适用边界。'
                     composer.fill('/生成贴图 ' + original)
                     expect(page.get_by_role('menuitem', name='/生成贴图', exact=False)).to_be_visible()

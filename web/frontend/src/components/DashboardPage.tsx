@@ -42,6 +42,7 @@ interface DashboardProps {
   agentRuntime: string;
   onNavigate: (page: Page) => void;
   onUseTopic: (title: string, sourceId?: string, note?: string) => void;
+  onReadTrend?: (sourceId: string) => void;
   persistAnalytics?: boolean;
   verifyAccountsOnMount?: boolean;
   /** Undefined keeps the official default; null lets the host own a flat scroll. */
@@ -56,7 +57,7 @@ type DashboardRead = 'trends'|'schedule'|'ideas'|'accounts'|'analytics';
 
 const STATUS_LABEL: Record<string, string> = { idea: '选题', draft: '草稿', scheduled: '待发', published: '已发' };
 
-export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState,trendsEmptyState=<div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>,outputsSource }: DashboardProps) {
+export default function DashboardPage({ persona, gatewayStatus, apiDirect, agentRuntime, onNavigate, onUseTopic, onReadTrend, persistAnalytics = true, verifyAccountsOnMount = true, listMaxHeight,onContentReady,viewState,trendsEmptyState=<div className="dash-empty">暂无热点，请到热点雷达查看数据源状态。</div>,outputsSource }: DashboardProps) {
   const [trends, setTrends] = useState<TrendGroup[]>(()=>peekApiData<Awaited<ReturnType<typeof fetchTrends>>>('/api/trends?limit=6')?.trends??[]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>(()=>peekApiData<ScheduleItem[]>('/api/schedule')??[]);
   const [outputs, setOutputs] = useState<OutputNode[]>(()=>outputsSource?outputsSource.peek?.({})?.items??[]:peekApiData<OutputNode[]>('/api/outputs')??[]);
@@ -262,8 +263,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
               {g.error && <div className="dash-empty">{g.error.message}</div>}
               {g.ok && g.items.length === 0 && <div className="dash-empty">采集成功，暂无热点</div>}
               {g.items.slice(0, 3).map((it) => (
-                <div key={it.id} className="dash-trend-item" title={`${it.title}（点击做成内容）`}>
-                  <button className="dash-trend-title" onClick={() => onUseTopic(it.title,it.id)}>{it.title}</button>
+                <div key={it.id} className="dash-trend-item" title={onReadTrend ? it.title : `${it.title}（点击做成内容）`}>
+                  <button className="dash-trend-title" onClick={() => onReadTrend ? onReadTrend(it.id) : onUseTopic(it.title,it.id)}>{it.title}</button>
                 </div>
               ))}
             </div>

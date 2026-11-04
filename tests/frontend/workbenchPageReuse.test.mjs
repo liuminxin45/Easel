@@ -89,6 +89,14 @@ test('dashboard uses server data and leaves retired account auto-detection disab
  assert.equal(typeof dashboard.props.outputsSource.list,'function');
 });
 
+test('dashboard and radar titles navigate to the same encoded news detail without invoking topic creation',()=>{
+ const routes=[],topics=[],pages=load('nativePages.tsx',{vm:{navigate:path=>routes.push(path)}}),onUseTopic=(...args)=>topics.push(args);
+ pages.NativeDashboard({profileId:'exact-id',onUseTopic}).props.onReadTrend('新闻 / 1');
+ pages.NativeTrends({onUseTopic}).props.onRead('新闻 / 1');
+ assert.deepEqual(routes,['/news/a/%E6%96%B0%E9%97%BB%20%2F%201','/news/a/%E6%96%B0%E9%97%BB%20%2F%201']);
+ assert.deepEqual(topics,[]);
+});
+
 test('compact dashboard delegates flat scrolling to the native page and restores bounded desktop lists',()=>{
  const viewport={compact:true},pages=load('nativePages.tsx',{viewport});
  const mobile=pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}});

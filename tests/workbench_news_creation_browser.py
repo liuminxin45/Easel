@@ -151,6 +151,7 @@ def main():
                 assert all(article in link.get_attribute('href') for link in links.all()),stage
                 expect(page.get_by_role('button',name='本轮创作设置',exact=True)).to_have_count(0)
                 expect(page.get_by_role('dialog',name='本轮创作设置',exact=True)).to_have_count(0)
+                expect(page.get_by_text('已选新闻素材',exact=True)).to_have_count(0)
                 expect(page.locator('.drawer-overlay')).to_have_count(0)
             def close_finished_drawer(stage):
                 drawer=page.get_by_role('dialog',name='制作内容',exact=True)
@@ -165,6 +166,13 @@ def main():
             def current_context(profile):
                 response=page.request.get(f['origin']+'/api/news/'+article+'/creation-context?profile_id='+profile);assert response.ok,response.text();return response.json()
             try:
+                goto(page,f['origin'],'/toolbox')
+                before_requests=len(f['adapter'].requests)
+                page.locator('.dash-trend-title').filter(has_text=TITLE).click(timeout=30000)
+                expect(page.locator('.ew-news-article h1')).to_have_text(TITLE)
+                assert parse_qs(urlsplit(page.url).query)['path'][0]=='/news/a/'+article
+                assert len(f['adapter'].requests)==before_requests and not any(r['method']=='POST' and r['path'].startswith('/api/chat/') for r in requests)
+                mark(case,'dashboard trend opens the same news detail without creating or submitting a conversation')
                 goto(page,f['origin'],'/news/a/'+article);expect(page.locator('.ew-news-prose > p')).to_have_count(3)
                 assert page.locator('.ew-news-prose > p').all_text_contents()==BODY.split('\n\n')
                 assert page.locator('.ew-news-prose pre').count()==0

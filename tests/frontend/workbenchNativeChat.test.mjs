@@ -318,6 +318,14 @@ test('news provenance survives an accepted discussion until explicit production'
  assert.equal(f.calls.stream[0][16].context.article_id,'exact-news');assert.equal(f.calls.stream[0][16].context.article_mode,'product');assert.equal(f.draft.article_id,'exact-news');
  f.calls.stream[0][16].onAccepted();assert.equal(f.draft.article_id,'exact-news');assert.equal(f.draft.article_mode,'product');assert.equal(f.draft.pending.context.article_mode,'product');assert.equal(f.draft.pending.context.article_id,'exact-news');
 });
+test('news draft has no extra footer while selected work version remains visible',()=>{
+ const plainNews=fixture({draft:{text:'原字',files:[],article_id:'exact-news'}}).render().chat.footer;
+ assert.equal(nodes(plainNews).filter(node=>node.type?.name==='ExtensionDetails').length,0);
+ const version=fixture({draft:{text:'原字',files:[],article_id:'exact-news'},search:'work=exact-work&version=exact-parent'}).render().chat.footer;
+ const details=nodes(version).find(node=>node.type?.name==='ExtensionDetails');
+ assert.equal(details.props.title,'已选作品版本');
+ assert.equal(nodes(details).some(node=>node.type==='button'),false);
+});
 test('explicit poster acceptance clears only the consumed news binding and keeps the frozen provenance',async()=>{
  const command={skill_id:'content-production',version:3,action_id:'poster',task:'poster',label:'生成贴图',requires_plan:true};
  const f=fixture({draft:{text:'新闻原字',files:[],article_id:'exact-news',command}});f.render().chat.onSend();await tick();

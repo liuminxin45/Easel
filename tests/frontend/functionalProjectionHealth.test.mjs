@@ -39,6 +39,15 @@ function dashboard(api,file='DashboardPage',suppliedProps){
 }
 function dashboardApi(){const subscriptions=new Map();return {subscriptions,peekApiData:()=>undefined,subscribeApiData:(path,onData,onError)=>{subscriptions.set(path,{onData,onError});return()=>{}},fetchTrends:async()=>trend(1),fetchSchedule:async()=>[],fetchIdeas:async()=>[],fetchAccounts:async()=>[],fetchOutputs:async()=>[],fetchAnalyticsPlatforms:async()=>[]}}
 
+test('dashboard trend navigation uses the optional read seam while the official default still uses the topic',async()=>{
+ for(const withRead of [false,true]){
+  const calls=[],props={persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic:(...args)=>calls.push(['topic',...args]),...(withRead?{onReadTrend:id=>calls.push(['read',id])}:{})};
+  const tree=await dashboard(dashboardApi(),'DashboardPage',props).settle();
+  all(tree).find(node=>node.type==='button'&&node.props.className==='dash-trend-title').props.onClick();
+  assert.deepEqual(calls,withRead?[['read','t1']]:[['topic','TEMP 1','t1']]);
+ }
+});
+
 test('ordinary dashboard retains its original tree source and waits for the initial read',async()=>{
  const api=dashboardApi();let finish,reads=0,ready=0;api.fetchOutputs=()=>{reads++;return new Promise(resolve=>{finish=resolve})};
  const f=dashboard(api,'DashboardPage',{persona:'',gatewayStatus:'connected',apiDirect:false,agentRuntime:'codex',persistAnalytics:false,verifyAccountsOnMount:false,onNavigate(){},onUseTopic(){},onContentReady(){ready++}});

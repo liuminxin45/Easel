@@ -33,7 +33,7 @@ export function NativeDashboard({profileId,onUseTopic}:{profileId:string;onUseTo
   apiDirect={status.data?.runtime==='api'} agentRuntime={string(status.data?.runtime)||'codex'}
   persistAnalytics={false} verifyAccountsOnMount={false} trendsEmptyState={null} listMaxHeight={compact?null:360}
   onContentReady={onContentReady} viewState={viewState} outputsSource={outputsSource}
-  onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic}/>;
+  onNavigate={page=>vm.navigate(nativePageRoutes[page]||'/toolbox')} onUseTopic={onUseTopic} onReadTrend={id=>vm.navigate('/news/a/'+encodeURIComponent(id))}/>;
 }
 
 function ProjectVersion({project}:{project:OutputNode}){

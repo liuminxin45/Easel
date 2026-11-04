@@ -124,8 +124,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
   notice={<><Notice sources={[resource,catalog,action,{error,feedback:feedback||(!busy&&unknown?{kind:'status',message:'正在恢复原任务状态，输入已保留。'}:undefined)}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>
-   {(draft.article_id||versionContext)&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':versionContext?'已选作品版本':'已选新闻素材'}>
-    {draft.article_id&&<div className="ew-row"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined,creation:undefined})}>移除本轮来源绑定</button></div>}
+   {versionContext&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':'已选作品版本'}>
     {versionContext&&<><p>{search.get('continue')==='1'?'发送后基于所选版本继续制作，结果另存新版本。':draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><a href={"#/outputs/"+encodeURIComponent("workbench-"+workId)+"/"+encodeURIComponent(parentVersion)}>内容库 › 所选版本</a></>}
    </ExtensionDetails>}
 

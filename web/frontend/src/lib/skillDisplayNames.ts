@@ -3,6 +3,8 @@
 // 数据源：能力清单菜单（capability-menu），重新生成即可更新。
 export const SKILL_DISPLAY_NAMES: Record<string, string> = {
   'content-production': '制作贴图 / 文章',
+  'oil-pig-poster': '油猪·做贴图',
+  'oil-pig-article': '油猪·做文章',
   'content-writing': '图文写作',
   'image-production': '配图设计与生成',
   'delivery-review': '交付核验',

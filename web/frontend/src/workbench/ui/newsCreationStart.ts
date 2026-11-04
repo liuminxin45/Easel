@@ -17,7 +17,8 @@ export async function startNewsTurn(client:WorkbenchClient,articleId:string,prof
   options.navigate('/chat/'+encodeURIComponent(id));throw Error('原任务仍在进行或待核对，请查看原会话，不会重复发送。');
  }
  const message=(creation.intent==='discuss'?'讨论这条新闻怎么写。':creation.format==='poster'?'请制作微信公众号贴图。':'请写文章。')+(creation.note?'\n\n'+creation.note:'');
- const turn:FrozenTurn={turnId:crypto.randomUUID(),message,attachments:[],context:{profile_id:profileId,article_id:articleId,creation,...(creation.intent==='produce'?{skill_id:'content-production',action_id:'native'}:{})},inputs:{text:message,files:[],article_id:articleId,creation},state:'connecting'};
+ const skill=creation.format==='poster'?'oil-pig-poster':'oil-pig-article';
+ const turn:FrozenTurn={turnId:crypto.randomUUID(),message,attachments:[],context:{profile_id:profileId,article_id:articleId,creation,...(creation.intent==='produce'?{skill_id:skill,action_id:'native'}:{})},inputs:{text:message,files:[],article_id:articleId,creation},state:'connecting'};
  options.navigate('/chat/'+encodeURIComponent(id));await runtime.submit(turn,profileId);
  const state=runtime.state.getState();if(!state.accepted&&state.error)throw Error(state.error);
  void client.invalidate(['chat','news']);

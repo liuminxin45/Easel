@@ -217,7 +217,9 @@ class ChatBusiness:
             attachments=self._attachments(value,native=True)
             source_materials=None
             if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
-            if context.get('skill_id')=='content-production':
+            from easel_workbench.features.creation_skills import PRODUCTION_SKILLS, FORMAT_BY_SKILL, LEGACY_SKILL
+            skill_id=context.get('skill_id')
+            if skill_id in PRODUCTION_SKILLS:
                 config=self.chat.execution_settings(session)
                 if config['runtime']=='api':raise PlanConflict('API 仅聊天模式不能制作，请新建 Agent 对话')
                 if config['runtime']=='codex' and config.get('sandbox')=='read-only':raise PlanConflict('此对话使用只读沙箱，请新建允许制作文件的 Agent 对话')
@@ -227,23 +229,25 @@ class ChatBusiness:
                     config=self.chat.execution_settings(session)
                     if config['runtime']=='api':raise PlanConflict('API 仅聊天模式不能制作，请新建 Agent 对话')
                     if config['runtime']=='codex' and config.get('sandbox')=='read-only':raise PlanConflict('此对话使用只读沙箱，请新建允许制作文件的 Agent 对话')
+                    selected=context['creation'].get('format')
+                    if skill_id!=LEGACY_SKILL and FORMAT_BY_SKILL.get(skill_id)!=selected:raise ValueError('所选技能与新闻制作格式不一致')
                 tid=value.get('turnId') or value.get('turn_id') or value.get('id')
                 prepared=NewsCreation(self.box).prepare(context['creation'],session['profile_id'],context.get('article_id'),tid)
                 source_materials=prepared
                 if prepared['creation']['intent']=='produce':
                     if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
-                    if context.get('skill_id')!='content-production':raise ValueError('新闻制作须调用内容生产技能')
+                    if skill_id not in PRODUCTION_SKILLS:raise ValueError('新闻制作须调用对应制作技能')
                 elif context.get('skill_id'):raise ValueError('讨论不启动制作技能')
                 message=prepared['input_text']
                 # Material identities and selected bytes are server-owned, never
                 # supplied as arbitrary paths by an HTTP caller.
                 for item in prepared['material_manifest']['files']:
                     attachments.append({**item,'path':str(self.root/item['path'])})
-            elif context.get('article_id') or context.get('skill_id')=='content-production':
+            elif context.get('article_id') or skill_id in PRODUCTION_SKILLS:
                 from easel_workbench.features.news_creation import NewsCreation
                 tid=value.get('turnId') or value.get('turn_id') or value.get('id')
                 prepared=NewsCreation(self.box).prepare_native(message,session['profile_id'],context.get('article_id'),tid,
-                    content_production=context.get('skill_id')=='content-production')
+                    content_production=skill_id in PRODUCTION_SKILLS, format=FORMAT_BY_SKILL.get(skill_id))
                 source_materials=prepared
                 message=prepared['input_text']
                 for item in prepared['material_manifest']['files']:

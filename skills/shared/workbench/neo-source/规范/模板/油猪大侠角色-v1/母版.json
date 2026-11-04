@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "brand_name": "油猪大侠",
+  "character_name": "小猪侠",
+  "version": "1.2",
+  "updated": "2026-10-13",
+  "reference_authority": "本次用户附件的已认可正面，优先于历史候选或标签",
+  "approved_front": {
+    "file": "已认可正面参考.png",
+    "width": 1254,
+    "height": 1254,
+    "format": "png",
+    "sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+    "status": "user_approved"
+  },
+  "turnaround": {
+    "file": "角色三视图-v0.1.png",
+    "width": 1983,
+    "height": 793,
+    "format": "png",
+    "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+    "status": "user_approved",
+    "views": [
+      "front",
+      "right_profile_facing_left",
+      "back"
+    ],
+    "original": "三视图-原始-v0.1.png",
+    "original_identical": true,
+    "approved_on": "2026-10-13",
+    "approval_evidence": "../../../资料/风格研究/2026-10-13-油猪大侠角色品牌讨论/用户指导-三视图认可与新贴图风格-2026-10-13.md"
+  },
+  "rules_file": "角色复用规范.md",
+  "guidance_file": "复用提示词.txt",
+  "approval_evidence": "../../../资料/风格研究/2026-10-13-油猪大侠角色品牌讨论/用户指导-认可附图制作三视图-2026-10-13.md",
+  "rules_version": "1.2",
+  "latest_usage_confirmation": {
+    "date": "2026-10-13",
+    "decision": "continue_existing_master",
+    "evidence": "../../../资料/风格研究/2026-10-13-油猪大侠角色品牌讨论/用户决定-继续使用已入库形象-2026-10-13.md",
+    "unused_redesigns": ["v0.5", "v0.6", "v0.7"],
+    "preference": "中性可爱；按原身份变化动作、表情与场景"
+  }
+}

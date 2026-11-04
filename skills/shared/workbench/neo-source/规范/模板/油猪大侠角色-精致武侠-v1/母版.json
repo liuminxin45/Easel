@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "version": "1.1",
+  "updated": "2026-10-20",
+  "brand_name": "油猪大侠",
+  "variant": "精致武侠小猪",
+  "reference": {
+    "file": "../../../资料/风格研究/2026-10-20-精致武侠小猪/用户原始头像.jpg",
+    "bytes": 162025,
+    "sha256": "fada68aa7ebdf42b9dd89f4650013b0c0ba54b867776f6ab02a9f1ee31a095b1",
+    "width": 1254,
+    "height": 1254,
+    "format": "JPEG",
+    "mode": "RGB",
+    "status": "user_approved",
+    "evidence": "../../../资料/风格研究/2026-10-20-精致武侠小猪/用户指导原文.md"
+  },
+  "turnaround": {
+    "file": "角色三视图-v0.3.png",
+    "bytes": 2166777,
+    "sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b",
+    "width": 1536,
+    "height": 1024,
+    "format": "PNG",
+    "mode": "RGB",
+    "status": "user_approved",
+    "views": [
+      "front",
+      "left_facing_profile",
+      "back"
+    ],
+    "version": "v0.3",
+    "unseen_design_extensions": [
+      "lower_body",
+      "boots",
+      "rear_costume_and_sword_attachment"
+    ],
+    "approved_on": "2026-10-20",
+    "approval_evidence": "../../../资料/风格研究/2026-10-20-精致武侠小猪/用户确认-三视图v0.3存档.md"
+  },
+  "tool": "built_in_imagegen",
+  "model": null,
+  "generation_calls": 3,
+  "rules_file": "角色复用规范.md",
+  "process": "../../../资料/风格研究/2026-10-20-精致武侠小猪/图片制作说明.md",
+  "publication": "not_published",
+  "git_sync": "blocked_by_unrelated_staged_changes",
+  "path_base": "母版.json所在目录",
+  "rules_version": "1.1",
+  "approval": {
+    "decision": "accepted",
+    "date": "2026-10-20",
+    "record": "../../../资料/风格研究/2026-10-20-精致武侠小猪/用户确认-三视图v0.3存档.md",
+    "sha256": "0d6ecda3f0abbbf08d3b02a1c292de10ee9a0edd3672fb5b6ea6af1dd13974bc"
+  }
+}

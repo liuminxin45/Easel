@@ -113,7 +113,7 @@ UPSTREAM_PATCH_ALLOWLIST.update({
     # Generic explicit runtime root and analytics directory, with native defaults.
     'skills/shared/scripts/account_stats.py',
 })
-WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','image-production',
+WORKBENCH_BUILTIN_IDS={'content-production','oil-pig-poster','oil-pig-article','topic-research','content-writing','image-production',
     'reference-analysis','delivery-review','publication-analysis','experience-distillation'}
 
 

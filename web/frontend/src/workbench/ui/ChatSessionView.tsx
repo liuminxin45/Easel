@@ -39,7 +39,7 @@ function CreationSummary({message,navigate}:{message:unknown;navigate:(path:stri
  if(!article)return null;
  if(!Object.keys(details).length&&!value.creation_review&&!pending)return <div className="ew-news-message-source"><NewsMessageLink articleId={article} navigate={navigate}/></div>;
  return <div className="ew-news-message-source ew-creation-summary"><div>新闻：<NewsMessageLink articleId={article} navigate={navigate} title={string(details.title)||'这条新闻'} inline/></div>
-  <div>技能：{pending?'已选择制作贴图 / 文章':string(details.skill_id)==='content-production'?'制作贴图 / 文章':legacy.error?'未记录':'正在核对'}</div>
+  <div>技能：{pending?'已选择制作技能':string(details.skill_id)==='oil-pig-poster'?'油猪·做贴图':string(details.skill_id)==='oil-pig-article'?'油猪·做文章':string(details.skill_id)==='content-production'?'制作贴图 / 文章':legacy.error?'未记录':'正在核对'}</div>
   {!pending&&Object.keys(details).length>0&&<div>{[['writing','写法'],['visual','画面风格'],['character','角色呈现'],['layout','画面与结构']].filter(([key])=>details.format==='poster'||!!style[key!]).map(([key,label])=><span key={key}>{label}：{string(style[key!])||'未记录'}</span>)}</div>}
   {!pending&&legacy.error&&<div>本轮风格记录不可用</div>}
  </div>;
@@ -84,7 +84,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   if(historyBefore)throw Error('请返回最新消息后继续输入；当前草稿已保留。');
   if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId||session.pendingSubmissionId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
-  const articleId=draft.article_id||session.source_article_id,uploads=await vm.service.uploadFiles(draft.files),context:JsonRecord={profile_id:profileId,...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(articleId?{article_id:articleId}:{}),...(draft.creation?{creation:draft.creation,...(draft.creation.intent==='produce'?{skill_id:'content-production',action_id:'native'}:{})}:draft.command?{skill_id:draft.command.skill_id,action_id:'native'}:{})};
+  const articleId=draft.article_id||session.source_article_id,uploads=await vm.service.uploadFiles(draft.files),context:JsonRecord={profile_id:profileId,...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(articleId?{article_id:articleId}:{}),...(draft.creation?{creation:draft.creation,...(draft.creation.intent==='produce'?{skill_id:draft.creation.format==='poster'?'oil-pig-poster':'oil-pig-article',action_id:'native'}:{})}:draft.command?{skill_id:draft.command.skill_id,action_id:'native'}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(draft.creation?{creation:draft.creation}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
   await runtime.submit(turn,profileId);
  });

@@ -5,6 +5,8 @@ import avatar from '../assets/workbench/oil-pig-avatar.jpg?inline';
 type Icon=ComponentType<{size?:number}>;
 /** Exact approved character pixels, shared by the seven project skill identities. */
 const badges:Record<string,string>={
+ 'oil-pig-poster':'M1 1h6v6H1zM2 5l1.5-1.5L5 5l1-1 1 2M2 2h2',
+ 'oil-pig-article':'M1 1h4l2 2v4H1zM5 1v2h2M2.5 4h3M2.5 5.5h2',
  'content-production':'M1 1h6v6H1zM2 5l1.5-1.5L5 5l1-1 1 2M2 2h2',
  'content-writing':'M1 1h4l2 2v4H1zM5 1v2h2M2.5 4h3M2.5 5.5h2',
  'image-production':'M1 1h6v6H1zM2 5l1.5-1.5L5 5M5.5 2v2M4.5 3h2',

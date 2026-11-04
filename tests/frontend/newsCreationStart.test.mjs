@@ -13,9 +13,13 @@ function setup(changes={}){
 }
 test('explicit production is one native root-skill turn in the existing source session',async()=>{
  const f=setup();await f.run();assert.equal(f.calls.length,1);assert.equal(f.opened,0);
- assert.equal(f.calls[0].context.skill_id,'content-production');assert.equal(f.calls[0].context.action_id,'native');
+ assert.equal(f.calls[0].context.skill_id,'oil-pig-poster');assert.equal(f.calls[0].context.action_id,'native');
  assert.deepEqual(f.calls[0].context.creation,f.creation);assert.equal(f.calls[0].context.article_id,'article-one');
  assert.equal(f.draft.text,'稍后还要问的问题');assert.deepEqual(f.navigations,['/chat/same-session']);
+});
+test('article creation selects only the independent article skill',async()=>{
+ const f=setup();await f.run({...f.creation,format:'article'});
+ assert.equal(f.calls.length,1);assert.equal(f.calls[0].context.skill_id,'oil-pig-article');
 });
 test('discussion carries the exact source but does not select a production skill',async()=>{
  const f=setup(),creation={...f.creation,intent:'discuss'};await f.run(creation);

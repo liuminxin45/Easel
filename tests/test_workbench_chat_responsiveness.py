@@ -73,7 +73,8 @@ def test_real_chat_io_does_not_block_parallel_health(business, monkeypatch, kind
             elif kind == 'history':
                 assert data['session']['id'] == 'test-chat' and data['session']['messages'] == []
             else:
-                assert any(item['name']=='content-production' for item in data)
+                assert {'oil-pig-poster','oil-pig-article'} <= {item['name'] for item in data}
+                assert all(item['name']!='content-production' for item in data)
                 assert all('prompt' not in item and 'resources' not in item for item in data)
     asyncio.run(scenario())
 

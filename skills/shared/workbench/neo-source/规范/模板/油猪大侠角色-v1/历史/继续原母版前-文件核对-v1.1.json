@@ -1,0 +1,22 @@
+{
+  "client_date": "2026-10-13",
+  "checked_at": "2026-10-13T06:42:02.031Z",
+  "status": "正面与三视图已认可，身份固定",
+  "images_unchanged": true,
+  "files": {
+    "taste设计取舍.md": "16fb261e77f695e14017b214e4b16a775b9fc82812843459de7ef9ec40621421",
+    "三视图-原始-v0.1.png": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+    "三视图-实际提示词.txt": "d9da446e12e848e9d2f5fdbf3fe40dbb522585aba931dd88cf47fdc0067fa3bc",
+    "三视图-调用记录.json": "feae47c8ce5c28066e0978b5ec0cb941bb50646c284adf1eef6e397d3c25b32e",
+    "三视图认可与风格指导.md": "fbc4b73b6ae62c1e0bbf131f5af139839f417bc4312b1887f23e5ef4ac453d64",
+    "历史/复用提示词-v1.0.txt": "e4d2de93bcaa5e35aa8dd0a8659e8f54cc0b18f6a2f8264aa1dbd1f17374933c",
+    "历史/母版-三视图认可前-v1.0.json": "25f72ff33c9b0f7210196f15bcae55c3deb6f98845af55517c3b3b78b9307dcf",
+    "历史/角色复用规范-v1.0.md": "793e9f40d5d6d1f04d0ff822a05abfbdd64390e84c4a66e1d678cb489bcae824",
+    "复用提示词.txt": "f631898981fd71aa4b9ae6807bb9a164a82c79898dcc60013c807ea173a69fd0",
+    "已认可正面参考.png": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+    "母版.json": "d012597a561b843b9212d463b917f7f718c020105efa562ea354cd405f42069b",
+    "目视检查-v0.1.md": "4a88a8c5ee85075af5c7f621318611d3e8b51de25e610f41e5733dbd93fc87b1",
+    "角色三视图-v0.1.png": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+    "角色复用规范.md": "f547e86bee3e3b21bcf67bb531157d18dcada0eb4e988202c31687a5c4cd8a48"
+  }
+}

@@ -558,7 +558,7 @@ test('a restored news creation preserves its explicit skill, edited raw note and
  const creation={intent:'produce',format:'poster',style:{character:'simple-pig'},catalog_revision:'catalog',profile_revision:4,source_revision:'source',note:'原始备注'};
  let accept;const f=fixture({draft:{text:'原来失败的制作请求',files:[],article_id:'news-one',creation},submitOverride:async(_path,body)=>new Promise(resolve=>{accept=()=>resolve({id:body.turnId,session_id:body.sessionId})})});
  f.render().chat.composer.onTextChange('修正后的原话\n保持第二行');f.render().chat.onSend();await tick();
- assert.equal(f.calls.submit[0].body.context.skill_id,'content-production');assert.equal(f.calls.submit[0].body.context.creation.note,'修正后的原话\n保持第二行');
+ assert.equal(f.calls.submit[0].body.context.skill_id,'oil-pig-poster');assert.equal(f.calls.submit[0].body.context.creation.note,'修正后的原话\n保持第二行');
  f.render().chat.composer.onTextChange('较晚输入的另一条要求');accept();await tick();f.calls.stream[0][16].onAccepted();
  assert.equal(f.draft.text,'较晚输入的另一条要求');assert.equal(f.draft.creation.note,'较晚输入的另一条要求');
  const consumed=fixture({draft:{text:'再次明确制作',files:[],article_id:'news-one',creation}});consumed.render().chat.onSend();await tick();consumed.calls.stream[0][16].onAccepted();

@@ -1,0 +1,5 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{title}}</title>
+<style>body{margin:0;background:#fff}header,.tools{max-width:640px;margin:20px auto;padding:0 16px;font:13px/1.8 system-ui;color:#666}h1{font-size:25px;line-height:1.5;color:#333}button{padding:8px 16px;border:0;background:#cf4436;color:#fff}@media print{.tools{display:none}}</style></head>
+<body><header><h1>{{title}}</h1></header><div class="tools"><button onclick="selectArticle()">选中正文</button><p>标题单独填写；下方仅包含正文和来源。</p></div>
+<section id="article" style="background:rgba(26,26,24,0.02);max-width:640px;margin:0 auto;padding:24px 16px;word-break:normal;overflow-wrap:break-word">{{body}}</section>
+<script>function selectArticle(){const r=document.createRange();r.selectNodeContents(document.getElementById('article'));const s=window.getSelection();s.removeAllRanges();s.addRange(r)}</script></body></html>

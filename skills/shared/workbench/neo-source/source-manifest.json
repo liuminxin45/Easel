@@ -1,0 +1,510 @@
+{
+  "source_project": "neo-content",
+  "kind": "working-tree-snapshot",
+  "files": [
+    {
+      "source": ".agents/skills/neo-content/references/文章学习.md",
+      "destination": "skills/builtin/oil-pig-article/references/文章学习原文.md",
+      "sha256": "169f9073984d45d0b27a42daf8b6beff696af2110c6e9a7d9fe4b607d0151d5b",
+      "size": 5159
+    },
+    {
+      "source": ".agents/skills/neo-content/references/文章批注.md",
+      "destination": "skills/builtin/oil-pig-article/references/文章批注原文.md",
+      "sha256": "6eea40b874f77299ba89cd6c29e22becb9980d6f4332f2015ff4617306e4778e",
+      "size": 2944
+    },
+    {
+      "source": ".agents/skills/neo-content/references/文章生产.md",
+      "destination": "skills/builtin/oil-pig-article/references/文章生产原文.md",
+      "sha256": "35a13bde71fc239b4526bf70d424fbcb8f92a9e0d4875fa2b1ad47ddafa2e1af",
+      "size": 3364
+    },
+    {
+      "source": ".agents/skills/neo-content/references/贴图生产.md",
+      "destination": "skills/builtin/oil-pig-poster/references/贴图生产原文.md",
+      "sha256": "c96aa382a4de64ca48dda9e5472e1ca1198c465a692ca2382cf440ef6f76bf3d",
+      "size": 10010
+    },
+    {
+      "source": "工具/内容工作流/README.md",
+      "destination": "skills/shared/workbench/neo-source/工具/内容工作流/README.md",
+      "sha256": "b569d671acf78ea6502d75255685deb5e5f3ec92c177e1e48eb9d2217ddbff68",
+      "size": 21394
+    },
+    {
+      "source": "工具/内容工作流/article-check.mjs",
+      "destination": "skills/shared/workbench/neo-source/工具/内容工作流/article-check.mjs",
+      "sha256": "4f9f140df2c67e010896f44d4e9f5670d994fae03e9c949ef6d31938848581aa",
+      "size": 5065
+    },
+    {
+      "source": "工具/内容工作流/creative_review.py",
+      "destination": "skills/shared/workbench/neo-source/工具/内容工作流/creative_review.py",
+      "sha256": "67b5c904b0337a681e913c0039d8e8b1cbff98d3229fbd49bc5220cc90a361f8",
+      "size": 29569
+    },
+    {
+      "source": "工具/文章批注/README.md",
+      "destination": "skills/shared/workbench/neo-source/工具/文章批注/README.md",
+      "sha256": "38f83c9aeaad63cea5a3bc2fb7a3a8c9751bf6b491577c31671ee47600f01109",
+      "size": 4903
+    },
+    {
+      "source": "工具/文章批注/review.css",
+      "destination": "skills/shared/workbench/neo-source/工具/文章批注/review.css",
+      "sha256": "340f919eb607acad6263f6cc64c81955d5a259bfde2d81102ab4c58e0622cc47",
+      "size": 3474
+    },
+    {
+      "source": "工具/文章批注/review.js",
+      "destination": "skills/shared/workbench/neo-source/工具/文章批注/review.js",
+      "sha256": "b611433075709f5d7c479df85ded5eb01870b76bf4f1bb4070735205f8d1d5d2",
+      "size": 12998
+    },
+    {
+      "source": "工具/文章批注/review.py",
+      "destination": "skills/shared/workbench/neo-source/工具/文章批注/review.py",
+      "sha256": "0bf97c75a03ff0efef12f6c94ddaf6b17d1a71f85cb98ed4cc814f4993a45234",
+      "size": 20194
+    },
+    {
+      "source": "工具/贴图生产/README.md",
+      "destination": "skills/shared/workbench/neo-source/工具/贴图生产/README.md",
+      "sha256": "ae576420810cb3f6b7ab8c425fd1117523839d550f756a7ff1a74efd3efc49d9",
+      "size": 6035
+    },
+    {
+      "source": "工具/贴图生产/cli.mjs",
+      "destination": "skills/shared/workbench/neo-source/工具/贴图生产/cli.mjs",
+      "sha256": "b0a5f083005fb9da70f39104ae79cfa40ad34923215adc0f48fb226487958058",
+      "size": 1626
+    },
+    {
+      "source": "工具/贴图生产/lib.mjs",
+      "destination": "skills/shared/workbench/neo-source/工具/贴图生产/lib.mjs",
+      "sha256": "3602b396f4beee9c2bf8a14fc66282228cc34ed6b828fb99d284a4136dbc4c44",
+      "size": 20419
+    },
+    {
+      "source": "工具/贴图生产/package-lock.json",
+      "destination": "skills/shared/workbench/neo-source/工具/贴图生产/package-lock.json",
+      "sha256": "0b678560451856420a20f086b1d5e727b8e9e51ae64f086b6f2ade1a5ad5e966",
+      "size": 1215
+    },
+    {
+      "source": "工具/贴图生产/package.json",
+      "destination": "skills/shared/workbench/neo-source/工具/贴图生产/package.json",
+      "sha256": "6633ca46ceaa4a471a2189619c92c9be77ff392bab5a8966076085b507a542b8",
+      "size": 359
+    },
+    {
+      "source": "规范/公众号排版要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/公众号排版要求.md",
+      "sha256": "63cd266f0f2196475f21c89fa8018b66810f4a78bb626ff348c320b297d7f94a",
+      "size": 6893
+    },
+    {
+      "source": "规范/公众号贴图写作要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/公众号贴图写作要求.md",
+      "sha256": "221011e8de45616ddaa26ed6d53d1454f7b5ac0940fdf95c96566656c4c3f8bd",
+      "size": 19967
+    },
+    {
+      "source": "规范/内容总规格.md",
+      "destination": "skills/shared/workbench/neo-source/规范/内容总规格.md",
+      "sha256": "f5b339dafd17470984b03731f6034dc468164fc3657e5c9b81d3b142c6cb4441",
+      "size": 3442
+    },
+    {
+      "source": "规范/写作要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/写作要求.md",
+      "sha256": "bd85bfd9be8cdc55e722e94170cb005d905df5fc424f84b3ea022bcd3bbbbb2d",
+      "size": 30549
+    },
+    {
+      "source": "规范/发布与归档要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/发布与归档要求.md",
+      "sha256": "fdea446e300b9efe7423cda87514020ff4bdd51a9f82fb874f705ba3b98a287a",
+      "size": 5574
+    },
+    {
+      "source": "规范/图片制作要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/图片制作要求.md",
+      "sha256": "f39f18f435fedd86e7e79ab26a9ce96cd66a1e55d3158bc0c8c3d25412d5a4f0",
+      "size": 27148
+    },
+    {
+      "source": "规范/存档规范.md",
+      "destination": "skills/shared/workbench/neo-source/规范/存档规范.md",
+      "sha256": "4cf05f7db41ff8612deadc512abf670120bf3caeb763824820a1354aa75beb8b",
+      "size": 8650
+    },
+    {
+      "source": "规范/定位与编辑原则.md",
+      "destination": "skills/shared/workbench/neo-source/规范/定位与编辑原则.md",
+      "sha256": "2c04439254ed78654d7c9981383055278e93c78e6bb877bfb824ce7c62095133",
+      "size": 3010
+    },
+    {
+      "source": "规范/效率工具分享要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/效率工具分享要求.md",
+      "sha256": "c5b756cc8b6e634d4dd01c3a9e9af751c81adc1244d8f01d2c3b7de9eca9d05d",
+      "size": 4154
+    },
+    {
+      "source": "规范/文章批注与改稿要求.md",
+      "destination": "skills/shared/workbench/neo-source/规范/文章批注与改稿要求.md",
+      "sha256": "6289ce2b623e36c481085d5866cfbc9508e451eb10ed1ae562931999dfb11930",
+      "size": 4027
+    },
+    {
+      "source": "规范/模板/TechPulse-图生-v1/模板.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/TechPulse-图生-v1/模板.json",
+      "sha256": "17d3eb70002a366c46409aaf45938f64a4934990739131f317bb70905d8f4db8",
+      "size": 567
+    },
+    {
+      "source": "规范/模板/TechPulse-图生-v1/生成指引.txt",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/TechPulse-图生-v1/生成指引.txt",
+      "sha256": "eaea0bce9933fe8bdf5b73a1bb51b2cb8d013212549a13d4f5e4a6655cf85e2d",
+      "size": 2036
+    },
+    {
+      "source": "规范/模板/TechPulse-图生-v1/认可母版.png",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/TechPulse-图生-v1/认可母版.png",
+      "sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4",
+      "size": 1382933
+    },
+    {
+      "source": "规范/模板/TechPulse-图生-v1/风格说明.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/TechPulse-图生-v1/风格说明.md",
+      "sha256": "17fdd89981169b589a44d17b55ea9298c34d4bc4108b61d5b2d0b23e90a5a4ba",
+      "size": 2086
+    },
+    {
+      "source": "规范/模板/三源日报-文章-v1.html",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/三源日报-文章-v1.html",
+      "sha256": "6d9725ad295396e9b403d0373ffab7d165974acb66000dae39b3f84b8b60fc3c",
+      "size": 1009
+    },
+    {
+      "source": "规范/模板/三源日报-贴图-v1.html",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/三源日报-贴图-v1.html",
+      "sha256": "116c736f6dae732f0e513731c38229ae9ee573ba13379d58b03c7f1649f8358b",
+      "size": 1416
+    },
+    {
+      "source": "规范/模板/三源日报-贴图-v2.html",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/三源日报-贴图-v2.html",
+      "sha256": "62ef835e6938126fb36e8bed5b5b96e1fe2034d8ca75b2f03fb1d81738ced709",
+      "size": 1925
+    },
+    {
+      "source": "规范/模板/公众号排版模板.html",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/公众号排版模板.html",
+      "sha256": "b2419d4e928f0c1e23a2432f8ca91f42d1e11757158672a904b5b3129f17fd73",
+      "size": 6379
+    },
+    {
+      "source": "规范/模板/内容档案模板.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/内容档案模板.md",
+      "sha256": "c6b59ca8c04a1a07bf69aca8d25db3397d2ceb595fff4f3dcc7a533c05251189",
+      "size": 751
+    },
+    {
+      "source": "规范/模板/创作复盘模板.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/创作复盘模板.md",
+      "sha256": "b6d2c8709bd352aaa356975742ac27135af6f1caf1402b9251c28346f64c792b",
+      "size": 602
+    },
+    {
+      "source": "规范/模板/创作检查-v1.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/创作检查-v1.json",
+      "sha256": "61fb3412a1ac4d696fa68316fdad164cbe89545c95f577d35d719aebede30519",
+      "size": 1708
+    },
+    {
+      "source": "规范/模板/创作需求模板.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/创作需求模板.md",
+      "sha256": "c43ff03945f7e9ba1a8c2aa65598fdda89f2131f8e64658cbb10c6d7949045f8",
+      "size": 849
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/taste设计取舍.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/taste设计取舍.md",
+      "sha256": "16fb261e77f695e14017b214e4b16a775b9fc82812843459de7ef9ec40621421",
+      "size": 1098
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/三视图-原始-v0.1.png",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/三视图-原始-v0.1.png",
+      "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+      "size": 1162776
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/三视图-实际提示词.txt",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/三视图-实际提示词.txt",
+      "sha256": "d9da446e12e848e9d2f5fdbf3fe40dbb522585aba931dd88cf47fdc0067fa3bc",
+      "size": 3529
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/三视图-调用记录.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/三视图-调用记录.json",
+      "sha256": "feae47c8ce5c28066e0978b5ec0cb941bb50646c284adf1eef6e397d3c25b32e",
+      "size": 681
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/三视图认可与风格指导.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/三视图认可与风格指导.md",
+      "sha256": "fbc4b73b6ae62c1e0bbf131f5af139839f417bc4312b1887f23e5ef4ac453d64",
+      "size": 1588
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/复用提示词-v1.0.txt",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/复用提示词-v1.0.txt",
+      "sha256": "e4d2de93bcaa5e35aa8dd0a8659e8f54cc0b18f6a2f8264aa1dbd1f17374933c",
+      "size": 1620
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/母版-三视图认可前-v1.0.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/母版-三视图认可前-v1.0.json",
+      "sha256": "25f72ff33c9b0f7210196f15bcae55c3deb6f98845af55517c3b3b78b9307dcf",
+      "size": 1124
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/继续原母版前-文件核对-v1.1.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/继续原母版前-文件核对-v1.1.json",
+      "sha256": "8998de6fffbec1229c15dde93cca636bfebdc3f6c08cad49ad1f2b057f8d06ea",
+      "size": 1605
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/继续原母版前-母版-v1.1.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/继续原母版前-母版-v1.1.json",
+      "sha256": "d012597a561b843b9212d463b917f7f718c020105efa562ea354cd405f42069b",
+      "size": 1326
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/继续原母版前-角色复用规范-v1.1.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/继续原母版前-角色复用规范-v1.1.md",
+      "sha256": "f547e86bee3e3b21bcf67bb531157d18dcada0eb4e988202c31687a5c4cd8a48",
+      "size": 4937
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/历史/角色复用规范-v1.0.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/历史/角色复用规范-v1.0.md",
+      "sha256": "793e9f40d5d6d1f04d0ff822a05abfbdd64390e84c4a66e1d678cb489bcae824",
+      "size": 3280
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/复用提示词.txt",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/复用提示词.txt",
+      "sha256": "f631898981fd71aa4b9ae6807bb9a164a82c79898dcc60013c807ea173a69fd0",
+      "size": 2531
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+      "sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef",
+      "size": 1098467
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/文件核对.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/文件核对.json",
+      "sha256": "db9c302b9f5d070c27feaf9fe090d58b462fc9920f3914d5a3c7554dc189cba5",
+      "size": 2002
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/母版.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/母版.json",
+      "sha256": "c7ae4ae88e5cc749a53a0f48fcaa801e19046ee3a82ad76a7904fc1aa267b145",
+      "size": 1707
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/目视检查-v0.1.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/目视检查-v0.1.md",
+      "sha256": "4a88a8c5ee85075af5c7f621318611d3e8b51de25e610f41e5733dbd93fc87b1",
+      "size": 1520
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+      "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506",
+      "size": 1162776
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-v1/角色复用规范.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-v1/角色复用规范.md",
+      "sha256": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
+      "size": 6181
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-精致武侠-v1/三视图认可说明.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-精致武侠-v1/三视图认可说明.md",
+      "sha256": "cce056f6ddde23f2cb48ce48c6949000c40949f741e165e14edb6bd94de52d83",
+      "size": 837
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-精致武侠-v1/母版.json",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-精致武侠-v1/母版.json",
+      "sha256": "66de02ba1c3df80702583198e0125f6c88e2c3d90e1655fb8ac428baa45a2276",
+      "size": 1914
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+      "sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b",
+      "size": 2166777
+    },
+    {
+      "source": "规范/模板/油猪大侠角色-精致武侠-v1/角色复用规范.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色-精致武侠-v1/角色复用规范.md",
+      "sha256": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
+      "size": 2975
+    },
+    {
+      "source": "规范/模板/油猪大侠角色库.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/油猪大侠角色库.md",
+      "sha256": "089046404d077580cd74f8e08af1379b5c72e2c05aa1d091da13d7d229ca721a",
+      "size": 1519
+    },
+    {
+      "source": "规范/模板/设计说明-v2.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/设计说明-v2.md",
+      "sha256": "dfe7b7d8889ed67b6a7d72986951cab172e4d1781b693b34909c32359a255ea0",
+      "size": 4593
+    },
+    {
+      "source": "规范/模板/贴图页面模板.html",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/贴图页面模板.html",
+      "sha256": "c4ca796067bd330f4e0a00c21a13c447a8df5435add34929845e88c408bfe9e7",
+      "size": 1767
+    },
+    {
+      "source": "规范/模板/进度模板.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/进度模板.md",
+      "sha256": "defc068b501fd18e581cc864654bb4d3da8f6a7da995167698ae0d391523f0a7",
+      "size": 387
+    },
+    {
+      "source": "规范/模板/风格权重表模板.md",
+      "destination": "skills/shared/workbench/neo-source/规范/模板/风格权重表模板.md",
+      "sha256": "adc3bc26243d611fb8408ebdf48c478a46e89f8d2f09c1aaf48dc731147f05d8",
+      "size": 2413
+    },
+    {
+      "source": "资料/风格研究/作者素材索引.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/作者素材索引.md",
+      "sha256": "08988cbda8c3da8455b6a48c86042db366d3fa9fa6b879747db832f3dbd4a492",
+      "size": 4882
+    },
+    {
+      "source": "资料/风格研究/分析模板.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/分析模板.md",
+      "sha256": "e9b54dd7e778a06895632dcee03ac0872d4033ac6033988af9b7a28056314aaa",
+      "size": 2906
+    },
+    {
+      "source": "资料/风格研究/反馈检查案例.json",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/反馈检查案例.json",
+      "sha256": "076ebe200444d2386d77158c960fdf192508291cea3852b39bad76fda2fab2d4",
+      "size": 9983
+    },
+    {
+      "source": "资料/风格研究/样本索引.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/样本索引.md",
+      "sha256": "3a5c162c8811991f7a6f28c1b81308a03ea6c191497c912bd8c69ba314f86aa0",
+      "size": 24528
+    },
+    {
+      "source": "资料/风格研究/类型笔记/个人思考.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/个人思考.md",
+      "sha256": "23b9b00d16f974743f37bb23079ef286892a4457a7fa612f018d4b2f3d9efdec",
+      "size": 8816
+    },
+    {
+      "source": "资料/风格研究/类型笔记/工具介绍.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/工具介绍.md",
+      "sha256": "05a701ffe5ed549d26b3a8b4f149f6779ddc2a0ab77bdb6c76ea8ae766353115",
+      "size": 7034
+    },
+    {
+      "source": "资料/风格研究/类型笔记/工具体验.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/工具体验.md",
+      "sha256": "95a0becc8c475c6af29fb54e8370a58db7bb86b207a30510e66b015a3973ccdc",
+      "size": 5526
+    },
+    {
+      "source": "资料/风格研究/类型笔记/工程复盘.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/工程复盘.md",
+      "sha256": "b7f6b77fa8c8aee3270d23d8432f650865cf9eb3a685e3101d58c854d3f8017d",
+      "size": 5642
+    },
+    {
+      "source": "资料/风格研究/类型笔记/新闻解读.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/新闻解读.md",
+      "sha256": "0696de1103dfe654a959262091040a14865d7dd56fc92adf50975f6954dfb2ba",
+      "size": 10742
+    },
+    {
+      "source": "资料/风格研究/类型笔记/短视频表达.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/短视频表达.md",
+      "sha256": "685ea6944b7d33e593b0414ccb20cc08cba20e7af8e3161f97a84771fd1792bf",
+      "size": 2270
+    },
+    {
+      "source": "资料/风格研究/类型笔记/精选周刊.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/精选周刊.md",
+      "sha256": "adce9c6935b0db8a41ae37b8e1f178d78ddaf7312ef797d2d4636e6d8a6f15c4",
+      "size": 2418
+    },
+    {
+      "source": "资料/风格研究/类型笔记/贴图表达.md",
+      "destination": "skills/shared/workbench/neo-source/资料/风格研究/类型笔记/贴图表达.md",
+      "sha256": "bc39225a2d2d032c205a5e19d227826d34cbd1864c6ae1913ccc28ee4aa7c8cf",
+      "size": 16658
+    },
+    {
+      "source": "内容/16万Star的开源AI角色库/用户修改原文-v0.3-63a96756-c3e9-49a9-914d-6cf6f0c12ac8.md",
+      "destination": "skills/shared/workbench/neo-source/内容/16万Star的开源AI角色库/用户修改原文-v0.3-63a96756-c3e9-49a9-914d-6cf6f0c12ac8.md",
+      "sha256": "738db61749ac91894eeba4ba2589d686e2e55ccf366a3aca320dd9a4abd175fe",
+      "size": 4763
+    },
+    {
+      "source": "内容/17万Star开源技能让AI少造轮子/用户修改原文-v0.3-04c93b2a-10d3-4fcd-8b38-83aa12815670.md",
+      "destination": "skills/shared/workbench/neo-source/内容/17万Star开源技能让AI少造轮子/用户修改原文-v0.3-04c93b2a-10d3-4fcd-8b38-83aa12815670.md",
+      "sha256": "8a365fbecb1ec601a51cf146723082527a90a03ca940ee5a443348fd993f3af4",
+      "size": 4590
+    },
+    {
+      "source": "内容/AI做3D打开网页就能逛/用户指导/93fb3ca2-b85c-4e5c-91f4-1c0baa761655/用户请求全文.md",
+      "destination": "skills/shared/workbench/neo-source/内容/AI做3D打开网页就能逛/用户指导/93fb3ca2-b85c-4e5c-91f4-1c0baa761655/用户请求全文.md",
+      "sha256": "7ed8d410ff399f2f8920f3d2d49c6e86250d536d7c105c83b0d812b078dd3b32",
+      "size": 6040
+    },
+    {
+      "source": "内容/AI发现PHP严重漏洞补丁已发布/用户指导/adadd281-4572-4d25-b45a-819b2019d9de/用户请求全文.md",
+      "destination": "skills/shared/workbench/neo-source/内容/AI发现PHP严重漏洞补丁已发布/用户指导/adadd281-4572-4d25-b45a-819b2019d9de/用户请求全文.md",
+      "sha256": "2758df6e83e340c6dd4b5c7ac2368546d922dcad7084fd5ba350a0b130a6938e",
+      "size": 7078
+    },
+    {
+      "source": "内容/CleanYourTV清理电视广告/反馈/476a0fc9-0860-486e-b0b1-4264da534d89/用户请求全文.md",
+      "destination": "skills/shared/workbench/neo-source/内容/CleanYourTV清理电视广告/反馈/476a0fc9-0860-486e-b0b1-4264da534d89/用户请求全文.md",
+      "sha256": "423230fd9f06bf8f7cf5591f5ff99ee8f39b08f3c34beffb1118e05be6ec1fea",
+      "size": 5984
+    },
+    {
+      "source": "内容/KimiK3.1Pro新品速览/反馈/905db2fe-0c00-44d0-a79a-7be3ff9226e9/用户请求全文.md",
+      "destination": "skills/shared/workbench/neo-source/内容/KimiK3.1Pro新品速览/反馈/905db2fe-0c00-44d0-a79a-7be3ff9226e9/用户请求全文.md",
+      "sha256": "9a34a2c5e299eda34cd250d079396a9921c31492279b225c258ccfd06e6105ce",
+      "size": 8245
+    },
+    {
+      "source": "内容/苹果菜单图标别硬配/反馈/8d847426-1498-4982-9e4d-3a9f7279b294/用户请求全文.md",
+      "destination": "skills/shared/workbench/neo-source/内容/苹果菜单图标别硬配/反馈/8d847426-1498-4982-9e4d-3a9f7279b294/用户请求全文.md",
+      "sha256": "62a0ba0c5f657de1d8080f43da5aa00ce0614942bf33875d3295fc5800157fb7",
+      "size": 5712
+    }
+  ]
+}

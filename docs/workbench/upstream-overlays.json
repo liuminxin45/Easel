@@ -105,7 +105,7 @@
   },
   "reviewed_private_blobs": {
     "web/frontend/src/components/skillIconsProduce.tsx": "8579348f16e2063087907e09ea7f01cf55558099",
-    "web/frontend/src/lib/skillDisplayNames.ts": "fcb2941d9ea5436dfe51fc3baa5891cfaa285bd2",
+    "web/frontend/src/lib/skillDisplayNames.ts": "338719d1a23463ba9f535727248b0451d5042240",
     "agents/workspace/AGENTS.md": "babc4964a906d086cd41ec5472c4aa17863a96c2"
   },
   "note": "PR195 includes PR194; PR198 depends on PR197. Shared commits imported once. Full baseline unchanged; private host ports remain concentrated. Reviewed blobs record Chinese labels, mascot and a narrow fix for unnecessary .env checks while retaining official hashes.",

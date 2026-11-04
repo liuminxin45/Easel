@@ -48,7 +48,10 @@ class NativeSkills:
         native=self.context()
         return native._publishing_message(self._persona(persona)+chat_turn_message(value,None))
 
-    def items(self):return self.context().get_skills()
+    def items(self):
+        # Keep the original handler callable for frozen historical requests;
+        # new selections use the two explicit formats.
+        return [item for item in self.context().get_skills() if item.get('name')!='content-production']
     async def detail(self,name):
         configuration=self.chat.settings.skill_configuration()
         native=self.context(ports={'_read_env':lambda:configuration['environment']})

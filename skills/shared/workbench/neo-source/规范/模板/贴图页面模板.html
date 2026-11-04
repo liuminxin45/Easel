@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>贴图页面模板</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e1d7; color: #243d34; font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+    .poster { width: 1080px; height: 1440px; background: #fffef8; display: flex; flex-direction: column; }
+    .heading { padding: 65px 72px; background: #163a31; color: #fffef8; }
+    h1 { margin: 0; font-size: 84px; line-height: 1.25; letter-spacing: -2px; }
+    .content { padding: 50px 72px; }
+    h2 { font-size: 50px; line-height: 1.4; margin: 0 0 25px; }
+    p { font-size: 42px; line-height: 1.6; margin: 0 0 25px; }
+    .footer { margin: auto 72px 40px; display: flex; align-items: baseline; justify-content: space-between; gap: 24px; color: #667568; font-size: 29px; line-height: 1.5; }
+    .watermark { white-space: nowrap; }
+    img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <!-- 可编辑骨架，不是用户认可的文风样本。另存到本篇，将标题替换为草稿包的完整标题。 -->
+  <section class="poster" data-poster-page="01">
+    <div class="heading"><h1 data-poster-title>本篇完整标题</h1></div>
+    <div class="content">
+      <h2>一句具体变化</h2>
+      <p>一项用途或一个例子。</p>
+      <!-- 在需要时嵌入本篇素材；原图等比显示，不模拟真实界面。没有必要的区块直接删除。 -->
+    </div>
+    <div class="footer"><span class="source">简短来源</span><span class="watermark" data-author-watermark>油猪大侠</span></div>
+  </section>
+</body>
+</html>

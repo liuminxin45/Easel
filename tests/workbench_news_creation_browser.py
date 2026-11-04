@@ -59,7 +59,7 @@ async def fake_run(self,request,emit,ask,bind):
     bind(native);request.on_native_turn(native,'TEMP-news-turn-'+str(number))
     await asyncio.sleep(.15)
     if 'TEMP_NEWS_UNKNOWN' in request.prompt:raise HarnessError('TEMP admitted request receipt unknown; never replay')
-    production='content-production' in request.prompt or 'TEMP_NATIVE_MODIFY' in request.prompt
+    production=any(skill in request.prompt for skill in ('content-production','oil-pig-poster','oil-pig-article')) or 'TEMP_NATIVE_MODIFY' in request.prompt
     if not production:
         emit('token','TEMP 仅讨论：原新闻的事实、切入角度与表达边界，没有制作文件。');return
     folder=Path(request.cwd)/'outputs/TEMP-news-created'/('run-'+str(number));folder.mkdir(parents=True,exist_ok=True)
@@ -167,6 +167,13 @@ def main():
             def current_context(profile):
                 response=page.request.get(f['origin']+'/api/news/'+article+'/creation-context?profile_id='+profile);assert response.ok,response.text();return response.json()
             try:
+                goto(page,f['origin'],'/toolbox?section=skills')
+                expect(page.get_by_text('油猪·做贴图',exact=True).first).to_be_visible()
+                expect(page.get_by_text('油猪·做文章',exact=True).first).to_be_visible()
+                expect(page.locator('[data-workbench-skill-icon="oil-pig-poster"]').first).to_be_visible()
+                expect(page.locator('[data-workbench-skill-icon="oil-pig-article"]').first).to_be_visible()
+                assert page.get_by_text('制作贴图 / 文章',exact=True).count()==0
+                mark(case,'native skill library shows distinct oil pig poster and article skills')
                 goto(page,f['origin'],'/toolbox')
                 before_requests=len(f['adapter'].requests)
                 page.locator('.dash-trend-title').filter(has_text=TITLE).click(timeout=30000)
@@ -239,15 +246,15 @@ def main():
                 composer=page.get_by_role('textbox',name='对话输入');expect(composer).to_be_enabled()
                 assert session_id(page)==sid and page.get_by_role('button',name='制作内容',exact=True).count()==0
                 raw='TEMP_NATIVE_POSTER 用这条新闻制作贴图，保留准确来源。 '+case
-                composer.fill('/content-production '+raw)
-                item=page.get_by_role('menuitem',name='/制作贴图 / 文章',exact=True);expect(item).to_be_visible();item.click()
-                expect(page.locator('[data-chat-command]')).to_have_attribute('data-chat-command','content-production:native')
+                composer.fill('/oil-pig-poster '+raw)
+                item=page.get_by_role('menuitem',name='/油猪·做贴图',exact=True);expect(item).to_be_visible();item.click()
+                expect(page.locator('[data-chat-command]')).to_have_attribute('data-chat-command','oil-pig-poster:native')
                 expect(composer).to_have_value(raw)
                 assert page.get_by_role('dialog').count()==0 and len(f['adapter'].requests)==1 and len(post_bodies())==1
                 page.get_by_role('button',name='发送',exact=True).click()
                 history=helper.wait_history(page,f['origin'],sid,discussion['turnId']);native_product=history['session']['messages'][-1]
                 submitted=post_bodies()[-1]
-                assert submitted['message']==raw and submitted['context']['skill_id']=='content-production' and submitted['context']['action_id']=='native'
+                assert submitted['message']==raw and submitted['context']['skill_id']=='oil-pig-poster' and submitted['context']['action_id']=='native'
                 assert submitted['context']['article_id']==article and 'creation' not in submitted['context']
                 assert len(f['adapter'].requests)==2 and page.get_by_role('dialog').count()==0
                 native_package=material_files(f,native_product['turnId'])
@@ -286,7 +293,7 @@ def main():
                 start=len(post_bodies());drawer.get_by_role('button',name='开始制作贴图',exact=True).evaluate('(b)=>{b.click();b.click()}')
                 history=helper.wait_history(page,f['origin'],sid,native_modified['turnId']);poster=history['session']['messages'][-1];assert session_id(page)==sid
                 assert len(post_bodies())==start+1 and len(f['adapter'].requests)==4
-                submitted=post_bodies()[-1];assert submitted['context']['skill_id']=='content-production' and submitted['context']['action_id']=='native'
+                submitted=post_bodies()[-1];assert submitted['context']['skill_id']=='oil-pig-poster' and submitted['context']['action_id']=='native'
                 assert submitted['context']['creation']['format']=='poster' and submitted['context']['creation']['style']['character']=='wuxia-pig'
                 assert current_context(profile)['defaults']['poster']==style
                 package=material_files(f,poster['turnId']);assert package['creation']['note']==note
@@ -297,13 +304,13 @@ def main():
                 assert all((f['root']/i['path']).resolve() in actual_paths for i in copied)
                 assert turn_document(f,poster['turnId'])['context']['creation']['style']['character']=='wuxia-pig'
                 review=page.request.get(f['origin']+'/api/chat/turns/'+poster['turnId']+'/creation');assert review.ok and all('path' not in i for i in review.json()['material_manifest']['files'])
-                mark(case,'same-session poster explicitly invokes native content-production once with exact reference copies and isolated style override',reference_sha256=sorted(expect_hashes))
+                mark(case,'same-session poster explicitly invokes its native skill once with exact reference copies and isolated style override',reference_sha256=sorted(expect_hashes))
                 close_finished_drawer('poster')
                 user_message=next(m for m in history['session']['messages'] if m.get('id')==poster['turnId']+'-user')
-                summary=user_message['creation_summary'];assert summary['skill_id']=='content-production' and summary['format']=='poster'
+                summary=user_message['creation_summary'];assert summary['skill_id']=='oil-pig-poster' and summary['format']=='poster'
                 assert summary['styles']['character']==entries['wuxia-pig']['name'] and summary['title']
                 anchor=page.locator('[data-native-anchor="chat:'+poster['turnId']+'-user"] .ew-creation-summary')
-                expect(anchor).to_contain_text(summary['title']);expect(anchor).to_contain_text(entries['wuxia-pig']['name']);expect(anchor).to_contain_text('制作贴图 / 文章')
+                expect(anchor).to_contain_text(summary['title']);expect(anchor).to_contain_text(entries['wuxia-pig']['name']);expect(anchor).to_contain_text('油猪·做贴图')
                 assert anchor.get_by_role('button').count()==0
                 mark(case,'accepted turn displays frozen news skill and selected style beside the original message')
                 # The next format shares this same news conversation but has its own draft.
@@ -313,6 +320,7 @@ def main():
                 drawer.get_by_label('补充要求',exact=True).fill('TEMP 文章只写正文 '+case);shot('article-settings');drawer.get_by_role('button',name='开始写文章',exact=True).click()
                 history=helper.wait_history(page,f['origin'],sid,poster['turnId']);article_turn=history['session']['messages'][-1];assert session_id(page)==sid
                 assert len(f['adapter'].requests)==5 and post_bodies()[-1]['context']['creation']['format']=='article'
+                assert post_bodies()[-1]['context']['skill_id']=='oil-pig-article'
                 package=material_files(f,article_turn['turnId']);assert package['creation']['style']=={'writing':writing['id']}
                 assert not any(i['role'] in ('identity','reference') for i in package['material_manifest']['files'])
                 mark(case,'same conversation switches to explicit article production; optional illustration settings remain absent')

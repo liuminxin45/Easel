@@ -1,0 +1,20 @@
+Use case: identity-preserve / character turnaround.
+Create a proper ANIMATION CHARACTER MODEL SHEET showing THREE ORTHOGRAPHIC VIEWS of the EXACT pig mascot in the supplied approved reference: FRONT, RIGHT-SIDE PROFILE facing LEFT, and BACK, arranged left-to-right across one wide white landscape sheet. This is for keeping the same character identity in future drawings, not for changing its design or making an animated video.
+
+The reference is the user's APPROVED DESIGN. Match that actual attached image, not a new pig or earlier alternative: same round broad head, big asymmetrical pig ears with one simple inner-ear stroke, dot eyes, closed oval snout with two dark nostrils, tiny off-center smile, plump rounded torso, short rounded arms and stubby bare feet. Maintain the reference's softly wobbly fairly bold black hand-pen line weight and natural irregularity. It is a simple 2D doodle character, no 3D render, anime polish or realistic anatomy.
+
+Turnaround layout:
+- A single wide canvas about 2.5:1 landscape, three evenly spaced full-body figures at EXACTLY THE SAME SCALE and HEIGHT, aligned to a shared foot baseline. Enough horizontal room for the red tails so figures never overlap.
+- Front at left: reproduce the approved face, ear heights, silhouette, head/body proportions, relaxed standing pose and facial placements faithfully. Two dot eyes, two nostrils, the short smile. The left ear in the front reference is higher than the right; do not symmetrize the design.
+- Middle: a TRUE 90-degree RIGHT-SIDE profile, character looking toward the left side of the sheet. One visible dot eye, a modest protruding pig snout with one visible nostril and a short smile. The same ear size, same round head height and belly volume, same short arms and feet. Do not produce a three-quarter face.
+- Back at right: TRUE 180-degree rear view, same ears, broad round head, same body and feet. NO eyes, nostrils, smile, snout or any face on the back. A single tiny simple curled pig tail may be indicated low on the rear torso as a minimal internal line; keep it understated. No new costume or accessories.
+
+Identity accent in all views: the scarf is only ONE continuous thick RED pen line, not an outlined fabric object. It passes beside/across the neck and loosely flutters from the character's own right-rear side. In the front view it trails toward the viewer's LEFT, exactly like the supplied reference; in the side view it trails back toward the RIGHT; in the back view it trails toward the viewer's RIGHT. No knot, folds, loops, outlined scarf or extra tail. Red stays the only colored accent.
+
+All exterior black contours must be continuous and CLOSED. No gaps at the head, ears, neck, hands, feet or body. Keep organic hand wobble and mildly uneven pressure, not artificially smooth vector curves. Side and back must feel like the SAME approved pig rotated, not three unrelated mascots. Consistent line weight across all three.
+
+White body interiors and pure white background, black outlines and one red line only. No hats, hair, clothes, belt, shoes, armor, props, shadows, gradients, color fills, fabric details or scenery. No construction grid, measuring arrows, color swatches, presentation decorations, extra poses or page border.
+
+Only minimal readable labels beneath each view in correct Chinese:
+"正面"   "侧面"   "背面"
+No other text, title, watermark or design annotation. Full silhouettes and red strokes safely inside the canvas, no cropping. Deliver one finished raster turnaround sheet directly.

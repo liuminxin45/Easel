@@ -64,6 +64,27 @@ def test_original_skill_uses_explicit_profile_default_material_and_preserves_ret
     assert package(b,value['turnId'])==material
 
 
+@pytest.mark.parametrize('skill,format',[('oil-pig-poster','poster'),('oil-pig-article','article')])
+def test_distinct_skills_only_freeze_defaults_for_their_format(business,skill,format):
+    b=business;source(b)
+    defaults={'poster':{'writing':'editorial-writing','visual':'editorial-poster','character':'by-purpose','layout':'page-roles'},'article':{'writing':'article-writing'}}
+    with b.store.connect() as c:
+        profile=b.creator._profile(c,'oil-pig');profile['creation_defaults']=defaults
+        c.execute('UPDATE creator_profiles SET document=? WHERE id=?',(json.dumps(profile,ensure_ascii=False),'oil-pig'))
+    value=fixtures.value(tid='specific-'+format);value['context']['skill_id']=skill
+    prepared=b.prepare(value);material=package(b,value['turnId'])
+    assert '/'+skill in prepared['actual_prompt']
+    assert material['creation']['defaults']=={format:defaults[format]}
+    assert all(not row.get('slot') or row['slot'].startswith(format+':') for row in material['material_manifest']['files'])
+
+
+def test_mismatched_news_format_rejected_before_material_freeze(business):
+    b=business;aid=source(b)
+    value={'sessionId':'test-chat','turnId':'wrong-format','message':'做文章','context':{'article_id':aid,'skill_id':'oil-pig-poster','creation':{'intent':'produce','format':'article'}}}
+    with pytest.raises(ValueError,match='格式不一致'):b.prepare(value)
+    assert not (b.root/'outputs/_sessions/inputs/wrong-format').exists()
+
+
 @pytest.mark.parametrize('runtime,sandbox',[('api','workspace-write'),('codex','read-only')])
 def test_native_production_preserves_runtime_permissions_before_freezing(business,monkeypatch,runtime,sandbox):
     b=business;source(b)

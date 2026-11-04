@@ -1,0 +1,24 @@
+{
+  "tool": "image_gen.imagegen",
+  "mode": "built-in",
+  "model": "not returned by tool",
+  "prompt": "三视图-实际提示词.txt",
+  "reference": {
+    "file": "已认可正面参考.png",
+    "width": 1254,
+    "height": 1254,
+    "format": "png",
+    "sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef"
+  },
+  "transparent_background": false,
+  "output": {
+    "file": "角色三视图-v0.1.png",
+    "width": 1983,
+    "height": 793,
+    "format": "png",
+    "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506"
+  },
+  "original_identical": true,
+  "client_date": "2026-10-13",
+  "recorded_at": "2026-10-13T05:54:02.658Z"
+}

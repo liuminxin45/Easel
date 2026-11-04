@@ -23,3 +23,14 @@ test('unrelated native skill icons keep their exact original line SVG without pr
  const registry=icons();for(const id of ['ai-image-gen','ai-music','video-production']){const svg=registry[id]({size:26});assert.equal(svg.props.stroke,'currentColor');assert.equal(nodes(svg).some(node=>node.type==='image'),false);assert.equal(svg.props['data-workbench-skill-icon'],undefined)}
  assert.equal(registry['unknown-private-skill'],undefined);
 });
+
+test('poster and article each retain the approved pig avatar with distinct purpose badges',()=>{
+ const registry=icons(),badges=[];
+ for(const id of ['oil-pig-poster','oil-pig-article']){
+  const svg=registry[id]({size:26}),all=nodes(svg),image=all.find(node=>node.type==='image');
+  assert.equal(image.props.href,'approved-pig.jpg');
+  const badge=all.find(node=>node.props['data-workbench-skill-purpose']===id);assert.ok(badge);
+  badges.push(nodes(badge).find(node=>node.type==='path').props.d);
+ }
+ assert.notEqual(badges[0],badges[1]);
+});

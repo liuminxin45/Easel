@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react';
 import CopyableText from './CopyableText';
+import {StatusCard} from './InteractionNotice';
 
 export default function TextArtifact({url,name}:{url:string;name:string}){
   const [text,setText]=useState<string|null>(null),[error,setError]=useState('');
@@ -11,5 +12,5 @@ export default function TextArtifact({url,name}:{url:string;name:string}){
     })().catch(error=>{if(!controller.signal.aborted)setError(error instanceof Error?error.message:'文本加载失败，可打开原文件')});
     return()=>controller.abort();
   },[url]);
-  return error?<p role="status">{error}</p>:text===null?<p role="status">正在读取文本…</p>:<CopyableText label={name} text={text}/>;
+  return error?<StatusCard className="ew-status-card-compact" tone="error">{error}</StatusCard>:text===null?<StatusCard className="ew-status-card-compact">正在读取文本…</StatusCard>:<CopyableText label={name} text={text}/>;
 }

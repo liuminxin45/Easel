@@ -9,7 +9,7 @@ const sourceRoot=new URL('../../web/frontend/src/',import.meta.url),jsx={jsx:(ty
 const plain=value=>JSON.parse(JSON.stringify(value));
 const record=value=>value&&typeof value==='object'?value:{},string=value=>typeof value==='string'?value:'',array=value=>Array.isArray(value)?value:[];
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
-function module(file,imports,globals={}){imports={'./hooks/visibility':{ResourceVisibility:()=>{}},...imports,'./hooks':imports['@workbench/core']};const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
+function module(file,imports,globals={}){imports={'./hooks/visibility':{ResourceVisibility:()=>{}},'../../components/InteractionNotice':moduleLoader({imports:{'react/jsx-runtime':jsx}})('components/InteractionNotice.tsx'),...imports,'./hooks':imports['@workbench/core']};const exports={};runInNewContext(ts.transpileModule(readFileSync(new URL(file,sourceRoot),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,URL,URLSearchParams,crypto:{randomUUID:()=> 'exact-turn'},...globals,require:id=>id==='react/jsx-runtime'?jsx:imports[id]??(()=>{throw Error('Unexpected dependency '+id)})()});return exports}
 const {RequestError}=module('workbench/core/transport.ts',{'./models':{record,string}},{Error});
 const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
 const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
@@ -146,7 +146,7 @@ test('the latest confirmed interrupted production keeps its unique continuation 
  assert.ok(!nodes(ui.chat.notice).some(node=>node.props.children==='本轮已中断，原文件已保留。'));
  const products=renderedProducts(ui,ui.chat.session.messages.at(-1)),buttons=continuationButtons(products);
  assert.equal(buttons.length,1,'the exact message owns its unique continuation action');
- const status=nodes(products).find(node=>node.type===f.components.TaskStatus);assert.ok(status);const displayed=status.type(status.props);
+ const status=nodes(products).find(node=>node.type===f.components.TaskStatus);assert.ok(status);const card=status.type(status.props),displayed=card.type(card.props);
  assert.equal(displayed.props.role,'status');assert.equal(displayed.props['aria-label'],'制作中断');assert.equal(status.props.title,'制作中断');
  buttons[0].props.onClick();const destination=new URL(f.calls.navigate[0],'https://example.test');
  assert.equal(destination.pathname,'/chat/session-one');assert.deepEqual(Object.fromEntries(destination.searchParams),{work:'exact-work',version:'interrupted-version',skill:'content-production',skill_version:'2',action:'change',continue:'1'});
@@ -446,7 +446,7 @@ test('resumed HTTP 401 ends the existing stream without a second POST',async()=>
 function legacyEntry({saved={},pending=null,search='draft=old-input',format='poster',news=null,profilePins={}}={}){
  const source=readFileSync(new URL('workbench/ui/index.tsx',sourceRoot),'utf8'),ast=ts.createSourceFile('index.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),declaration=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='NativeNewChat'),exports={},calls={create:[],errors:[]};
  const f=fixture(),core={useWorkbench:()=>({client:{drafts:{get:()=>saved},operation:()=>({getState:()=>({pending})}),legacyPending:()=>[]},navigate:()=>{}}),useResource:path=>({data:path==='/api/skills'?catalog:path==='/api/creator/bootstrap?view=summary'?{profiles:[{id:'p',task_skill_versions:profilePins}]}:news,error:''}),useAsyncAction:()=>({busy:false,error:'',run:async fn=>{try{return await fn()}catch(error){calls.errors.push(error.message)}}}),useRef:value=>({current:value}),useEffect:()=>{}};
- runInNewContext(ts.transpileModule('export '+declaration.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,URLSearchParams,record,string,array,nativeSkillChoices:f.lib.nativeSkillChoices,...core,Notice:()=>{},ActionButton:'button',refreshViews:(...reads)=>reads.forEach(read=>void read()),require:id=>id==='react/jsx-runtime'?jsx:assert.fail(id)});
+ runInNewContext(ts.transpileModule('export '+declaration.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,URLSearchParams,record,string,array,nativeSkillChoices:f.lib.nativeSkillChoices,...core,Notice:()=>{},StatusCard:'section',ActionButton:'button',refreshViews:(...reads)=>reads.forEach(read=>void read()),require:id=>id==='react/jsx-runtime'?jsx:assert.fail(id)});
  const tree=exports.NativeNewChat({format,profileId:'p',search:new URLSearchParams(search),onCreate:async(...args)=>{calls.create.push(args);return 'created-session'}});
  return {calls,open:()=>nodes(tree).find(n=>n.type==='button').props.onClick()};
 }

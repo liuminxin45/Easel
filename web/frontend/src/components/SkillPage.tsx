@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import {StatusCard} from './InteractionNotice';
 import type { ComponentType } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
@@ -138,7 +139,7 @@ export default function SkillPage({ persona,viewState,onContentReady }: SkillPag
       {error && <div role="alert" style={{ color: 'var(--red)', maxWidth: 1100, margin: '16px auto' }}>{error}</div>}
 
       <div className="skills-body">
-        {waiting&&<div className="empty-state" style={{height:240}} role="status"><p>正在读取技能…</p></div>}
+        {waiting&&<StatusCard className="ew-status-card-compact">正在读取技能…</StatusCard>}
         {orderedLayers.length === 0 && !error && !waiting && (
           <div className="empty-state" style={{ height: 240 }}>
             <div className="empty-icon"><IconSearch size={40} /></div>

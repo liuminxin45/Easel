@@ -18,7 +18,7 @@ function fixture(file,api){
   useMemo:fn=>{cursor++;return fn()},useCallback:fn=>{cursor++;return fn},
   useEffect:(fn,next)=>{const i=cursor++,old=deps[i];if(!old||!next||old.length!==next.length||next.some((value,j)=>value!==old[j])){deps[i]=next;effects.push(fn)}},
  };
- const imports={react,'react/jsx-runtime':jsx,'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect','../lib/api':api,'../lib/viewState':viewStateModule(react),'../lib/sanitize':{renderMarkdown:value=>'<p>'+value+'</p>'},'../lib/skillDisplayNames':{displayName:value=>value}};
+ const imports={react,'react/jsx-runtime':jsx,'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect','./InteractionNotice':{StatusCard:'StatusCard'},'../lib/api':api,'../lib/viewState':viewStateModule(react),'../lib/sanitize':{renderMarkdown:value=>'<p>'+value+'</p>'},'../lib/skillDisplayNames':{displayName:value=>value}};
  const source=readFileSync(new URL('../../web/frontend/src/components/'+file,import.meta.url),'utf8'),exports={};
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>imports[name]??assert.fail('Unexpected import '+name),setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout:()=>{}});
  return {render(props){cursor=0;const tree=exports.default(props);effects.splice(0).forEach(fn=>fn());return tree},timers};

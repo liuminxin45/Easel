@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import MessageBubble from './MessageBubble';
+import {StatusCard} from './InteractionNotice';
 import QuestionCards from './QuestionCards';
 import type {QuestionServices} from './QuestionCards';
 import BrushEntry,{BrushItem} from './BrushEntry';
@@ -279,7 +280,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
         )}
       </div>
       {composer?.status && <div className="composer-hint" role="status">{composer.status}</div>}
-      {uploadError && <p className="notice-error" role="alert">{uploadError}</p>}
+      {uploadError && <StatusCard className="ew-status-card-compact" tone="error">{uploadError}</StatusCard>}
       {showCommands && <div ref={commandPanelRef} className="chat-command-menu brush-panel" role="menu" aria-label="选择技能">
         <div className="brush-panel-head"><div className="brush-panel-title" style={{flex:1}}>选择技能</div><button type="button" className="brush-close" role="menuitem" aria-label="关闭技能菜单" onClick={()=>{setCommandMenu(false);setSlashDismissed(true);textareaRef.current?.focus()}}>×</button></div>
         <div ref={commandListRef} className="brush-body">

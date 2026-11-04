@@ -29,7 +29,7 @@ function component(file,api={},options={}){
  const exports={},source=readFileSync(new URL('../../web/frontend/src/components/'+file+'.tsx',import.meta.url),'utf8')+(file==='TrendsPage'?'\nexport {TrendsPanel};':'');
  const imports={react,'react/jsx-runtime':{jsx:element,jsxs:element,Fragment:'fragment'},'../lib/viewState':viewStateModule(react),'../lib/api':apiPort,'../lib/outputBrowser':moduleLoader()('lib/outputBrowser.ts'),
   '../lib/sanitize':{renderMarkdown:value=>value},'../lib/skillDisplayNames':{displayName:value=>value},'./Drawer':'Drawer','./SettingsSelect':'SettingsSelect',
-  './SkillDrawer':'SkillDrawer','./TrendSourcesDialog':'TrendSourcesDialog','./DownloadLink':'DownloadLink','./MessageBubble':'MessageBubble','./QuestionCards':'QuestionCards',
+  './SkillDrawer':'SkillDrawer','./TrendSourcesDialog':'TrendSourcesDialog','./DownloadLink':'DownloadLink','./MessageBubble':'MessageBubble','./QuestionCards':'QuestionCards','./InteractionNotice':{StatusCard:'StatusCard'},
   './ContentPanel':moduleLoader({imports:{'react/jsx-runtime':{jsx:element,jsxs:element}}})('components/ContentPanel.tsx'),
   './BrushEntry':{default:'BrushEntry',BrushItem:'BrushItem'},'./useBrushPopover':{useBrushPopover(){}}};
  Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});

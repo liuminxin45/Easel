@@ -8,6 +8,7 @@ import {Notice,ActionButton,Field,Drawer,Pending,TextRecord,Markdown} from './co
 import {TaskStatus} from './TaskStatus';
 import {ProductionParameters} from './ProductionParameters';
 import {Completion} from './WorkCompletion';
+import {StatusCard} from '../../components/InteractionNotice';
 
 /** Lifecycle controls extend the native library; they do not own file browsing. */
 export function VersionOperations({workId,versionId}:{workId:string;versionId:string}){
@@ -27,7 +28,7 @@ export function VersionPanel({workId,versionId}:{workId:string;versionId:string}
   review=useResource<ReviewDocument>(version?.status==='completed'?'/api/works/'+workId+'/versions/'+versionId+'/review':null),
   [recordsOpen,setRecordsOpen]=useState(false),[annotation,setAnnotation]=useState<{field:string;quote:string;start:number;end:number}|null>(null),[annotationText,setAnnotationText]=useState('');
  if(work&&!versionId&&!work.versions.length)return <DraftOperations work={work}/>;
- if(!work||!version)return <><Notice sources={[resource]}/><p>{work?'此准确版本不存在；请选择内容库中的原版本。':'正在读取本版操作…'}</p></>;
+ if(!work||!version)return <><Notice sources={[resource]}/>{!resource.error&&<StatusCard className="ew-status-card-compact" tone={work?'warning':'status'}>{work?'此准确版本不存在；请选择内容库中的原版本。':'正在读取本版操作…'}</StatusCard>}</>;
  const title=version.editable_text?.title||version.copy?.title||version.article?.title||work.title,
   body=version.editable_text?.body||version.copy?.caption||version.article?.body||'',
   recovery=workProductionRecovery(work,version),continuation=nativeContinuationPath(recovery,work.id,version.id),

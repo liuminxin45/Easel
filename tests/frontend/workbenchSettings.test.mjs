@@ -1,7 +1,24 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {moduleLoader} from './helpers/modules.mjs';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
+
+test('model request busy state stays in the control while recovery feedback stays visible',()=>{
+ const ts=createRequire(new URL('../../web/frontend/package.json',import.meta.url))('typescript');
+ const source=readFileSync(new URL('../../web/frontend/src/workbench/ui/system.tsx',import.meta.url),'utf8');
+ const ast=ts.createSourceFile('system.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),fn=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='Settings');
+ const compiled=ts.transpileModule(fn.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+ const feedback={kind:'status',message:'连接暂时中断，正在恢复操作状态。输入已保留。'},operation={busy:true,feedback:undefined};
+ const vm={client:{},navigation:{path:'/settings',registerLeaveGuard:()=>{},back:()=>{}},replace:()=>{}};
+ const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},context={exports:{},URL,URLSearchParams,location:{origin:'https://example.test'},useWorkbench:()=>vm,useOperation:()=>operation,useMemo:fn=>fn(),useCallback:fn=>fn,useEffect:()=>{},workbenchSettingsApi:()=>({}),SettingsPanel:'SettingsPanel',require:id=>id==='react/jsx-runtime'?jsx:assert.fail(id)};
+ runInNewContext(compiled,context);const state=moduleLoader()('lib/interaction.ts').interactionState;
+ const sources=()=>context.exports.Settings().props.children.props.operationSource;
+ assert.equal(state([sources()]),undefined);operation.feedback=feedback;
+ assert.equal(state([sources()]).message,feedback.message);
+});
 function setup(){
  const storage=new Map(),posts=[],gets=[],events=[];let receipt={state:'pending'},fail=false;
  const load=moduleLoader({globals:{window:{dispatchEvent:event=>events.push(event)},Event}}),{WorkbenchClient}=load('workbench/core/client.ts');

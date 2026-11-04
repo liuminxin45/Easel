@@ -2,6 +2,7 @@ import {WorkLibrary} from './nativePages';
 import {nativeAsset} from './lib/nativeAsset';
 import {bindOutputNavigation} from '../../lib/outputNavigation';
 import {ActionButton} from './common';
+import {StatusCard} from '../../components/InteractionNotice';
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
 import App,{topicPrompt} from '../../App';
 import type {Page} from '../../components/Sidebar';
@@ -118,7 +119,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
  notice:<Notice sources={[{error:chatAction.error,feedback:chatAction.feedback}]}/>,
  overlays:settingsOpen&&apiReady&&vm.ready?<Settings/>:undefined,
- content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><p>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</p><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&!vm.expired&&(vm.ready||booted.current)&&page}</>,
+ content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><StatusCard className="ew-status-card-compact" tone={vm.expired?'warning':'status'}>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</StatusCard><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&!vm.expired&&(vm.ready||booted.current)&&page}</>,
  }}/>;
 }
 export function EaselAuth({next='/native/'}:{next?:string}){const {service}=useWorkbench(),[code,setCode]=useState(''),action=useAsyncAction();return <main className="ew-auth"><div className="card ew-auth-card"><IconDashboard size={36}/><h1>登录创作工作台</h1><p>使用 Ente Auth 的验证码继续。</p><form onSubmit={e=>{e.preventDefault();void action.run(async()=>location.assign(await service.login(code,next)))}}><label className="ew-field"><span>6位验证码</span><input className="field" autoFocus aria-label="6位验证码" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))}/></label><Notice sources={[action]}/><ActionButton action={action} className="btn btn-primary" type="submit" disabled={action.busy||code.length!==6}>{action.busy?'正在登录…':'登录'}</ActionButton></form></div></main>}
@@ -137,6 +138,6 @@ function NativeNewChat({format,profileId,search,onCreate}:{format:'poster'|'arti
   await onCreate(profile,command,text,files,sourceId||string(saved.article_id)||undefined,saved.article_mode==='product'?'product':saved.article_mode==='auto'?'auto':undefined);
  });
  useEffect(()=>{if(started.current||!catalog.data||!creators.data||(sourceId&&!source.data))return;started.current=true;open()},[catalog.data,creators.data,source.data]);
- return <div className="ew-loading"><Notice sources={[catalog,creators,source,action]}/><p>正在将材料带入原生对话。原草稿与来源保留，使用 Easel 原生对话执行技能。</p><ActionButton action={action} className="btn" disabled={action.busy} onClick={open}>重新打开对话</ActionButton><button className="btn btn-ghost" onClick={()=>vm.navigate('/posters?drafts=1')}>查看本机草稿</button></div>;
+ return <div className="ew-loading"><Notice sources={[catalog,creators,source,action]}/><StatusCard className="ew-status-card-compact">正在将材料带入原生对话。原草稿与来源保留，使用 Easel 原生对话执行技能。</StatusCard><ActionButton action={action} className="btn" disabled={action.busy} onClick={open}>重新打开对话</ActionButton><button className="btn btn-ghost" onClick={()=>vm.navigate('/posters?drafts=1')}>查看本机草稿</button></div>;
 }
 function ChatLanding({client,sessions,error,fresh,onOpen,onCreate}:{client:WorkbenchClient;sessions:NativeSessions|null;loading:boolean;error:string;fresh:boolean;onOpen:(id:string)=>void;onCreate:()=>void}){const started=useRef(false),{flow}=useSessionOpenFlow(client);useEffect(()=>{if(!sessions||started.current)return;started.current=true;const recent=!fresh&&sessions.sessions.find(session=>!session.archived);if(recent)onOpen(recent.id);else onCreate()},[sessions]);return <SessionOpenStage client={client} flow={flow} error={error} onRetry={onCreate}/>}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import {StatusCard} from './InteractionNotice';
 import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
   fetchAnalyticsPlatforms, fetchAccountAnalytics,
@@ -194,7 +195,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const pendingIdeas = ideas.filter((i) => i.status === 'pending');
   const loggedIn = accounts.filter((a) => a.loggedIn).length;
   const count=(key:DashboardRead,value:string)=>readErrors[key]?'—':readReady[key]?value:'…';
-  const readNotice=(key:Exclude<DashboardRead,'analytics'>,label:string)=>readErrors[key]&&<div className="notice-error" role="alert">{label}读取失败：{readErrors[key]} <button className="btn btn-sm" onClick={()=>void loadCommon(key,true)}>重试</button></div>;
+  const readNotice=(key:Exclude<DashboardRead,'analytics'>,label:string)=>readErrors[key]&&<StatusCard className="ew-status-card-compact" tone="error">{label}读取失败：{readErrors[key]} <button className="btn btn-sm" onClick={()=>void loadCommon(key,true)}>重试</button></StatusCard>;
 
   const quick: { label: string; page: Page; Icon: typeof IconChat }[] = [
     { label: '开始对话', page: 'chat', Icon: IconChat },
@@ -305,8 +306,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconOutputs size={16} /> 最近产物</span>
             <button className="dash-more" onClick={() => onNavigate('outputs')}>内容库 →</button>
           </div>}>
-            {(outputsLoading||outputsIndexing) && recent.length === 0 && <div className="dash-empty" role="status">正在读取最近产物…</div>}
-            {outputsError && <div className="notice-error" role="alert">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={()=>loadOutputs(true)}>重试</button></div>}
+            {(outputsLoading||outputsIndexing) && recent.length === 0 && <StatusCard className="ew-status-card-compact">正在读取最近产物…</StatusCard>}
+            {outputsError && <StatusCard className="ew-status-card-compact" tone="error">最近产物读取失败：{outputsError} <button className="btn btn-sm" disabled={outputsLoading} onClick={()=>loadOutputs(true)}>重试</button></StatusCard>}
             {!outputsLoading && !outputsIndexing && !outputsError && recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
           {recent.map((g) => (
             <div key={g.name} className="dash-output" onClick={() => onNavigate('outputs')}>
@@ -325,8 +326,8 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
           </div>}>
           {(() => {
             const logged = anaPlats.filter((p) => p.loggedIn || whoamiMap[p.platform]?.loggedIn);
-            if (readErrors.analytics) return <div className="notice-error" role="alert">归因平台读取失败：{readErrors.analytics}</div>;
-            if (anaPlats.length === 0) return <div className="dash-empty">{readReady.analytics?'暂无可用归因平台，请到账号页配置。':'正在读取归因平台…'}</div>;
+            if (readErrors.analytics) return <StatusCard className="ew-status-card-compact" tone="error">归因平台读取失败：{readErrors.analytics}</StatusCard>;
+            if (anaPlats.length === 0) return readReady.analytics?<div className="dash-empty">暂无可用归因平台，请到账号页配置。</div>:<StatusCard className="ew-status-card-compact">正在读取归因平台…</StatusCard>;
             if (logged.length === 0) {
               return (
                 <div className="dash-empty" onClick={() => onNavigate('accounts')} style={{ cursor: 'pointer' }}>

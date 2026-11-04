@@ -21,7 +21,7 @@ function fixture(){
   useEffect:(effect,next)=>{const at=cursor++,old=deps[at];if(!old||old.length!==next.length||next.some((value,index)=>value!==old[index])){deps[at]=next;effects.push(effect)}},
  };
  const exports={},source=readFileSync(new URL('../../web/frontend/src/components/SkillPage.tsx',import.meta.url),'utf8');
- const imports={react,'react/jsx-runtime':jsx,'../lib/viewState':viewStateModule(react),'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
+ const imports={react,'react/jsx-runtime':jsx,'../lib/viewState':viewStateModule(react),'../lib/api':{fetchSkills:()=>{fetches++;return new Promise((resolve,reject)=>requests.push({resolve,reject}))}},'./SkillDrawer':'SkillDrawer','./InteractionNotice':{StatusCard:'StatusCard'},'../lib/skillDisplayNames':{displayName:value=>value},'./icons':new Proxy({},{get:()=>()=>null})};
  Object.assign(imports,{'./skillIconsPlanning':{planningSkillIcons:{}},'./skillIconsProduce':{produceSkillIcons:{}},'./skillIconsPublish':{publishSkillIcons:{}},'./skillIconsBrand':{brandSkillIcons:{}}});
  runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:id=>imports[id]??assert.fail('Unexpected import '+id)});
  const render=()=>{cursor=0;const tree=exports.default({persona:'author'});effects.splice(0).forEach(effect=>effect());return tree};

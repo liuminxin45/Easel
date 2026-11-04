@@ -6,6 +6,7 @@ import OnboardingWizard,{type OnboardingDraft} from '../../components/Onboarding
 import {creatorAssetInputs,array,record,string,number,type CreatorBootstrap,type CreatorProfile,type DraftAttachment} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
 import {ActionButton,Field,Panel,Notice,Pending,resultDocument} from './common';
+import {StatusCard} from '../../components/InteractionNotice';
 
 export function NativeProfiles({search,profileId=''}:{search:URLSearchParams;profileId?:string}){
  const vm=useWorkbench(),resource=useResource<CreatorBootstrap>('/api/creator/bootstrap?view=summary');
@@ -71,7 +72,7 @@ function ProfileBindings({profile,data,reload}:{profile:CreatorProfile;data:Crea
   </Panel>
 
   <ActionButton action={action} className="btn btn-primary" disabled={action.busy||changedRevision} onClick={save}>保存素材绑定</ActionButton>
-  {changedRevision&&<p role="status">画像已有新修订。<button className="btn" onClick={()=>patch({base_revision:profile.revision})}>已核对当前画像，保留这些绑定修改</button></p>}
+  {changedRevision&&<StatusCard className="ew-status-card-compact" tone="warning">画像已有新修订。<button className="btn" onClick={()=>patch({base_revision:profile.revision})}>已核对当前画像，保留这些绑定修改</button></StatusCard>}
   <Panel title="关联平台账号">{data.accounts.map(account=><div className="ew-row" key={account.id}><span>{account.label||account.account||account.platform}</span><ActionButton action={action} className="btn" disabled={action.busy} onClick={()=>void action.run(async()=>{
    const result=await vm.service.creatorCommand(profile.account_ids.includes(account.id)?'unbind-account':'bind-account',{profile_id:profile.id,connection_id:account.id,base_revision:profile.revision});patch({base_revision:number(record(resultDocument(result).profile).revision)});void reload();
   })}>{profile.account_ids.includes(account.id)?'解绑':'绑定'}</ActionButton></div>)}</Panel>

@@ -34,6 +34,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false},react:reac
   if(specifier==='../../lib/api')return {peekApiData:()=>undefined};
   if(specifier==='../platform/native-routes')return routeModule;
   if(specifier==='./ChatSessionView')return {nativeSkillChoices:()=>choices};
+  if(specifier==='../../components/InteractionNotice')return {StatusCard:'StatusCard'};
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
   if(specifier==='./ExtensionDetails')return {ExtensionDetails:function ExtensionDetails(){}};
   if(specifier==='./VersionOperations')return {VersionOperations:function VersionOperations(){}};
@@ -182,6 +183,7 @@ test('native gallery resolves declared virtual file paths independently of displ
   if(specifier==='../lib/api')return {peekApiData:()=>roots,subscribeApiData:()=>()=>{},fetchOutputs:async()=>roots,fetchOutputContent:async path=>{reads.push(path);return {content:'原字内容',isBinary:false}},mediaUrl:path=>path,deleteOutput:async()=>{throw Error('Deletion must not run')}};
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
   if(specifier==='./DownloadLink')return {default:'DownloadLink'};
+  if(specifier==='./InteractionNotice')return {StatusCard:'StatusCard'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});
   throw Error(specifier);
  }});

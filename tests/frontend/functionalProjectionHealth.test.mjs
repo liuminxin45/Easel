@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {moduleLoader} from './helpers/modules.mjs';
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
-const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?typeof value.type==='function'&&value.type.name==='ContentPanel'?all(value.type(value.props)):[value,...all(value.props?.children)]:[];
+const all=value=>Array.isArray(value)?value.flatMap(all):value&&typeof value==='object'?typeof value.type==='function'&&['ContentPanel','StatusCard'].includes(value.type.name)?all(value.type(value.props)):[value,...all(value.props?.children)]:[];
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):value==null?'':String(value);
 const trend=version=>({version:1,day:'1970-01-01',timezone:'Asia/Shanghai',trends:[{platform:'temp',label:'TEMP',ok:true,status:'fresh',fetched_at:version===1?'2026-11-01T12:00:00+08:00':'2026-11-03T12:00:00+08:00',items:[{id:'t'+version,title:'TEMP '+version}]}],updated:1,warnings:[]});
 

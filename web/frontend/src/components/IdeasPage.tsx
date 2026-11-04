@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {StatusCard} from './InteractionNotice';
 import { fetchIdeas, createIdea, updateIdea, deleteIdea, createSchedule,peekApiData,subscribeApiData } from '../lib/api';
 import type { Idea, IdeaInput } from '../lib/api';
 import {IconIdea,IconEdit,IconTrash,IconChat,IconCalendar,IconChevron} from './icons';
@@ -94,7 +95,7 @@ export default function IdeasPage({ onUseTopic, draftStore,onContentReady }: Ide
     } catch (caught) { reportError(caught); }
   };
 
-  const notice = error ? <div className="notice-error" role="alert">{error}<button className="btn btn-sm" onClick={()=>void load(true)}>重新读取选题</button></div> : undefined;
+  const notice = error ? <StatusCard className="ew-status-card-compact" tone="error">{error}<button className="btn btn-sm" onClick={()=>void load(true)}>重新读取选题</button></StatusCard> : undefined;
   return (
     <div className="page-scroll ideas-page">
       <div className="page-head">

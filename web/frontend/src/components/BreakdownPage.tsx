@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { runAgent, createIdea } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { IconFire, IconIdea, IconSkills } from './icons';
+import {StatusCard} from './InteractionNotice';
 
 interface BreakdownPageProps {
   persona: string;
@@ -71,7 +72,7 @@ export default function BreakdownPage({ persona, onAnalyze, inputState, resultCo
           {result && <button className="btn btn-ghost" onClick={() => { setResult(''); setInput(''); }}>清空</button>}
         </div>
 
-        {error&&<div className="notice-error" role="alert">{error}</div>}
+        {error&&<StatusCard className="ew-status-card-compact" tone="error">{error}</StatusCard>}
         {loading && <div className="loading" style={{ padding: 40 }}><div className="spinner" />AI 正在拆解…</div>}
         {result && !loading && (
           <div className="panel" style={{ marginTop: 18 }}>

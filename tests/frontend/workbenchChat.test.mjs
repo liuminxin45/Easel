@@ -11,7 +11,7 @@ function load(file,imports={},globals={}){
  const source=readFileSync(new URL(file,root),'utf8'),exports={};
  const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  runInNewContext(output,{exports,URL,URLSearchParams,requestAnimationFrame:fn=>fn(),document:{addEventListener:()=>{},removeEventListener:()=>{},querySelector:()=>null},...globals,
-  require:id=>{if(id==='react')return react;if(id==='react/jsx-runtime')return jsx;if(id==='./useBrushPopover')return {useBrushPopover:()=>{}};if(id==='./lib/nativeAsset')return load('workbench/ui/lib/nativeAsset.ts',{},globals);if(id==='./hooks')return imports['@workbench/core'];if(id in imports)return imports[id];throw Error('Unexpected runtime dependency: '+id)}});
+  require:id=>{if(id==='react')return react;if(id==='react/jsx-runtime')return jsx;if(id==='./useBrushPopover')return {useBrushPopover:()=>{}};if(id==='./InteractionNotice')return {StatusCard:'StatusCard'};if(id==='./lib/nativeAsset')return load('workbench/ui/lib/nativeAsset.ts',{},globals);if(id==='./hooks')return imports['@workbench/core'];if(id in imports)return imports[id];throw Error('Unexpected runtime dependency: '+id)}});
  return exports;
 }
 function nodes(value){return Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[]}

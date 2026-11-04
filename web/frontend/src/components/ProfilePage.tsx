@@ -4,6 +4,7 @@ import {useStoredViewState,type ViewStateStore} from '../lib/viewState';
 import type { PersonaItem, PersonaFile, AccountAnalytics } from '../lib/api';
 import { renderMarkdown } from '../lib/sanitize';
 import { IconProfile, IconPlus } from './icons';
+import {StatusCard} from './InteractionNotice';
 
 // 粉丝量级：把粉丝数映射成人话档位（画像里“粉丝量级”一栏要的是量级而非精确值）
 function fanTier(n: number): string {
@@ -147,7 +148,7 @@ export default function ProfilePage(props: ProfilePageProps) {
         <IconProfile size={18} />
         <span>{props.persona ? `当前对话使用「${props.persona}」` : '当前对话为通用模式'}<small>查看和编辑画像不会切换对话身份。</small></span>
       </div>
-      {notice && <p role="status">{notice}</p>}
+      {notice && <StatusCard className="ew-status-card-compact">{notice}</StatusCard>}
       {loading ? <div className="loading"><div className="spinner" />加载画像…</div>
         : error ? <div className="empty-state"><p role="alert">{error}</p><button className="btn" onClick={() => setRevision((n) => n + 1)}>重新加载</button></div>
         : personas.length === 0 ? <div className="empty-state profile-empty">
@@ -357,11 +358,11 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
       </div>
 
       {error && <div style={{ color: 'var(--red)', fontSize: 14, marginTop: 12 }}>{error}</div>}
-      {needsDraftReview && <div className="profile-mode-note" role="status">
+      {needsDraftReview && <StatusCard className="ew-status-card-compact profile-mode-note" tone="warning">
         <span>服务器画像已有新修订，原输入和原修订仍保留。请先查看当前内容，再明确继续编辑。</span>
         {editing ? <button className="btn btn-sm" onClick={() => setEditing(false)}>查看当前修订</button>
           : <button className="btn btn-sm" onClick={reviewRetainedDraft}>已核对当前修订，保留输入继续编辑</button>}
-      </div>}
+      </StatusCard>}
 
       {loading ? (
         <div className="loading"><div className="spinner" />加载中…</div>

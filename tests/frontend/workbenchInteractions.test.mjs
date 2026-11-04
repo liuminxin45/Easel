@@ -4,7 +4,8 @@ import {readdirSync} from 'node:fs';
 import {inspectInteractions,auditInteractions} from '../../scripts/audit_workbench_interactions.mjs';
 import {moduleLoader} from './helpers/modules.mjs';
 const jsx={jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
-const load=moduleLoader({imports:{'react/jsx-runtime':jsx}}),{interactionFeedback,refreshViews}=load('lib/interaction.ts'),{InteractionNotice}=load('components/InteractionNotice.tsx');
+const load=moduleLoader({imports:{'react/jsx-runtime':jsx}}),{interactionFeedback,refreshViews}=load('lib/interaction.ts'),{InteractionNotice:renderInteractionNotice}=load('components/InteractionNotice.tsx');
+const InteractionNotice=props=>{const element=renderInteractionNotice(props);if(!element)return null;const section=element.type(element.props);return {...section,props:{...section.props,children:element.props.children}}};
 
 const privateLoad=moduleLoader({imports:{'react/jsx-runtime':jsx,'@workbench/core':{},'./lib/sanitize':{renderMarkdown:value=>value}}});
 const {Notice}=privateLoad('workbench/ui/common.tsx');

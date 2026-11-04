@@ -4,7 +4,7 @@ import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import {fileUrl,fileDownload,record,string,type Artifact,type InteractionSource} from '@workbench/core';
 import {useWorkbench,useOperation,useResource,useSessionMediaImage} from './hooks';
 import {renderMarkdown} from './lib/sanitize';
-import {InteractionNotice} from '../../components/InteractionNotice';
+import {InteractionNotice,StatusCard} from '../../components/InteractionNotice';
 import {DetailChevron} from './ExtensionDetails';
 import {useResourceVisibility} from './hooks/visibility';
 
@@ -21,7 +21,7 @@ export function ActionButton({action,children,onClick,disabled,...props}:React.B
 export function Markdown({text}:{text:string}){return <div className="markdown-body" dangerouslySetInnerHTML={{__html:renderMarkdown(text)}}/>}
 export function Panel({title,children}:{title?:string;children:ReactNode}){return <section className="card ew-panel">{title&&<h2>{title}</h2>}{children}</section>}
 export function Field({label,children}:{label:string;children:ReactNode}){return <label className="ew-field"><span>{label}</span>{children}</label>}
-export function Pending({scope,reload}:{scope:string;reload?:()=>void}){const p=useOperation(scope),previous=useRef(p.pending?.uncertain?p.pending.id:undefined);useEffect(()=>{if(previous.current&&!p.pending)reload?.();previous.current=p.pending?.uncertain?p.pending.id:undefined},[p.pending?.id,p.pending?.uncertain,reload]);return p.pending?.uncertain&&!p.busy?<p className="ew-muted" role="status">{p.feedback?.message||p.error||'连接中断，正在恢复操作状态。输入已保留。'}</p>:null}
+export function Pending({scope,reload}:{scope:string;reload?:()=>void}){const p=useOperation(scope),previous=useRef(p.pending?.uncertain?p.pending.id:undefined);useEffect(()=>{if(previous.current&&!p.pending)reload?.();previous.current=p.pending?.uncertain?p.pending.id:undefined},[p.pending?.id,p.pending?.uncertain,reload]);return p.pending?.uncertain&&!p.busy?<StatusCard tone="warning" className="ew-status-card-compact">{p.feedback?.message||p.error||'连接中断，正在恢复操作状态。输入已保留。'}</StatusCard>:null}
 /** Only host history/focus is adapted; the visible shell is the original drawer. */
 type HostDrawerProps={open:boolean;title:string;onClose:()=>void;onDismiss?:()=>void|boolean;children:ReactNode};
 export function Drawer(props:HostDrawerProps){return props.open?<MountedDrawer {...props}/>:null}
@@ -67,6 +67,6 @@ export function RecordBody({value}:{value:unknown}){
 export function RemoteRecord({title,path,field}:{title:string;path:string;field?:string}){return <RecordDetails title={title} renderContent={()=><ReadRecord path={path} field={field}/>}/>}
 function ReadRecord({path,field}:{path:string;field?:string}){
  const resource=useResource(path),value=field?record(resource.data)[field]:resource.data;
- return <><Notice sources={[resource]}/>{resource.error&&<button className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取</button>}{resource.loading&&!resource.data?<p className="ew-muted" role="status">正在读取记录…</p>:resource.data&&<pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre>}</>;
+ return <><Notice sources={[resource]}/>{resource.error&&<button className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取</button>}{resource.loading&&!resource.data?<StatusCard className="ew-status-card-compact">正在读取记录…</StatusCard>:resource.data&&<pre className="ew-preserve">{typeof value==='string'?value:JSON.stringify(value,null,2)}</pre>}</>;
 }
 export function SourceLink({value}:{value:unknown}){const url=string(value);return /^https?:\/\//.test(url)?<a href={url} target="_blank" rel="noreferrer">原始来源 ↗</a>:null}

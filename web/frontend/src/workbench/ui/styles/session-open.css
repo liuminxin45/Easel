@@ -1,11 +1,6 @@
 .ew-session-open-stage {display:flex;align-items:safe center;justify-content:center;height:100%;min-height:100%;overflow-y:auto;padding:24px 16px;box-sizing:border-box;}
 .ew-session-open-card {width:100%;max-width:480px;padding:32px 24px;box-sizing:border-box;text-align:center;}
-.ew-session-open-icon {display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 20px;border-radius:var(--radius);background:var(--accent-soft);color:var(--accent-end);}
-.ew-session-open-icon.is-working svg {animation:ew-session-open-turn 1.2s linear infinite;}
 .ew-session-open-card.is-error {border-color:var(--red-soft);}
-.ew-session-open-card.is-error .ew-session-open-icon {background:var(--red-soft);color:var(--red);}
-.ew-session-open-card.is-warning .ew-session-open-icon {background:var(--amber-soft);color:var(--amber);}
-.ew-session-open-card.is-ready .ew-session-open-icon {background:var(--green-soft);color:var(--green);}
 .ew-session-open-title {margin:0 0 10px;font-size:20px;font-weight:600;color:var(--text);}
 .ew-session-open-description {margin:0;line-height:1.65;color:var(--text-secondary);overflow-wrap:anywhere;}
 .ew-session-open-preserved {margin:12px 0 0;font-size:13px;color:var(--text-tertiary);}
@@ -17,4 +12,3 @@
 .ew-session-open-record dd {margin:6px 0 0;overflow-wrap:anywhere;line-height:1.6;}
 @keyframes ew-session-open-turn {to {transform:rotate(360deg)}}
 @media (max-width:480px){.ew-session-open-card {padding:28px 20px;}.ew-session-open-actions {flex-direction:column;}.ew-session-open-actions .btn {width:100%;}}
-@media (prefers-reduced-motion:reduce){.ew-session-open-icon.is-working svg {animation:none;}}

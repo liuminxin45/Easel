@@ -43,6 +43,7 @@ function gallery(initial,{jumpPath,dataSource}={}){
   if(specifier==='../lib/outputBrowser')return outputBrowserModule;
   if(specifier==='../lib/sanitize')return {renderMarkdown:text=>text};
   if(specifier==='./DownloadLink')return {default:'DownloadLink'};
+  if(specifier==='./InteractionNotice')return {StatusCard:'StatusCard'};
   if(specifier==='./icons')return new Proxy({},{get:(_,name)=>name});
   assert.fail('Unexpected import '+specifier);
  }});

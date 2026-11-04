@@ -4,6 +4,7 @@ import React,{useState} from 'react';
 import {array,record,string,type JsonRecord} from '@workbench/core';
 import {useResource} from './hooks';
 import {Notice,TextRecord} from './common';
+import {StatusCard} from '../../components/InteractionNotice';
 
 /** Read the selected version's stored input, never today's profile or skill defaults. */
 export function ProductionParameters({versionId}:{versionId:string}){
@@ -12,7 +13,7 @@ export function ProductionParameters({versionId}:{versionId:string}){
  return <ExtensionDetails className="chat-production-details" title="制作参数" onToggle={event=>{if(event.currentTarget.open)setOpened(true)}}>
   <Notice sources={[resource]}/>
   {resource.error&&<ActionButton action={{busy:!!resource.refreshing}} className="btn btn-sm" onClick={()=>void resource.reload()}>重新读取制作参数</ActionButton>}
-  {!resource.data&&!resource.error&&<p role="status">正在读取本版制作记录…</p>}
+  {!resource.data&&!resource.error&&<StatusCard className="ew-status-card-compact">正在读取本版制作记录…</StatusCard>}
   {resource.data&&<>
    <p><strong>作品版本：</strong>{versionId}</p>
    {Object.keys(profile).length>0&&<p><strong>画像：</strong>{string(profile.name)||string(profile.id)}{profile.revision!=null?' · v'+String(profile.revision):''}</p>}

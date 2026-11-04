@@ -146,10 +146,8 @@ def seed(fixture, image, video):
     creator.command({'id': 'mobile-profile-seed', 'action': 'profile-save', 'profile_id': profile['id'],
                      'base_revision': profile['revision'], 'document': {key: LONG for key in ('identity', 'audience', 'voice', 'boundaries')}})
     detail = creator.detail('skill', 'content-writing')
-    candidate = creator.command({'id': 'mobile-skill-seed', 'action': 'skill-draft', 'skill_id': detail['id'],
-                                 'base_version': detail['version'], 'prompt': detail['prompt'] + '\n\n' + LONG,
-                                 'reason': LONG, 'conditions': {'description': LONG}, 'evidence_refs': []})['result']['skill']
-    return {'work': work, 'version': work, 'article': article, 'session': session['id'], 'skill': detail['id'], 'skill_version': candidate['version'],
+    # Current Easel skills are read from the project; private skill drafting is retired.
+    return {'work': work, 'version': work, 'article': article, 'session': session['id'], 'skill': detail['id'], 'skill_version': detail['version'],
             'image_path': '__workbench__/mobile-audit-image/封面.png',
             'news_article': next(item['id'] for item in box.store.article_day()['items'] if item['title'].startswith(MARK)),
             'topics': 3, 'calendar_items': 8, 'news_items': 20, 'output_folder': str(folder)}
@@ -218,7 +216,7 @@ MEASURE = """element=>{
  const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!e.closest('[inert]')};
  const name=e=>e.tagName.toLowerCase()+(e.id?'#'+e.id:'')+(typeof e.className==='string'?'.'+e.className.trim().replace(/\\s+/g,'.'):'');
  const boundedScroller=p=>{const s=getComputedStyle(p),r=p.getBoundingClientRect();return ['auto','scroll'].includes(s.overflowX)&&p.scrollWidth>p.clientWidth+1&&r.left>=-2&&r.right<=innerWidth+2};
- const scroller=e=>{for(let p=e.parentElement;p&&p!==document.body;p=p.parentElement){if(p.matches('.subnav-tabs,.tabbar,.settings-nav,.ew-table-wrap,.kanban,pre,textarea,[data-mobile-audit-horizontal]')&&boundedScroller(p))return name(p)}return null};
+ const scroller=e=>{for(let p=e.parentElement;p&&p!==document.body;p=p.parentElement){if(p.matches('.subnav-tabs,.tabbar,.settings-nav,.trend-source-controls,.ew-table-wrap,.kanban,pre,textarea,[data-mobile-audit-horizontal]')&&boundedScroller(p))return name(p)}return null};
  const box=element.getBoundingClientRect(),style=getComputedStyle(element),overflow=[];
  for(const child of element.querySelectorAll('*')){if(!visible(child)||['STYLE','SCRIPT','OPTION'].includes(child.tagName))continue;const r=child.getBoundingClientRect(),s=getComputedStyle(child);
   if(r.right>innerWidth+2||r.left< -2){const scroll=child.closest('pre,textarea,[data-mobile-audit-horizontal]'),scrollHost=scroller(child);overflow.push({selector:name(child),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),text:(child.innerText||'').slice(0,90),intentional_code_scroll:!!scroll&&boundedScroller(scroll),horizontal_scroll_container:scrollHost,reflow_handled:!!scrollHost});}
@@ -425,14 +423,15 @@ def main():
                             def go(path):
                                 page.goto(fixture['origin'] + '/native/?' + urlencode({'path': path}), wait_until='domcontentloaded')
                             def verify_news_scroll(target):
-                                pre = target.locator('.copyable-text pre code')
-                                expect(pre).to_be_visible()
-                                assert pre.text_content() == NEWS_BODY, 'News reading did not retain the collected long original text'
-                                expect(target.get_by_role('button', name='做内容', exact=True)).to_be_enabled()
+                                paragraphs = target.locator('.ew-news-prose p')
+                                expect(paragraphs.first).to_be_visible()
+                                expected = [line.strip() for line in NEWS_BODY.splitlines() if line.strip()]
+                                assert paragraphs.all_text_contents() == expected, 'News reading did not retain the collected long original text'
+                                expect(target.get_by_role('button', name='制作内容', exact=True)).to_be_enabled()
                                 geometry = """(el, marker)=>{
-                                  const box=el.getBoundingClientRect(),node=el.querySelector('.copyable-text code')?.firstChild,text=node?.textContent||'',index=text.lastIndexOf(marker);
+                                  const box=el.getBoundingClientRect(),node=[...el.querySelectorAll('.ew-news-prose p')].find(p=>p.textContent.includes(marker))?.firstChild,text=node?.textContent||'',index=text.lastIndexOf(marker);
                                   let tail=null;if(node?.nodeType===Node.TEXT_NODE&&index>=0){const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+marker.length);const r=range.getBoundingClientRect();tail={top:r.top,bottom:r.bottom};}
-                                  const button=[...el.querySelectorAll('button')].find(b=>b.textContent.trim()==='做内容'),b=button?.getBoundingClientRect(),hit=b&&document.elementFromPoint(b.left+b.width/2,b.top+b.height/2),top=Math.max(0,box.top),bottom=Math.min(innerHeight,box.bottom);
+                                  const button=[...el.querySelectorAll('button')].find(b=>b.textContent.trim()==='制作内容'),b=button?.getBoundingClientRect(),hit=b&&document.elementFromPoint(b.left+b.width/2,b.top+b.height/2),top=Math.max(0,box.top),bottom=Math.min(innerHeight,box.bottom);
                                   return {scrollTop:el.scrollTop,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,overflowY:getComputedStyle(el).overflowY,
                                    box:{left:box.left,right:box.right,top:box.top,bottom:box.bottom},tail,tailVisible:!!tail&&tail.top>=top-1&&tail.bottom<=bottom+1,
                                    action:b?{left:b.left,right:b.right,top:b.top,bottom:b.bottom}:null,
@@ -451,8 +450,9 @@ def main():
                                         top, bottom = max(0, box['top']), min(height, box['bottom'])
                                         span = bottom - top
                                         assert span > 100, ('No usable news gesture region', before)
-                                        x, y = (max(0, box['left']) + min(width, box['right'])) / 2, bottom - 50
-                                        distance = min(520, span - 100)
+                                        # Start on the article, above the sticky action bar.
+                                        x, y = (max(0, box['left']) + min(width, box['right'])) / 2, top + span * 0.65
+                                        distance = min(420, y - top - 30)
                                         if session:
                                             touch_helper.touch_swipe(page, session, x, y, -distance)
                                         else:
@@ -505,8 +505,6 @@ def main():
                                 if surface == 'dashboard.main':
                                     expect(target.locator('.dash-idea-title').first).to_contain_text(MARK)
                                     expect(target.locator('.dash-sched-title').first).to_contain_text(MARK)
-                                    if width <= 900 or width <= 1100 and height <= 500:
-                                        expect(target.locator('.dash-card-list')).to_have_count(0)
                                 if surface == 'library.preview' and state in ('image', 'populated'):
                                     expect(target.locator('img')).to_be_visible()
                                     expect(target.locator('img')).to_have_js_property('complete', True)

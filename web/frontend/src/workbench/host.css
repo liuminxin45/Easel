@@ -6,3 +6,16 @@ body,#root{height:var(--native-height);overflow:hidden}
 .native-boot-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;max-inline-size:100%;overflow:auto}
 .native-host-notice{position:relative;z-index:11000;padding:12px 16px;background:var(--amber-soft);color:var(--text);font-size:14px;line-height:20px}
 .native-host-notice a{margin-left:8px;color:inherit}
+.native-host .ew-status-card{box-sizing:border-box;min-width:0;overflow-wrap:anywhere}
+.native-host .ew-status-card-compact{margin:12px 0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text)}
+.native-host .ew-status-card-compact{display:flex;align-items:flex-start;gap:12px}
+.native-host .ew-status-card-compact .ew-status-card-icon{width:32px;height:32px;margin:0;flex:none}
+.native-host .ew-status-card-compact.is-error{border-color:var(--red);}
+.native-host .ew-status-card-compact.is-warning{border-color:var(--amber);}
+.native-host .ew-status-card-content{min-width:0}
+.native-host .ew-status-card-icon{display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin:0 auto 20px;border-radius:var(--radius);background:var(--accent-soft);color:var(--accent-end)}
+.native-host .ew-status-card.is-error .ew-status-card-icon{background:var(--red-soft);color:var(--red)}
+.native-host .ew-status-card.is-warning .ew-status-card-icon{background:var(--amber-soft);color:var(--amber)}
+.native-host .ew-status-card.is-ready .ew-status-card-icon{background:var(--green-soft);color:var(--green)}
+.native-host .ew-status-card-icon .is-working{display:flex;animation:ew-session-open-turn 1.2s linear infinite}
+@media(prefers-reduced-motion:reduce){.native-host .ew-status-card-icon .is-working{animation:none}}

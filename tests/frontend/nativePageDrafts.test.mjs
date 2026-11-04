@@ -30,7 +30,7 @@ function component(name,api){
   if(specifier==='../lib/api')return {peekApiData:()=>undefined,subscribeApiData:()=>()=>{},...api};
   if(specifier==='../lib/viewState')return viewStateModule(react);
   if(specifier==='../lib/sanitize')return {renderMarkdown:value=>value};
-  if(specifier==='./InteractionNotice')return {InteractionNotice:'InteractionNotice'};
+  if(specifier==='./InteractionNotice')return {InteractionNotice:'InteractionNotice',StatusCard:'StatusCard'};
   if(specifier==='./icons')return new Proxy({},{get:()=>function Icon(){}});
   throw Error('Unexpected import '+specifier);
  }});
@@ -56,7 +56,7 @@ function ideaView(tree){
  const note=nodes(tree,node=>node.type==='textarea')[0];
  const source=nodes(tree,node=>node.type==='input'&&node.props.placeholder==='如：微博热搜 / 灵感')[0];
  const card=cards[0],control=(name)=>nodes(card,node=>node.type==='button'&&node.props.title===name)[0];
- const notice=nodes(tree,node=>node.props?.className==='notice-error')[0];
+ const notice=nodes(tree,node=>node.type==='StatusCard'&&node.props?.tone==='error')[0];
  const form=title?{title:title.props.value,note:note.props.value,source:source.props.value}:null;
  return {notice,form,byStatus:{pending:cards.map(node=>({title:text(nodes(node,child=>child.props?.className==='idea-title')[0])}))},
   openEdit:()=>control('编辑').props.onClick(),

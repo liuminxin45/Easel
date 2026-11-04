@@ -1,4 +1,5 @@
 import DownloadLink from './DownloadLink';
+import {StatusCard} from './InteractionNotice';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { fetchOutputs, fetchOutputContent, mediaUrl, deleteOutput } from '../lib/api';
@@ -255,7 +256,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     );
     if (selected.kind === 'text') {
       if (loading) return <div className="loading"><div className="spinner" />加载中…</div>;
-      return <>{contentError&&<div className="notice-error" role="alert">{contentError} <button className="btn btn-sm" onClick={()=>open(selected,true)}>重试预览</button></div>}<div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
+      return <>{contentError&&<StatusCard className="ew-status-card-compact" tone="error">{contentError} <button className="btn btn-sm" onClick={()=>open(selected,true)}>重试预览</button></StatusCard>}<div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
     }
     return <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>无法预览。<DownloadLink href={url} download={selected.name} style={{ color: 'var(--accent-start)' }}>下载 {selected.name}</DownloadLink></div>;
   };
@@ -330,8 +331,8 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
 
       {selectedProject && renderProjectDetails?.(selectedProject)}
 
-      {treeError && <div className="notice-error" role="alert">内容读取失败：{treeError} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>}
-      {(treeLoading||lazyCurrent?.indexing) && currentNodes.length === 0 && <div className="loading" role="status">正在读取内容库…</div>}
+      {treeError && <StatusCard className="ew-status-card-compact" tone="error">内容读取失败：{treeError} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></StatusCard>}
+      {(treeLoading||lazyCurrent?.indexing) && currentNodes.length === 0 && <StatusCard className="ew-status-card-compact">正在读取内容库…</StatusCard>}
 
       {/* 项目主题标签（进入项目根时展示） */}
       {atProjectRoot && projectMeta?.tags && projectMeta.tags.length > 0 && (

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { fetchTrendManagement, updateTrendSource } from '../lib/api';
 import type { TrendManagedSource } from '../lib/api';
 import SettingsSelect from './SettingsSelect';
-import {useFeedbackChannel} from './InteractionNotice';
+import {StatusCard,useFeedbackChannel} from './InteractionNotice';
 import {refreshViews,type InteractionSource} from '../lib/interaction';
 
 export interface SourceUpdateResult {id:string;revision?:number;source?:TrendManagedSource|null;deleted?:boolean}
@@ -109,7 +109,7 @@ export default function TrendSourcesDialog({ onClose, onChanged, management }: {
   return <dialog ref={dialog} className="trend-manager" aria-labelledby="trend-manager-title" onCancel={event => { event.preventDefault(); onClose(); }}>
     <div className="trend-manager-head"><div><h2 id="trend-manager-title">数据源</h2><p>订阅你关心的内容，或接入自己的采集服务。</p></div><button className="btn btn-sm" onClick={onClose}>关闭</button></div>
     {error && <div ref={errorBox} tabIndex={-1} className="trend-manager-error" role="alert">{error}</div>}
-    {(management?.operationSource?.feedback?.kind==='status'||feedback.feedback?.kind==='status')&&<div className="trend-manager-notice" role="status">{management?.operationSource?.feedback?.message||feedback.feedback?.message}</div>}
+    {(management?.operationSource?.feedback?.kind==='status'||feedback.feedback?.kind==='status')&&<StatusCard className="ew-status-card-compact" tone="warning">{management?.operationSource?.feedback?.message||feedback.feedback?.message}</StatusCard>}
     {notice && <div className="trend-manager-notice" role="status">{notice}</div>}
     {warnings.map((warning,i)=><p className="trend-manager-error" key={i}>{warning}</p>)}
     {loading ? <p role="status">正在加载数据源…</p> : <>

@@ -6,6 +6,7 @@ import type { TrendGroup, TrendSource } from '../lib/api';
 import { IconFire, IconRefresh, IconBookmark, IconCheck, IconChat } from './icons';
 import TrendSourcesDialog from './TrendSourcesDialog';
 import ContentPanel from './ContentPanel';
+import {StatusCard} from './InteractionNotice';
 
 interface TrendsPageProps {
   onUseTopic: (title: string, sourceId?: string, note?: string) => void;   // 一键做成内容 → 跳 chat
@@ -23,7 +24,7 @@ class TrendBoundary extends Component<{ children: ReactNode }, { failed: boolean
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
-    return this.state.failed ? <div className="page-scroll trends-page"><div className="notice-error" role="alert">热点页面暂时无法显示，其他工作台功能仍可使用。<button className="btn btn-sm" onClick={() => this.setState({ failed: false })}>重新加载热点</button></div></div> : this.props.children;
+    return this.state.failed ? <div className="page-scroll trends-page"><StatusCard className="ew-status-card-compact" tone="error">热点页面暂时无法显示，其他工作台功能仍可使用。<button className="btn btn-sm" onClick={() => this.setState({ failed: false })}>重新加载热点</button></StatusCard></div> : this.props.children;
   }
 }
 

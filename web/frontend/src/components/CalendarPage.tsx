@@ -3,6 +3,7 @@ import { fetchSchedule, createSchedule, updateSchedule, deleteSchedule, fetchSch
 import type { ScheduleItem, ScheduleInput, ScheduleContext } from '../lib/api';
 import {useStoredViewState,type ViewStateStore,type DraftStore} from '../lib/viewState';
 import { IconCalendar, IconTrash, IconChevron } from './icons';
+import {StatusCard} from './InteractionNotice';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   idea: { label: '选题', color: 'var(--text-tertiary)' },
@@ -160,8 +161,8 @@ export default function CalendarPage({viewState,draftStore,onContentReady,regist
         </div>
       </div>
 
-      {[error,readErrors.schedule,readErrors.context].filter(Boolean).map((message,index)=><div className="notice-error" role="alert" key={index}>{message} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></div>)}
-      {loading&&<div role="status">正在读取日历…</div>}
+      {[error,readErrors.schedule,readErrors.context].filter(Boolean).map((message,index)=><StatusCard className="ew-status-card-compact" tone="error" key={index}>{message} <button className="btn btn-sm" onClick={()=>load(true)}>重试</button></StatusCard>)}
+      {loading&&<StatusCard className="ew-status-card-compact">正在读取日历…</StatusCard>}
 
       {showSuggest && suggestions.length > 0 && (
         <div className="cal-suggest">

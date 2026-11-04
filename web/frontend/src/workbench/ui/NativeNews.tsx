@@ -5,6 +5,7 @@ import {useResource,useWorkbench} from './hooks';
 import {useEffect,useRef,useState} from 'react';
 import {Notice,PageHead,SourceLink} from './common';
 import NewsCreationDrawer from './NewsCreationDrawer';
+import {StatusCard} from '../../components/InteractionNotice';
 import {creationContextPath,creationRequest,linkedCreationSession,readingParagraphs,type NewsCreationContext,type NewsCreationRequest} from './newsCreation';
 import './news-creation.css';
 export interface NativeNewsProps {
@@ -32,7 +33,7 @@ export default function NativeNews({onUseTopic,id,search,profileId,onStart}:Nati
   {data&&<div className="ew-news-layout"><article className="ew-news-article"><header><h1>{title}</h1><div className="ew-news-byline">{publisher&&<span>{publisher}</span>}{published&&<time dateTime={published}>{published}</time>}<SourceLink value={meta?.url||data.url}/></div></header>
    <div className="ew-news-prose">{readingParagraphs(meta?.reading_summary||string(data.reading_summary)||string(data.body)).map((paragraph,index)=><p key={index}>{paragraph}</p>)}</div>
   </article><aside className="ew-news-actions" aria-label="新闻创作操作"><p className="ew-news-muted">围绕这条新闻，先交流想法，或选择写法开始制作。</p>
-   <Notice sources={[context]}/>{error&&<p role="alert" className="ew-news-error">{error}</p>}
+   <Notice sources={[context]}/>{error&&<StatusCard tone="error" className="ew-status-card-compact">{error}</StatusCard>}
    <button className="btn" type="button" disabled={busy||!context.data} onClick={()=>void discuss()}>{busy?'正在打开…':pending?'查看会话':linked?'继续讨论':'讨论怎么写'}</button>
    <button className="btn btn-primary" type="button" disabled={busy||!context.data} onClick={()=>setDrawer('creation')}>制作内容</button>
    <button className="btn btn-ghost" type="button" onClick={()=>setDrawer('records')}>采集记录</button>

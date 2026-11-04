@@ -107,6 +107,7 @@ def main():
     args=parser.parse_args();backend=args.backend.resolve();native=args.native.resolve();out=args.out.resolve();out.mkdir(parents=True,exist_ok=True)
     binding=frozen(backend,'workbench-release.json');native_binding=frozen(native,'native-manifest.json')
     helper,application,native_app=infrastructure(backend,native)
+    shutil.copy2(__file__,out/'harness.py')
     from playwright.sync_api import sync_playwright,expect
     report={'passed':False,'backend':binding,'native':native_binding,'checks':[],'screenshots':{},'requests':{},'page_errors':[],'manual_post_submit_drawer_closures':[],'exploratory_manual_close_allowed':args.allow_manual_close,'real_model_calls':0,'platform_writes':0,'production_data_access':False,'physical_device_tested':False,'harness_sha256':sha(__file__),'fixture_sha256':sha(ROOT/'tests/workbench_native_browser.py')}
     catalog=read(backend/'skills/shared/workbench/规范/创作方案/目录.json');entries={item['id']:item for item in catalog['components']}
@@ -145,12 +146,12 @@ def main():
                 page.get_by_role('button',name='制作内容',exact=True).click();drawer=page.get_by_role('dialog',name='制作内容',exact=True);expect(drawer).to_be_visible();drawer.get_by_role('button',name=format,exact=True).click();return drawer
             def post_bodies():return [r['body'] for r in requests if r['path']=='/api/chat/submit' and r['method']=='POST']
             def no_turn_settings(stage):
+                links=page.get_by_role('link',name='这条新闻',exact=True)
+                expect(links.first).to_be_visible()
+                assert all(article in link.get_attribute('href') for link in links.all()),stage
                 expect(page.get_by_role('button',name='本轮创作设置',exact=True)).to_have_count(0)
                 expect(page.get_by_role('dialog',name='本轮创作设置',exact=True)).to_have_count(0)
                 expect(page.locator('.drawer-overlay')).to_have_count(0)
-                links=page.get_by_role('link',name='这条新闻',exact=True)
-                assert links.count()>0,stage
-                assert all(article in link.get_attribute('href') for link in links.all()),stage
             def close_finished_drawer(stage):
                 drawer=page.get_by_role('dialog',name='制作内容',exact=True)
                 if not args.allow_manual_close:
@@ -230,7 +231,7 @@ def main():
                 assert session_id(page)==sid and page.get_by_role('button',name='制作内容',exact=True).count()==0
                 raw='TEMP_NATIVE_POSTER 用这条新闻制作贴图，保留准确来源。 '+case
                 composer.fill('/content-production '+raw)
-                item=page.get_by_role('menuitem',name='/content-production',exact=True);expect(item).to_be_visible();item.click()
+                item=page.get_by_role('menuitem',name='/制作贴图 / 文章',exact=True);expect(item).to_be_visible();item.click()
                 expect(page.locator('[data-chat-command]')).to_have_attribute('data-chat-command','content-production:native')
                 expect(composer).to_have_value(raw)
                 assert page.get_by_role('dialog').count()==0 and len(f['adapter'].requests)==1 and len(post_bodies())==1

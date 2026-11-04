@@ -52,7 +52,8 @@ def test_restart_running_is_unknown_and_does_not_schedule_replay(commands,monkey
     assert len(jobs)==1
 
 
-def test_api_runtime_keeps_baseline_and_dispatches_no_native_skill(commands,monkeypatch):
+@pytest.mark.parametrize('initial_runtime',['api','codex'])
+def test_api_runtime_keeps_baseline_and_dispatches_no_native_skill(commands,monkeypatch,initial_runtime):
     import asyncio
     from types import SimpleNamespace
     import easel.web_services.profiles as profiles
@@ -62,7 +63,11 @@ def test_api_runtime_keeps_baseline_and_dispatches_no_native_skill(commands,monk
     def forbidden(*a,**kw):
         called.append(True)
         raise AssertionError('API runtime cannot dispatch local profile skills')
-    fake=SimpleNamespace(settings=SimpleNamespace(current=lambda:{'runtime':'api'}),create_internal_session=forbidden,submit=forbidden)
+    created=[]
+    def create(*args):
+        created.append(args)
+        return {'session':{'runtime':'api'}}
+    fake=SimpleNamespace(settings=SimpleNamespace(current=lambda:{'runtime':initial_runtime}),create_internal_session=create,submit=forbidden)
     async def scenario():
         api=NativeApi(commands);api._operation='api-baseline'
         result=api._build_profile({'name':'API baseline','form':{}},chat=fake,loop=asyncio.get_running_loop())
@@ -70,4 +75,5 @@ def test_api_runtime_keeps_baseline_and_dispatches_no_native_skill(commands,monk
         assert api._profile_build_status(result['name'])['state']=='failed'
         assert commands.creator.detail('profile',result['name'])['identity']
         assert called==[]
+        assert len(created)==(0 if initial_runtime=='api' else 1)
     asyncio.run(scenario())

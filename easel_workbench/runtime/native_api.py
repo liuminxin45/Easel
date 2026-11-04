@@ -494,7 +494,9 @@ class NativeApi:
             if settings['runtime'] == 'api':
                 raise RuntimeError('API 模式不执行本机画像增强技能，基线画像已可使用')
             sid = 'profile-' + operation
-            await _offload(chat.create_internal_session, {'id':operation,'session_id':sid,'profile_id':pid})
+            created = await _offload(chat.create_internal_session, {'id':operation,'session_id':sid,'profile_id':pid})
+            if created['session']['runtime'] == 'api':
+                raise RuntimeError('会话准确配置为 API 模式，不执行本机增强技能；基线画像仍可使用')
             turn = await chat.submit({'sessionId':sid,'turnId':operation,'message':'完善画像：'+profile['name'],
                 'attachments':[],'context':{'profile_id':pid}}, snapshot=None, actual_prompt=message, interactive=False)
             async for _ in chat.events(turn['id']): pass

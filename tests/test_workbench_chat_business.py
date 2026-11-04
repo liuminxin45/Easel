@@ -38,6 +38,21 @@ def value(action='poster',tid='turn-one'):
                                       'action_id':'native','profile_id':'oil-pig'}}
 
 
+def test_history_projects_only_available_generated_images(business,monkeypatch,tmp_path):
+    path=tmp_path/'candidate.png';path.write_bytes(b'candidate')
+    source='C:/Users/person/.codex/generated_images/thread/image.png'
+    monkeypatch.setattr(business.chat,'history',lambda *args,**kwargs:{'session':{'messages':[{'role':'assistant','turnId':'turn-image','content':f'[候选]({source})'}]},'linked_works':[]})
+    with business.store.connect() as c:
+        c.execute('CREATE TABLE easel_generated_image_sources(turn_id TEXT,source TEXT,artifact_id TEXT,sha256 TEXT)')
+        c.execute('INSERT INTO artifacts VALUES(?,?,?,?,?)',('image-id','turn-image','candidate.png',str(path),'image/png'))
+        c.execute('INSERT INTO easel_generated_image_sources VALUES(?,?,?,?)',('turn-image',source,'image-id','hash'))
+    message=business.history('test-chat')['session']['messages'][0]
+    assert message['content']=='[候选](/api/files/image-id)' and len(message['output_files'])==1
+    path.unlink()
+    message=business.history('test-chat')['session']['messages'][0]
+    assert message['content']=='候选（图片暂不可用）' and message['output_files']==[]
+
+
 def confirmed(b,action='poster',tid='turn-one'):
     from easel_workbench.features.skills.retirement import SkillFeatureRetired
     raise SkillFeatureRetired('legacy-test-plan-fixture')

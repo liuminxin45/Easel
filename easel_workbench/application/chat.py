@@ -61,7 +61,10 @@ class ChatBusiness:
                 from easel_workbench.features.conversations.generated_images import display
                 mappings={}
                 if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_generated_image_sources'").fetchone():
-                    mappings={r[0]:r[1] for r in c.execute('SELECT source,artifact_id FROM easel_generated_image_sources WHERE turn_id=?',(message['turnId'],))}
+                    rows=c.execute('SELECT s.source,s.artifact_id,a.path FROM easel_generated_image_sources s LEFT JOIN artifacts a ON a.id=s.artifact_id AND a.task_id=s.turn_id WHERE s.turn_id=?',(message['turnId'],)).fetchall()
+                    mappings={r[0]:r[1] for r in rows if r[2] and Path(r[2]).is_file()}
+                    unavailable={r[1] for r in rows if r[0] not in mappings}
+                    message['output_files']=[file for file in message['output_files'] if file['id'] not in unavailable]
                 message['content']=display(message.get('content',''),mappings)
                 if c.execute("SELECT 1 FROM sqlite_master WHERE name='toolbox_product_origins'").fetchone():
                     for file in message['output_files']:

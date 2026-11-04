@@ -46,6 +46,7 @@ class GeneratedImagesTest(unittest.TestCase):
             self.assertIn('/api/files/'+rows[0][1],projected)
             self.assertIn('不属于本回合（图片暂不可用）',projected)
             self.assertIn('[网页](https://example.com)',projected)
+            self.assertEqual(display('[网页](https://example.com/generated_images/a.png)',{}),'[网页](https://example.com/generated_images/a.png)')
             self.assertIn(str(one),turn['output'])
             one.write_bytes(b'\x89PNG\r\n\x1a\nreplaced')
             self.assertEqual(receive(root,store,turn,home=home),0)

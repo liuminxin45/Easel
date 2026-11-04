@@ -108,7 +108,9 @@ def display(content, mappings):
     """Project local image links without changing stored assistant text."""
     def replace(match):
         target = match.group(3)
-        if 'generated_images' not in target.replace('\\','/'): return match.group(0)
+        normalized = target.replace('\\','/')
+        if '/generated_images/' not in normalized or not (normalized.startswith('/') or re.match(r'^[A-Za-z]:/',normalized)):
+            return match.group(0)
         artifact = mappings.get(target)
         return '['+match.group(1)+'](/api/files/'+artifact+')' if artifact else match.group(1)+'（图片暂不可用）'
     return LINK.sub(replace, content)

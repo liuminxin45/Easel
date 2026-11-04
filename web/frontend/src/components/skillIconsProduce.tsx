@@ -1,15 +1,9 @@
 import type { ComponentType } from 'react';
+import {workbenchSkillIcons} from './skillIconsWorkbench';
 
 type Icon = ComponentType<{ size?: number }>;
 // Each symbol is drawn on the same 24-unit grid as the application's other icons.
 const paths: Record<string, string> = {
-  'content-production': 'M4 4h16v16H4zM6 16l4-4 3 3 2-2 3 3M7 7h5M7 9h3',
-  'content-writing': 'M5 3h14v18H5zM8 7h8M8 10h8M8 13h8M8 16h5',
-  'image-production': 'M4 4h16v16H4zM6 16l4-4 3 3 2-2 3 3M15 7v4m-2-2h4',
-  'delivery-review': 'M5 3h14v18H5zM8 8h8M8 12l2 2 5-5M8 17h8',
-  'publication-analysis': 'M4 20V4m0 16h16M7 17v-5h3v5m2 0V7h3v10m2 0v-8h3v8',
-  'reference-analysis': 'M5 3h14v18H5zM8 7h8M8 10h8M8 13h5M15 15l4 4m-1-4a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
-  'topic-research': 'M11 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 13 5 5M8 10h6m-3-3v6',
   'ai-image-gen': 'M4 19V5h16v14H4Zm2-3 4-4 3 3 2-2 3 3M15 7v4m-2-2h4',
   'ai-music': 'M9 17V6l9-2v11M9 17a3 2 0 1 1-3-2 3 2 0 0 1 3 2Zm9-2a3 2 0 1 1-3-2 3 2 0 0 1 3 2ZM5 4v3m-1.5-1.5h3',
   'ai-video-gen': 'M3 6h13v12H3zM16 10l5-3v10l-5-3M9 8v6m-3-3h6',
@@ -66,8 +60,8 @@ const paths: Record<string, string> = {
   'xhs-note-creator': 'M5 3h14v18H5zM8 7h8M8 10h8M8 14h5m2 3h4m-2-2v4',
 };
 
-export const produceSkillIcons: Record<string, Icon> = Object.fromEntries(
+export const produceSkillIcons: Record<string, Icon> = {...Object.fromEntries(
   Object.entries(paths).map(([name, d]) => [name, ({ size = 18 }: { size?: number }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
   )]),
-);
+),...workbenchSkillIcons};

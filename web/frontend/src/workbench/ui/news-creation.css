@@ -39,3 +39,5 @@
 
 .ew-news-message-source { display: flex; justify-content: flex-end; margin: 4px 0 12px; }
 .ew-news-message-source a { text-decoration: underline; text-underline-offset: 3px; padding-block: 6px; }
+.ew-news-message-source.ew-creation-summary {display:block;text-align:right;color:var(--text-secondary);font-size:13px;line-height:1.65;overflow-wrap:anywhere;}
+.ew-creation-summary span {display:inline-block;margin-left:10px;}

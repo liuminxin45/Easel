@@ -102,7 +102,11 @@
     "web/frontend/src/components/icons.tsx": "fe66d13472e4d80df45c036e660fc6000176ce7b",
     "web/frontend/src/lib/skillDisplayNames.ts": "4f46a6093dec311b8e7e2fee0f4989a7b66508e4"
   },
-  "note": "PR195 includes PR194; PR198 depends on PR197. Shared commits imported once. Full baseline unchanged; private host ports remain concentrated and preserve native defaults.",
+  "reviewed_private_blobs": {
+    "web/frontend/src/components/skillIconsProduce.tsx": "8579348f16e2063087907e09ea7f01cf55558099",
+    "web/frontend/src/lib/skillDisplayNames.ts": "fcb2941d9ea5436dfe51fc3baa5891cfaa285bd2"
+  },
+  "note": "PR195 includes PR194; PR198 depends on PR197. Shared commits imported once. Full baseline unchanged; private host ports remain concentrated and preserve native defaults. Two exact reviewed private blobs record the separately approved Chinese labels and mascot while retaining the official blob hashes.",
   "adaptations": {
     "197": [
       "Preserve source_id, internal reading navigation and anchors."

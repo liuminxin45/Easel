@@ -196,18 +196,20 @@ class NewsCreation:
             raise ValueError('创作参考不是支持的图片')
         return path
 
-    def _read(self, directory, fingerprint):
+    def _read(self, directory, fingerprint, *, summary_only=False):
         path = _safe(self.root, directory.relative_to(self.root) / 'manifest.json')
         document = json.loads(path.read_text(encoding='utf-8'))
         if document['request_sha256'] != fingerprint:
             raise CreatorConflict('本回合已有不同创作输入，未覆盖原材料')
         for file in document['material_manifest']['files']:
+            if summary_only and file.get('role') not in ('source', 'style'):
+                continue
             target = _safe(self.root, file['path'])
             if target.parent != directory or not target.is_file() or _sha(target.read_bytes()) != file['sha256']:
                 raise CreatorConflict('本回合材料副本已变化，未重新解释或重发')
         return {key: document[key] for key in ('input_text', 'material_manifest', 'creation')}
 
-    def review(self, turn):
+    def review(self, turn, *, summary_only=False):
         """Read only the admitted turn's package; current catalog/defaults are irrelevant."""
         if not isinstance(turn, dict) or not isinstance(turn.get('context'), dict):
             raise ValueError('本回合没有创作材料记录')
@@ -220,12 +222,34 @@ class NewsCreation:
         directory = _safe(self.root, Path('outputs/_sessions/inputs') / request['turn_id'])
         if not directory.is_dir():
             raise ValueError('本回合创作材料记录不存在，未生成新材料')
-        result = self._read(directory, _sha(_json(request).encode()))
+        result = self._read(directory, _sha(_json(request).encode()), summary_only=summary_only)
         # A read projection contains descriptive metadata, never raw source or input text.
         manifest = copy.deepcopy(result['material_manifest'])
         manifest['files'] = [{key: file[key] for key in ('name', 'sha256', 'size', 'mime', 'role', 'label', 'slot') if key in file}
                              for file in manifest['files']]
-        return {'creation': result['creation'], 'material_manifest': manifest}
+        summary = self.display_summary(result, context.get('skill_id'))
+        if summary_only:
+            return {'display_summary': summary}
+        return {'creation': result['creation'], 'material_manifest': manifest, 'display_summary': summary}
+
+    def display_summary(self, prepared, skill_id=None):
+        """Small, path-free description of the already frozen materials."""
+        creation = prepared.get('creation') or {}
+        if creation.get('intent') != 'produce':
+            return None
+        files = prepared['material_manifest']['files']
+        source = next((item for item in files if item.get('role') == 'source'), None)
+        title = ''
+        if source:
+            raw = _safe(self.root, source['path']).read_bytes()
+            if _sha(raw) != source['sha256']:
+                raise CreatorConflict('本轮原文副本已变化，无法核对摘要')
+            title = str(json.loads(raw).get('title') or '')[:300]
+        styles = {item['slot']: str(item.get('label') or '')[:200] for item in files
+                  if item.get('role') == 'style' and item.get('slot') in SLOTS}
+        return {'title': title, 'format': creation.get('format'),
+                'skill_id': skill_id if skill_id == 'content-production' else None,
+                'styles': styles}
 
     def api_source_text(self, prepared):
         """API chat has no local-file tools; inline only verified frozen source bytes."""

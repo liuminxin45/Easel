@@ -533,6 +533,19 @@ test('news links belong to their messages and native skill selection adds no pri
  const pendingMessage=f.render().chat.session.messages.find(m=>m.role==='user');assert.equal(pendingMessage.article_id,'news-one');
 });
 
+test('an accepted news production shows only its frozen title, skill and style labels beside the original message',()=>{
+ const f=fixture(),ui=f.render();
+ const original='请制作微信公众号贴图。\n\n原始补充要求';
+ const message={role:'user',id:'turn-user',content:original,article_id:'news-one',creation_summary:{title:'准确新闻',format:'poster',skill_id:'content-production',styles:{writing:'清楚写法',visual:'场景',character:'简笔小猪侠',layout:'逐页分工'}}};
+ const extra=ui.chat.renderMessageExtra(message),content=extra.type(extra.props),all=nodes(content);
+ assert.equal(message.content,original);
+ assert.ok(JSON.stringify(content).includes('制作贴图 / 文章'));
+ assert.ok(JSON.stringify(content).includes('简笔小猪侠'));
+ const link=all.find(node=>typeof node.type==='function'&&node.type.name==='NewsMessageLink');
+ assert.equal(link.props.title,'准确新闻');assert.equal(link.props.articleId,'news-one');
+ assert.ok(!JSON.stringify(content).includes('version'));
+});
+
 test('a restored news creation preserves its explicit skill, edited raw note and later draft identity',async()=>{
  const creation={intent:'produce',format:'poster',style:{character:'simple-pig'},catalog_revision:'catalog',profile_revision:4,source_revision:'source',note:'原始备注'};
  let accept;const f=fixture({draft:{text:'原来失败的制作请求',files:[],article_id:'news-one',creation},submitOverride:async(_path,body)=>new Promise(resolve=>{accept=()=>resolve({id:body.turnId,session_id:body.sessionId})})});

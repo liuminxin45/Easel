@@ -261,7 +261,7 @@ def test_missing_optional_image_skips_only_that_asset_but_changed_bytes_reject(n
 def test_review_reads_exact_turn_package_without_latest_source_defaults_or_paths(news):
     value = creation(news)
     result = news.prepare(value, 'p', 'news-one', 'review-turn')
-    turn = {'id': 'review-turn', 'profile_id': 'p', 'context': {'creation': value, 'article_id': 'news-one'}}
+    turn = {'id': 'review-turn', 'profile_id': 'p', 'context': {'creation': value, 'article_id': 'news-one', 'skill_id': 'content-production'}}
     # Prove review has no dependency on live catalog, profile or source.
     (news.root / CATALOG).unlink()
     with news.box.store.connect() as c:
@@ -269,10 +269,17 @@ def test_review_reads_exact_turn_package_without_latest_source_defaults_or_paths
         c.execute('DELETE FROM creator_profiles')
     review = news.review(turn)
     assert review['creation'] == result['creation']
+    assert review['display_summary']['title'] == '真实标题'
+    assert set(review['display_summary']['styles']) == {'writing', 'visual', 'character', 'layout'}
+    assert review['display_summary']['skill_id'] == 'content-production'
+    assert all(name for name in review['display_summary']['styles'].values())
     assert len(review['material_manifest']['files']) == 6
     assert 'input_text' not in review
     assert all('path' not in entry for entry in review['material_manifest']['files'])
     assert str(news.root) not in json.dumps(review)
+    summary_only = news.review(turn, summary_only=True)
+    assert summary_only == {'display_summary': review['display_summary']}
+    assert 'path' not in json.dumps(summary_only)
     with pytest.raises(CreatorConflict): news.review(turn | {'profile_id': 'other'})
     with pytest.raises(CreatorConflict): news.review(turn | {'context': {'creation': value | {'note': 'different'}, 'article_id': 'news-one'}})
     file = news.root / result['material_manifest']['files'][0]['path']

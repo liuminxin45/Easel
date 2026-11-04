@@ -290,6 +290,13 @@ def main():
                 review=page.request.get(f['origin']+'/api/chat/turns/'+poster['turnId']+'/creation');assert review.ok and all('path' not in i for i in review.json()['material_manifest']['files'])
                 mark(case,'same-session poster explicitly invokes native content-production once with exact reference copies and isolated style override',reference_sha256=sorted(expect_hashes))
                 close_finished_drawer('poster')
+                user_message=next(m for m in history['session']['messages'] if m.get('id')==poster['turnId']+'-user')
+                summary=user_message['creation_summary'];assert summary['skill_id']=='content-production' and summary['format']=='poster'
+                assert summary['styles']['character']==entries['wuxia-pig']['name'] and summary['title']
+                anchor=page.locator('[data-native-anchor="chat:'+poster['turnId']+'-user"] .ew-creation-summary')
+                expect(anchor).to_contain_text(summary['title']);expect(anchor).to_contain_text(entries['wuxia-pig']['name']);expect(anchor).to_contain_text('制作贴图 / 文章')
+                assert anchor.get_by_role('button').count()==0
+                mark(case,'accepted turn displays frozen news skill and selected style beside the original message')
                 # The next format shares this same news conversation but has its own draft.
                 drawer=creation_drawer('文章');expect(drawer.get_by_role('button',name='设置配图风格',exact=True)).to_be_visible()
                 assert drawer.get_by_role('button',name='角色呈现',exact=True).count()==0

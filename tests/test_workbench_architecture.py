@@ -60,6 +60,13 @@ UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/TrendsPage.tsx',
 # Reviewed daily-result metadata and bounded item parsing; ordinary official
 # responses retain their original shape and 30-item default, with no host import.
 UPSTREAM_PATCH_ALLOWLIST.add('web/frontend/src/lib/trendValidation.ts')
+# Explicitly reviewed Chinese skill labels and the user's approved private mascot
+# assets, documented in PRIVATE-SKILL-AVATAR-20261104.md and upstream-overlays.json.
+UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/assets/workbench/README.md',
+    'web/frontend/src/assets/workbench/oil-pig-avatar.jpg',
+    'web/frontend/src/components/skillIconsProduce.tsx',
+    'web/frontend/src/components/skillIconsWorkbench.tsx',
+    'web/frontend/src/lib/skillDisplayNames.ts'})
 # Shared, I/O-free board presentation; private data ports stay in workbench/.
 UPSTREAM_PATCH_ALLOWLIST.update({'web/frontend/src/components/IdeasPage.tsx',
     # Original shell/flow shared by both hosts; no private service dependency.
@@ -113,12 +120,14 @@ WORKBENCH_BUILTIN_IDS={'content-production','topic-research','content-writing','
 def allowed_upstream_patch(relative):
     ledger=ROOT/'docs/workbench/upstream-overlays.json'
     if ledger.is_file():
-        expected=json.loads(ledger.read_text(encoding='utf-8')).get('exact_official_blobs',{}).get(relative)
+        overlays=json.loads(ledger.read_text(encoding='utf-8'))
+        expected=overlays.get('exact_official_blobs',{}).get(relative)
         if expected:
             target=ROOT/relative
             if not target.is_file() or target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):return False
             raw=target.read_bytes().replace(b'\r\n',b'\n')
-            return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==expected
+            actual=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+            return actual in {expected,overlays.get('reviewed_private_blobs',{}).get(relative)}
     if relative in UPSTREAM_PATCH_ALLOWLIST or relative.startswith('web/frontend/src/workbench/'):
         return True
     if relative=='skills/workbench-import.json' or relative.startswith('skills/shared/workbench/'):
@@ -137,6 +146,10 @@ def test_official_overlay_exception_requires_exact_registered_blob(tmp_path,monk
     assert allowed_upstream_patch(relative)
     target.write_bytes(b'private mutation\n')
     assert not allowed_upstream_patch(relative)
+    raw=b'reviewed private\n';private_blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+    ledger.write_text(json.dumps({'exact_official_blobs':{relative:blob},'reviewed_private_blobs':{relative:private_blob}}),encoding='utf-8')
+    target.write_bytes(raw);assert allowed_upstream_patch(relative)
+    target.write_bytes(b'other private\n');assert not allowed_upstream_patch(relative)
     assert not allowed_upstream_patch('easel/commands/unregistered.py')
 
 

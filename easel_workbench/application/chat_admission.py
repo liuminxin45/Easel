@@ -210,7 +210,10 @@ class ChatAdmission:
             if window and row['id'] not in window['ids']:continue
             if row['id'] in existing:continue
             value=row['request'];failed=row['status']=='failed';stopped=row['status']=='stopped'
-            messages.extend([{'id':row['id']+'-user','role':'user','content':value.get('message',''),'timestamp':row['created_at'],'attachments':value.get('attachments',[])},
+            context=value.get('context') or {}; creation=context.get('creation') or {}
+            messages.extend([{'id':row['id']+'-user','role':'user','content':value.get('message',''),'timestamp':row['created_at'],'attachments':value.get('attachments',[]),
+                              **({'article_id':context['article_id']} if context.get('article_id') else {}),
+                              **({'creation_pending':True} if creation.get('intent')=='produce' and context.get('skill_id')=='content-production' else {})},
                              {'id':row['id'],'turnId':row['id'],'role':'assistant','content':row.get('error','') if failed else '',
                               'timestamp':row['updated_at'],'status':'failed' if failed else 'stopped' if stopped else 'running',
                               'activity':'已停止准备，未调用模型' if stopped else 'AI已接收，正在处理','admission_failed':failed}])

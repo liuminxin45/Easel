@@ -251,7 +251,12 @@ class ChatBusiness:
                 from easel_workbench.runtime.native_skills import service
                 message=service(self.box,self.chat).prepare_chat_message(message,session['profile_id'])
             if attachments:message+='\n\n## 本轮附件\n'+packed(attachments)
-            return {'snapshot':None,'actual_prompt':message,'work':None,'frozen_instructions':self._workspace(session)}
+            summary = None
+            if source_materials and context.get('creation'):
+                from easel_workbench.features.news_creation import NewsCreation
+                summary = NewsCreation(self.box).display_summary(source_materials, context.get('skill_id'))
+            return {'snapshot':None,'actual_prompt':message,'work':None,'frozen_instructions':self._workspace(session),
+                    **({'display_summary':summary} if summary is not None else {})}
         from easel_workbench.features.skills.retirement import SkillFeatureRetired
         raise SkillFeatureRetired('legacy-skill-orchestration')
 

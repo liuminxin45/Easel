@@ -77,6 +77,8 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
         if creation_review and get:
             from easel_workbench.features.news_creation import NewsCreation
             turn=await run_sync(service.get_turn,creation_review[1],private=True)
+            if request.query_params.get('view') == 'summary':
+                return response(await run_sync(lambda:NewsCreation(business.box).review(turn,summary_only=True)))
             return response(await run_sync(NewsCreation(business.box).review,turn))
         match=re.fullmatch(r'/api/chat/products/([A-Za-z0-9_-]+)(?:/files/([a-f0-9]{64}))?',path)
         if match and get:

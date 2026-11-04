@@ -351,6 +351,10 @@ class ChatService:
                              'attachments': copy.deepcopy(turn.get('attachments', []))})
             if turn.get('context',{}).get('article_id'):
                 messages[-1]['article_id']=turn['context']['article_id']
+            if turn.get('display_summary'):
+                messages[-1]['creation_summary']=copy.deepcopy(turn['display_summary'])
+            elif (turn.get('context',{}).get('creation') or {}).get('intent')=='produce':
+                messages[-1]['creation_review']=True
             messages.append({'id': turn['id'], 'role': 'assistant', 'content': turn.get('output', ''),
                              'timestamp': turn['updated_at'], 'status': self.get_turn(turn['id'])['status'],
                              'runtime': turn['runtime'], 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
@@ -389,7 +393,7 @@ class ChatService:
             return self.get_turn(previous['id'])
         return None
 
-    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None, interactive=True):
+    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None, interactive=True, display_summary=None):
         if self._closing:
             raise ChatConflict('服务正在关闭，请保留草稿')
         if not isinstance(value, dict):
@@ -469,6 +473,7 @@ class ChatService:
                     'output': '', 'thinking': '', 'activity': '', 'attachments': copy.deepcopy(value.get('attachments') or []),
                     'native_id': '', 'work': copy.deepcopy(work), 'hook_status': 'not_started'}
             if context.get('creation'):turn['profile_id']=session['profile_id']
+            if display_summary is not None:turn['display_summary']=copy.deepcopy(display_summary)
             if self.on_accept:
                 accepted = self.on_accept(c, turn)
                 if inspect.isawaitable(accepted):
@@ -484,9 +489,9 @@ class ChatService:
             register_owned()
         return turn,environment
 
-    async def submit(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True):
+    async def submit(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True,display_summary=None):
         task=asyncio.create_task(self._submit_owned(value,snapshot=snapshot,actual_prompt=actual_prompt,
-            work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive))
+            work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive,display_summary=display_summary))
         self._admissions.add(task)
         def finished(done):
             self._admissions.discard(done)
@@ -494,10 +499,10 @@ class ChatService:
         task.add_done_callback(finished)
         return await asyncio.shield(task)
 
-    async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True):
+    async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True,display_summary=None):
         from easel.web_services.concurrency import run_sync
         turn,environment=await run_sync(self._admit,value,snapshot=snapshot,actual_prompt=actual_prompt,
-                                       work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive)
+                                       work=work,frozen_instructions=frozen_instructions,admission_id=admission_id,interactive=interactive,display_summary=display_summary)
         if environment is None:return turn
         turn_id,session_id=turn['id'],turn['session_id']
         runner = None

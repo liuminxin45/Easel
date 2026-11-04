@@ -181,6 +181,8 @@ async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: st
             raise HarnessError("底座已切换，请使用新对话重试")
         record = harness_store.binding(SESSIONS_DIR, sk)
         native_id = record.get("native_id", "")
+        if run_request is not None and run_request.native_id != native_id:
+            raise HarnessError("原生会话绑定已变化，请核对原回合；没有启动新的模型回合")
         harness_store.bind(SESSIONS_DIR, sk, runtime, native_id)
         _STOPPED_CHAT.discard(sk)
         proc._task = task

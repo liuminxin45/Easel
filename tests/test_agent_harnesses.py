@@ -1003,3 +1003,20 @@ def test_web_and_host_share_the_same_native_supervisor_function(tmp_path):
     assert context._run_harness_chat.__code__ is chat._run_harness_chat.__code__
     assert web._HarnessProc is chat._HarnessProc
     assert isinstance(web._CrossProcLock('same-source'),chat.SessionFileLock)
+
+
+def test_host_supervisor_rejects_a_changed_native_binding_before_dispatch(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    from easel.web_services import chat
+    async def ask(*args):return {}
+    store.bind(tmp_path/'outputs/_sessions','frozen-session','codex','new-native')
+    context=chat.create_chat_context(tmp_path,backend=lambda sid:'codex',environment={},
+        snapshot=lambda *args:None,ask=ask,scrub=str)
+    monkeypatch.setattr(chat.harnesses,'adapter',lambda runtime:pytest.fail('Must not start another native thread'))
+    request=RunRequest('frozen input',tmp_path,{},native_id='old-native',session_key='frozen-session')
+    async def scenario():
+        with pytest.raises(HarnessError,match='绑定已变化'):
+            await context._run_harness_chat(SimpleNamespace(turnId='exact-turn'),'frozen-session',
+                'frozen input','codex',{'models':{'codex':''},'sandbox':'workspace-write'},
+                lambda *args:None,run_request=request,propagate_errors=True)
+    asyncio.run(scenario())

@@ -163,10 +163,12 @@ def main():
 
                     def send_poster(text):
                         composer = page.get_by_role('textbox', name='对话输入', exact=True)
-                        composer.fill('/生成贴图 ' + text)
-                        expect(page.get_by_role('menuitem', name='/生成贴图', exact=False)).to_be_visible()
-                        composer.press('Enter')
-                        expect(page.get_by_text('生成贴图 · v', exact=False)).to_be_visible()
+                        composer.fill('/oil-pig-poster ' + text)
+                        skill=page.get_by_role('menuitem',name='/油猪·做贴图',exact=True)
+                        expect(skill).to_be_visible()
+                        skill.click()
+                        expect(page.locator('[data-chat-command]')).to_have_attribute('data-chat-command','oil-pig-poster:native')
+                        expect(composer).to_have_value(text)
                         expect(page.get_by_role('button', name='发送', exact=True)).to_be_enabled()
                         composer.press('Enter')
 

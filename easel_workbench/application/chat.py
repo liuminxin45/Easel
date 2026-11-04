@@ -58,6 +58,11 @@ class ChatBusiness:
                     message['business_receipt']=copy.deepcopy(turn.get('business_receipt'))
                     if turn.get('work'):message['library_path']='workbench-'+turn['work']['work_id']+'/'+turn['work']['version_id']
                 message['output_files']=[{'id':r['id'],'name':r['name'],'mime':r['mime'],'url':'/api/files/'+r['id']} for r in c.execute('SELECT id,name,mime FROM artifacts WHERE task_id=? ORDER BY rowid',(message['turnId'],))]
+                from easel_workbench.features.conversations.generated_images import display
+                mappings={}
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_generated_image_sources'").fetchone():
+                    mappings={r[0]:r[1] for r in c.execute('SELECT source,artifact_id FROM easel_generated_image_sources WHERE turn_id=?',(message['turnId'],))}
+                message['content']=display(message.get('content',''),mappings)
                 if c.execute("SELECT 1 FROM sqlite_master WHERE name='toolbox_product_origins'").fetchone():
                     for file in message['output_files']:
                         origin=c.execute('SELECT source_path FROM toolbox_product_origins WHERE artifact_id=?',(file['id'],)).fetchone()
@@ -322,6 +327,8 @@ class ChatBusiness:
         return {'model_call_id':call_id}
 
     def finished(self,turn):
+        from easel_workbench.features.conversations.generated_images import receive
+        receive(self.root,self.store,turn)
         if not turn.get('snapshot'):
             # Ordinary native runs can write files without creating private work
             # rows. Wake the existing metadata index, including partial outputs.

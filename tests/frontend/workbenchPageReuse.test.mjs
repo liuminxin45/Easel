@@ -56,12 +56,12 @@ test('workbench common routes render the complete native page components',()=>{
  assert.equal(pages.NativeLibrary({}).type,native.OutputsPage);
 });
 
-test('native gallery retains original delete actions and registered version extensions',()=>{
+test('native gallery retains registered project version actions and forbids destructive history deletion',()=>{
  const calls=[];
  const pages=load('nativePages.tsx',{vm:{navigate:path=>calls.push(path)}});
  const gallery=pages.NativeLibrary({jumpPath:'__workbench__/file'});
  assert.equal(gallery.props.jumpPath,'__workbench__/file');
- assert.equal(gallery.props.canDelete,undefined,'the native default owns visible delete controls');
+ assert.equal(gallery.props.canDelete({path:'original.png'}),false);
  const project={meta:{work_id:'work-a',version_id:'version-3'}};
  const extension=gallery.props.renderProjectDetails(project);
  const rendered=extension.type(extension.props);
@@ -107,16 +107,15 @@ test('compact dashboard delegates flat scrolling to the native page and restores
  assert.equal(pages.NativeDashboard({profileId:'exact-id',onUseTopic:()=>{}}).props.listMaxHeight,360);
 });
 
-test('native profile editor restores explicit account import and protects only the builtin profile',()=>{
+test('native profile editor keeps stable identity and makes account imports and deletion unavailable',()=>{
  const bootstrap={profiles:[{id:'creator-a',name:'Display A'}]};
  const pages=load('nativeProfiles.tsx',{data:{'/api/creator/bootstrap?view=summary':bootstrap}});
  const tree=pages.NativeProfiles({search:new URLSearchParams('item=creator-a')});
  const page=tree.props.children.find(node=>node?.type===native.ProfilePage);
  assert.equal(page.props.persona,'creator-a');
  assert.equal(page.props.personaLabel('creator-a'),'Display A');
- assert.equal(page.props.allowAccountImport,undefined,'the original explicit import remains available');
- assert.equal(page.props.allowDelete('creator-a'),true);
- assert.equal(page.props.allowDelete('oil-pig'),false);
+ assert.equal(page.props.allowAccountImport,false);
+ assert.equal(page.props.allowDelete,false);
 });
 
 test('profile binding disclosure requests only full selected current data and never saves summary blanks',async()=>{

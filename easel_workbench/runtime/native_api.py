@@ -140,8 +140,6 @@ class NativeApi:
         self.library=LibraryIndex(self.root,self._build_library,self._library_revision)
         self._library_work_cache={};self._library_work_tokens={}
         self._library_full_at=0
-        from easel_workbench.features.works.library_deletion import LibraryDeletion
-        self.deletions=LibraryDeletion(self)
         self.planning = create_planning_context(
             self.root, scripts=Path(__file__).resolve().parents[2] / 'skills/shared/scripts',
             read_ideas=self._ideas, write_ideas=self._save_ideas,
@@ -206,14 +204,6 @@ class NativeApi:
     def _save_operation(self, operation, saved):
         with self.store.connect() as c:
             c.execute('UPDATE easel_ui_operations SET result=? WHERE id=?', (pack(saved), operation))
-
-    def commit_local_result(self,c,result,*,operation=None):
-        """Join a local repository change to its already-reserved receipt."""
-        operation=operation or self._operation
-        saved={'id':operation,'native_protocol':True,'state':'completed','result':result}
-        changed=c.execute("UPDATE easel_ui_operations SET result=? WHERE id=? AND json_extract(result,'$.state')='unavailable' AND json_extract(result,'$.native_protocol')=1",
-                          (pack(saved),operation))
-        if changed.rowcount!=1:raise HTTPException(409,'本次操作身份未登记，未修改内容库')
 
     def _require_admission(self):
         state = self.root / '.local/workbench-deployment'
@@ -429,7 +419,7 @@ class NativeApi:
 
     def _profiles(self):
         with self.store.connect() as c:
-            return [json.loads(row['document']) for row in c.execute("SELECT document FROM creator_profiles WHERE coalesce(json_extract(document,'$.active'),1)!=0 ORDER BY rowid")]
+            return [json.loads(row['document']) for row in c.execute('SELECT document FROM creator_profiles ORDER BY rowid')]
 
     def _profile(self, name):
         profiles = self._profiles()
@@ -497,25 +487,11 @@ class NativeApi:
                 c.execute('INSERT INTO native_profile_documents VALUES(?,?,?,?)', (profile['id'], filename, saved['revision'], content))
         return {'ok': True, 'revision': saved['revision']}
 
-    def _profile_deletion(self,name,fields):
-        profile=self._profile(name)
-        if profile['id']=='oil-pig':raise HTTPException(403,'默认画像受保护，请另建画像使用')
-        if type(fields.get('expected_revision')) is not int or fields['expected_revision']!=profile['revision']:
-            raise HTTPException(409,'画像已有新修订，请重新核对后删除')
-        return {**profile,'_deletion_name':name,'_deletion_operation':self._operation}
-
-    def _remove_profile(self,profile):
-        operation=profile['_deletion_operation']
-        self.box.creator.command({'id':'native-profile-delete-'+operation,'action':'profile-save',
-            'profile_id':profile['id'],'base_revision':profile['revision'],'document':{'active':False}},
-            before_commit=lambda c,result:self.commit_local_result(c,{'ok':True,'deleted':profile['_deletion_name']},operation=operation))
-
     def _library_revision(self):
         with self.store.connect() as c:
-            deleted=c.execute("SELECT count(*),coalesce(max(json_extract(document,'$.at')),'') FROM native_library_deletions").fetchone()
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='read_cache_revisions'").fetchone():
-                return [list(deleted)]+[list(r) for r in c.execute("SELECT domain,revision FROM read_cache_revisions WHERE domain='works' ORDER BY domain")]
-        return [list(deleted)]
+                return [list(r) for r in c.execute("SELECT domain,revision FROM read_cache_revisions WHERE domain='works' ORDER BY domain")]
+        return None
 
     def _build_library(self):
         # Expensive compatibility projection is background-only. Rebuild only
@@ -534,7 +510,7 @@ class NativeApi:
         with self.store.connect() as c:
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(r[0] for r in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
         physical=[n for n in self.outputs.api_outputs() if n['path'] not in sessions]
-        return self.deletions.apply(physical+[n for nodes in self._library_work_cache.values() for n in nodes]+registered)
+        return physical+[n for nodes in self._library_work_cache.values() for n in nodes]+registered
 
     def _work_tree(self,work_ids=None):
         result = []
@@ -595,7 +571,7 @@ class NativeApi:
         with self.store.connect() as c:
             if c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():sessions.update(row[0] for row in c.execute("SELECT DISTINCT json_extract(document,'$.session_id') FROM easel_chat_turns WHERE json_extract(document,'$.work.work_id') IS NOT NULL"))
         native = [item for item in native if item['path'] not in sessions]
-        return sorted(self.deletions.apply(native + self._work_tree() + registered), key=lambda item: item.get('mtime', 0), reverse=True)
+        return sorted(native + self._work_tree() + registered, key=lambda item: item.get('mtime', 0), reverse=True)
 
     def _output_context(self, wanted):
         if not wanted:return {}
@@ -816,20 +792,10 @@ class NativeApi:
             return await _offload(self._outputs_tree, native)
         if path=='/api/library/items' and method=='GET':
             q=request.query_params
-            result=await _offload(self.library.list,parent=q.get('parent',''),cursor=q.get('cursor'),limit=int(q.get('limit','50')),query=q.get('query',''),kind=q.get('kind',''))
-            def filter_pending():
-                hidden=self.deletions.pending_paths(result['items'],result['revision'])
-                items=[item for item in result['items'] if item['path'] not in hidden]
-                return {**result,'items':items,'total':max(0,result['total']-len(result['items'])+len(items))}
-            return await _offload(filter_pending)
+            return await _offload(self.library.list,parent=q.get('parent',''),cursor=q.get('cursor'),limit=int(q.get('limit','50')),query=q.get('query',''),kind=q.get('kind',''))
         if path=='/api/library/resolve' and method=='GET':
             wanted=request.query_params.get('path','')
-            def resolve_visible():
-                result=self.library.resolve(wanted)
-                if self.deletions.pending_paths(result['nodes'],self.library.generation()):
-                    raise HTTPException(410,'内容已从内容库删除，历史原件仍保留')
-                return result
-            try:return await _offload(resolve_visible)
+            try:return await _offload(self.library.resolve,wanted)
             except HTTPException as error:
                 if error.status_code!=404:raise
                 context=await _offload(self._output_context,wanted)
@@ -859,10 +825,7 @@ class NativeApi:
             return await self._file(unquote(file_match[2]), file_match[1] == 'media',
                                     preview=request.query_params.get('download') != '1')
         if file_match and method == 'DELETE':
-            if file_match[1]!='output':raise HTTPException(405,'请使用内容库删除入口')
-            relative=unquote(file_match[2])
-            return await self._mutate(request,body,lambda fields:self.outputs.delete_output(
-                relative,resolve=self.deletions.resolve,remove=self.deletions.remove))
+            raise HTTPException(403, '原件与历史版本保留，请在准确作品版本中归档')
         if path == '/api/personas' and method == 'GET':
             profiles = await _offload(self._profiles)
             return [{'name': item['id'], 'display_name': item['name'], 'description': item['identity']}
@@ -883,10 +846,7 @@ class NativeApi:
             if method == 'PUT' and persona[2] == 'file':
                 return await self._mutate(request, body, lambda fields: self._save_profile_file(name, fields))
             if method == 'DELETE':
-                if persona[2] is not None:raise HTTPException(405,'请使用画像删除入口')
-                from easel.web_services.profiles import delete_profile
-                return await self._mutate(request,body,lambda fields:delete_profile(name,
-                    resolve=lambda target:self._profile_deletion(target,fields),remove=self._remove_profile))
+                raise HTTPException(403, '画像历史须保留；请在画像扩展中停用')
         if path == '/api/ideas' or path.startswith('/api/ideas/'):
             if method == 'GET' and path == '/api/ideas':
                 return await self.planning.api_ideas_list()

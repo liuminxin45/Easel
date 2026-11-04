@@ -70,7 +70,7 @@ interface ProfilePageProps {
   onDeleted: (name: string) => void;
   personaLabel?: (name: string) => string;
   allowAccountImport?: boolean;
-  allowDelete?: boolean | ((name:string)=>boolean);
+  allowDelete?: boolean;
   onFileSaved?: () => void;
   renderDetailExtension?: (name: string) => ReactNode;
   draftStore?: ProfilePageDraftStore;
@@ -190,7 +190,7 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
   const [error, setError] = useState('');
   const [savingFile, setSavingFile] = useState('');
   const [fileRevision, setFileRevision] = useState<number | undefined>(undefined);
-  const [serverRevision, setServerRevision] = useState<number | undefined>(()=>snapshot?.revision);
+  const [serverRevision, setServerRevision] = useState<number | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; kind: 'ok' | 'error' } | null>(null);
   const [fetchingWx, setFetchingWx] = useState(false);
@@ -315,11 +315,11 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
   };
 
   const handleDelete = async () => {
-    if (loading || !(typeof allowDelete==='function'?allowDelete(persona):allowDelete)) return;
+    if (!allowDelete) return;
     if (!window.confirm(`确定删除画像「${persona}」吗？\n此操作不可恢复，将删除该画像的全部六维文件。`)) return;
     setDeleting(true);
     try {
-      await deletePersona(persona,serverRevision);
+      await deletePersona(persona);
       onDeleted(persona);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) onDeleted(persona, true);
@@ -350,8 +350,8 @@ function ProfileDetail({ persona, onDeleted, onBack, onUsePersona, inUse, person
           <button className={`btn ${editing ? 'btn-primary' : ''}`} onClick={() => setEditing((v) => !v)}>
             {editing ? '完成编辑' : '✏️ 编辑资料'}
           </button>
-          {(typeof allowDelete==='function'?allowDelete(persona):allowDelete) && <button className="btn" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
-            disabled={deleting || loading} onClick={handleDelete}>
+          {allowDelete && <button className="btn" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+            disabled={deleting} onClick={handleDelete}>
             {deleting ? '删除中…' : '🗑 删除画像'}
           </button>}
         </div>

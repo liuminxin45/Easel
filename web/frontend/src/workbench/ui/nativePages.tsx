@@ -48,7 +48,7 @@ export function NativeLibrary({jumpPath}:{jumpPath?:string}){
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  const dataSource=useMemo(()=>libraryDataSource(vm.client),[vm.client,vm.client.authenticationEpoch]);
  const renderProject=useCallback((project:OutputNode)=><ProjectVersion project={project}/>,[]);
- return <OutputsPage jumpPath={jumpPath} dataSource={dataSource} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
+ return <OutputsPage jumpPath={jumpPath} dataSource={dataSource} canDelete={()=>false} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
 }
 
 export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){

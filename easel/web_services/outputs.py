@@ -4,7 +4,7 @@ The implementation lives here once. Host-specific persistence and roots are
 injected into an isolated namespace; default web routes retain their behavior.
 """
 from __future__ import annotations
-import asyncio,inspect,json,os,shutil,subprocess,sys,threading,time,uuid,zipfile
+import asyncio,json,os,shutil,subprocess,sys,threading,time,uuid,zipfile
 from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
@@ -19,8 +19,7 @@ PROTECTED_OUTPUTS = {'_login', '_analytics', '_schedule.json', '_ideas.json', '_
 EXPORTS = ('_file_kind', '_file_meta', '_build_output_node', '_read_project_meta',
            'get_output_tree', '_safe_output_path', 'api_outputs',
            'api_artifact_archive', 'api_output', 'api_media',
-           '_safe_output_target', '_is_protected', 'api_output_delete',
-           'delete_output', '_resolve_output_deletion', '_remove_output_deletion')
+           '_safe_output_target', '_is_protected', 'api_output_delete')
 
 
 def bind(context=None, *, into=None):
@@ -206,30 +205,17 @@ def _is_protected(full: Path) -> bool:
     first = rel.parts[0]
     return first.startswith('_') or first.startswith('.') or first in PROTECTED_OUTPUTS or (first.lower() in {'analytics', 'wechat'})
 
-def _resolve_output_deletion(path):
+async def api_output_delete(path: str):
+    """删除内容库里的单个文件或整个项目目录。系统数据（_login/_analytics/日历/发布记录）受保护。"""
     full = _safe_output_target(path)
-    return {'kind':'dir' if full.is_dir() else 'file','protected':_is_protected(full),'value':full}
-
-
-def _remove_output_deletion(target):
-    full=target['value']
-    if target['kind']=='dir':shutil.rmtree(full)
-    else:full.unlink()
-
-
-async def delete_output(path, *, resolve=None, remove=None):
-    """One deletion use case; storage hosts may retain immutable history."""
-    target=await asyncio.to_thread(resolve or _resolve_output_deletion,path)
-    if target['protected']:
+    if _is_protected(full):
         raise HTTPException(403, '系统数据受保护，不可从内容库删除')
+    is_dir = full.is_dir()
     try:
-        result=await asyncio.to_thread(remove or _remove_output_deletion,target)
-        if inspect.isawaitable(result):await result
+        if is_dir:
+            shutil.rmtree(full)
+        else:
+            full.unlink()
     except OSError as e:
         raise HTTPException(500, f'删除失败：{e}')
-    return {'ok':True,'deleted':path,'kind':target['kind']}
-
-
-async def api_output_delete(path: str):
-    """删除内容库里的单个文件或整个项目目录。系统数据受保护。"""
-    return await delete_output(path)
+    return {'ok': True, 'deleted': path, 'kind': 'dir' if is_dir else 'file'}

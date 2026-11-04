@@ -10,6 +10,15 @@ const css=readFileSync(new URL('../../web/frontend/src/workbench/ui/styles/mobil
 const source=readFileSync(new URL('../../web/frontend/src/workbench/ui/index.tsx',import.meta.url),'utf8');
 const inspect=inspectMobileCss;
 
+test('mobile brush stacking exception is limited to the open composer and reviewed value',()=>{
+ const rule=(selector,value,important='')=>`@media (max-width: 1100px){${selector}{z-index:${value}${important}}}`;
+ const selector='html[data-native-platform] .composer:has(.brush-entry.open)';
+ assert.deepEqual(inspect(rule(selector,'1')),[]);
+ assert.ok(inspect(rule(selector,'2')).length);
+ assert.ok(inspect(rule('html[data-native-platform] .composer','1')).length);
+ assert.ok(inspect(rule(selector,'1',' !important')).length);
+});
+
 function value(selector,property){
  const values=[];postcss.parse(css).walkRules(rule=>{if(rule.selectors.includes('html[data-native-platform] '+selector))rule.walkDecls(property,decl=>values.push(decl.value));});return values.at(-1);
 }

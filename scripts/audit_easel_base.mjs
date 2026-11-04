@@ -117,7 +117,9 @@ export function inspectMobileCss(source,file='mobile.css'){
   if(!splitSelectors(node.selector).every(selector=>selector.startsWith('html[data-native-platform] ')))report(node,'mobile-adapter-must-be-host-scoped');
   if(node.parent.type!=='atrule'||node.parent.name!=='media'||!viewport.test(node.parent.params))report(node,'mobile-adapter-viewport-unreviewed');
   node.walkDecls(decl=>{
-   if(!geometry.has(decl.prop)||decl.important)report(decl,'mobile-adapter-must-preserve-appearance',{property:decl.prop});
+   // A composer with an open native brush menu must sit above later cards.
+   const brushStack=decl.prop==='z-index'&&decl.value==='1'&&node.selector==='html[data-native-platform] .composer:has(.brush-entry.open)'&&node.parent.type==='atrule'&&node.parent.params==='(max-width: 1100px)';
+   if((!geometry.has(decl.prop)&&!brushStack)||decl.important)report(decl,'mobile-adapter-must-preserve-appearance',{property:decl.prop});
    if((decl.prop==='overflow'||decl.prop==='overflow-x')&&/hidden|clip/.test(decl.value))report(decl,'mobile-adapter-must-not-conceal-overflow');
    if(decl.prop==='display'&&decl.value==='none'){
     const selectors=splitSelectors(node.selector);

@@ -6,7 +6,7 @@ import {moduleLoader} from './helpers/modules.mjs';
 const jsx={jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
 const root=new URL('../../',import.meta.url),digest=file=>createHash('sha256').update(readFileSync(new URL(file,root))).digest('hex');
-function icons(){let sequence=0;return moduleLoader({imports:{react:{useId:()=>':avatar-'+sequence++},'react/jsx-runtime':jsx,'../assets/workbench/oil-pig-avatar.jpg':'approved-pig.jpg'}})('components/skillIconsProduce.tsx').produceSkillIcons}
+function icons(){let sequence=0;return moduleLoader({imports:{react:{useId:()=>':avatar-'+sequence++},'react/jsx-runtime':jsx,'../assets/workbench/oil-pig-avatar.jpg?inline':'approved-pig.jpg'}})('components/skillIconsProduce.tsx').produceSkillIcons}
 
 test('seven exact project skills share the original approved avatar with distinct independent purpose marks',()=>{
  const registry=icons(),ids=['content-production','content-writing','image-production','delivery-review','publication-analysis','reference-analysis','topic-research'],purposes=[];

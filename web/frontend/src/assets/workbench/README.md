@@ -9,6 +9,9 @@ Source and copy SHA256:
 `fada68aa7ebdf42b9dd89f4650013b0c0ba54b867776f6ab02a9f1ee31a095b1`.
 Tests verify this fixed SHA against the repository copy and do not require
 the external source directory on another machine.
+The build inlines the JPEG in its cached JavaScript because the existing native
+static server does not serve `.jpg` files. This preserves the bytes, requires no
+backend change, and makes the avatar available with the offline frontend bundle.
 
 All seven project skills share this single bundled image. Their independent
 bottom-right purpose marks use the existing 24-unit SVG grid and currentColor.

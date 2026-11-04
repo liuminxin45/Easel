@@ -7,6 +7,7 @@ import {type SkillItem} from '../../lib/api';
 import {generateSessionTitle,type ChatSession} from '../../lib/store';
 import type {Artifact as ChatArtifact} from '../../lib/artifacts';
 import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
+import {displayName} from '../../lib/skillDisplayNames';
 import {nativeContinuationPath,workProductionRecovery,type Work,array,record,string,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
 import {Notice,JsonDetails} from './common';
@@ -21,7 +22,7 @@ export interface NativeSessions {sessions:NativeSession[]}
 interface HistoryPage {has_more:boolean;next_before:string|null;before?:string|null;limit:number}
 export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
  return skills.map(skill=>{
-  const id=skill.name,position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0],fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!,label=position?.item.label||skill.name;
+  const id=skill.name,position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0],fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!,label=position?.item.label||displayName(skill.name);
   return {id:id+':native',label,prompt:`帮我做「${label}」`,tab:position?.tab.id||fallback.id,tabLabel:position?.tab.label||fallback.label,group:position?.group.label||'其他内置技能',status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description,selection:{skill_id:id,action_id:'native',task:'native',label,requires_plan:false}};
  });
 }

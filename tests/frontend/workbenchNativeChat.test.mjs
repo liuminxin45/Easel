@@ -29,7 +29,7 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Drawer:()=>{},Field:()=>{},ActionButton:'button'}});
  const timers=new Map();
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/skillDisplayNames':module('lib/skillDisplayNames.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
@@ -543,4 +543,12 @@ test('a restored news creation preserves its explicit skill, edited raw note and
  assert.equal(f.draft.text,'较晚输入的另一条要求');assert.equal(f.draft.creation.note,'较晚输入的另一条要求');
  const consumed=fixture({draft:{text:'再次明确制作',files:[],article_id:'news-one',creation}});consumed.render().chat.onSend();await tick();consumed.calls.stream[0][16].onAccepted();
  assert.equal(consumed.draft.creation,undefined);assert.equal(consumed.draft.article_id,undefined);
+});
+
+
+test('private native production skills expose Chinese names without version labels',()=>{
+ const f=fixture(),choices=f.lib.nativeSkillChoices(catalog);
+ const choice=choices.find(c=>c.selection.skill_id==='content-production');
+ assert.equal(choice.label,'制作贴图 / 文章');assert.equal(choice.selection.skill_id,'content-production');
+ assert.doesNotMatch(choice.label,/\bv\d+/i);
 });

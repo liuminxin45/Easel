@@ -2,6 +2,13 @@
 // 展示层：中文名给用户看；技能原名保留在详情中，供排查使用。
 // 数据源：能力清单菜单（capability-menu），重新生成即可更新。
 export const SKILL_DISPLAY_NAMES: Record<string, string> = {
+  'content-production': '制作贴图 / 文章',
+  'content-writing': '图文写作',
+  'image-production': '配图设计与生成',
+  'delivery-review': '交付核验',
+  'publication-analysis': '发布复盘',
+  'reference-analysis': '参考拆解',
+  'topic-research': '选题研究',
   'ai-image-gen': 'AI 生图',
   'ai-music': 'BGM / 音乐生成',
   'ai-video-gen': 'AI 视频生成',

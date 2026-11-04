@@ -200,6 +200,8 @@
 @media (max-width: 1100px) {
   /* Size floating skills to their composer, including a persistent tablet sidebar. */
   html[data-native-platform] .composer { position: relative; }
+  /* Keep private skill avatars clear of the floating navigation trigger. */
+  html[data-native-platform] .skill-card-icon:has(svg[data-workbench-skill-icon]) { margin-inline-start: 8px; }
   /* Its backdrop-filter contains the popup; raise that context above later suggestions only while open. */
   html[data-native-platform] .composer:has(.brush-entry.open) { z-index: 1; }
   html[data-native-platform] .composer .brush-entry { position: static; }

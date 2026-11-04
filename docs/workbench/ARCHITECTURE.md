@@ -1,5 +1,7 @@
 # Easel 主工程与私有业务边界
 
+> 本文保留早期架构设计与迁移背景，部分技能版本、试用、经验及基线描述已被后续决定取代。当前私有能力、启用/兼容/退役状态及源码入口请先查 [私有能力登记表](PRIVATE-CAPABILITIES.md)，再按维护卡进入当前源码；不得依据下文历史描述恢复已退役功能。
+
 主工程为 `D:/Projects/Easel`。本地 fork 基线为 `514caf8089f89b4793063aeae867690cc69bf8b8`，官方共同基线为 `5a597e5f3ef5b01098b53f36caf719dd9a32b7bf`。保留 fork 的自定义 Python 数据采集接口，官方更新从 upstream 跟进。历史导入来源和逐文件哈希继续保存在 `import-baseline.json`。
 
 ## 与 Easel 共用的核心

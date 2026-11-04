@@ -195,17 +195,24 @@ class ChatBusiness:
     def prepare(self,value,*,selection=None):
         previous=self.chat.receipt(value)
         if previous:return {'receipt':previous}
-        context=value.get('context') or {}
+        context=copy.deepcopy(value.get('context') or {})
         if selection is None:
             from easel_workbench.features.skills.retirement import SkillFeatureRetired
             if any(field in context for field in ('plan_token','work_id','parent_version_id','trial','version','skill_revision')) or context.get('action_id','native')!='native':
                 raise SkillFeatureRetired('legacy-skill-orchestration')
             session=self._session(value)
+            if not context.get('article_id') and session.get('source_article_id'):
+                context['article_id']=session['source_article_id']
             if context.get('profile_id',session['profile_id'])!=session['profile_id']:
                 raise PlanConflict('已有会话保持原画像，请新建会话后切换')
             message=text(value.get('message',''),100000)
             attachments=self._attachments(value,native=True)
+            source_materials=None
             if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
+            if context.get('skill_id')=='content-production':
+                config=self.chat.execution_settings(session)
+                if config['runtime']=='api':raise PlanConflict('API 仅聊天模式不能制作，请新建 Agent 对话')
+                if config['runtime']=='codex' and config.get('sandbox')=='read-only':raise PlanConflict('此对话使用只读沙箱，请新建允许制作文件的 Agent 对话')
             if context.get('creation') is not None:
                 from easel_workbench.features.news_creation import NewsCreation
                 if isinstance(context['creation'],dict) and context['creation'].get('intent')=='produce':
@@ -214,6 +221,7 @@ class ChatBusiness:
                     if config['runtime']=='codex' and config.get('sandbox')=='read-only':raise PlanConflict('此对话使用只读沙箱，请新建允许制作文件的 Agent 对话')
                 tid=value.get('turnId') or value.get('turn_id') or value.get('id')
                 prepared=NewsCreation(self.box).prepare(context['creation'],session['profile_id'],context.get('article_id'),tid)
+                source_materials=prepared
                 if prepared['creation']['intent']=='produce':
                     if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
                     if context.get('skill_id')!='content-production':raise ValueError('新闻制作须调用内容生产技能')
@@ -223,6 +231,18 @@ class ChatBusiness:
                 # supplied as arbitrary paths by an HTTP caller.
                 for item in prepared['material_manifest']['files']:
                     attachments.append({**item,'path':str(self.root/item['path'])})
+            elif context.get('article_id') or context.get('skill_id')=='content-production':
+                from easel_workbench.features.news_creation import NewsCreation
+                tid=value.get('turnId') or value.get('turn_id') or value.get('id')
+                prepared=NewsCreation(self.box).prepare_native(message,session['profile_id'],context.get('article_id'),tid,
+                    content_production=context.get('skill_id')=='content-production')
+                source_materials=prepared
+                message=prepared['input_text']
+                for item in prepared['material_manifest']['files']:
+                    attachments.append({**item,'path':str(self.root/item['path'])})
+            if source_materials and self.chat.execution_settings(session)['runtime']=='api':
+                from easel_workbench.features.news_creation import NewsCreation
+                message+=NewsCreation(self.box).api_source_text(source_materials)
             if context.get('skill_id'):
                 if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
                 from easel_workbench.runtime.native_skills import service
@@ -230,8 +250,6 @@ class ChatBusiness:
             else:
                 from easel_workbench.runtime.native_skills import service
                 message=service(self.box,self.chat).prepare_chat_message(message,session['profile_id'])
-            source=self._news_source(value) if context.get('creation') is None else None
-            if source:message+='\n\n## 本轮指定来源\n'+packed(source)
             if attachments:message+='\n\n## 本轮附件\n'+packed(attachments)
             return {'snapshot':None,'actual_prompt':message,'work':None,'frozen_instructions':self._workspace(session)}
         from easel_workbench.features.skills.retirement import SkillFeatureRetired

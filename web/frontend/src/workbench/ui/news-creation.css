@@ -37,3 +37,6 @@
  .ew-news-actions > .btn-ghost { grid-column: 1 / -1; min-height: 32px; }
  .ew-news-actions > [role=alert], .ew-news-actions > .notice-error { grid-column: 1 / -1; }
 }
+
+.ew-news-message-source { display: flex; justify-content: flex-end; margin: 4px 0 12px; }
+.ew-news-message-source a { text-decoration: underline; text-underline-offset: 3px; padding-block: 6px; }

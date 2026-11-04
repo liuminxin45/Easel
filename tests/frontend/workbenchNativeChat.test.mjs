@@ -15,7 +15,7 @@ const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
 const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
-function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride,startNewsOverride}={}){
+function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride}={}){
  let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],navigate:[],invalidate:[],resources:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
  const react={useCallback:(fn)=>fn,useMemo:(fn,deps)=>{const index=cursor++,old=hooks[index];if(!old||!deps||!old.deps||deps.length!==old.deps.length||deps.some((value,i)=>!Object.is(value,old.deps[i])))hooks[index]={deps,value:fn()};return hooks[index].value},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
  const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{if(path==='/api/chat/submit'){calls.submit.push({path,body,csrf});return submitOverride?submitOverride(path,body,csrf):{id:body.turnId,session_id:body.sessionId,accepted_by_server:true}}calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
@@ -29,7 +29,7 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Drawer:()=>{},Field:()=>{},ActionButton:'button'}});
  const timers=new Map();
  const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'./NewsCreationDrawer':'NewsCreationDrawer','./newsCreationStart':startNewsOverride?{startNewsTurn:startNewsOverride}:module('workbench/ui/newsCreationStart.ts',{'./chatRuntime':runtime}),'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
@@ -516,16 +516,22 @@ test('ordinary project skills use original brush groups without private actions 
  const card=choices.find(item=>item.selection.skill_id==='card-quote');assert.equal(card.label,'金句卡 / 数据卡');assert.equal(card.prompt,'帮我做「金句卡 / 数据卡」');assert.equal(card.selection.source_revision,undefined);
 });
 
-test('news creation Drawer closes only after accepted handoff and stays open for an uncertain result',async()=>{
- let accept;const f=fixture({startNewsOverride:()=>new Promise(resolve=>{accept=resolve})});f.resources.session.source_article_id='news-one';
- nodes(f.render().chat.footer).find(node=>node.type==='button'&&node.props.children==='制作内容').props.onClick();
- let drawer=nodes(f.render().chat.footer).find(node=>node.type==='NewsCreationDrawer');assert.ok(drawer);
- const running=drawer.props.onStart('news-one',{intent:'produce'});assert.ok(nodes(f.render().chat.footer).some(node=>node.type==='NewsCreationDrawer'));
- accept();await running;assert.ok(!nodes(f.render().chat.footer).some(node=>node.type==='NewsCreationDrawer'));
- const failed=fixture({startNewsOverride:async()=>{throw Error('原回执未知')}});failed.resources.session.source_article_id='news-one';
- nodes(failed.render().chat.footer).find(node=>node.type==='button'&&node.props.children==='制作内容').props.onClick();
- drawer=nodes(failed.render().chat.footer).find(node=>node.type==='NewsCreationDrawer');await assert.rejects(drawer.props.onStart('news-one',{intent:'produce'}),/未知/);
- assert.ok(nodes(failed.render().chat.footer).some(node=>node.type==='NewsCreationDrawer'));
+test('news links belong to their messages and native skill selection adds no private composer controls',async()=>{
+ const f=fixture();f.resources.session.source_article_id='news-one';
+ const ui=f.render();assert.equal(nodes(ui.chat.footer).some(n=>n.type==='button'&&['新闻详情','制作内容'].includes(n.props.children)),false);
+ assert.equal(nodes(ui.chat.footer).some(n=>n.type==='NewsCreationDrawer'),false);
+ assert.equal(ui.chat.renderMessageExtra({role:'user',content:'普通消息'}),null);
+ const extra=ui.chat.renderMessageExtra({role:'user',content:'讨论这条新闻怎么写。',article_id:'news-one'}),link=nodes(extra.type(extra.props)).find(n=>n.type==='a');
+ assert.equal(link.props.children,'这条新闻');assert.equal(new URL(link.props.href,'https://example/native/').searchParams.get('path'),'/news/a/news-one');
+ let prevented=false;link.props.onClick({button:0,preventDefault:()=>{prevented=true}});assert.equal(prevented,true);assert.equal(f.calls.navigate.at(-1),'/news/a/news-one');
+ prevented=false;link.props.onClick({button:0,ctrlKey:true,preventDefault:()=>{prevented=true}});assert.equal(prevented,false);
+ const choice=ui.chat.composer.commands.find(c=>c.selection.skill_id==='content-production');
+ ui.chat.composer.onCommandSelect(choice.id);assert.equal(f.calls.submit.length,0);assert.equal(f.draft.command.skill_id,'content-production');
+ assert.equal(f.render().chat.composer.selectedCommand.label.includes('undefined'),false);
+ assert.equal(nodes(f.render().chat.footer).some(n=>n.type==='NewsCreationDrawer'),false);
+ f.render().chat.composer.onTextChange('把这条新闻做成贴图');f.render().chat.onSend();await tick();
+ assert.equal(f.calls.submit.length,1);assert.equal(f.calls.submit[0].body.context.article_id,'news-one');assert.equal(f.calls.submit[0].body.context.skill_id,'content-production');assert.equal(f.calls.submit[0].body.context.creation,undefined);
+ const pendingMessage=f.render().chat.session.messages.find(m=>m.role==='user');assert.equal(pendingMessage.article_id,'news-one');
 });
 
 test('a restored news creation preserves its explicit skill, edited raw note and later draft identity',async()=>{

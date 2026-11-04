@@ -349,6 +349,8 @@ class ChatService:
         for turn in turns:
             messages.append({'id': turn['id'] + '-user', 'role': 'user', 'content': turn['message'], 'timestamp': turn['created_at'],
                              'attachments': copy.deepcopy(turn.get('attachments', []))})
+            if turn.get('context',{}).get('article_id'):
+                messages[-1]['article_id']=turn['context']['article_id']
             messages.append({'id': turn['id'], 'role': 'assistant', 'content': turn.get('output', ''),
                              'timestamp': turn['updated_at'], 'status': self.get_turn(turn['id'])['status'],
                              'runtime': turn['runtime'], 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
@@ -418,13 +420,15 @@ class ChatService:
             frozen_instructions = harness_instructions(RunRequest(actual_prompt, self.root, environment, model=model,
                 sandbox=config['sandbox'], codex_auto_approve=config['codex_auto_approve']))
         frozen_instructions = text(frozen_instructions, 1024 * 1024, True)
-        context = value.get('context', {})
+        context = copy.deepcopy(value.get('context', {}))
         if not isinstance(context, dict) or set(context) - {'skill_id', 'version', 'action_id', 'profile_id', 'plan_token', 'work_id', 'parent_version_id', 'trial', 'article_id', 'article_mode', 'skill_revision','creation'}:
             raise ValueError('对话启动上下文无效')
         if 'trial' in context and type(context['trial']) is not bool:
             raise ValueError('技能试用标记必须为布尔值')
         if ('work_id' in context) != ('parent_version_id' in context):
             raise ValueError('修改作品与父版本必须同时指定')
+        if not context.get('article_id') and accepted_session.get('source_article_id'):
+            context['article_id']=identity(accepted_session['source_article_id'])
         for field in ('work_id', 'parent_version_id'):
             if field in context:
                 identity(context[field])

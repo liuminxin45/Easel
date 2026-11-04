@@ -10,8 +10,6 @@ import {CAPABILITY_MENU} from '../../lib/capabilityMenu';
 import {nativeContinuationPath,workProductionRecovery,type Work,array,record,string,type JsonRecord} from '@workbench/core';
 import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './hooks';
 import {Notice,JsonDetails} from './common';
-import NewsCreationDrawer from './NewsCreationDrawer';
-import {startNewsTurn} from './newsCreationStart';
 import Drawer from '../../components/Drawer';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
@@ -29,6 +27,10 @@ export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]|undefined{const files=productArtifacts(record(message).output_files);return files.length?files:undefined}
 export function nativeArtifactPath(message:unknown,path:string,kind:'media'|'library'='media'):string|undefined{const rel=path.replace(/^outputs\//,'');const file=array<JsonRecord>(record(message).output_files).find(file=>string(file.source_path)===rel);return file?(kind==='library'?'#/outputs/__workbench__/'+encodeURIComponent(string(file.id))+'/'+encodeURIComponent(string(file.name)):string(file.url)):undefined}
+export function NewsMessageLink({articleId,navigate}:{articleId:string;navigate:(path:string)=>void}){
+ const path='/news/a/'+encodeURIComponent(articleId);
+ return <div className="ew-news-message-source"><a href={'?path='+encodeURIComponent(path)} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigate(path)}}>这条新闻</a></div>;
+}
 export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{record(message).creation&&<CreationTurnRecord turnId={string(record(message).turnId||record(message).id)}/>}</>}
 function CreationTurnRecord({turnId}:{turnId:string}){
  const [open,setOpen]=useState(false),resource=useResource<JsonRecord>(open?'/api/chat/turns/'+encodeURIComponent(turnId)+'/creation':null),creation=record(resource.data?.creation),files=array<JsonRecord>(record(resource.data?.material_manifest).files);
@@ -48,7 +50,6 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const key='chat:'+id,[draft,patch]=useDraft<SessionDraft>(key,{text:'',files:[]}),action=useAsyncAction();
  const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
- const [creationOpen,setCreationOpen]=useState(false);
  const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
  const continuationIdle=!running&&!session?.pendingTurnId&&!session?.pendingSubmissionId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
  const lastAssistant=session?.messages.filter(message=>message.role==='assistant').at(-1),lastTurn=string(record(lastAssistant).turnId||record(lastAssistant).id);
@@ -74,7 +75,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   if(historyBefore)throw Error('请返回最新消息后继续输入；当前草稿已保留。');
   if(!session)throw Error('会话尚未读回，输入已保留');if(search.get('continue')==='1'&&!continuationPath)throw Error('中断版本的恢复状态尚未核对，请返回成品页重新读取');if(runtime.state.getState().running||session.pendingTurnId||session.pendingSubmissionId)throw Error('原任务仍在进行，请先查看原回执');
   const pending=vm.client.drafts.get<SessionDraft>(key)?.pending;if(pending&&pending.state!=='rejected')throw Error('原请求结果尚未核对，不能重复发送');
-  const uploads=await vm.service.uploadFiles(draft.files),context:JsonRecord={profile_id:profileId,...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.creation?{creation:draft.creation,...(draft.creation.intent==='produce'?{skill_id:'content-production',action_id:'native'}:{})}:draft.command?{skill_id:draft.command.skill_id,action_id:'native'}:{})};
+  const articleId=draft.article_id||session.source_article_id,uploads=await vm.service.uploadFiles(draft.files),context:JsonRecord={profile_id:profileId,...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(articleId?{article_id:articleId}:{}),...(draft.creation?{creation:draft.creation,...(draft.creation.intent==='produce'?{skill_id:'content-production',action_id:'native'}:{})}:draft.command?{skill_id:draft.command.skill_id,action_id:'native'}:{})};
   const turn:FrozenTurn={turnId:crypto.randomUUID(),message:draft.text,attachments:uploads.map(file=>({id:file.id,name:file.name,path:file.id})),context,inputs:{text:draft.text,files:draft.files,command:draft.command,...(draft.article_id?{article_id:draft.article_id}:{}),...(draft.article_mode?{article_mode:draft.article_mode}:{}),...(draft.creation?{creation:draft.creation}:{})},state:'connecting',initial_title:generateSessionTitle(draft.text)};
   await runtime.submit(turn,profileId);
  });
@@ -99,13 +100,13 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const historyJson=useMemo(()=>JSON.stringify(session?.messages||[]),[session?.messages]);
  const visibleMessages=useMemo(()=>
   {const messages=(JSON.parse(historyJson) as ChatSession['messages']).map(message=>{const path=string(record(message).library_path);return message.role==='assistant'&&path?{...message,content:message.content+'\n\n[内容库 › 本版产物](#/outputs/'+path.split('/').map(encodeURIComponent).join('/')+')'}:message}).filter(message=>!((running||!!session?.pendingTurnId||!!session?.pendingSubmissionId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)));
-  const pending=draft.pending;if(!historyBefore&&pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments} as ChatSession['messages'][number]);return messages;},
+  const pending=draft.pending;if(!historyBefore&&pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments,article_id:pending.context.article_id} as ChatSession['messages'][number]);return messages;},
   [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
- const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label+' · v'+draft.command.version}:undefined;
+ const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId||!!session?.pendingSubmissionId;
  const historyPath=(before?:string)=>{const query=new URLSearchParams(search);if(before)query.set('history_before',before);else query.delete('history_before');return '/chat/'+encodeURIComponent(id)+(query.size?'?'+query:'')};
- return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:null}
+ return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:string(record(message).article_id)?<NewsMessageLink articleId={string(record(message).article_id)} navigate={vm.navigate}/>:null}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
@@ -114,8 +115,6 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
   notice={<><Notice sources={[resource,catalog,action,{error,feedback}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>
-   {session?.source_article_id&&<div className="ew-row ew-news-chat-context"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(session.source_article_id!))}>新闻详情</button><button className="btn btn-sm" disabled={readOnly||busy||unknown||!!historyBefore} onClick={()=>setCreationOpen(true)}>制作内容</button></div>}
-   {creationOpen&&session?.source_article_id&&<NewsCreationDrawer articleId={session.source_article_id} profileId={profileId} sessionId={id} onClose={()=>setCreationOpen(false)} onStart={async(articleId,creation)=>{await startNewsTurn(vm.client,articleId,profileId,creation,{sessionId:id,open:async()=>id,navigate:vm.navigate});setCreationOpen(false)}}/>}
    {(draft.article_id||versionContext)&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':versionContext?'已选作品版本':'已选新闻素材'}>
     {draft.article_id&&<div className="ew-row"><button className="btn btn-sm" onClick={()=>vm.navigate('/news/a/'+encodeURIComponent(draft.article_id!))}>查看来源</button><button className="btn btn-ghost btn-sm" onClick={()=>patch({article_id:undefined,creation:undefined})}>移除本轮来源绑定</button></div>}
     {versionContext&&<><p>{search.get('continue')==='1'?'发送后基于所选版本继续制作，结果另存新版本。':draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><a href={"#/outputs/"+encodeURIComponent("workbench-"+workId)+"/"+encodeURIComponent(parentVersion)}>内容库 › 所选版本</a></>}

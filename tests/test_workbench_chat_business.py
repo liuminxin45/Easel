@@ -78,7 +78,10 @@ def test_explicit_project_skill_uses_same_official_native_message_and_no_plan(bu
     prepared=b.prepare(v)
     assert prepared['snapshot'] is None and prepared['work'] is None
     assert '请执行 /content-production，内容如下：' in prepared['actual_prompt']
-    assert prepared['actual_prompt'].endswith(v['message'])
+    assert prepared['actual_prompt'].split('内容如下：\n\n',1)[1].startswith(v['message']+'\n\n## 画像显式创作默认值')
+    material=json.loads((b.root/'outputs/_sessions/inputs'/v['turnId']/'manifest.json').read_text(encoding='utf-8'))
+    assert material['input_text'].startswith(v['message'])
+    assert material['creation']['defaults']=={} and material['material_manifest']['files']==[]
     assert '## 本轮冻结输入' not in prepared['actual_prompt']
 
 

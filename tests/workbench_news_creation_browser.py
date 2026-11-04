@@ -59,14 +59,14 @@ async def fake_run(self,request,emit,ask,bind):
     bind(native);request.on_native_turn(native,'TEMP-news-turn-'+str(number))
     await asyncio.sleep(.15)
     if 'TEMP_NEWS_UNKNOWN' in request.prompt:raise HarnessError('TEMP admitted request receipt unknown; never replay')
-    production='content-production' in request.prompt
+    production='content-production' in request.prompt or 'TEMP_NATIVE_MODIFY' in request.prompt
     if not production:
         emit('token','TEMP 仅讨论：原新闻的事实、切入角度与表达边界，没有制作文件。');return
     folder=Path(request.cwd)/'outputs/TEMP-news-created'/('run-'+str(number));folder.mkdir(parents=True,exist_ok=True)
     body=folder/'正文.md';body.write_text('# TEMP_NEWS_PRODUCT_'+str(number)+'\n\n'+BODY,encoding='utf-8')
     emit('activity','TEMP native executor wrote separately versioned files')
     media=''
-    if '根据明确选择制作贴图' in request.prompt:
+    if '根据明确选择制作贴图' in request.prompt or 'TEMP_NATIVE_POSTER' in request.prompt or 'TEMP_NATIVE_MODIFY' in request.prompt:
         image=folder/'贴图.png';image.write_bytes(IMAGE)
         media='\n\n![贴图](/api/media/TEMP-news-created/run-'+str(number)+'/贴图.png)'
     emit('token','TEMP_NEWS_PRODUCT_'+str(number)+media+'\n\n[正文]('+body.as_posix()+')')
@@ -137,6 +137,11 @@ def main():
                 page.evaluate('()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))')
                 file=out/(case+'-'+name+'.png');page.screenshot(path=str(file));report['screenshots'][file.name]=sha(file)
             def creation_drawer(format):
+                if parse_qs(urlsplit(page.url).query).get('path',[''])[0].startswith('/chat/'):
+                    assert page.get_by_role('button',name='新闻详情',exact=True).count()==0
+                    assert page.get_by_role('button',name='制作内容',exact=True).count()==0
+                    link=page.get_by_role('link',name='这条新闻',exact=True).first;expect(link).to_be_visible();link.click()
+                    expect(page.locator('.ew-news-prose > p').first).to_be_visible()
                 page.get_by_role('button',name='制作内容',exact=True).click();drawer=page.get_by_role('dialog',name='制作内容',exact=True);expect(drawer).to_be_visible();drawer.get_by_role('button',name=format,exact=True).click();return drawer
             def post_bodies():return [r['body'] for r in requests if r['path']=='/api/chat/submit' and r['method']=='POST']
             def close_finished_drawer(stage):
@@ -179,7 +184,9 @@ def main():
                 assert history['session']['title']==TITLE,'News session must use the selected headline, not a generic discussion instruction'
                 # Deliberately use SPA navigation: a full document reload would
                 # hide stale creation-context cache and admit a duplicate turn.
-                page.get_by_role('button',name='新闻详情',exact=True).click()
+                assert page.get_by_role('button',name='新闻详情',exact=True).count()==0
+                assert page.get_by_role('button',name='制作内容',exact=True).count()==0
+                page.get_by_role('link',name='这条新闻',exact=True).first.click()
                 expect(page.get_by_role('button',name='继续讨论',exact=True)).to_be_enabled()
                 prior_posts=len(post_bodies());page.get_by_role('button',name='继续讨论',exact=True).click()
                 expect(page.get_by_role('textbox',name='对话输入')).to_be_visible()
@@ -203,14 +210,57 @@ def main():
                 for slot,label in [('writing','写法'),('visual','画面风格'),('character','角色呈现'),('layout','画面与结构')]:expect(drawer.get_by_role('button',name=label,exact=True)).to_contain_text(entries[style[slot]]['name'])
                 note='TEMP 精确草稿 '+case+'\n此备注仅本次。';drawer.get_by_label('补充要求',exact=True).fill(note);drawer.get_by_role('button',name='关闭',exact=True).click();page.reload(wait_until='domcontentloaded');drawer=creation_drawer('贴图');expect(drawer.get_by_label('补充要求',exact=True)).to_have_value(note)
                 mark(case,'explicit consecutive default saves advance profile revisions; reopening and reload preserve the exact draft')
+                drawer.get_by_role('button',name='关闭',exact=True).click()
+                page.get_by_role('button',name='继续讨论',exact=True).click()
+                composer=page.get_by_role('textbox',name='对话输入');expect(composer).to_be_enabled()
+                assert session_id(page)==sid and page.get_by_role('button',name='制作内容',exact=True).count()==0
+                raw='TEMP_NATIVE_POSTER 用这条新闻制作贴图，保留准确来源。 '+case
+                composer.fill('/content-production '+raw)
+                item=page.get_by_role('menuitem',name='/content-production',exact=True);expect(item).to_be_visible();item.click()
+                expect(page.locator('[data-chat-command]')).to_have_attribute('data-chat-command','content-production:native')
+                expect(composer).to_have_value(raw)
+                assert page.get_by_role('dialog').count()==0 and len(f['adapter'].requests)==1 and len(post_bodies())==1
+                page.get_by_role('button',name='发送',exact=True).click()
+                history=helper.wait_history(page,f['origin'],sid,discussion['turnId']);native_product=history['session']['messages'][-1]
+                submitted=post_bodies()[-1]
+                assert submitted['message']==raw and submitted['context']['skill_id']=='content-production' and submitted['context']['action_id']=='native'
+                assert submitted['context']['article_id']==article and 'creation' not in submitted['context']
+                assert len(f['adapter'].requests)==2 and page.get_by_role('dialog').count()==0
+                native_package=material_files(f,native_product['turnId'])
+                assert native_package['creation']['mode']=='native-defaults' and 'format' not in native_package['creation']
+                assert native_package['creation']['defaults']['poster']==style
+                native_files=native_package['material_manifest']['files']
+                canonical_simple={a['sha256'] for a in entries['simple-pig'].get('assets',[]) if a.get('required',True)}
+                assert canonical_simple and canonical_simple<={item['sha256'] for item in native_files}
+                assert any(item['slot']=='poster:character' for item in native_files if item.get('slot'))
+                assert raw in f['adapter'].requests[-1].prompt
+                frozen_source=next(item for item in native_files if item['role']=='source')
+                assert read(f['root']/frozen_source['path'])['body']==BODY
+                expect(composer).to_be_enabled()
+                remove=page.get_by_role('button',name='移除所选技能',exact=True)
+                if remove.count():remove.click()
+                modified='TEMP_NATIVE_MODIFY 修改刚才的贴图，保留原文件并另存。 '+case
+                composer.fill(modified);page.get_by_role('button',name='发送',exact=True).click()
+                history=helper.wait_history(page,f['origin'],sid,native_product['turnId']);native_modified=history['session']['messages'][-1]
+                assert post_bodies()[-1]['message']==modified and not post_bodies()[-1]['context'].get('skill_id') and 'creation' not in post_bodies()[-1]['context']
+                assert len(f['adapter'].requests)==3 and session_id(page)==sid
+                modified_package=material_files(f,native_modified['turnId'])
+                assert modified_package['creation']['mode']=='native-defaults'
+                assert len(modified_package['material_manifest']['files'])==1 and modified_package['material_manifest']['files'][0]['role']=='source'
+                assert modified in f['adapter'].requests[-1].prompt
+                assert turn_document(f,native_modified['turnId'])['context']['article_id']==article
+                assert (f['root']/'outputs/TEMP-news-created/run-2/正文.md').is_file() and (f['root']/'outputs/TEMP-news-created/run-3/正文.md').is_file()
+                report.setdefault('native_chat_checks',{})[case]={'session_id':sid,'production_turn':native_product['turnId'],'modification_turn':native_modified['turnId'],'skill_selection_did_not_execute':True,'no_creation_drawer':True,'format_not_inferred':True,'production_reference_sha256':sorted(canonical_simple),'modification_source_files':1,'original_and_modified_files_preserved':True}
+                shot('native-skill-modification')
+                drawer=creation_drawer('贴图')
                 # Per-request override must not alter saved profile defaults.
                 choose(page,drawer,'角色呈现',entries['wuxia-pig']['name'],expect)
                 expect(drawer.locator('img.ew-news-style-preview').first).to_be_visible()
                 page.wait_for_function('()=>[...document.querySelectorAll("img.ew-news-style-preview")].every(n=>n.complete&&n.naturalWidth>0)')
                 shot('poster-settings')
                 start=len(post_bodies());drawer.get_by_role('button',name='开始制作贴图',exact=True).evaluate('(b)=>{b.click();b.click()}')
-                history=helper.wait_history(page,f['origin'],sid,discussion['turnId']);poster=history['session']['messages'][-1];assert session_id(page)==sid
-                assert len(post_bodies())==start+1 and len(f['adapter'].requests)==2
+                history=helper.wait_history(page,f['origin'],sid,native_modified['turnId']);poster=history['session']['messages'][-1];assert session_id(page)==sid
+                assert len(post_bodies())==start+1 and len(f['adapter'].requests)==4
                 submitted=post_bodies()[-1];assert submitted['context']['skill_id']=='content-production' and submitted['context']['action_id']=='native'
                 assert submitted['context']['creation']['format']=='poster' and submitted['context']['creation']['style']['character']=='wuxia-pig'
                 assert current_context(profile)['defaults']['poster']==style
@@ -230,7 +280,7 @@ def main():
                 writing=next(item for item in available['writing'] if item['available']);choose(page,drawer,'写法',writing['name'],expect)
                 drawer.get_by_label('补充要求',exact=True).fill('TEMP 文章只写正文 '+case);shot('article-settings');drawer.get_by_role('button',name='开始写文章',exact=True).click()
                 history=helper.wait_history(page,f['origin'],sid,poster['turnId']);article_turn=history['session']['messages'][-1];assert session_id(page)==sid
-                assert len(f['adapter'].requests)==3 and post_bodies()[-1]['context']['creation']['format']=='article'
+                assert len(f['adapter'].requests)==5 and post_bodies()[-1]['context']['creation']['format']=='article'
                 package=material_files(f,article_turn['turnId']);assert package['creation']['style']=={'writing':writing['id']}
                 assert not any(i['role'] in ('identity','reference') for i in package['material_manifest']['files'])
                 mark(case,'same conversation switches to explicit article production; optional illustration settings remain absent')
@@ -239,7 +289,7 @@ def main():
                 drawer.get_by_label('补充要求',exact=True).fill('TEMP 简笔小猪准确身份参考 '+case)
                 drawer.get_by_role('button',name='开始制作贴图',exact=True).click()
                 history=helper.wait_history(page,f['origin'],sid,article_turn['turnId']);simple_turn=history['session']['messages'][-1]
-                assert session_id(page)==sid and len(f['adapter'].requests)==4
+                assert session_id(page)==sid and len(f['adapter'].requests)==6
                 simple_package=material_files(f,simple_turn['turnId'])
                 simple_hashes={a['sha256'] for a in entries['simple-pig'].get('assets',[]) if a.get('required',True)}
                 assert simple_hashes and simple_hashes<={i['sha256'] for i in simple_package['material_manifest']['files']}
@@ -263,7 +313,7 @@ def main():
                 admitted=len(f['adapter'].requests);page.reload(wait_until='domcontentloaded');expect(page.get_by_role('textbox',name='对话输入')).to_be_visible();page.wait_for_timeout(400)
                 goto(page,f['origin'],'/news/a/'+article);open_button=page.get_by_role('button',name=re.compile(r'^(查看会话|继续讨论)$'))
                 expect(open_button).to_be_enabled();open_button.click();expect(page.get_by_role('textbox',name='对话输入')).to_be_visible();assert session_id(page)==sid
-                assert len(f['adapter'].requests)==admitted and len(post_bodies())==5
+                assert len(f['adapter'].requests)==admitted and len(post_bodies())==7
                 assert not any(r['method']=='POST' and r['path'] in ('/api/chat/plan','/api/creative/commands') for r in requests)
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1');shot('unknown-preserved')
                 mark(case,'unknown admitted operation survives reload/news return without replay or a new conversation')

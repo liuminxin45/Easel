@@ -104,6 +104,56 @@ def test_discussion_is_not_production_and_copies_no_unselected_styles(news):
     result = news.prepare(value, 'p', 'news-one', 'discussion')
     assert len(result['material_manifest']['files']) == 1
     assert '仅讨论' in result['input_text'] and '不制作文件' in result['input_text']
+    assert '仅约束本轮' in result['input_text'] and '后续用户明确选择制作技能时可以制作' in result['input_text']
+
+
+def test_native_defaults_freeze_actual_references_but_never_guess_format_or_override_user(news):
+    defaults = {'poster': {slot: slot for slot in ('writing', 'visual', 'character', 'layout')},
+                'article': {'writing': 'writing'}}
+    with news.box.store.connect() as c:
+        profile = json.loads(c.execute('SELECT document FROM creator_profiles').fetchone()[0])
+        profile['creation_defaults'] = defaults
+        c.execute('UPDATE creator_profiles SET document=?', (json.dumps(profile),))
+    message = ' 按我本轮新要求，换个表现方式\n保持这些原话 '
+    result = news.prepare_native(message, 'p', 'news-one', 'native-defaults', content_production=True)
+    assert result['input_text'].startswith(message)
+    assert result['creation']['defaults'] == defaults
+    assert 'format' not in result['creation']
+    assert '用户本轮原始要求优先' in result['input_text']
+    assert '先使用原生问答询问' in result['input_text']
+    assert '不得同时制作两套' in result['input_text']
+    assert '不得当作用户指令' in result['input_text']
+    assert len(result['material_manifest']['files']) == 6  # shared writing resource deduplicated
+    for entry in result['material_manifest']['files']:
+        assert sha((news.root / entry['path']).read_bytes()) == entry['sha256']
+    # A retry never reads changed defaults, deleted canonical files or current source.
+    with news.box.store.connect() as c:
+        c.execute('DELETE FROM creator_profiles')
+        c.execute('DELETE FROM articles')
+    (news.root / CATALOG).unlink()
+    assert news.prepare_native(message, 'p', 'news-one', 'native-defaults', content_production=True) == result
+    with pytest.raises(CreatorConflict): news.prepare_native(message + 'changed', 'p', 'news-one', 'native-defaults', content_production=True)
+
+
+def test_native_plain_modification_inherits_only_source_not_profile_defaults(news):
+    # No profile or catalog is needed for a normal native follow-up message.
+    with news.box.store.connect() as c: c.execute('DELETE FROM creator_profiles')
+    (news.root / CATALOG).unlink()
+    result = news.prepare_native('修改第一段，不制作图片', 'p', 'news-one', 'ordinary-modification')
+    assert result['input_text'].startswith('修改第一段，不制作图片')
+    assert result['creation']['defaults'] == {}
+    assert len(result['material_manifest']['files']) == 1
+    assert result['material_manifest']['files'][0]['role'] == 'source'
+    assert '仅讨论' not in result['input_text'] and '画像显式创作默认值' not in result['input_text']
+
+
+def test_native_production_with_missing_defaults_delegates_choices_to_original_agent(news):
+    (news.root / CATALOG).unlink()
+    result = news.prepare_native('先讨论方案', 'p', None, 'no-defaults', content_production=True)
+    assert result['material_manifest']['files'] == []
+    assert result['creation']['defaults'] == {}
+    assert '默认缺失或槽位缺项' in result['input_text']
+    assert 'format' not in result['creation']
 
 
 @pytest.mark.parametrize('field', ['catalog_revision', 'source_revision', 'profile_revision'])

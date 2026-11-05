@@ -57,6 +57,20 @@ class MonitorFaultTests(unittest.TestCase):
         self.assertEqual(self.store.read('status.json')['observation']['status'], 'app_missing')
         self.assertEqual(self.calls, [])
 
+    def test_slow_inspection_failure_records_completion_time_and_sanitized_cause_without_restart(self):
+        def unavailable():
+            self.clock[0] += 3
+            raise TimeoutError('private prompt and token must not be logged')
+        result = self.monitor(inspect_target=unavailable).tick(allow_repair=True)
+        self.assertEqual(result['decision'], 'inspection_unavailable')
+        self.assertEqual(result['at'], 1003)
+        self.assertEqual(result['inspection_seconds'], 3)
+        events = [json.loads(line) for line in (self.store.root/'events.jsonl').read_text().splitlines()]
+        self.assertEqual(events[-1]['error_type'], 'TimeoutError')
+        self.assertEqual(events[-1]['seconds'], 3)
+        self.assertNotIn('private prompt', json.dumps(events))
+        self.assertEqual(self.calls, [])
+
     def test_app_down_requests_only_fenced_server_recovery(self):
         result = self.monitor().tick(allow_repair=True)
         self.assertEqual(result['decision'], 'repair_acknowledged')

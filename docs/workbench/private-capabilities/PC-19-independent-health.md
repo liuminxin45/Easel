@@ -14,6 +14,8 @@
 
 **公网入口探测：** 用户2026-11-05报告普通4G的 ERR_CONNECTION_CLOSED，现有本机健康不能代表外部入口可达。本轮在 [public_ingress.py](../../../tools/health-control/easel_health_control/public_ingress.py) 增加独立公网探测，monitor 通过 `public_ingress_enabled=true` 启用采样；使用DoH取得公网地址，TLS/SNI保持原host，绕开本机MagicDNS/系统代理造成的本机路径假绿，并复用nonce/release/PID响应核对。公网失败/变慢但本机正常时只记 network_degraded，不授权重启健康业务、更换业务状态或重发任务。配置仍归 [config.example.json](../../../tools/health-control/config.example.json) 及安装后的独立配置，不进入前端。服务器侧公网探测成功也不等于运营商4G、实体vivo/WebToApp已经实测通过。
 
+**巡检自身的可追溯性：** 观测完成时间与开始时间、检查耗时分别记录；短暂IPC/检查不可用必须保留脱敏错误类型到独立事件日志，不因下一条成功覆盖而丢失诊断。检查失败仍不授予重启权限。2026-11-05持续观察曾见一条inspection_unavailable后自动恢复、后端PID不变；该旧错误未记原因，不能事后猜成确定超时或业务崩溃。
+
 **私有入口／资源：** [tools/health-control/easel_health_control/monitor.py](../../../tools/health-control/easel_health_control/monitor.py)、[tools/health-control/easel_health_control/canary.py](../../../tools/health-control/easel_health_control/canary.py)、[easel_workbench/business_health.py](../../../easel_workbench/business_health.py)、[easel_workbench/health_endpoint.py](../../../easel_workbench/health_endpoint.py)
 
 **官方复用／共通接缝：** [easel/harnesses/codex.py](../../../easel/harnesses/codex.py)

@@ -225,12 +225,14 @@ class Monitor:
 
     def tick(self, *, allow_repair=False):
         with self.store.lock():
-            now = self.clock()
+            started = self.clock()
             observation, _ = self._observe()
+            now = self.clock()
             options = {key: self.config[key] for key in ('threshold', 'startup_grace', 'cooldown', 'window', 'max_restarts') if key in self.config}
             policy = assess(self.store.policy(), observation, now, **options)
             self.store.save_policy(policy)
-            report = {'schema': 1, 'at': now, 'controller_pid': os.getpid(), 'observation': observation, 'policy': policy,
+            report = {'schema': 1, 'at': now, 'started_at': started, 'inspection_seconds': max(0, now-started),
+                      'controller_pid': os.getpid(), 'observation': observation, 'policy': policy,
                       'decision': policy['decision'], 'repair_enabled': allow_repair is True}
             if policy['action'] and allow_repair is True and self.recovery_bridge is not None:
                 fresh, _ = self._observe()
@@ -262,5 +264,6 @@ class Monitor:
                         report.update(decision='repair_receipt_unknown', repair={'operation_id': request['operation_id'], 'error_type': type(error).__name__})
                     report['policy'] = policy
             self.store.write('status.json', report)
-            self.store.event('observation', at=now, decision=report['decision'])
+            self.store.event('observation', at=now, decision=report['decision'],
+                             error_type=observation.get('error_type'), seconds=report['inspection_seconds'])
             return report

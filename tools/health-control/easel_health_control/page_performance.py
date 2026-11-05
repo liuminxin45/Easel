@@ -58,7 +58,7 @@ def summarize(directory,*,now=None,max_read=4*1024*1024):
                         for i,n in enumerate(item['buckets']):
                             if type(n) is int and 0<=n<=10000:stats[key][i]+=n
                     elif item.get('kind')=='slow' and len(slow)<20:
-                        slow.append({k:item[k] for k in ('metric','screen','platform','duration_ms','phases_ms','outcome','hidden','release','request_group','status','trace') if k in item})
+                        slow.append({'received_at':value['at'],**{k:item[k] for k in ('at','metric','screen','platform','duration_ms','phases_ms','outcome','hidden','release','request_group','status','trace') if k in item}})
         except OSError:partial=True
     return {'status':'partial' if partial else 'available','window_hours':24,'bytes_read':read,'bucket_upper_ms':[250,500,1000,2000,3000,5000,10000,30000,None],'dropped_reported':dropped,'server_dropped_max':server_dropped,'write_failures_max':write_failures,
             'histograms':[{'metric':key[0],'screen':key[1],'platform':key[2],'buckets':value} for key,value in sorted(stats.items(),key=lambda x:str(x[0]))], 'slow':slow}

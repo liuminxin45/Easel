@@ -24,7 +24,7 @@ def validate(value):
     if not isinstance(events,list) or not 1<=len(events)<=20 or type(dropped) is not int or not 0<=dropped<=100000:raise ValueError('invalid performance batch')
     clean=[]
     for item in events:
-        if not isinstance(item,dict) or set(item)-{'kind','metric','screen','platform','release','buckets','duration_ms','phases_ms','outcome','hidden','trace','request_group','status'}:raise ValueError('invalid performance event')
+        if not isinstance(item,dict) or set(item)-{'kind','metric','screen','platform','release','buckets','duration_ms','phases_ms','outcome','hidden','trace','request_group','status','at'}:raise ValueError('invalid performance event')
         if item.get('kind') not in ('summary','slow') or item.get('metric') not in METRICS or item.get('screen') not in SCREENS or item.get('platform') not in PLATFORMS:raise ValueError('invalid performance label')
         release=item.get('release')
         if not isinstance(release,str) or not re.fullmatch(r'native-[A-Za-z0-9_-]{1,80}',release):raise ValueError('invalid release')
@@ -41,6 +41,10 @@ def validate(value):
             if not isinstance(trace,str) or (trace and not re.fullmatch(r'[a-f0-9]{16,64}',trace)):raise ValueError('invalid trace')
             row.update(duration_ms=round(duration,1),phases_ms={k:round(v,1) for k,v in phases.items()},outcome=item['outcome'],hidden=item['hidden'])
             if trace:row['trace']=trace
+            at=item.get('at')
+            if at is not None:
+                if type(at) not in (int,float) or not math.isfinite(at) or not 0<=at<=4102444800:raise ValueError('invalid timestamp')
+                row['at']=round(at,3)
             group=item.get('request_group');status=item.get('status')
             if group is not None:
                 if group not in ('config','chat','news','works','skills','other'):raise ValueError('invalid request group')

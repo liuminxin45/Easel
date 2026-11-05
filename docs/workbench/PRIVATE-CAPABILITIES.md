@@ -2,7 +2,7 @@
 
 这是 AI 和维护者查找“我们增加了什么、在哪里接入 Easel、哪些不能继续扩展”的唯一文档索引。每项独立能力有一份维护卡；卡片链接当前源码、需求依据和验证入口，不复制技能方法或另建运行时注册表。
 
-首版盘点日期：**2026-11-05**。业务源码基线：`1901f832684e8d11f3d63bdca70aa0a803f37916`。官方完整集成基线仍以 [upstream-base.json](upstream-base.json) 为准，选取的 PR 另见 [upstream-overlays.json](upstream-overlays.json)；本次没有更新上游基线、启用新功能或切换线上版本。
+首版盘点日期：**2026-11-05**，首版业务源码基线 `1901f832684e8d11f3d63bdca70aa0a803f37916`。本次按 `49193c8` 及后续复核整改补全到36张维护卡；官方完整集成基线仍以 [upstream-base.json](upstream-base.json) 为准，选取的 PR 另见 [upstream-overlays.json](upstream-overlays.json)，不将本次整改冒称跟进官方最新main。部署与验证结果另按 [本轮 Spec](../../specs/private-registry-hardening-20261105/spec.md) 记录，登记表自身不证明已上线。
 
 ## 使用方法与状态
 
@@ -10,7 +10,7 @@
 
 - **已确认保留（PC）**：已有需求对应的能力边界；允许维护该边界，不代表任意扩大功能或取得制作、采纳、发布授权。
 - **退役／兼容（C）**：为历史、迁移或受理任务保留的代码，不能作为新增功能许可。
-- **待核对存量（U）**：存在实现，但具体范围与最新需求尚需逐项核对；仅作事实登记，不授予新增许可，也不授权直接删除。
+- **存量核对记录（U）**：保留初版核对ID及本轮结论；已核对/已分类不等于新能力批准，仍保留各调用的限制，不授予新增许可或直接删除授权。
 - 文档描述的能力状态不等同于每个函数都正确实现或已通过本轮运行验收。首版是按页面组装、服务入口、SKILL 与既有记录建立的能力级清单，不是逐行代码合规证明。新发现的遗漏必须补登记，不因“首版没列”自动删除或默认获批。
 
 ## 已确认能力（27 项）
@@ -37,8 +37,8 @@
 | [PC-16 配置修订、凭据与隔离安装队列](private-capabilities/PC-16-settings-installation.md) | 共通适配 | 服务器加密凭据、会话准确配置、明确保存、环境/依赖检测和持久安装操作身份。 | `settings.py`、`environment.py`、`SettingsPanel.tsx` |
 | [PC-17 附件上传、文件预览、下载与导出](private-capabilities/PC-17-artifact-delivery.md) | 共通适配 | 附件 ID/幂等注册、流式上传、受保护预览、限时下载凭证、HEAD/Range、导出与原件 SHA。 | `uploads.py`、`outputs.py`、`DownloadLink.tsx` |
 | [PC-18 托管运行、不可变配对与安全部署](private-capabilities/PC-18-runtime-delivery.md) | 运维能力 | 角色监督、OS 锁与进程身份、活动前后端指针、写入围栏、准确候选验收、旧包归档和保留未知回执。 | `rpc.py`、`chat.py` |
-| [PC-19 独立健康中控与每日全链路检查](private-capabilities/PC-19-independent-health.md) | 运维能力 | 项目外监控进程、入口/业务/性能检测、受控恢复、隔离浏览器旅程及每日真实 Agent canary。 | `codex.py` |
-| [PC-20 官方基线、PR 补丁及 fork 交付](private-capabilities/PC-20-upstream-maintenance.md) | 开发维护 | 基线 JSON/历史标记、显式 PR overlay、同步技能、差异审计、技能字节与可复现交付。 | `app.py`、`App.tsx`、`web_services` |
+| [PC-19 独立健康中控与每日全链路检查](private-capabilities/PC-19-independent-health.md) | 运维能力 | 项目外监控进程、入口/业务/性能及独立公网探测、受控恢复、隔离浏览器旅程及每日真实 Agent canary；外网异常不误重启健康后端。 | `codex.py` |
+| [PC-20 官方基线、PR 补丁及 fork 交付](private-capabilities/PC-20-upstream-maintenance.md) | 开发维护 | 基线/PR记录、同步技能、公共差异逐文件台账、登记自动门禁与可复现fork交付；不替代业务授权。 | `app.py`、`App.tsx`、`web_services` |
 | [PC-21 项目 Codex Spec 工作流与维护知识](private-capabilities/PC-21-project-tooling.md) | 开发维护 | 项目开发技能、隔离 CLI、spec 记录、维护文档和本私有能力速查表；与产品内容技能分开。 | 不修改产品代码；仅开发工作流 |
 | [PC-22 选题研究](private-capabilities/PC-22-topic-research.md) | 辅助业务 SKILL | 讨论、选题与新闻增强的方法和事实边界；是否调用由本轮所选技能或既有明确调用链决定。 | `skills.py`、`SkillDrawer.tsx` |
 | [PC-23 图文写作](private-capabilities/PC-23-content-writing.md) | 辅助业务 SKILL | 结构、表述、事实与原字约束；供明确选择的内容流程组合，不将所有文章变成贴图。 | `skills.py`、`SkillDrawer.tsx` |
@@ -53,7 +53,7 @@
 
 油猪·做贴图与油猪·做文章分别维护，互不套用流程。方法正文、资源和组合依赖以各自 `SKILL.md` 为准；本表仅登记业务边界和接入位置。开发技能 `codex-spec`、`easel-upstream-sync` 与产品内容技能分开登记。
 
-## 退役与兼容代码（4 项，不是新增许可）
+## 退役与受限兼容代码（7 项，不是新增许可）
 
 | 登记 ID / 专门记录 | 状态 | 保留或限制的内容 |
 | --- | --- | --- |
@@ -61,19 +61,24 @@
 | [C-02 旧生产/媒体执行与 vendor](private-capabilities/C-02-legacy-production-media.md) | 兼容受限／部分入口已退役 | 旧任务的核对、进程及准确源码保护，旧媒体/生产方法与历史 vendor 原件。 |
 | [C-03 旧工作台、通知、资料库与自动检测](private-capabilities/C-03-retired-entrypoints.md) | 已退役／迁移兼容 | 旧 URL、旧壳/SW/安装入口、通知/设备、个人资料库、旧桥接与自动账号检测；旧统计页面不恢复，已有队列/历史保持。 |
 | [C-04 旧 content-production 组合技能](private-capabilities/C-04-legacy-content-production-skill.md) | 隐藏入口／兼容资源 | 原组合方法和历史冻结输入仍可解释；新贴图/文章入口分别使用 PC-08/PC-09。 |
+| [C-05 本地项目关联、作品归档与 Git 同步存量](private-capabilities/C-05-local-project-operations.md) | 受限兼容／保留原操作 | 分别登记项目绑定/重试写入口、local_io worker开关、原决定和准确文件Git意图；不新增外部同步授权。 |
+| [C-06 证据索引、分类与分析设置存量](private-capabilities/C-06-evidence-index-compatibility.md) | 受限兼容／确定性索引与历史 | 区分仍可写的索引/分类/设置和HTTP层410的分析/提案动作；自动模型学习持续关闭。 |
+| [C-07 旧创作配方、图稿方案与样本导入存量](private-capabilities/C-07-legacy-creative-recipes.md) | 兼容受限／混合读写 | 区分只读预览、原件导入/方案保存、可能排Agent讨论的准备动作及退役参数预设；不恢复旧生产页。 |
 
-## 待核对存量（2 项，不是新增许可）
+## 已核对存量记录（2 项，不是新增许可）
 
-这些条目明确保留不确定性。后续整改需先核对真实调用、准入和用户决定；不得借本次登记恢复旧功能或回退整个私有层。
+保留首版U-ID用于追溯，本轮已纠正用途推断并完成逐路由分类。下列结论保留准确版本/授权边界，不意味着所有旧实现都需要删除、全部获准扩展或已经完成真实业务验收。
 
 | 登记 ID / 专门记录 | 已见存量与需要核对的范围 |
 | --- | --- |
-| [U-01 采纳附加动作与旧创作参数的范围](private-capabilities/U-01-completion-options-review.md) | 核心采纳与版本保留已登记 PC-12；采纳完成窗口中的附加归档/复盘/学习选项，以及旧制作参数显示范围，需要分别对照后续用户决定。 |
-| [U-02 旧私有写接口与生产页面的剩余调用](private-capabilities/U-02-legacy-write-path-review.md) | 旧制作表单、风格/研究/长期业务辅助代码及旧 REST 写路径中，已退役、历史核对和仍可执行部分的逐项分类。 |
+| [U-01 已核对的采纳与准确版本记录边界](private-capabilities/U-01-completion-options-review.md) | 已核对：三种完成mode与质量token不是整理经验；准确版本只读记录不等同已删除的会话“本轮创作设置”。归PC-12/PC-15保留。 |
+| [U-02 旧生产写入口的逐路由归类](private-capabilities/U-02-legacy-write-path-review.md) | 已分类：写/排队/只读/410逐项列出并关联PC/C卡；新普通草稿按明确format选两个油猪技能，旧受理身份不改写。 |
 
 ## 官方修改面与同步核对
 
 采用 [适配点文档](ADAPTATION-POINTS.md) 中的端口与适配器、集中组装、可选扩展槽及边界装饰。共享页面和处理函数只保留一份。下面是集中核对位置，不是新建第二套页面或服务的许可。
+
+实际公共源码差异统一查 [逐文件台账](SHARED-SOURCE-CHANGES.md) 及其 [结构化原件](shared-source-changes.json)：按路径、能力ID、官方PR/通用修复/宿主接缝分类，记录原因和同步核对点。维护卡通过ID关联此唯一清单，不复制第二份85文件列表；“文件与官方基线不同”不自动等于私有业务或应当删除。
 
 | 共通位置 | 关联能力 | 必要接缝与更新时核对 |
 | --- | --- | --- |
@@ -94,9 +99,9 @@
 1. 先找已有官方实现及已有 PC-ID。能直接复用就不新增实现；属于已有能力的扩展更新原卡，独立能力另建稳定 ID。
 2. 每张维护卡必须写清：状态/日期、用户需求或 Spec、允许范围、官方复用位置与必要修改理由、实际影响的官方文件、私有代码/API/存储入口、不可破坏合同、验证入口及上游更新/退役核对点。没有 HTTP 或存储的能力明确写“无独立接口/存储”，不创造多余机制。
 3. 新卡放在 `docs/workbench/private-capabilities/<ID>-<name>.md`，在本表登记并链接。不得仅改本表一行而没有专门文档，或把运行时自动扫描结果当作用户授权。
-4. 登记、维护卡、实现和必要验证同一提交交付。接口/存储名称应引用唯一源码，技能方法应引用原 SKILL，不复制第二份实现或正文。
+4. 新能力/能力范围变更的登记、维护卡、实现和必要验证同一提交交付；纯维护修复不扩能力时按PC-20的maintenance规则声明原能力和理由，新增私有源码仍必须在所属卡登记。接口/存储名称应引用唯一源码，技能方法应引用原SKILL，不复制第二份实现或正文。自动检查能发现漏登记/失效路径，不能自动批准需求。
 5. 功能迁移、退役、移除或被官方吸收时，同步更新本表、维护卡和官方差异；保留旧 ID 与历史依据。未登记或范围不清的存量先标记待核对，不在无需求依据时扩大或直接清理。
 
-## 首版覆盖及验证范围
+## 首版与本轮复核范围
 
-盘点主入口 `workbench/ui/index.tsx`、原生 API/技能绑定、业务服务、运维入口及对应历史决定；新增 33 张维护卡。逐项源码/文档链接及分类覆盖在本次提交前核验，记录见 [本次 Spec](../../specs/private-capability-registry-20261105/spec.md)。本轮仅调整项目规范和维护文档，不修改业务代码、技能正文、数据库、运行指针，也不重跑真实制作、平台登录或发布。
+首版按主入口、原生API/技能绑定、业务服务、运维入口及历史决定建立33张卡，其原始文档验证与只读限制保留在 [首版 Spec](../../specs/private-capability-registry-20261105/spec.md)。本轮复核拆出C-05/C-06/C-07，现为27项PC、7项C、2项U，共36张卡，并补齐官方差异、油猪工具、质量确认与入口门控事实；实际构建、测试、提交和部署分别见 [本轮 Spec](../../specs/private-registry-hardening-20261105/spec.md)。任何文档分类均不代替真实模型、平台发布或实体4G/WebToApp验收。

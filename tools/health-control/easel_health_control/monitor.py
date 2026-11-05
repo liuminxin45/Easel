@@ -51,7 +51,7 @@ def ingress_origin(value):
     return value.rstrip('/')
 
 
-def probe_http(url, token, release, timeout=3):
+def probe_http(url, token, release, timeout=3, *, opener=None):
     """Verify nonce/release/PID, reject redirects/proxies and never retain body."""
     start = time.monotonic()
     nonce = secrets.token_hex(16)
@@ -62,7 +62,7 @@ def probe_http(url, token, release, timeout=3):
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs): return None
     try:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         with opener.open(request, timeout=timeout) as response:
             raw = response.read(4097)
             value = json.loads(raw) if len(raw) <= 4096 else None
@@ -82,9 +82,12 @@ def probe_http(url, token, release, timeout=3):
 
 
 class Monitor:
-    def __init__(self, config, store, *, inspect_target, http_probe=probe_http, recovery_bridge=None, clock=time.time):
+    def __init__(self, config, store, *, inspect_target, http_probe=probe_http, recovery_bridge=None, clock=time.time, public_probe=None):
         self.config, self.store = dict(config), store
         self.inspect_target, self.http_probe, self.recovery_bridge, self.clock = inspect_target, http_probe, recovery_bridge, clock
+        self.public_probe = public_probe
+        self._public_result = None
+        self._public_key = None
         self.app_root = Path(config['app_root']).resolve()
         if store.root == self.app_root or store.root.is_relative_to(self.app_root):
             raise ValueError('controller_state_must_be_outside_application')
@@ -157,6 +160,22 @@ class Monitor:
             if ingress.get('ok') and ingress.get('pid') not in allowed_pids:
                 ingress = {'ok': False, 'reason': 'foreign_ingress_pid', 'recoverable': False, 'seconds': ingress.get('seconds', 0)}
             result['ingress'] = ingress
+            if self.config.get('public_ingress_enabled') is True:
+                now = self.clock()
+                public_key = (bound['release'], bound['manifest_sha256'], tuple(allowed_pids))
+                if (self._public_result is None or now - self._public_result['observed_at'] >= 60
+                        or now < self._public_result['observed_at'] or self._public_key != public_key):
+                    from .public_ingress import probe_public_http
+                    public = (self.public_probe or probe_public_http)(origin + HEALTH_PATH,
+                        inspected.get('health_token'), bound['release'], self.config.get('ingress_timeout', 5))
+                    if public.get('ok') and public.get('pid') not in allowed_pids:
+                        public = {'ok': False, 'reason': 'foreign_public_ingress_pid', 'recoverable': False, 'seconds': public.get('seconds', 0)}
+                    self._public_result = {**public, 'observed_at': now, 'release': bound['release']}
+                    self._public_key = public_key
+                    self.store.event('public_ingress_probe', at=now, source='public_ingress',
+                        outcome='healthy' if public.get('ok') else 'failed',
+                        reason=public.get('reason', 'verified'), seconds=public.get('seconds', 0))
+                result['public_ingress'] = self._public_result
             manager = inspected.get('manager', {})
             server = inspected.get('server', {})
             stale_manager = manager.get('alive') is not True or not number(manager.get('heartbeat_age_seconds')) or manager['heartbeat_age_seconds'] > 90
@@ -176,7 +195,9 @@ class Monitor:
                 age_seconds=age)
             healthy_local = local.get('ok') is True
             if healthy_local and not stale_manager:
-                if not ingress.get('ok') or ingress.get('seconds', 0) > self.config.get('slow_seconds', 2): result['status'] = 'network_degraded'
+                if (not ingress.get('ok') or ingress.get('seconds', 0) > self.config.get('slow_seconds', 2)
+                        or result.get('public_ingress', {}).get('ok') is False
+                        or result.get('public_ingress', {}).get('seconds', 0) > self.config.get('public_slow_seconds', 8)): result['status'] = 'network_degraded'
                 elif local.get('seconds', 0) > self.config.get('slow_seconds', 2): result['status'] = 'endpoint_slow'
                 elif business.get('external_provider') is True: result['status'] = 'provider_degraded'
                 elif business.get('ok') is False: result['status'] = 'business_degraded'

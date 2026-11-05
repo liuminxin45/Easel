@@ -29,8 +29,11 @@ def test_official_catalog_discovers_project_and_official_skills_without_private_
     before={p:p.read_bytes() for p in (b.root/'skills/builtin').glob('*/SKILL.md')}
     monkeypatch.setattr(b.creator,'detail',lambda *a,**k:pytest.fail('native menu must not load a private skill release'))
     rows=native.items()
-    assert {row['name'] for row in rows}=={p.parent.name for p in before}
-    assert {'card-quote','ai-image-gen','content-production','content-writing'}<={row['name'] for row in rows}
+    # The old combined skill remains readable for frozen historical requests,
+    # while all new selections use the two independent Oil Pig workflows.
+    assert {row['name'] for row in rows}=={p.parent.name for p in before}-{'content-production'}
+    assert {'card-quote','ai-image-gen','oil-pig-poster','oil-pig-article','content-writing'}<={row['name'] for row in rows}
+    assert 'content-production' not in {row['name'] for row in rows}
     assert all('version' not in row and 'origin' not in row and 'launch_actions' not in row for row in rows)
     assert all(p.read_bytes()==raw for p,raw in before.items())
     assert 'experience-distillation' not in {row['name'] for row in rows}

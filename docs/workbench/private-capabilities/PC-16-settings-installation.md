@@ -2,6 +2,8 @@
 
 [返回私有能力登记表](../PRIVATE-CAPABILITIES.md)
 
+**实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-16` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
+
 - **状态：** 已确认保留；类型：共通适配。
 - **需求依据：** 用户要求官方设置页和模型/引擎通道，保留配置修订、项目隔离安装，固定 Node/Python。 依据见下方原始规则/Spec；本卡不额外授予执行、采纳或发布权限。
 - **能力范围：** 服务器加密凭据、会话准确配置、明确保存、环境/依赖检测和持久安装操作身份。
@@ -10,14 +12,16 @@
 
 **接口与状态归属：** 原 /api/settings/*、/api/env 进入共享处理函数；SettingsService 保存 workbench_settings_versions/operations，凭据及安装任务分别在现有 vault/queue 边界管理。
 
+**执行权限策略：** 原 [HarnessSettings](../../../web/frontend/src/components/HarnessSettings.tsx) 和既有settings保存明确的 `codex_auto_approve`；当前 [codex.py](../../../easel/harnesses/codex.py) 在其为true时使用 `danger-full-access`/approvalPolicy=never，[permissions.py](../../../easel/harnesses/permissions.py) 与 [workspace.py](../../../easel/harnesses/workspace.py) 使用同一策略。该现有差异必须与上游权限语义分开核对，不称为未经修改的官方默认。旧会话和已受理任务继续冻结原配置；独立中控canary保留严格workspace-write，不继承正式Full access。工具执行权限不增加平台发布、修改账号、外部Git同步或采纳授权。
+
 **私有入口／资源：** [easel_workbench/settings.py](../../../easel_workbench/settings.py)、[easel_workbench/features/installations/queue.py](../../../easel_workbench/features/installations/queue.py)、[easel_workbench/infrastructure/installations/host.py](../../../easel_workbench/infrastructure/installations/host.py)、[web/frontend/src/workbench/ui/settingsApi.ts](../../../web/frontend/src/workbench/ui/settingsApi.ts)
 
 **官方复用／共通接缝：** [easel/web_services/settings.py](../../../easel/web_services/settings.py)、[easel/web_services/environment.py](../../../easel/web_services/environment.py)、[web/frontend/src/components/SettingsPanel.tsx](../../../web/frontend/src/components/SettingsPanel.tsx)
 
-**验证入口：** [tests/test_workbench_settings.py](../../../tests/test_workbench_settings.py)、[tests/test_workbench_install_queue.py](../../../tests/test_workbench_install_queue.py)
+**验证入口：** [tests/test_workbench_settings.py](../../../tests/test_workbench_settings.py)、[tests/test_workbench_install_queue.py](../../../tests/test_workbench_install_queue.py)、[tests/test_codex_permissions.py](../../../tests/test_codex_permissions.py)、[tests/test_harness_workspace.py](../../../tests/test_harness_workspace.py)。工具权限与业务授权分别验证。
 
 **需求与设计记录：** [docs/workbench/SETTINGS-ALIGNMENT-20261030.md](../../../docs/workbench/SETTINGS-ALIGNMENT-20261030.md)、[specs/settings-native-cleanup-20261103/spec.md](../../../specs/settings-native-cleanup-20261103/spec.md)
 
 **后续维护：** 变更时先核对上述调用链与当前官方实现；优先共用、缩小上游补丁。同步维护本卡的范围、入口、共通差异及验证依据；被上游吸收时移除对应适配并更新登记状态。原方法、历史输入和交付证据不在本卡复制或改写。
 
-**登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；本次只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。
+**首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。

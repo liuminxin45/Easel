@@ -1,0 +1,944 @@
+{
+  "schema_version": 1,
+  "upstream_commit": "0f43dc98277eac85fb48952878acad349731d3fc",
+  "inventory_commit": "49193c821055841ad6930eafd81cd662ff349be6",
+  "recorded_at": "2026-11-05",
+  "purpose": "source-maintenance-only",
+  "scope": {
+    "include": [
+      "easel/",
+      "web/app.py",
+      "web/frontend/src/"
+    ],
+    "exclude": [
+      "web/frontend/src/workbench/",
+      "web/frontend/src/assets/workbench/"
+    ]
+  },
+  "entries": [
+    {
+      "path": "easel/cli.py",
+      "status": "M",
+      "capabilities": [
+        "PC-18"
+      ],
+      "kind": "host-port",
+      "reason": "增加显式 --profile workbench 启动私有解释器与宿主；默认 easel profile 继续原入口。",
+      "upstream_check": "核对 cmd_web 默认分支、固定解释器及启动参数；不能将私有入口扩散到默认命令或同步给官方贡献。"
+    },
+    {
+      "path": "easel/commands/doctor.py",
+      "status": "M",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "easel/harnesses/acp.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03"
+      ],
+      "kind": "host-port",
+      "reason": "可选原生请求/回合观察及取消回执回调，ACP仍负责原生执行。",
+      "upstream_check": "核对 session/prompt请求ID、通知早到时序和真实cancel终态；CLI退出不能冒充远端已停。"
+    },
+    {
+      "path": "easel/harnesses/base.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-16",
+        "PC-19"
+      ],
+      "kind": "host-port",
+      "reason": "RunRequest增加可选冻结指令、图片、推理/输出参数及原生回合/中断/消息/执行回执钩子。",
+      "upstream_check": "核对字段默认None和所有adapter调用；已有任务保留冻结参数，未传宿主钩子时不建立私有依赖。"
+    },
+    {
+      "path": "easel/harnesses/codex.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-16",
+        "PC-17",
+        "PC-19"
+      ],
+      "kind": "mixed",
+      "reason": "共用Codex RPC执行；补准确回合/停止/产物回调、原生图片与结构化参数，codex_auto_approve按已选策略映射Full access。",
+      "upstream_check": "核对原生协议、完成/中断事件所有权及参数校验；Full access仅随明确保存配置生效，不增加发布授权；隔离canary保持自己的权限。"
+    },
+    {
+      "path": "easel/harnesses/openclaw.py",
+      "status": "A",
+      "capabilities": [
+        "PC-03",
+        "PC-16"
+      ],
+      "kind": "host-port",
+      "reason": "通过原生本地CLI执行OpenClaw，调用方传隔离配置并保管会话；不启动或改写网关。",
+      "upstream_check": "核对CLI结果中的准确session/run/错误与执行回执；取消进程仍保留unknown，不自动重放。"
+    },
+    {
+      "path": "easel/harnesses/permissions.py",
+      "status": "M",
+      "capabilities": [
+        "PC-16"
+      ],
+      "kind": "private-policy",
+      "reason": "明确开启的Codex Full access兼容处理执行/文件授权决定；不再将此开关解释为旧普通操作白名单。",
+      "upstream_check": "核对可用原生decision、开关关闭行为及会话配置冻结；不能扩大未开启Full access的沙箱或平台交付授权。"
+    },
+    {
+      "path": "easel/harnesses/rpc.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03"
+      ],
+      "kind": "host-port",
+      "reason": "RPC.call增加可选on_request，调用方在发送边界取得准确请求ID。",
+      "upstream_check": "核对ID产生、发送异常及pending清理时序；没有回调的原调用保持原行为。"
+    },
+    {
+      "path": "easel/harnesses/workspace.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-16"
+      ],
+      "kind": "mixed",
+      "reason": "支持准确冻结工作区指令，并在共通指令中说明当前Full access或沙箱实际权限。",
+      "upstream_check": "核对冻结指令优先级、实际引擎与权限表述；不能把工具权限说明当采纳/发布许可或把新默认注入旧任务。"
+    },
+    {
+      "path": "easel/openclaw_workspace.py",
+      "status": "M",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "easel/skills_sync.py",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "easel/web_services/__init__.py",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "shared-extraction",
+      "reason": "声明单一共享Web服务包。",
+      "upstream_check": "核对包职责与依赖方向，不引入私有层。"
+    },
+    {
+      "path": "easel/web_services/accounts.py",
+      "status": "A",
+      "capabilities": [
+        "PC-14"
+      ],
+      "kind": "shared-extraction",
+      "reason": "将官方账号驱动、登录/扫码状态和身份处理提成两入口共用函数。",
+      "upstream_check": "核对登录状态/轮询终态、驱动注册和默认接口，私有层只保留身份与授权台账。"
+    },
+    {
+      "path": "easel/web_services/analytics.py",
+      "status": "A",
+      "capabilities": [
+        "PC-15"
+      ],
+      "kind": "shared-extraction",
+      "reason": "官方平台数据/复盘HTTP处理唯一共享，运行依赖经上下文提供。",
+      "upstream_check": "核对原响应、平台身份、指标来源与显式读取边界；不因复用自动发布或恢复私有统计页。"
+    },
+    {
+      "path": "easel/web_services/binding.py",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "shared-extraction",
+      "reason": "按同一函数代码对象绑定各入口独立上下文的兼容桥，不生成源码副本。",
+      "upstream_check": "核对函数globals/闭包及绑定快照限制；新增依赖优先显式工厂，不扩散运行时替换。"
+    },
+    {
+      "path": "easel/web_services/chat.py",
+      "status": "A",
+      "capabilities": [
+        "PC-03"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原生与API模式监督、锁、停止和问题生命周期共用，宿主提供持久存储及回执端口。",
+      "upstream_check": "核对原入口与私有宿主代码身份、准确停止所有权、unknown不重放及配置冻结。"
+    },
+    {
+      "path": "easel/web_services/concurrency.py",
+      "status": "A",
+      "capabilities": [
+        "PC-03",
+        "PC-13"
+      ],
+      "kind": "shared-extraction",
+      "reason": "统一阻塞I/O线程边界，取消时等真实工作结束后再释放调用方锁。",
+      "upstream_check": "核对取消/异常/线程完成竞态，不把HTTP断开当服务器事务取消或允许重复写入。"
+    },
+    {
+      "path": "easel/web_services/environment.py",
+      "status": "A",
+      "capabilities": [
+        "PC-16"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原环境检测、依赖及安装方法共享，宿主注入隔离安装配置。",
+      "upstream_check": "核对固定Node/Python、project_local/installable字段与持久安装队列，不改全局环境。"
+    },
+    {
+      "path": "easel/web_services/outputs.py",
+      "status": "A",
+      "capabilities": [
+        "PC-13",
+        "PC-17"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原输出读取、类型/保护目录及文件预览处理共享，宿主适配版本索引和文件位置。",
+      "upstream_check": "核对路径保护、流式读取、产物形态和删除限制；索引不是原件主库。"
+    },
+    {
+      "path": "easel/web_services/planning.py",
+      "status": "A",
+      "capabilities": [
+        "PC-05",
+        "PC-07",
+        "PC-13"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原热点、选题、排期CRUD与通用来源引用共享，私有存储通过上下文端口接入。",
+      "upstream_check": "核对默认响应、可选source_id、日历与选题写入合同，来源引用不授权制作或发布。"
+    },
+    {
+      "path": "easel/web_services/profiles.py",
+      "status": "A",
+      "capabilities": [
+        "PC-11"
+      ],
+      "kind": "shared-extraction",
+      "reason": "官方画像表单/六维文件构造与增强生命周期共享，私有端提供版本化存储。",
+      "upstream_check": "核对原字段、增强后台状态/起始修订CAS和删除保护；原入口文件存储保持。"
+    },
+    {
+      "path": "easel/web_services/settings.py",
+      "status": "A",
+      "capabilities": [
+        "PC-16"
+      ],
+      "kind": "shared-extraction",
+      "reason": "官方引擎、模型和通道设置唯一共享；宿主提供凭据、配置修订及环境端口。",
+      "upstream_check": "核对默认配置响应、脱敏、显式保存与已有会话准确修订，不能维护私有函数副本。"
+    },
+    {
+      "path": "easel/web_services/skills.py",
+      "status": "A",
+      "capabilities": [
+        "PC-10",
+        "PC-08",
+        "PC-09"
+      ],
+      "kind": "shared-extraction",
+      "reason": "官方目录/详情/依赖脱敏/配置和技能执行服务共用，宿主只供应环境、画像和执行端口。",
+      "upstream_check": "核对原SkillPage/Drawer合同、当前磁盘SKILL及资源；不恢复私有候选、版本pin或计划执行前提。"
+    },
+    {
+      "path": "easel/web_services/uploads.py",
+      "status": "A",
+      "capabilities": [
+        "PC-17"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原生multipart和聊天raw上传共用受限流式writer及清理边界。",
+      "upstream_check": "核对鉴权先于接收、50MB限制、取消/超限临时文件清理、幂等附件及未读取未授权body。"
+    },
+    {
+      "path": "web/app.py",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-10",
+        "PC-11",
+        "PC-14",
+        "PC-16",
+        "PC-17"
+      ],
+      "kind": "shared-extraction",
+      "reason": "原路由绑定同一web_services函数、常量与上下文，继续作为官方独立入口。",
+      "upstream_check": "核对原路由/测试钩子、默认目录与双入口构建，不让通用入口反向导入私有业务。"
+    },
+    {
+      "path": "web/frontend/src/App.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-02",
+        "PC-03",
+        "PC-07"
+      ],
+      "kind": "host-port",
+      "reason": "ApplicationFrame为唯一页面外壳；可选host注入导航/服务器会话/内容，主题与来源参数沿集中端口传递。",
+      "upstream_check": "核对无host时原NativeApp、侧栏与页面组织；有host时仅使用原页面或登记业务扩展，禁止另画壳。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/README.md",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/bilibili.svg",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/kuaishou.svg",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/wechat.svg",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/xiaohongshu.svg",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/assets/platform/zhihu.svg",
+      "status": "A",
+      "capabilities": [
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/AccountsPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-14",
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "官方账号页叠加可见性轮询、迟到响应隔离及可选弹层/内容就绪端口。",
+      "upstream_check": "核对QR单次登录、恢复查询先于超时裁决、凭据未保存关闭确认及原登录终态；不能据私有会话行显示成功。"
+    },
+    {
+      "path": "web/frontend/src/components/ArtifactGallery.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-12",
+        "PC-17"
+      ],
+      "kind": "mixed",
+      "reason": "原产物组件复用文本/文档预览、可打开原图和统一下载；文档仅允许鉴权本地路径。",
+      "upstream_check": "核对实际文件URL、iframe沙箱、原图与下载resolver，不把不存在路径投影为可点产物。"
+    },
+    {
+      "path": "web/frontend/src/components/BreakdownPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-26",
+        "PC-02"
+      ],
+      "kind": "host-port",
+      "reason": "原拆解页接可选分析/输入/结果端口，并将真实错误用于共通状态卡。",
+      "upstream_check": "核对未传端口原runAgent流程和结果存选题行为，业务分析方法仍在SKILL而非平行页面。"
+    },
+    {
+      "path": "web/frontend/src/components/BrushEntry.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-10",
+        "PC-02"
+      ],
+      "kind": "host-port",
+      "reason": "原画笔菜单增加技能项/选择及层管理端口，与斜杠菜单共用项目定位helper。",
+      "upstream_check": "核对默认画笔项、显式选择不自动发送、触摸/键盘与关闭恢复焦点。"
+    },
+    {
+      "path": "web/frontend/src/components/CalendarPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-02",
+        "PC-04",
+        "PC-13"
+      ],
+      "kind": "host-port",
+      "reason": "原排期页接草稿/视图/弹层端口与缓存订阅，返回保留输入/月份/筛选。",
+      "upstream_check": "核对原排期CRUD、草稿精确清理、迟到读取、关闭事务及排期不扩大发布授权。"
+    },
+    {
+      "path": "web/frontend/src/components/ChatPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-04",
+        "PC-10",
+        "PC-17"
+      ],
+      "kind": "mixed",
+      "reason": "原聊天页面接受控输入、技能/斜杠、回执状态、消息扩展/产物解析及视图端口；唯一原输入和消息渲染保持。",
+      "upstream_check": "核对普通默认行为、仅真实受理清输入、停止状态、未知禁重发、滚动跟随与恢复、技能选择不自动执行。"
+    },
+    {
+      "path": "web/frontend/src/components/ContentPanel.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方PR198列表面板，增加可选body属性承接宿主滚动恢复及紧凑布局。",
+      "upstream_check": "核对官方结构/默认滚动和面板header；宿主属性只做已登记几何/滚动，不重画列表或隐藏内容。"
+    },
+    {
+      "path": "web/frontend/src/components/CopyableText.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-02",
+        "PC-12"
+      ],
+      "kind": "shared-extraction",
+      "reason": "提取官方原复制正文结构为共通组件，版本与新闻扩展使用同一复制交互。",
+      "upstream_check": "核对复制原字、长文本/换行和原页面默认样式，不增加私有复制正文副本。"
+    },
+    {
+      "path": "web/frontend/src/components/DashboardPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-05",
+        "PC-07",
+        "PC-13",
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "官方PR198工作台面板复用；补可选来源导航、分层读取/缓存、独立错误和空面板投影端口。",
+      "upstream_check": "核对首页热点与雷达统一到私有新闻页、当日空结果无旧缓存、原默认onUseTopic及读取失败不冒充空结果。"
+    },
+    {
+      "path": "web/frontend/src/components/DownloadLink.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-17"
+      ],
+      "kind": "host-port",
+      "reason": "所有显式文件下载共用组件和download manager，宿主resolver提供鉴权交接。",
+      "upstream_check": "核对原链接无宿主时可用、限时凭证/退出撤销和真实设备保存的验证边界。"
+    },
+    {
+      "path": "web/frontend/src/components/Drawer.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-02"
+      ],
+      "kind": "shared-extraction",
+      "reason": "由官方SkillDrawer结构最小提取唯一抽屉外壳，原技能及私有详情共同使用。",
+      "upstream_check": "核对原CSS/尺寸/关闭控件、portal/focus/history所有权，不演变平行Modal框架。"
+    },
+    {
+      "path": "web/frontend/src/components/EnvBoard.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-16"
+      ],
+      "kind": "host-port",
+      "reason": "原环境页按可选installable/installKey/scope显示固定运行时与项目隔离安装，批量安装去重。",
+      "upstream_check": "核对默认本机安装提示保持、固定Node/Python只检测和相同依赖不会重复排队。"
+    },
+    {
+      "path": "web/frontend/src/components/HarnessSettings.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-16",
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "原设置表单接SettingsApi/hostManaged/dirty端口，统一提示；明确Full access配置语义。",
+      "upstream_check": "核对默认API、显式保存、离开未存输入、开关与后端实际权限一致，旧会话配置不被新设置覆盖。"
+    },
+    {
+      "path": "web/frontend/src/components/IdeasPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-04",
+        "PC-07",
+        "PC-13"
+      ],
+      "kind": "mixed",
+      "reason": "原选题页接输入/视图草稿和缓存，保留通用source_id后将新闻关联交宿主。",
+      "upstream_check": "核对原CRUD/空表、准确来源保存、返回状态及标题相同不猜新闻身份。"
+    },
+    {
+      "path": "web/frontend/src/components/InteractionNotice.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-02"
+      ],
+      "kind": "shared-extraction",
+      "reason": "将已有任务状态卡结构用于统一反馈/恢复提示，共通组件不认识私有业务。",
+      "upstream_check": "核对真正错误和未知回执仍可见、正常后台刷新不闪动；不恢复顶部固定平铺技术文字。"
+    },
+    {
+      "path": "web/frontend/src/components/ManualPublishPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-15",
+        "PC-17"
+      ],
+      "kind": "host-port",
+      "reason": "原手动发布页可选Agent操作接原生对话，导出改用唯一download manager。",
+      "upstream_check": "核对不传agentActions仍原流程，生成/核验/导出不冒称平台发布成功，交付仍需准确授权。"
+    },
+    {
+      "path": "web/frontend/src/components/MessageBubble.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-03",
+        "PC-17"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方消息和产物渲染，支持宿主注入已核实产物/路径resolver及链接处理选项。",
+      "upstream_check": "核对历史正文不改写、链接只指向真实授权文件、原/私有消息展示均可独立运行。"
+    },
+    {
+      "path": "web/frontend/src/components/OnboardingWizard.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-11",
+        "PC-02"
+      ],
+      "kind": "host-port",
+      "reason": "原画像向导接服务及弹层/脏输入端口，与共享画像增强生命周期配套。",
+      "upstream_check": "核对六维表单、基线可直接用、后台unknown不重发、关闭/恢复不丢未保存输入。"
+    },
+    {
+      "path": "web/frontend/src/components/OutputsPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-12",
+        "PC-13",
+        "PC-17"
+      ],
+      "kind": "host-port",
+      "reason": "原内容库接可选分层dataSource、视图恢复、版本详情扩展和文件下载服务。",
+      "upstream_check": "核对无dataSource原树模式，按需目录/详情/预览、准确删除和父目录定位，不能把私有列表覆盖原页面。"
+    },
+    {
+      "path": "web/frontend/src/components/ProfilePage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-11",
+        "PC-04",
+        "PC-13"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方画像恢复修复，增加显式loadPersonas、草稿/视图/详情端口及安全删除/资料导入适配。",
+      "upstream_check": "核对官方修复与宿主CAS/准确revision共存，inactive画像不供新会话使用、历史仍可读，未存编辑不丢。"
+    },
+    {
+      "path": "web/frontend/src/components/PublishingPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-15"
+      ],
+      "kind": "host-port",
+      "reason": "原发布外壳向原手动页传可选adapt/check操作端口。",
+      "upstream_check": "核对默认自动/手动页选择及私有动作仅打开原生流程，不跳过交付批准。"
+    },
+    {
+      "path": "web/frontend/src/components/QuestionCards.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-03"
+      ],
+      "kind": "host-port",
+      "reason": "原问题卡接可选answer/status服务；断连查询失败不关闭问题、不重发答案。",
+      "upstream_check": "核对问题/会话所有权、真实答复/终态、默认服务与重连轮询，不把状态探测失败当完成。"
+    },
+    {
+      "path": "web/frontend/src/components/ResponsiveSidebar.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-02"
+      ],
+      "kind": "shared-extraction",
+      "reason": "从原布局提取共通窄屏抽屉与悬浮展开入口，保留原Sidebar为内容。",
+      "upstream_check": "核对遮罩/关闭/返回、焦点与桌面布局；不恢复用户撤销PR176的顶部横栏或新增导航标题条。"
+    },
+    {
+      "path": "web/frontend/src/components/SettingsApi.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-16"
+      ],
+      "kind": "host-port",
+      "reason": "集中声明原设置API默认对象与可选宿主传输类型。",
+      "upstream_check": "核对未注入时原HTTP方法、宿主认证及修订经现有边界，不复制设置业务。"
+    },
+    {
+      "path": "web/frontend/src/components/SettingsPanel.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-16",
+        "PC-02"
+      ],
+      "kind": "host-port",
+      "reason": "原设置面板接统一API/host状态与关闭保护端口，依赖安装和反馈仍复用原子组件。",
+      "upstream_check": "核对model/env/more原区域、明确保存及未存输入，不能重新挂入退役统计/路径面板。"
+    },
+    {
+      "path": "web/frontend/src/components/SettingsSelect.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-02",
+        "PC-16"
+      ],
+      "kind": "generic-fix",
+      "reason": "统一下拉增加可见视口测量、触摸/键盘选择和最近dialog/drawer的portal所有权。",
+      "upstream_check": "核对窄屏/软键盘、长标签、滚动与明暗默认外观；上游吸收同项后去掉对应补丁，不增加z-index副本。"
+    },
+    {
+      "path": "web/frontend/src/components/Sidebar.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-02",
+        "PC-03"
+      ],
+      "kind": "host-port",
+      "reason": "原侧栏接服务器会话/导航/画像与受控主题、compact层管理及资产解析端口。",
+      "upstream_check": "核对原重命名/归档/删除菜单、六入口注册、抽屉关闭；不能另建侧栏或仅用会话缓存判断登录。"
+    },
+    {
+      "path": "web/frontend/src/components/SkillDrawer.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-10",
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "原技能详情复用共通Drawer并接配置/执行服务，保留原依赖、原结果与问题区域。",
+      "upstream_check": "核对默认详情与执行布局、配置父修订、真实QuestionCards、unknown恢复；宿主不得隐藏官方共通区域。"
+    },
+    {
+      "path": "web/frontend/src/components/SkillPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-10",
+        "PC-13"
+      ],
+      "kind": "host-port",
+      "reason": "原技能列表接图标、视图/就绪及读取生命周期端口，详情仍使用原SkillDrawer。",
+      "upstream_check": "核对目录摘要与详情分层、保存后读到当前配置，私有头像只由宿主注入，不引入私有图标依赖。"
+    },
+    {
+      "path": "web/frontend/src/components/TextArtifact.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-17"
+      ],
+      "kind": "generic-fix",
+      "reason": "通用文本产物按需读取并显示原字/复制，避免每条消息预拉全文。",
+      "upstream_check": "核对真实文件、编码/截断与错误状态，原文本不被Markdown投影改写。"
+    },
+    {
+      "path": "web/frontend/src/components/ThemeToggle.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-02"
+      ],
+      "kind": "host-port",
+      "reason": "原主题按钮增加可选受控theme/onChange，宿主复用原控件。",
+      "upstream_check": "核对无props原本地偏好/系统主题和受控更新，不另写主题按钮或CSS覆盖。"
+    },
+    {
+      "path": "web/frontend/src/components/TrendSourcesDialog.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-05",
+        "PC-02",
+        "PC-04"
+      ],
+      "kind": "mixed",
+      "reason": "原来源编辑对话框接管理API、准确修订、操作反馈与footer端口；保存后后台刷新，避免清掉提交期间的新输入。",
+      "upstream_check": "核对未传management的原API、来源协议校验、准确修订与并发输入保留，不恢复旧平行来源管理表单。"
+    },
+    {
+      "path": "web/frontend/src/components/TrendsPage.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-05",
+        "PC-07",
+        "PC-13",
+        "PC-02"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方PR197热点条目/锚点，增加可选新闻导航、静默后台刷新、当日空面板与视图缓存端口。",
+      "upstream_check": "核对source_id准确、读取未完成与无结果区分，私有只展示当天实采，不用旧缓存顶替或常驻partial警告。"
+    },
+    {
+      "path": "web/frontend/src/components/icons.tsx",
+      "status": "M",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/skillIconsBrand.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/skillIconsPlanning.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/skillIconsProduce.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/skillIconsPublish.tsx",
+      "status": "A",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/components/useBrushPopover.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-02",
+        "PC-10"
+      ],
+      "kind": "generic-fix",
+      "reason": "画笔与斜杠菜单共用可视视口/软键盘溢出定位，保留能容纳时的原位置。",
+      "upstream_check": "核对窄屏/横屏/软键盘、菜单内滚动和关闭清理，修复不能隐藏控件或改变原主题。"
+    },
+    {
+      "path": "web/frontend/src/lib/api.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-01",
+        "PC-03",
+        "PC-10",
+        "PC-13",
+        "PC-16"
+      ],
+      "kind": "host-port",
+      "reason": "原API函数接可选传输/缓存绑定与认证代数，统一操作身份并保留默认fetch。",
+      "upstream_check": "核对首屏绑定顺序、401/身份切换及迟到响应隔离、原请求/响应和支持路径一致。"
+    },
+    {
+      "path": "web/frontend/src/lib/artifacts.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-12",
+        "PC-17"
+      ],
+      "kind": "generic-fix",
+      "reason": "共通产物解析合并支持文本/文件与下载URL，保留本地路径安全和稳定去重。",
+      "upstream_check": "核对文件类型/编码路径/未知路径、真实文件来源及Markdown产物去重，不构造不可点假链接。"
+    },
+    {
+      "path": "web/frontend/src/lib/download.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-17"
+      ],
+      "kind": "host-port",
+      "reason": "唯一下载manager接受可选宿主resolver，实现点击到鉴权交接的集中处理。",
+      "upstream_check": "核对普通网页默认下载、WebToApp能力链接、取消/失败及退出撤销，不把交接当设备已保存。"
+    },
+    {
+      "path": "web/frontend/src/lib/interaction.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-02",
+        "PC-03"
+      ],
+      "kind": "generic-fix",
+      "reason": "定义共享反馈类型与后台视图刷新helper，区分uncertain、网络错误和确定失败。",
+      "upstream_check": "核对未知不重发、恢复状态附着原操作及正常刷新静默，不用错误提示创建第二套状态机。"
+    },
+    {
+      "path": "web/frontend/src/lib/linkifyOutputs.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-12",
+        "PC-17"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方文件超链接修复并允许已核实产物路径解析，处理原生本地文件链接。",
+      "upstream_check": "核对真实回合/来源映射、历史原文和URL安全；没有已取得文件时不生成下载承诺。"
+    },
+    {
+      "path": "web/frontend/src/lib/outputBrowser.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-13"
+      ],
+      "kind": "host-port",
+      "reason": "可选OutputsDataSource及有界目录浏览器，分页/查询/游标修订和返回深链接共用。",
+      "upstream_check": "核对索引更新/游标过期、迟到请求、缓存上限和原目录模式，不预读全库或把缓存当权威。"
+    },
+    {
+      "path": "web/frontend/src/lib/outputNavigation.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-12",
+        "PC-13"
+      ],
+      "kind": "host-port",
+      "reason": "集中绑定原产物链接到宿主内容库导航，未绑定时保持标准链接。",
+      "upstream_check": "核对真实目标路径、修饰键和普通浏览器行为，导航不创建作品或自动执行。"
+    },
+    {
+      "path": "web/frontend/src/lib/personas.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-11",
+        "PC-20"
+      ],
+      "kind": "official-overlay",
+      "reason": "当前文件与upstream-overlays.json登记的官方补丁blob一致；相对完整基线的差异来自已选官方PR，不能误记为自行重写。",
+      "upstream_check": "跟进官方时核对原PR是否已被包含、blob或后续实现是否变更；保持官方补丁与完整集成基线分开，不重复cherry-pick或直接删掉功能。"
+    },
+    {
+      "path": "web/frontend/src/lib/skillDisplayNames.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-10",
+        "PC-20"
+      ],
+      "kind": "mixed",
+      "reason": "保留官方技能名称映射并补油猪两技能/辅助技能中文名，历史组合技能保持兼容名称。",
+      "upstream_check": "核对ID精确映射、无V1/V2可见名、官方新技能回退及已记录overlay差异，不能改执行技能身份。"
+    },
+    {
+      "path": "web/frontend/src/lib/trendValidation.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-05"
+      ],
+      "kind": "host-port",
+      "reason": "原热点验证器仅对显式Asia/Shanghai当日协议接受扩展结果上限，其余原协议仍30项。",
+      "upstream_check": "核对day/timezone验证、结果有界和无旧缓存，不能因扩大上限使常规源无限载入。"
+    },
+    {
+      "path": "web/frontend/src/lib/viewState.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-02",
+        "PC-04"
+      ],
+      "kind": "host-port",
+      "reason": "通用ViewState/DraftStore与hook为原页面提供可选宿主输入/导航状态。",
+      "upstream_check": "核对未传store原local state、身份切换和草稿清理，浏览器不缓存业务主库或凭据。"
+    },
+    {
+      "path": "web/frontend/src/lib/visiblePoll.ts",
+      "status": "A",
+      "capabilities": [
+        "PC-02",
+        "PC-14"
+      ],
+      "kind": "generic-fix",
+      "reason": "统一可见性轮询、失败退避和串行读取，后台页暂停避免WebView请求重叠。",
+      "upstream_check": "核对恢复只查询、done/stop生命周期、慢请求不并发，超时不能伪造成功或自动重发登录。"
+    },
+    {
+      "path": "web/frontend/src/lib/whoami.ts",
+      "status": "M",
+      "capabilities": [
+        "PC-14",
+        "PC-13"
+      ],
+      "kind": "host-port",
+      "reason": "原账号显示缓存接可选临时storage与automaticVerification策略，代数隔离旧身份响应。",
+      "upstream_check": "核对默认localStorage/自动核验保持、手动和扫码后force查询仍可用；不恢复已退役自动账号检测。"
+    },
+    {
+      "path": "web/frontend/src/styles/index.css",
+      "status": "M",
+      "capabilities": [
+        "PC-02",
+        "PC-12",
+        "PC-17"
+      ],
+      "kind": "mixed",
+      "reason": "共享Drawer/状态卡/复制/产物/菜单等必要组件样式及移动可用性补丁；私有业务样式仍限宿主目录。",
+      "upstream_check": "逐段对照官方默认主题/控件与上游新增样式；只保留共通组件或通用可用性修复，不能用样式覆盖隐藏官方区域。"
+    }
+  ]
+}

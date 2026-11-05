@@ -21,6 +21,7 @@ import {COMPACT_LAYOUT_QUERY} from '../platform/profile';
 import NativeNews from './NativeNews';
 import {startNewsTurn} from './newsCreationStart';
 import type {NewsCreationRequest} from './newsCreation';
+import {creationDraftSkillId} from './newsCreation';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
 import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
@@ -133,7 +134,7 @@ function NativeNewChat({format,profileId,search,onCreate}:{format:'poster'|'arti
   const saved=vm.client.drafts.get<JsonRecord>(key)||{},pending=vm.client.operation('create:'+key).getState().pending;
   if(pending||vm.client.legacyPending().some(item=>item.key===key))throw Object.assign(Error('原草稿状态正在恢复，输入和原操作标识已保留。'),{uncertain:true,...(pending?{operationScope:pending.scope,operationId:pending.id}:{})});
   const profile=search.get('profile')||string(record(record(saved.creative).creator).profile_id)||profileId;
-  const choices=nativeSkillChoices(catalog.data),legacy=record(saved.command),skill=search.get('skill')||string(legacy.skill_id)||'content-production',wanted=choices.find(choice=>choice.selection.skill_id===skill),command=search.get('mode')==='research'&&!search.has('skill')?undefined:wanted?.selection;
+  const choices=nativeSkillChoices(catalog.data),legacy=record(saved.command),skill=creationDraftSkillId(format,search.get('skill')||string(legacy.skill_id)),wanted=choices.find(choice=>choice.selection.skill_id===skill),command=search.get('mode')==='research'&&!search.has('skill')?undefined:wanted?.selection;
   if(!command&&search.get('mode')!=='research')throw Error('准确制作技能尚不可用，旧草稿已保留。请从技能库核对后再打开。');
   const material=string(saved.material)||string(source.data?.body),title=string(saved.title)||string(source.data?.title),text=[title,material,string(saved.guidance),string(record(record(saved.creative).recipe).prompt_text)?'原草稿明确制作要求：\n'+string(record(record(saved.creative).recipe).prompt_text):'',saved.article_mode==='product'?'原草稿明确选择：文章类型为产品文章。':''].filter(Boolean).join('\n\n'),files=array<DraftAttachment>(saved.files);
   await onCreate(profile,command,text,files,sourceId||string(saved.article_id)||undefined,saved.article_mode==='product'?'product':saved.article_mode==='auto'?'auto':undefined);

@@ -1,0 +1,39 @@
+name: Private capability registration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registration:
+    if: github.repository == 'liuminxin45/Easel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install isolated check dependency
+        run: python -m pip install pytest
+      - name: Exercise missing-registration negative cases
+        run: python -m pytest -q tests/test_private_capability_registry.py
+      - name: Verify index, shared differences and each changed commit
+        env:
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CHANGE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          args=(--head-ref "$CHANGE_HEAD")
+          if [[ -n "$CHANGE_BASE" && ! "$CHANGE_BASE" =~ ^0+$ ]]; then
+            args+=(--base-ref "$CHANGE_BASE")
+          fi
+          python scripts/check_private_capabilities.py "${args[@]}"

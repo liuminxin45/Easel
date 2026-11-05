@@ -8,6 +8,8 @@
 
 **当前存量位置：** [easel_workbench/features/skills/retirement.py](../../../easel_workbench/features/skills/retirement.py)、[easel_workbench/features/skills/releases.py](../../../easel_workbench/features/skills/releases.py)、[easel_workbench/runtime/learning_service.py](../../../easel_workbench/runtime/learning_service.py)
 
+**模块与动作不能混同：** learning_service 是兼容导出，其余确定性证据索引、分类与设置存量写入另见 [C-06](C-06-evidence-index-compatibility.md)；本条“历史只读”描述的是已退役私有技能管理动作，不表示整个 LearningService 模块均只读。作品独立质量检查仍归 [PC-12](PC-12-versioned-works.md)，不得因文件名误删。
+
 **需求／退役／核对依据：** [docs/workbench/NATIVE-SKILLS-20261103.md](../../../docs/workbench/NATIVE-SKILLS-20261103.md)、[specs/native-skills-only-20261103/spec.md](../../../specs/native-skills-only-20261103/spec.md)
 
 **相关验证入口：** [tests/test_workbench_skill_retirement.py](../../../tests/test_workbench_skill_retirement.py)、[tests/test_workbench_skill_retirement_cutover.py](../../../tests/test_workbench_skill_retirement_cutover.py)

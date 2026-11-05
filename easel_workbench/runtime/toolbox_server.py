@@ -23,7 +23,7 @@ from easel_workbench.http import downloads
 from easel_workbench.http.downloads import download_request
 from easel_workbench.http.response_lifecycle import close_read_response
 
-TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '创作方法、版本与整理经验。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
+TOOLS=[{'id': 'workbench', 'name': '工作台', 'path': '/toolbox', 'description': '采集、选题、日历与发布数据。'}, {'id': 'chat', 'name': '对话', 'path': '/chat', 'description': '在 Easel 会话中调用项目技能。'}, {'id': 'skills', 'name': '技能库', 'path': '/toolbox?section=skills', 'description': '原生技能、配置与使用。'}, {'id': 'content', 'name': '内容库', 'path': '/works', 'description': '作品、素材和版本反馈。'}, {'id': 'accounts', 'name': '账号', 'path': '/toolbox?section=distribution&pane=connections', 'description': '平台连接与能力证据。'}, {'id': 'profiles', 'name': '画像', 'path': '/toolbox?section=profiles', 'description': '身份、读者、表达与默认技能。'}]
 
 
 def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,distribution=None):
@@ -343,7 +343,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
             completion_preview=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/versions/([A-Za-z0-9_-]+)/completion-preview',path)
             if path=='/api/learning/commands':
                 if value.get('action') in ('analyze-evidence','analysis-start','proposal-create','proposal-preview','proposal-confirm','proposal-revert'):
-                    return error(410,'旧学习写入入口已退役。请在采集与研究拆解参考，或在技能库整理经验、确认技能版本。')
+                    return error(410,'旧学习写入入口已退役。参考分析请使用原生技能；历史记录与原始反馈保留。')
                 try:return reply(await asyncio.to_thread(learning.command,value))
                 except LearningConflict as exc:return error(409,str(exc))
                 except ValueError as exc:return error(400,str(exc))
@@ -382,7 +382,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 if action in ('foundation-preview','foundation-confirm','foundation-revert','config-preview','config-confirm','config-revert'):
                     return error(410,'旧基座编辑入口已退役。请在创作画像维护身份与读者，在技能库确认提示词和资源版本。')
                 if action=='proposal-create' and value.get('scope','work')!='work':
-                    return error(410,'长期改进请整理为技能候选，并明确发布版本和适用范围。')
+                    return error(410,'私有长期提案入口已退役。请通过项目 SKILL 源码和明确需求维护规则。')
                 if action in ('proposal-confirm','proposal-revert'):
                     with store.connect() as connection:
                         proposal=studio._get(connection,'proposals',value.get('proposal_id'))
@@ -412,7 +412,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 return reply(await asyncio.to_thread(box.retry,match[1],operation_id=value.get('operation_id'),expected_retry_revision=value.get('expected_retry_revision')))
             match=re.fullmatch(r'/api/works/([A-Za-z0-9_-]+)/actions',path)
             if path=='/api/style-presets':
-                return error(410,'风格参数预设已退役，请在技能库修改可读提示词并保存候选版本。')
+                return error(410,'风格参数预设已退役。请在本轮输入或已明确保存的画像默认中选择风格。')
             if path=='/api/text-works':
                 from easel_workbench.runtime.content_studio import save_text,StudioConflict
                 try:return reply(await asyncio.to_thread(save_text,box,value.get('id'),value,new=True))

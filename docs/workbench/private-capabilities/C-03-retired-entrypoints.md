@@ -14,6 +14,8 @@
 
 **使用统计兼容：** 私有统计设置/页面入口已迁出（见 [PRIVATE-ROUTES-20261103.md](../PRIVATE-ROUTES-20261103.md)）；旧采集/聚合代码仍在 [usage_service.py](../../../easel_workbench/runtime/usage_service.py)、[diagnostics/usage.py](../../../easel_workbench/diagnostics/usage.py) 与 [core/usage.ts](../../../web/frontend/src/workbench/core/usage.ts)。保留既有队列/历史不代表允许恢复私有统计面板，也不得凭仍有接口推断新产品需求。
 
+**本机网络残留清理（2026-11-05）：** Tailscale 8443 的 `/api/workbench/agent/` 仍转发到已无监听的9140，与应用对旧桥接返回410的退役行为不一致。保存配置后仅移除此具体handler，8443根路径仍转发9123，443/10000/9446及Funnel标志保持；Tailscale不再为旧Agent路径另做业务分流。它不是此次 `/native` 短暂断连的已证实原因，也不恢复旧桥接。
+
 **后续维护：** 先核对真实调用方、请求准入和历史依赖；未经明确需求不恢复退役业务。待核对项只有补齐需求依据并确认范围后，才能迁入新的已确认能力维护卡；不得把本表当作自动启用或删除清单。
 
 **登记记录：** 2026-11-05 按业务源码 `1901f83` 记录存量；本次不修改接口、运行开关、历史数据或部署版本。

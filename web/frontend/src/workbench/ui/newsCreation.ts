@@ -1,4 +1,14 @@
 export type NewsFormat='poster'|'article';
+/** New creation uses an explicit format; accepted historical turns keep their frozen skill. */
+export function creationSkillId(format:unknown):'oil-pig-poster'|'oil-pig-article' {
+ if(format==='poster')return 'oil-pig-poster';
+ if(format==='article')return 'oil-pig-article';
+ throw Error('请明确选择贴图或文章，原材料已保留。');
+}
+/** Only a new draft's retired/default selection is migrated, never an accepted turn. */
+export function creationDraftSkillId(format:unknown,selected?:string):string {
+ return !selected||selected==='content-production'?creationSkillId(format):selected;
+}
 export type NewsSlot='writing'|'visual'|'character'|'layout';
 export type NewsStyle=Partial<Record<NewsSlot,string>>;
 export interface NewsComponent {id:string;name:string;slot:NewsSlot;available:boolean;reason?:string;thumbnail_url?:string}

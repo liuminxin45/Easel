@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS learning_batch_calls(id TEXT PRIMARY KEY,document TEX
         if any(type(changes[key]) is not bool for key in ('enabled', 'paused') if key in changes):
             raise ValueError('学习开关无效')
         if changes.get('enabled') is True:
-            raise ValueError('自动AI经验整理已退役；请在技能库按需整理经验')
+            raise ValueError('自动AI经验整理已退役；参考分析请使用原生技能，原始反馈继续保留')
         if not isinstance(changes.get('local_time', '03:00'), str) or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]', changes.get('local_time', '03:00')):
             raise ValueError('统一学习时间须为北京时间HH:mm')
         state.update(changes, revision=state['revision'] + 1, updated_at=self.now())

@@ -42,16 +42,16 @@
 | [PC-19 独立健康中控与每日全链路检查](private-capabilities/PC-19-independent-health.md) | 运维能力 | 项目外监控进程、入口/业务/性能及独立公网探测、受控恢复、隔离浏览器旅程及每日真实 Agent canary；外网异常不误重启健康后端。 | `codex.py` |
 | [PC-20 官方基线、PR 补丁及 fork 交付](private-capabilities/PC-20-upstream-maintenance.md) | 开发维护 | 基线/PR记录、同步技能、公共差异逐文件台账、登记自动门禁与可复现fork交付；不替代业务授权。 | `app.py`、`App.tsx`、`web_services` |
 | [PC-21 项目 Codex Spec 工作流与维护知识](private-capabilities/PC-21-project-tooling.md) | 开发维护 | 项目开发技能、隔离 CLI、spec 记录、维护文档和本私有能力速查表；与产品内容技能分开。 | 不修改产品代码；仅开发工作流 |
-| [PC-22 油猪·选题研究](private-capabilities/PC-22-topic-research.md) | 辅助业务 SKILL | 讨论、选题与新闻增强的方法和事实边界；是否调用由本轮所选技能或既有明确调用链决定。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-23 油猪·图文写作](private-capabilities/PC-23-content-writing.md) | 辅助业务 SKILL | 结构、表述、事实与原字约束；供明确选择的内容流程组合，不将所有文章变成贴图。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-24 油猪·配图制作与核验](private-capabilities/PC-24-image-production.md) | 辅助业务 SKILL | 根据准确输入制作配图，保留参考素材和真实产物；按需组合，不冒称实际调用未发生的生图能力。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-25 油猪·交付核验](private-capabilities/PC-25-delivery-review.md) | 辅助业务 SKILL | 按准确版本的真实文件/合同核对交付，区分制作方自检与独立核验；不自动采纳或发布。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-26 油猪·参考拆解](private-capabilities/PC-26-reference-analysis.md) | 辅助业务 SKILL | 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-27 油猪·发布复盘](private-capabilities/PC-27-publication-analysis.md) | 辅助业务 SKILL | 基于实际发布/反馈证据复盘，不凭生成结果虚构曝光或平台回执，不自动改规则。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-22 油猪·选题研究](private-capabilities/PC-22-topic-research.md) | 新选择入口停用，历史兼容 | 讨论、选题与新闻增强的方法和事实边界；是否调用由本轮所选技能或既有明确调用链决定。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-23 油猪·图文写作](private-capabilities/PC-23-content-writing.md) | 新选择入口停用，历史兼容 | 结构、表述、事实与原字约束；供明确选择的内容流程组合，不将所有文章变成贴图。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-24 油猪·配图制作与核验](private-capabilities/PC-24-image-production.md) | 新选择入口停用，历史兼容 | 根据准确输入制作配图，保留参考素材和真实产物；按需组合，不冒称实际调用未发生的生图能力。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-25 油猪·交付核验](private-capabilities/PC-25-delivery-review.md) | 新选择入口停用，历史兼容 | 按准确版本的真实文件/合同核对交付，区分制作方自检与独立核验；不自动采纳或发布。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-26 油猪·参考拆解](private-capabilities/PC-26-reference-analysis.md) | 新选择入口停用，历史兼容 | 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-27 油猪·发布复盘](private-capabilities/PC-27-publication-analysis.md) | 新选择入口停用，历史兼容 | 基于实际发布/反馈证据复盘，不凭生成结果虚构曝光或平台回执，不自动改规则。 | `skills.py`、`SkillDrawer.tsx` |
 
 ### 技能登记边界
 
-当前 `ProjectSkillCatalog` 按 SKILL 中的工作台元数据读取到 9 个业务技能项：上表的油猪两个独立技能、6 个辅助技能，以及下表 C-04 的旧组合技能。**这不代表 9 项都应展示或可作为新创作入口**；原生目录会过滤旧 `content-production`。其余官方内置技能继续由官方目录和流程管理，不因存在于本仓库就登记成私有能力。
+当前 `ProjectSkillCatalog` 按 SKILL 中的工作台元数据读取到 9 个业务技能项：上表的油猪两个独立技能、6 个辅助技能，以及下表 C-04 的旧组合技能。**这不代表 9 项都应展示或可作为新创作入口**；原生目录会过滤旧 `content-production` 及六个已吸收的辅助技能；它们的项目文件与历史版本仍供旧记录、健康检测和冻结流程兼容。其余官方内置技能继续由官方目录和流程管理，不因存在于本仓库就登记成私有能力。
 
 油猪·做贴图与油猪·做文章分别维护，互不套用流程。方法正文、资源和组合依赖以各自 `SKILL.md` 为准；本表仅登记业务边界和接入位置。开发技能 `codex-spec`、`easel-upstream-sync` 与产品内容技能分开登记。
 

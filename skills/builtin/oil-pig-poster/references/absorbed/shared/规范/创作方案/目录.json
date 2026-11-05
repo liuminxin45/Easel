@@ -1,0 +1,285 @@
+{
+  "authority": "这是可读创作资源的目录；状态沿用已有规范或保留候选，不新增认可。",
+  "components": [
+    {
+      "assets": [],
+      "id": "editorial-writing",
+      "name": "清楚、克制、有依据的解释",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/editorial-writing-v1.md",
+      "prompt_sha256": "83d30d876080d553decb90510b4bda03dad1b26e6aa16d507c8a16989997fd67",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "article-writing",
+      "name": "长文：围绕一个问题组织完整意思",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/article-writing-v1.md",
+      "prompt_sha256": "45cee3493b1ffd7dffb249b17cc5591ef44def57732b4dcf6016031d60962498",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已采纳 Kimi v0.4 版面示例（不复用旧事实）",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/内容/KimiK3.1Pro新品速览/产物/v0.4/01-Kimi新品能力与排名.png",
+          "required": false,
+          "role": "example",
+          "sha256": "3e1115901208da6a05dddc57e39d5ae3527ed64b341f0d515d2eabe0990355ce"
+        },
+        {
+          "label": "已采纳 Kimi v0.4 版面示例（不复用旧事实）",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/内容/KimiK3.1Pro新品速览/产物/v0.4/02-Kimi编程分项一张图.png",
+          "required": false,
+          "role": "example",
+          "sha256": "4812850677c3f1ac3c5efc3640b983b3a25fe980ac5919b2c00539f10167b7f7"
+        }
+      ],
+      "id": "editorial-poster",
+      "name": "Kimi v0.4：清楚层次与关系解释",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/editorial-poster-v1.md",
+      "prompt_sha256": "fcbe21ce49038ff79d39649ee7daf777885def344160788c3645e4d692512ead",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "scene-visual",
+      "name": "油猪大侠：具象场景解释",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/scene-visual-v1.md",
+      "prompt_sha256": "c1a90b271854955c678083fdf52ddd077d4f432bd3040628d0c2131af34a0632",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可正面身份",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/模板/油猪大侠角色-v1/已认可正面参考.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "00e8bd61a39fabb908d6a94cb4ed03d969dcb2e4a8237737b64e1780b2fbb0ef"
+        },
+        {
+          "label": "已认可三视图",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/模板/油猪大侠角色-v1/角色三视图-v0.1.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "a73dd2cde7f660939ebce5d37c35c7bede77262d5c47ae392c27c1bf49b57506"
+        }
+      ],
+      "id": "simple-pig",
+      "name": "简笔小猪侠",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/simple-pig-v1.md",
+      "prompt_sha256": "e044dd7eed10bba8bb007778279353f3caa9be4e1eb1758461357195f75169bf",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可精致武侠三视图",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/模板/油猪大侠角色-精致武侠-v1/角色三视图-v0.3.png",
+          "required": true,
+          "role": "identity",
+          "sha256": "21ab973db2e6acf377158964b3dd832b92dfc02a3c74232daa3f3f4f0e4ef19b"
+        }
+      ],
+      "id": "wuxia-pig",
+      "name": "精致武侠小猪",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/wuxia-pig-v1.md",
+      "prompt_sha256": "425eabf6c9b7fda98558034e3508ece4a0beddeda645650b3522c6fc098c866d",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "by-purpose",
+      "name": "按主题选择角色与素材",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/by-purpose-v1.md",
+      "prompt_sha256": "bf115a0177a790f88ce8f0b615ef7e59c854442ca83ead2997c02dd0596504c5",
+      "revision": 1,
+      "slot": "character",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "page-roles",
+      "name": "按内容分工组织整组",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/page-roles-v1.md",
+      "prompt_sha256": "388e897fbcf746caad35e214001f6b7fcce330bb539af5aacacc77529bf8e02e",
+      "revision": 1,
+      "slot": "layout",
+      "status": "confirmed"
+    },
+    {
+      "assets": [
+        {
+          "label": "外部候选封面",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/1-1000119525.jpg",
+          "required": false,
+          "role": "external_reference",
+          "sha256": "da4fa9bdfddd52211ae2357c8a8d2b589dec980f670377b0fe52e7f82afa81f2"
+        },
+        {
+          "label": "外部候选内页",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/资料/风格研究/2026-10-28-GitHub免费工具贴图标题与封面学习/原件/2-1000119526.jpg",
+          "required": false,
+          "role": "external_reference",
+          "sha256": "a9281cf045a893187566a1243ff677043f242dda7bf9979f355c303f391caa74"
+        }
+      ],
+      "id": "typographic",
+      "name": "工具合集：排字封面试用",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/typographic-v1.md",
+      "prompt_sha256": "543889bad4789d09619b8aa64efdba3b476586e37b5c95e62c6a051df0e7b2eb",
+      "revision": 1,
+      "slot": "visual",
+      "status": "candidate"
+    },
+    {
+      "assets": [],
+      "id": "tool-writing",
+      "name": "工具合集：按任务与选择理由",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/tool-writing-v1.md",
+      "prompt_sha256": "a048341340ca6da405f29caf4080c64fea29effa43e21751f6d3c5db8175815a",
+      "revision": 1,
+      "slot": "writing",
+      "status": "candidate"
+    },
+    {
+      "assets": [
+        {
+          "label": "已认可固定图生母版",
+          "path": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/模板/TechPulse-图生-v1/认可母版.png",
+          "required": true,
+          "role": "master",
+          "sha256": "b8899247da513631692c7899322c91e1e1f63a916ae6776d1463e46bf1048fd4"
+        }
+      ],
+      "id": "tech-pulse",
+      "name": "Tech Pulse v01 固定母版",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/tech-pulse-v1.md",
+      "prompt_sha256": "cef547e31078fdea2245bfdfe1bccebf66946742be16c5dc46ca7f9cd887461b",
+      "revision": 1,
+      "slot": "visual",
+      "status": "confirmed"
+    },
+    {
+      "assets": [],
+      "id": "tech-writing",
+      "name": "Tech Pulse：沿用本期栏目文案规范",
+      "prompt_file": "skills/builtin/oil-pig-poster/references/absorbed/shared/规范/创作方案/组件/tech-writing-v1.md",
+      "prompt_sha256": "7a847a70f029cb8a32ff60bad92bc4fb46b068b57d653b7492130e727c6a28fd",
+      "revision": 1,
+      "slot": "writing",
+      "status": "confirmed"
+    }
+  ],
+  "packs": [
+    {
+      "components": {
+        "character": "by-purpose",
+        "layout": "page-roles",
+        "visual": "editorial-poster",
+        "writing": "editorial-writing"
+      },
+      "description": "默认视觉参考；按内容组织，不套固定构图。",
+      "formats": [
+        "poster"
+      ],
+      "id": "editorial-poster",
+      "name": "清楚的解释型海报",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "simple-pig",
+        "layout": "page-roles",
+        "visual": "scene-visual",
+        "writing": "editorial-writing"
+      },
+      "description": "有意义的角色动作与清楚的信息分工。",
+      "formats": [
+        "poster"
+      ],
+      "id": "oil-pig-simple",
+      "name": "油猪大侠 · 简笔场景",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "wuxia-pig",
+        "layout": "page-roles",
+        "visual": "scene-visual",
+        "writing": "editorial-writing"
+      },
+      "description": "使用已认可精致角色身份，不替换简笔资产。",
+      "formats": [
+        "poster"
+      ],
+      "id": "oil-pig-wuxia",
+      "name": "油猪大侠 · 精致武侠",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "visual": "tech-pulse",
+        "writing": "tech-writing"
+      },
+      "description": "固定母版，不允许普通局部选择改写母版。",
+      "fixed_master": true,
+      "formats": [
+        "poster"
+      ],
+      "id": "tech-pulse",
+      "name": "Tech Pulse · 固定栏目",
+      "revision": 1,
+      "status": "confirmed"
+    },
+    {
+      "components": {
+        "character": "by-purpose",
+        "layout": "page-roles",
+        "visual": "typographic",
+        "writing": "tool-writing"
+      },
+      "description": "本轮明确试用，不自动变成长期默认。",
+      "formats": [
+        "poster"
+      ],
+      "id": "P007-typographic",
+      "name": "工具合集 · 排字封面试用",
+      "policy_profile": "P007-typographic",
+      "revision": 1,
+      "status": "candidate"
+    },
+    {
+      "components": {
+        "character": "by-purpose",
+        "visual": "editorial-poster",
+        "writing": "article-writing"
+      },
+      "description": "完整论述、真实依据，配图按正文需要选择。",
+      "formats": [
+        "article"
+      ],
+      "id": "editorial-article",
+      "name": "清楚、克制的长文章",
+      "revision": 1,
+      "status": "confirmed"
+    }
+  ],
+  "revision": 2,
+  "schema_version": 1
+}

@@ -20,6 +20,42 @@ def test_separated_skills_keep_their_primary_standards_exact_and_local():
             assert path.relative_to(ROOT).as_posix() in {r['path'] for r in entries[sid]['resources']}
 
 
+def test_each_skill_creative_review_works_without_the_shared_skill_tree(tmp_path):
+    import shutil, subprocess
+    for sid, format in (('oil-pig-poster', 'poster'), ('oil-pig-article', 'article')):
+        package=tmp_path/'skills/builtin'/sid
+        shutil.copytree(ROOT/'skills/builtin'/sid,package)
+        script=package/'scripts/内容工作流/creative_review.py'
+        spec=importlib.util.spec_from_file_location('isolated_'+format,script)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        output=tmp_path/'outputs'/format/'创作检查.json';output.parent.mkdir(parents=True)
+        module.prepare_packet(output,root=tmp_path,format=format,profile='custom',work_id='test',version='v1',title='测试标题')
+        assert json.loads(output.read_text(encoding='utf8'))['format']==format
+        installer=package/'scripts/install_oil_pig_tools.py'
+        install_spec=importlib.util.spec_from_file_location('install_'+format,installer)
+        install=importlib.util.module_from_spec(install_spec);install_spec.loader.exec_module(install)
+        assert install.ROOT==tmp_path and install.SOURCE.is_relative_to(package)
+        assert all((install.SOURCE/name).is_file() for name in ('package.json','package-lock.json'))
+        if format=='poster':
+            node=shutil.which('node')
+            assert node, 'Node is required for the poster tools'
+            library=(package/'scripts/贴图生产/lib.mjs').as_uri()
+            code=f"import({json.dumps(library)}).then(async x => {{ const p=await x.readPolicy(); if (!p.width || !p.titleLimit) process.exit(1); }})"
+            import os
+            subprocess.run([node,'--input-type=module','-e',code],env={**os.environ,'EASEL_ROOT':str(tmp_path)},check=True,capture_output=True)
+    assert not (tmp_path/'skills/shared').exists()
+
+
+def test_two_skill_catalog_resources_stay_inside_their_own_packages():
+    from easel_workbench.skill_catalog import ProjectSkillCatalog
+    entries={row['id']:row for row in ProjectSkillCatalog(ROOT).entries()}
+    for sid in ('oil-pig-poster','oil-pig-article'):
+        folder=(ROOT/'skills/builtin'/sid).resolve()
+        for resource in entries[sid]['resources']:
+            path=(ROOT/resource['path']).resolve()
+            assert path.is_relative_to(folder) and path.is_file(), resource['path']
+
+
 def test_imported_workflow_snapshot_matches_exact_source_manifest():
     manifest=json.loads((ROOT/'skills/shared/workbench/neo-source/source-manifest.json').read_text(encoding='utf8'))
     paths=set()
@@ -47,11 +83,11 @@ def test_native_catalog_has_two_distinct_skill_entries_and_legacy_is_still_addre
     assert context.find_skill('content-production')=='content-production'
 
 
-def test_native_host_hides_only_retired_root_without_hiding_official_skills():
+def test_native_host_hides_retired_private_entries_without_hiding_official_skills():
     from types import SimpleNamespace
     from easel_workbench.runtime.native_skills import NativeSkills
     adapter=NativeSkills.__new__(NativeSkills)
-    adapter.context=lambda:SimpleNamespace(get_skills=lambda:[{'name':name} for name in ('content-production','oil-pig-poster','oil-pig-article','skill-wechat-article')])
+    adapter.context=lambda:SimpleNamespace(get_skills=lambda:[{'name':name} for name in ('content-production','content-writing','image-production','topic-research','delivery-review','reference-analysis','publication-analysis','oil-pig-poster','oil-pig-article','skill-wechat-article')])
     assert [row['name'] for row in adapter.items()]==['oil-pig-poster','oil-pig-article','skill-wechat-article']
 
 

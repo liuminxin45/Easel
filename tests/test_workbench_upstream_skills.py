@@ -31,8 +31,9 @@ def test_official_catalog_discovers_project_and_official_skills_without_private_
     rows=native.items()
     # The old combined skill remains readable for frozen historical requests,
     # while all new selections use the two independent Oil Pig workflows.
-    assert {row['name'] for row in rows}=={p.parent.name for p in before}-{'content-production'}
-    assert {'card-quote','ai-image-gen','oil-pig-poster','oil-pig-article','content-writing'}<={row['name'] for row in rows}
+    from easel_workbench.runtime.native_skills import RETIRED_PRIVATE_SKILLS
+    assert {row['name'] for row in rows}=={p.parent.name for p in before}-RETIRED_PRIVATE_SKILLS
+    assert {'card-quote','ai-image-gen','oil-pig-poster','oil-pig-article'}<={row['name'] for row in rows}
     assert 'content-production' not in {row['name'] for row in rows}
     assert all('version' not in row and 'origin' not in row and 'launch_actions' not in row for row in rows)
     assert all(p.read_bytes()==raw for p,raw in before.items())

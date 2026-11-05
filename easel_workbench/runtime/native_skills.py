@@ -16,6 +16,11 @@ from easel.web_services.skills import create_skills_context
 from easel.persona import chat_turn_message
 from easel_workbench.contracts.values import ident,pack
 
+RETIRED_PRIVATE_SKILLS = frozenset((
+    'content-production', 'topic-research', 'content-writing', 'image-production',
+    'delivery-review', 'reference-analysis', 'publication-analysis',
+))
+
 
 class NativeSkills:
     def __init__(self,box,chat):
@@ -51,7 +56,7 @@ class NativeSkills:
     def items(self):
         # Keep the original handler callable for frozen historical requests;
         # new selections use the two explicit formats.
-        return [item for item in self.context().get_skills() if item.get('name')!='content-production']
+        return [item for item in self.context().get_skills() if item.get('name') not in RETIRED_PRIVATE_SKILLS]
     async def detail(self,name):
         configuration=self.chat.settings.skill_configuration()
         native=self.context(ports={'_read_env':lambda:configuration['environment']})

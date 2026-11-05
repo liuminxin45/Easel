@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "title-audience-fit",
+      "dimension": "title",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "audience",
+        "headline",
+        "example-transfer"
+      ],
+      "kind": "negative",
+      "scope": "AI的3D建模贴图v0.2标题反馈。用户否定把参考例子机械套成“程序员必看”，未认可后来改题。供同类标题比较受众与内容价值的关系。",
+      "question": "标题点名的读者为什么需要这篇内容？有具体用途或阅读价值支持，还是机械复制了参考例子的职业称呼与句式？",
+      "do_not_generalize": "不禁止一切职业称呼或“必看”；不把助手另存v0.3的新标题当作用户认可正例，不扩大到原版全部图文。",
+      "source_version": "5b6b45b7-f5ea-4099-ad73-bcacea22aa74",
+      "operation_id": "93fb3ca2-b85c-4e5c-91f4-1c0baa761655",
+      "evidence": [
+        {
+          "file": "内容/AI做3D打开网页就能逛/用户指导/93fb3ca2-b85c-4e5c-91f4-1c0baa761655/用户请求全文.md",
+          "sha256": "7ed8d410ff399f2f8920f3d2d49c6e86250d536d7c105c83b0d812b078dd3b32",
+          "quote": "你这个“程序员必看”的标题太死板了，硬套啊！应该是给真正会用到这一门技术的人才需要的东西，才叫“必看”。程序员不一定做这些 3D 设计，只有极少数程序员会做 3D 设计。为什么程序员就“必看”了呢？毫无逻辑。这个取标题的事儿，我觉得你还非常欠缺。"
+        }
+      ]
+    },
+    {
+      "id": "image-meaningful-action",
+      "dimension": "image",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "mascot",
+        "action",
+        "readability",
+        "composition"
+      ],
+      "kind": "positive",
+      "scope": "CleanYourTV v0.1视觉反馈：明确认可首图动作有意义、清晰干净、文字适度，并提高同类自制小猪贴图呈现的参考优先级。此反馈动作没有增加采纳范围。",
+      "question": "角色正在做什么，这个动作是否直接解释本页用途？文字与主视觉是否清晰、干净、层次明确，并在手机尺度上保持适度字号？",
+      "do_not_generalize": "不固定电视、撕纸、两张图、同一构图或具体字号；不把助手估计权重当认可数值。标题增加“开源”只是本篇建议。",
+      "source_version": "976a3cfe-403c-40cb-b36d-b1940701ea80",
+      "operation_id": "476a0fc9-0860-486e-b0b1-4264da534d89",
+      "evidence": [
+        {
+          "file": "内容/CleanYourTV清理电视广告/反馈/476a0fc9-0860-486e-b0b1-4264da534d89/用户请求全文.md",
+          "sha256": "423230fd9f06bf8f7cf5591f5ff99ee8f39b08f3c34beffb1118e05be6ec1fea",
+          "quote": "图片非常好，特别是第一张，非常形象、清晰、干净，文字也没有那么大。然后，图像里的小猪把电视里的广告给撕掉，这个动作非常好，有意义、有价值，而且很可爱。这一版的文字画风，相比之前那个版本的手写体画风，我觉得可以提高优先级，优先使用今天你这一种画风。"
+        }
+      ]
+    },
+    {
+      "id": "image-page-increment",
+      "dimension": "image",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "mascot",
+        "redundancy",
+        "sequence",
+        "whitespace"
+      ],
+      "kind": "negative",
+      "scope": "PHP漏洞贴图v0.1图二反馈：同一小猪插画重复出现，没有增加信息。用户要求删冗余、允许留白，针对本组两页的实际重复。",
+      "question": "这一页相对前页增加了什么解释？重复角色或插画是否只是填空，删掉后是否损失实际信息？",
+      "do_not_generalize": "不禁止同一角色跨页出现或复用角色身份，也不要求所有第二页留白；动作与信息确有新贡献时应按内容判断。",
+      "source_version": "32a80117-a9c4-417e-ac90-c5559c49bc88",
+      "operation_id": "adadd281-4572-4d25-b45a-819b2019d9de",
+      "evidence": [
+        {
+          "file": "内容/AI发现PHP严重漏洞补丁已发布/用户指导/adadd281-4572-4d25-b45a-819b2019d9de/用户请求全文.md",
+          "sha256": "2758df6e83e340c6dd4b5c7ac2368546d922dcad7084fd5ba350a0b130a6938e",
+          "quote": "图二里，完全使用了图一的小猪，一模一样的。这是浪费，宁可留白，不要冗余。"
+        }
+      ]
+    },
+    {
+      "id": "title-value-before-stars",
+      "dimension": "title",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "open-source",
+        "headline",
+        "stars",
+        "reader-value"
+      ],
+      "kind": "negative",
+      "scope": "Agency Agents贴图v0.2标题反馈：用户认为本篇继续强调Star数没有意思，要求修改标题。仅为本篇否定，供项目分享标题比较卖点。",
+      "question": "去掉Star数后，标题是否仍说清项目提供什么帮助？是否仅用关注度替代了具体的阅读价值？",
+      "do_not_generalize": "不推导所有开源项目标题都禁止Star，也不能把Star当作质量、效果或个人收益证明。",
+      "source_version": "bf0b61d0-586c-4839-a7e2-6a568e40dd31",
+      "operation_id": "63a96756-c3e9-49a9-914d-6cf6f0c12ac8",
+      "evidence": [
+        {
+          "file": "内容/16万Star的开源AI角色库/用户修改原文-v0.3-63a96756-c3e9-49a9-914d-6cf6f0c12ac8.md",
+          "sha256": "738db61749ac91894eeba4ba2589d686e2e55ccf366a3aca320dd9a4abd175fe",
+          "quote": "标题还是不好，不用说star数目了。没太大意思"
+        }
+      ]
+    },
+    {
+      "id": "title-project-identity",
+      "dimension": "title",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "open-source",
+        "headline",
+        "product-identity",
+        "factual-scope"
+      ],
+      "kind": "negative",
+      "scope": "Ponytail贴图v0.2修改要求：标题需要让人识别开源项目，正文补具体内容。用户原话中的项目拼写和组件库提问不是已核实事实。",
+      "question": "项目分享的标题是否让人识别项目与具体用途？正文中的数量及分类有直接来源吗，是否把用户的提问或口误当成了产品事实？",
+      "do_not_generalize": "不要求每个标题都用“开源＋项目名”；不将Pontail拼写或“组件库”说法升级为核实结论，不凭此编造数量。",
+      "source_version": "0af8c134-ba59-4800-a64c-a27cb61bd4c5",
+      "operation_id": "04c93b2a-10d3-4fcd-8b38-83aa12815670",
+      "evidence": [
+        {
+          "file": "内容/17万Star开源技能让AI少造轮子/用户修改原文-v0.3-04c93b2a-10d3-4fcd-8b38-83aa12815670.md",
+          "sha256": "8a365fbecb1ec601a51cf146723082527a90a03ca940ee5a443348fd993f3af4",
+          "quote": "标题体现开源项目Pontail，正文说下提供了大概多少个组件库。优化下文案，"
+        }
+      ]
+    },
+    {
+      "id": "image-brand-presence",
+      "dimension": "image",
+      "formats": [
+        "poster",
+        "article"
+      ],
+      "tags": [
+        "mascot",
+        "brand",
+        "illustration",
+        "source-integrity"
+      ],
+      "kind": "negative",
+      "scope": "菜单图标解释贴图v0.1不采纳意见：本版自制解释区域遗漏小猪。认可范围为空，未据此否定菜单资料、标题、配色等其他要素。",
+      "question": "适用自制角色画风的解释区域是否遗漏了小猪？角色是否以与本页主题有关的动作参与，同时保持真实来源图的完整性？",
+      "do_not_generalize": "不强制每张官方原图或固定栏目母版叠加角色，不以角落静止标识代替有意义的动作，不把遗漏小猪推成对全部图文要素的否定。",
+      "source_version": "d8e6ad62-c192-47b4-bf1d-319ebde6bce5",
+      "operation_id": "8d847426-1498-4982-9e4d-3a9f7279b294",
+      "evidence": [
+        {
+          "file": "内容/苹果菜单图标别硬配/反馈/8d847426-1498-4982-9e4d-3a9f7279b294/用户请求全文.md",
+          "sha256": "62a0ba0c5f657de1d8080f43da5aa00ce0614942bf33875d3295fc5800157fb7",
+          "quote": "你忘了一个非常重要的元素，小猪。"
+        }
+      ]
+    },
+    {
+      "id": "image-kimi-v04-comparison-poster",
+      "dimension": "image",
+      "formats": [
+        "poster"
+      ],
+      "tags": [
+        "comparison",
+        "readability",
+        "poster",
+        "typography",
+        "price"
+      ],
+      "kind": "positive",
+      "scope": "Kimi新品速览v0.4三图及配文已明确采纳；用户要求后续贴图优先参考文字、价格呈现、排版和配文。",
+      "question": "陌生单价是否转为同一用量的总费用并用直观图形比较？文字层级、密度及正式海报字体能否让读者快速理解？",
+      "do_not_generalize": "不把本版数据、三页、四品牌、固定配色、字号或助手权重配比设为通用要求；每个新选题重新核查事实，固定栏目母版不替换。",
+      "source_version": "f235ef9b-ba8e-5c98-95b4-c1bff4104678",
+      "operation_id": "905db2fe-0c00-44d0-a79a-7be3ff9226e9",
+      "evidence": [
+        {
+          "file": "内容/KimiK3.1Pro新品速览/反馈/905db2fe-0c00-44d0-a79a-7be3ff9226e9/用户请求全文.md",
+          "sha256": "9a34a2c5e299eda34cd250d079396a9921c31492279b225c258ccfd06e6105ce",
+          "quote": "V04 无论是文字、价格、排版还是配文都不错。提高这一套模板的优先级，后续贴图优先参考 V04 这个设计。"
+        }
+      ]
+    }
+  ]
+}

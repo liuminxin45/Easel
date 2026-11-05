@@ -2,7 +2,9 @@
 
 [返回私有能力登记表](../PRIVATE-CAPABILITIES.md)
 
-**技能收敛首批：** 写作与公众号排版两份基础规范的原字节副本放入本技能 `references/standards/` 并由 SKILL 引用；共享原件继续保留给历史流程。工具、其余资源与旧技能退役尚待后续批次，不代表已经实现完整目录自包含。
+**技能收敛进行中：** 基础规范、创作检查与批注工具和辅助技能方法已纳入本技能目录；共享原件继续保留给历史流程。目录内脚本和资源清单已做隔离检查，六个旧技能入口及历史兼容尚待后续批次，不能将本批标为全部完成。
+
+**包内维护范围：** [参考及素材](../../../skills/builtin/oil-pig-article/references/)、[技能专用脚本](../../../skills/builtin/oil-pig-article/scripts/)。
 
 **实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-09` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
 
@@ -14,11 +16,11 @@
 
 **接口与状态归属：** 技能调用沿原技能服务，方法与资源以 oil-pig-article/SKILL.md 为源，不另建技能数据库；文章版本和交付状态归会话/作品台账。可选批注工具有独立本机 HTTP 服务，不能将“技能调用复用官方 API”误写成所有工具均无HTTP。
 
-**本项目工具与文件：** [creative_review.py](../../../skills/shared/workbench/neo-tools/内容工作流/creative_review.py) 核对准确版创作检查；[article-check.mjs](../../../skills/shared/workbench/neo-tools/内容工作流/article-check.mjs) 检查真实 HTML/图片；[文章批注 review.py](../../../skills/shared/workbench/neo-tools/文章批注/review.py) 及其 [review.js](../../../skills/shared/workbench/neo-tools/文章批注/review.js)、[review.css](../../../skills/shared/workbench/neo-tools/文章批注/review.css) 读写对应文章目录的批注及修订。原始方法和来源SHA见 [source-manifest.json](../../../skills/shared/workbench/neo-source/source-manifest.json)，本卡不复制正文。
+**本项目工具与文件：** [creative_review.py](../../../skills/builtin/oil-pig-article/scripts/内容工作流/creative_review.py) 核对准确版创作检查；[article-check.mjs](../../../skills/builtin/oil-pig-article/scripts/内容工作流/article-check.mjs) 检查真实 HTML/图片；[文章批注 review.py](../../../skills/builtin/oil-pig-article/scripts/文章批注/review.py) 及其 [review.js](../../../skills/builtin/oil-pig-article/scripts/文章批注/review.js)、[review.css](../../../skills/builtin/oil-pig-article/scripts/文章批注/review.css) 读写对应文章目录的批注及修订。原始方法和来源SHA见 [source-manifest.json](../../../skills/shared/workbench/neo-source/source-manifest.json)，本卡不复制正文。
 
 **HTTP与移动端边界：** review.py 的 GET/PUT 服务仅绑定服务器 `127.0.0.1`，校验Host及写请求Origin，保存批注时核对generation/version/content_hash/edit_seq。手机的 `127.0.0.1` 指向手机本身，工作台经Tailscale可达不代表此本机服务可远程打开；不得随意改成公网监听或将其冒称已接入工作台。远程批注需单独需求、鉴权适配和验证。
 
-**依赖与验证边界：** [install_oil_pig_tools.py](../../../scripts/install_oil_pig_tools.py) 将锁定Node依赖装入 `.runtime/neo-poster-tools`；固定Node24.19.0不变，安装器核对浏览器存在但不保证实际HTML已渲染。程序检查、独立目视审阅、公众号后台粘贴、用户采纳及发布分别报告，未执行不能写完成。
+**依赖与验证边界：** [install_oil_pig_tools.py](../../../skills/builtin/oil-pig-article/scripts/install_oil_pig_tools.py) 将锁定Node依赖装入 `.runtime/neo-poster-tools`；固定Node24.19.0不变，安装器核对浏览器存在但不保证实际HTML已渲染。程序检查、独立目视审阅、公众号后台粘贴、用户采纳及发布分别报告，未执行不能写完成。
 
 **私有入口／资源：** [skills/builtin/oil-pig-article/SKILL.md](../../../skills/builtin/oil-pig-article/SKILL.md)、[skills/shared/workbench](../../../skills/shared/workbench)、[easel_workbench/features/creation_skills.py](../../../easel_workbench/features/creation_skills.py)
 

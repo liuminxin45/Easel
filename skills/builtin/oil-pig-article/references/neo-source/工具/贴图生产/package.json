@@ -1,0 +1,14 @@
+{
+  "name": "neo-poster-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "check": "node cli.mjs check",
+    "render": "node cli.mjs render",
+    "test": "node --test test/*.test.mjs",
+    "setup:browser": "playwright install chromium"
+  },
+  "dependencies": { "playwright": "1.64.0" }
+}

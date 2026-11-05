@@ -1,0 +1,366 @@
+"""Tech Pulse 图生交接：准备准确文字、接收原图、检查归档；不调用模型。"""
+from pathlib import Path
+import re
+import shutil
+from PIL import Image
+
+from workflow import load, save, digest, within, nonempty, now, safe_url, stored_relative
+
+NAMES = {"github": "GitHub", "hackernews": "Hacker News", "producthunt": "Product Hunt"}
+SUBTITLES = {"github": "今日开源", "hackernews": "社区热议", "producthunt": "新品速览"}
+
+
+def validate_edition(plan, config):
+    nonempty(plan.get("version"), "本期编排版本")
+    nonempty(plan.get("guide"), "本期生成指引")
+    pages = plan.get("pages", [])
+    if not pages or pages[0].get("kind") != "cover":
+        raise ValueError("本期编排须以封面开始")
+    if [p.get("source") for p in pages if p.get("kind") == "source"] != config["sources"]:
+        raise ValueError("分源页须保留三源顺序")
+    for page in pages:
+        if page.get("kind") not in ("cover", "source", "focus"):
+            raise ValueError("编排页类型无效")
+        if page["kind"] == "focus":
+            if str(page.get("reference")) not in [f"{i:02d}" for i in range(1, 16)]:
+                raise ValueError("重点页须引用当期十五条之一")
+            if len(page.get("headings", [])) != 3:
+                raise ValueError("重点页须指定三个说明标题")
+
+
+def edition(engine, base, batch):
+    config = engine.config(base, batch)
+    path = config["poster"].get("edition_plan")
+    if not path:
+        return None
+    plan = load(engine.contract_path(base, batch, path))
+    validate_edition(plan, config)
+    return plan
+
+
+def page_count(engine, base, batch):
+    plan = edition(engine, base, batch)
+    return len(plan["pages"]) if plan else 3
+
+
+def template_assets(root, config):
+    if config["poster"].get("visual_backend") != "imagegen":
+        return []
+    return load(root / config["templates"]["poster"])["assets"]
+
+
+def citations(engine, base, batch):
+    lines, refs = ["地址对应图中编号：", ""], []
+    previous = None
+    for index, item in enumerate(engine.items(base, batch), 1):
+        if item["source"] != previous:
+            if previous is not None:
+                lines.append("")
+            lines.append(NAMES[item["source"]])
+            previous = item["source"]
+        url = safe_url(item["url"])
+        display = re.sub(r"^https?://", "", url, flags=re.IGNORECASE)
+        reference = f"{index:02d}"
+        lines.append(f"[{reference}] {display}")
+        refs.append({"reference_id": reference, "source": item["source"],
+                     "source_rank": (index - 1) % 5 + 1, "item_id": str(item["id"]),
+                     "url": url, "display_url": display})
+    return "\n".join(lines), {"schema_version": 1, "snapshot_id": batch["snapshot_id"], "references": refs}
+
+
+def explanation_caption(engine, base, batch, content):
+    lines, previous = [], None
+    for index, row in enumerate(content["items"], 1):
+        source = row["source"]
+        if source != previous:
+            if lines: lines.append("")
+            lines += [NAMES[source], ""]
+            previous = source
+        elif lines: lines.append("")
+        name = nonempty(row.get("caption_name", row["display_title"]), "配文名称")
+        explanation = nonempty(row.get("caption_explanation"), "每条配文简介")
+        lines.append(f"[{index:02d}] {name}：{explanation}")
+    return "\n".join(lines)
+
+
+def caption_text(engine, base, batch, content):
+    mode = engine.config(base, batch)["poster"].get("caption_mode")
+    if mode == "item_explanations":
+        return explanation_caption(engine, base, batch, content)
+    if mode == "citation_index":
+        return citations(engine, base, batch)[0]
+    return content["caption"]
+
+
+def caption_has_links(content):
+    text = content["caption"]
+    # Context.dev等真实产品名不是本次展示的链接；带路径/协议的写法仍检查。
+    for row in content["items"]:
+        name = row.get("caption_name", row["display_title"])
+        if re.search(r"https?://|www\.|/", name, re.IGNORECASE): continue
+        text = re.sub(r"(?<![\w.-])" + re.escape(name) + r"(?![\w./?#-])", "", text)
+    return bool(re.search(r"https?://|www\.|\[[^\]\n]+\]\([^\n)]+\)|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|ai|dev|cn|co|app|tech|tools|xyz|be|cloud)\b", text, re.IGNORECASE))
+
+
+def page_data(engine, base, batch, content, page):
+    config = engine.config(base, batch)
+    plan = edition(engine, base, batch)
+    if plan:
+        spec = plan["pages"][page - 1]
+        common = {"brand": "Tech Pulse", "series": "科技脉搏", "date": batch["date"],
+                  "issue_title": content["title"], "watermark": "油猪大侠", "kind": spec["kind"]}
+        if spec["kind"] == "cover":
+            common["rows"] = [{"reference": f"[{i:02d}]", "name": row["display_title"], "source": NAMES[row["source"]]}
+                              for i, row in enumerate(content["items"], 1)]
+            common["source_headings"] = [{"name": NAMES[s], "subtitle": config["poster"]["section_subtitles"][s]}
+                                         for s in config["sources"]]
+            return common
+        if spec["kind"] == "focus":
+            index = int(spec["reference"]) - 1
+            row = content["items"][index]
+            common.update(source_heading=NAMES[row["source"]],
+                          rows=[{"reference": f"[{index+1:02d}]", "name": row["display_title"]}],
+                          blocks=[{"heading": heading, "text": paragraph} for heading, paragraph in zip(spec["headings"], row["detail"])])
+            return common
+        source_index = config["sources"].index(spec["source"])
+    else:
+        source_index = page - 1
+    source = config["sources"][source_index]
+    editorial = config["poster"].get("item_titles") == "editorial"
+    start = source_index * 5
+    rows = []
+    for offset, (row, item) in enumerate(zip(content["items"][start:start+5], engine.items(base, batch)[start:start+5]), start + 1):
+        entry = {"reference": f"[{offset:02d}]", "explanation": row["summary"], "metric": engine.metric(item, True)}
+        if editorial:
+            entry["name"] = row["display_title"]
+            if source == "github":
+                entry["identity"] = item["title"]
+        elif source != "hackernews":
+            entry["name"] = item["title"] if source == "github" else row["display_title"]
+        rows.append(entry)
+    result = {"brand": "Tech Pulse", "series": content["title"] if page == 1 else "科技脉搏", "date": batch["date"].replace("-", "."),
+            "issue_title": content["title"], "source_heading": NAMES[source],
+            "section_subtitle": config["poster"].get("section_subtitles", SUBTITLES)[source], "watermark": "油猪大侠", "rows": rows}
+    if plan:
+        result.update(kind="source", date=batch["date"])
+    return result
+
+
+def prompt(engine, base, batch, content, page):
+    plan = edition(engine, base, batch)
+    if plan:
+        import json
+        return engine.contract_path(base, batch, plan["guide"]).read_text(encoding="utf-8") + "\nEXACT CONTENT:\n" + json.dumps(page_data(engine, base, batch, content, page), ensure_ascii=False, indent=2) + "\n"
+    template = engine.config(base, batch)["templates"]["poster"]
+    guide = str(Path(template).parent / "生成指引.txt").replace("\\", "/")
+    import json
+    result = engine.contract_path(base, batch, guide).read_text(encoding="utf-8") + "\nEXACT CONTENT:\n" + json.dumps(page_data(engine, base, batch, content, page), ensure_ascii=False, indent=2) + "\n"
+    if page == 1 and engine.config(base, batch)["poster"].get("first_title_exact"):
+        result += '\nCRITICAL MASTHEAD OVERRIDE FOR PAGE 1 ONLY: Replace the small 科技脉搏 line under the big Tech Pulse logo with this EXACT COMPLETE ISSUE TITLE, in one readable line: ' + content["title"] + '. Include every Latin letter, the full-width ｜ separator, the space and the YYYY-MM-DD date with hyphens. Do not shorten it to 科技脉搏 or replace the hyphenated date with dots. Keep the big Tech Pulse logo, the top-right dotted date and all other approved master geometry unchanged. This explicit line overrides the reference image text.\n'
+    if engine.config(base, batch)["poster"].get("section_subtitles"):
+        result += '\nDAILY COLUMN: Render section_subtitle exactly as supplied in vermilion in the existing subtitle position. Add no separate explanatory label. If TWO reference images are supplied, Image 1 is the existing issue poster EDIT TARGET and Image 2 is the approved style/geometry master: edit ONLY the red section subtitle in Image 1 to the new value. Preserve all other text, illustrations, spacing, masthead, date, metrics, watermark and native pixels as closely as possible. Do not copy old facts from Image 2. If only ONE image is supplied, it is the style/geometry master for a new issue with the supplied facts.\n'
+    if engine.config(base, batch)["poster"].get("item_titles") == "editorial":
+        result += '\nUSER-REQUESTED ITEM TITLES OVERRIDE: For EVERY source, including Hacker News, use the exact name field as the bold, readable first line of each row, then put the exact explanation below. These are factual Chinese titles and product names, never invented slogans. This overrides the old instructions to use only repository slugs as GitHub titles or to omit Hacker News titles. For GitHub only, preserve the full identity field (owner/repo) on the muted metadata line followed by a middle dot and the unchanged metric field. For the other sources render their unchanged metric line. Do not omit, abbreviate, translate or replace any identity or metric. Keep the same five-row geometry, readable typography, warm-white/black/vermilion palette, line illustrations, masthead and watermark; no extra labels or tagline.\n'
+    return result
+
+
+def png_info(path):
+    with Image.open(path) as image:
+        if image.format != "PNG":
+            raise ValueError("图生交付须为真实PNG")
+        width, height = image.size
+        image.verify()
+    with Image.open(path) as image:
+        image.load()
+    return {"width": width, "height": height, "format": "PNG", "sha256": digest(Path(path).read_bytes())}
+
+
+def artifacts(base, target):
+    return {stored_relative(base, path): digest(path.read_bytes())
+            for path in sorted(target.rglob("*")) if path.is_file() and path.name != "创作检查.json"}
+
+
+def prepare(engine, base, batch, content, output, target):
+    config = engine.config(base, batch)
+    caption = caption_text(engine, base, batch, content)
+    _, mapping = citations(engine, base, batch)
+    (target / "配文.txt").write_text(caption, encoding="utf-8")
+    save(target / "引用映射.json", mapping)
+    for name in ("公众号贴图写作要求.md", "图片制作要求.md", "存档规范.md"):
+        destination = target / "约定" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(engine.contract_path(base, batch, "规范/" + name), destination)
+    template = load(engine.contract_path(base, batch, config["templates"]["poster"]))
+    master = str(Path(config["templates"]["poster"]).parent / "认可母版.png").replace("\\", "/")
+    shutil.copyfile(engine.contract_path(base, batch, master), target / "认可母版.png")
+    tasks = []
+    plan = edition(engine, base, batch)
+    count = page_count(engine, base, batch)
+    for page in range(1, count + 1):
+        filename = f"提示词-{page:02d}.txt"
+        (target / filename).write_text(prompt(engine, base, batch, content, page), encoding="utf-8")
+        source = plan["pages"][page-1].get("source", plan["pages"][page-1]["kind"]) if plan else config["sources"][page-1]
+        tasks.append({"page": page, "source": source, "prompt": filename,
+                      "output": f"图-{page:02d}.png", "content": page_data(engine, base, batch, content, page)})
+    save(target / "图生任务.json", {"schema_version": 1, "backend": "imagegen", "template_version": template["version"],
+                                    "width": config["poster"]["width"], "height": config["poster"]["height"],
+                                    "reference": "认可母版.png", "reference_sha256": template["reference_sha256"], "pages": tasks})
+    save(target / "草稿包.json", {"schema_version": 1, "title": content["title"], "kind": "news", "status": "草稿",
+                                 "review": "待用户评审", "body_file": "配文.txt", "sources_file": "来源与核查.md",
+                                 "policy_files": {"writing": "约定/公众号贴图写作要求.md", "images": "约定/图片制作要求.md"},
+                                 "pages": [], "assets": [{"kind": "image", "file": f"图-{page:02d}.png"} for page in range(1, count + 1)]})
+    output.update(stage="awaiting_images", visual_backend="imagegen", image_imports={}, image_attempts={},
+                  template_version=template["version"], style_approval="pending_user_review" if plan else template["approval"])
+    if plan:
+        output["design_version"] = plan["version"]
+    output["artifacts"] = artifacts(base, target)
+
+
+def check(engine, base, batch, content, output, target):
+    errors = []
+    config = engine.config(base, batch)
+    caption = caption_text(engine, base, batch, content)
+    _, mapping = citations(engine, base, batch)
+    if (target / "配文.txt").read_text(encoding="utf-8") != caption or load(target / "引用映射.json") != mapping:
+        errors.append("配文或内部引用映射与十五条内容不对应")
+    tasks = load(target / "图生任务.json")
+    template = load(engine.contract_path(base, batch, config["templates"]["poster"]))
+    if digest((target / "认可母版.png").read_bytes()) != template["reference_sha256"]:
+        errors.append("认可母版字节不一致")
+    count = page_count(engine, base, batch)
+    if len(tasks["pages"]) != count or tasks["reference_sha256"] != template["reference_sha256"]:
+        errors.append("图生任务与冻结母版不一致")
+    for page in range(1, count + 1):
+        if (target / f"提示词-{page:02d}.txt").read_text(encoding="utf-8") != prompt(engine, base, batch, content, page):
+            errors.append(f"第{page}张提示词与输入不一致")
+        if tasks["pages"][page-1]["content"] != page_data(engine, base, batch, content, page):
+            errors.append(f"第{page}张结构化内容不对应")
+        record = output.get("image_imports", {}).get(str(page))
+        if not record:
+            errors.append(f"缺少第{page}张图片及制作记录")
+            continue
+        try:
+            info = png_info(target / f"图-{page:02d}.png")
+            if (info["width"], info["height"]) != (config["poster"]["width"], config["poster"]["height"]):
+                errors.append(f"第{page}张实际尺寸不符合认可母版")
+            if info["sha256"] != record["sha256"]:
+                errors.append(f"第{page}张与原图记录不一致")
+            for key in ("original", "actual_prompt", "provenance"):
+                path = within(base, record[key])
+                if not path.is_file() or not path.stat().st_size:
+                    errors.append(f"第{page}张缺少归档{key}")
+            if digest(within(base, record["original"]).read_bytes()) != info["sha256"]:
+                errors.append(f"第{page}张成品与保留原件不一致")
+        except (OSError, ValueError) as error:
+            errors.append(str(error))
+    if errors:
+        return {"ok": False, "errors": errors, "scope": "结构、尺寸、原件、引用与归档；字词/事实/可读性另由AI目视检查"}
+    report = engine.node([engine.root / "工具/贴图生产/cli.mjs", "check", "--manifest", target / "草稿包.json"])
+    report.update(backend="imagegen", template_version=template["version"],
+                  production_records_complete=True, archive_complete=not output["directory"].startswith("@pending/"))
+    report.setdefault("counts", {})["image_text"] = sum(len(str(v)) for task in tasks["pages"]
+        for row in task["content"]["rows"] + task["content"].get("blocks", []) for v in row.values())
+    return report
+
+
+def import_image(engine, date, page, file, record_file):
+    base, batch = engine.batch(date)
+    outputs = batch["outputs"].get("poster", [])
+    if not outputs:
+        raise ValueError("先build准备图生任务")
+    output = outputs[-1]
+    batch_for_output = dict(batch, config_file=output["config_file"])
+    count = page_count(engine, base, batch_for_output)
+    if page not in range(1, count + 1):
+        raise ValueError(f"页码须在1至{count}之间")
+    if output.get("visual_backend") != "imagegen" or output["stage"] != "awaiting_images":
+        raise ValueError("只能接续awaiting_images图生任务；已检查成品须另存新版本")
+    engine.verify_artifacts(base, output)
+    target = within(base, output["directory"])
+    source = Path(file)
+    metadata = load(record_file)
+    nonempty(metadata.get("tool"), "实际图生工具")
+    mode = metadata.get("mode")
+    if mode not in ("generated", "approved_sample_reuse"):
+        raise ValueError("须记录真实生成或认可样稿复用方式")
+    actual_prompt = Path(nonempty(metadata.get("actual_prompt_file"), "实际生成提示词文件"))
+    nonempty(actual_prompt.read_text(encoding="utf-8"), "实际生成提示词")
+    tasks = load(target / "图生任务.json")
+    if metadata.get("reference_image_sha256") != tasks["reference_sha256"]:
+        raise ValueError("实际调用记录须绑定冻结母版SHA-256")
+    expected_prompt = (target / f"提示词-{page:02d}.txt").read_text(encoding="utf-8")
+    correction = metadata.get("revision_instructions")
+    if correction:
+        nonempty(correction, "实际修正指令")
+        expected_prompt += "\nREVISION INSTRUCTIONS:\n" + correction + "\n"
+    if mode == "generated" and actual_prompt.read_text(encoding="utf-8").rstrip("\r\n") != expected_prompt.rstrip("\r\n"):
+        raise ValueError("实际调用提示词须对应冻结提示词及完整记录的修正指令")
+    raw = source.read_bytes()
+    if mode == "approved_sample_reuse":
+        if edition(engine, base, batch_for_output):
+            raise ValueError("本期新编排不能复用旧版样稿")
+        if digest(raw) != tasks["reference_sha256"] or page != 3 or metadata.get("sample_snapshot_id") != batch["snapshot_id"]:
+            raise ValueError("认可样稿只可复用同快照Product Hunt页，且须与母版同字节")
+    existing = output["image_imports"].get(str(page))
+    if existing:
+        if existing["sha256"] != digest(raw):
+            raise ValueError("已成功导入的页面固定；修订另存版本")
+        # 图片齐全但外部检查器失败时，重试检查而不重新生成或导入成功页。
+        if len(output["image_imports"]) == count:
+            content = load(target / "内容输入.json")
+            report = check(engine, base, batch_for_output, content, output, target)
+            save(target / "程序检查.json", report)
+            if report["ok"]:
+                output["stage"] = "awaiting_visual_check"
+                output.pop("error", None)
+            else:
+                output["error"] = "；".join(report["errors"])
+            output["artifacts"] = artifacts(base, target)
+            save(base / "工作流批次.json", batch)
+            engine.progress(base, batch)
+            return {"ok": bool(report["ok"]), "reused": True, "stage": output["stage"], "deliverable": False}
+        return {"ok": True, "reused": True, "stage": output["stage"]}
+    attempt = len(output["image_attempts"].get(str(page), [])) + 1
+    if attempt > 3:
+        raise ValueError("本页初稿加两次修正已用完")
+    relative = output["directory"] + f"/素材/图生原件/{page:02d}-{attempt:02d}"
+    original = within(base, relative + ".png")
+    original.parent.mkdir(parents=True, exist_ok=True)
+    original.write_bytes(raw)
+    shutil.copyfile(actual_prompt, within(base, relative + "-实际提示词.txt"))
+    if mode == "approved_sample_reuse":
+        metadata["reuse_note"] = "复用该样稿当期事实；须由AI逐字核对本页图生任务，不继承整篇认可。"
+    save(within(base, relative + "-来源.json"), metadata)
+    attempt_record = {"at": now(), "page": page, "mode": mode, "original": relative + ".png",
+                      "actual_prompt": relative + "-实际提示词.txt", "provenance": relative + "-来源.json", "sha256": digest(raw)}
+    output["image_attempts"].setdefault(str(page), []).append(attempt_record)
+    try:
+        info = png_info(original)
+        if (info["width"], info["height"]) != (tasks["width"], tasks["height"]):
+            raise ValueError(f"实际{info['width']}×{info['height']}不符合{tasks['width']}×{tasks['height']}；原件已保留，不缩放冒充")
+        shutil.copyfile(original, target / f"图-{page:02d}.png")
+        attempt_record.update(info)
+        output["image_imports"][str(page)] = dict(attempt_record)
+        output.pop("error", None)
+        ok = True
+    except (OSError, ValueError) as error:
+        output["error"] = str(error)
+        attempt_record["error"] = str(error)
+        ok = False
+    if len(output["image_imports"]) == count:
+        content = load(target / "内容输入.json")
+        report = check(engine, base, batch_for_output, content, output, target)
+        save(target / "程序检查.json", report)
+        if report["ok"]:
+            output["stage"] = "awaiting_visual_check"
+        else:
+            output["error"] = "；".join(report["errors"])
+            ok = False
+    save(target / "图片制作记录.json", {"backend": "imagegen", "imports": output["image_imports"],
+                                        "attempts": output["image_attempts"], "template_version": output["template_version"],
+                                        "style_approval": output["style_approval"], "issue_review": output["review"]})
+    output["artifacts"] = artifacts(base, target)
+    save(base / "工作流批次.json", batch)
+    engine.progress(base, batch)
+    return {"ok": ok, "stage": output["stage"], "imported_pages": sorted(output["image_imports"]),
+            "error": output.get("error"), "deliverable": False}

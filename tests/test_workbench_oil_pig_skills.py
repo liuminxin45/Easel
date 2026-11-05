@@ -56,6 +56,17 @@ def test_two_skill_catalog_resources_stay_inside_their_own_packages():
             assert path.is_relative_to(folder) and path.is_file(), resource['path']
 
 
+def test_absorbed_methods_resolve_their_local_shared_references():
+    import re
+    for sid in ('oil-pig-poster','oil-pig-article'):
+        folder=ROOT/'skills/builtin'/sid
+        for document in (folder/'references/absorbed').glob('*.md'):
+            text=document.read_text(encoding='utf8')
+            for name in re.findall(r'(?:`|\]\()(shared/[^`)]+)',text):
+                path=(document.parent/name).resolve()
+                assert path.is_relative_to(folder.resolve()) and path.is_file(), (document,name)
+
+
 def test_imported_workflow_snapshot_matches_exact_source_manifest():
     manifest=json.loads((ROOT/'skills/shared/workbench/neo-source/source-manifest.json').read_text(encoding='utf8'))
     paths=set()

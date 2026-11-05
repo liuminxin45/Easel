@@ -18,7 +18,7 @@
 
 以本轮用户明确要求为制作依据，先确认内容类型、目标读者、核心问题、原始材料、准确所改版本与文字范围。修改标题、修改配文、只配图分别处理；锁定原字须逐字保留，不能因整体风格变化改写用户文本。
 
-通用文字要求读取项目 `references/absorbed/shared/规范/写作要求.md`；贴图按需读取 `references/absorbed/shared/规范/公众号贴图写作要求.md` 和 `references/absorbed/shared/production-contract.md`，长文读取 `references/absorbed/shared/production-contract.md`。定位由当前画像提供，默认油猪大侠沿用现行定位原件。候选参考与历史反馈遵守自身适用范围，不转成无条件禁令。
+通用文字要求读取项目 `shared/规范/写作要求.md`；贴图按需读取 `shared/规范/公众号贴图写作要求.md` 和 `shared/production-contract.md`，长文读取 `shared/production-contract.md`。定位由当前画像提供，默认油猪大侠沿用现行定位原件。候选参考与历史反馈遵守自身适用范围，不转成无条件禁令。
 
 标题承诺必须由正文和图片兑现；以材料支持具体变化、解释、体验或判断，不编造经历、来源和数据。用户选择固定 Tech Pulse 才加载对应母版与固定工作流，不能将固定栏目计数套给普通主题。
 
@@ -30,4 +30,4 @@
 
 ## Easel 原生调用
 
-本技能通过官方“技能名＋用户输入＋画像”执行。按需读取 [项目内容工作流](references/absorbed/shared/production-contract.md) 与实际使用的参考文件，不要求私有制作计划、技能候选、试用版本或业务服务回执。产物写入 outputs/；多步骤按官方 manifest.py 传递文件路径。历史资源仅作来源依据，不执行旧私有API或外项目脚本。用户未要求时，不整理经验、不修改长期技能或画像，不采纳或发布。
+本技能通过官方“技能名＋用户输入＋画像”执行。按需读取 [项目内容工作流](shared/production-contract.md) 与实际使用的参考文件，不要求私有制作计划、技能候选、试用版本或业务服务回执。产物写入 outputs/；多步骤按官方 manifest.py 传递文件路径。历史资源仅作来源依据，不执行旧私有API或外项目脚本。用户未要求时，不整理经验、不修改长期技能或画像，不采纳或发布。

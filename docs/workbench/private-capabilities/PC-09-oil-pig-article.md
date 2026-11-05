@@ -6,6 +6,8 @@
 
 **包内维护范围：** [参考及素材](../../../skills/builtin/oil-pig-article/references/)、[技能专用脚本](../../../skills/builtin/oil-pig-article/scripts/)。
 
+辅助方法中的共享资料链接按该方法文档所在目录解析；链接回归与旧来源的历史追溯链接分开检查。
+
 **实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-09` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
 
 - **状态：** 已确认保留；类型：业务 SKILL。

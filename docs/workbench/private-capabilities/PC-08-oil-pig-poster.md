@@ -14,6 +14,8 @@
 
 **包内维护范围：** [参考及素材](../../../skills/builtin/oil-pig-poster/references/)、[技能专用脚本](../../../skills/builtin/oil-pig-poster/scripts/)。
 
+辅助方法中的共享资料链接按该方法文档所在目录解析；链接回归与旧来源的历史追溯链接分开检查。
+
 **接口与状态归属：** 技能接口沿原技能服务；方法与资源以 oil-pig-poster/SKILL.md 为源，无独立 HTTP 或技能数据库；本轮快照、产物和采纳分别归会话/作品台账。
 
 **本项目工具与依赖：** [neo-tools/贴图生产/cli.mjs](../../../skills/builtin/oil-pig-poster/scripts/贴图生产/cli.mjs) 及 [lib.mjs](../../../skills/builtin/oil-pig-poster/scripts/贴图生产/lib.mjs) 负责贴图草稿包 check/render；[creative_review.py](../../../skills/builtin/oil-pig-poster/scripts/内容工作流/creative_review.py) 负责准确版本的创作检查/绑定/反馈，显式指定 `--root <项目根>`。这些是当前技能按需调用的本项目工具，不是独立工作台执行器。原来源与字节以 [source-manifest.json](../../../skills/shared/workbench/neo-source/source-manifest.json) 维护，旧项目API/自动同步命令不能直接执行。

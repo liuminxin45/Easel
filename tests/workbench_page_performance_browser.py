@@ -48,7 +48,7 @@ def main():
                     route.continue_()
                   page.route('**/*',route_handler)
                   page.on('request',lambda req:requests.append((req.method,urlsplit(req.url).path)))
-                  page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox'}),wait_until='domcontentloaded')
+                  response=page.goto(f['origin']+'/native/?'+urlencode({'path':'/toolbox'}),wait_until='domcontentloaded');document_trace=response.headers.get('x-desk-trace','')
                   expect(page.locator('.native-host')).to_be_visible(timeout=30000)
                   page.wait_for_function("() => performance.now() > 4000 && document.querySelector('.native-host')",timeout=30000)
                   deadline=time.monotonic()+20
@@ -60,6 +60,7 @@ def main():
                   slow=[event for event in events if event.get('kind')=='slow' and event.get('metric')=='boot' and event.get('duration_ms',0)>=3000]
                   loading=[event for event in events if event.get('kind')=='slow' and event.get('metric')=='loading' and event.get('duration_ms',0)>=3000]
                   assert slow and all('?' not in json.dumps(event) for event in slow)
+                  assert len(document_trace)==16 and slow[-1].get('trace')==document_trace,'document trace did not match server response'
                   assert loading,'visible loading-card wait was not recorded'
                   assert not f['adapter'].requests
                   overhead=page.evaluate("""() => {const times=[];for(let i=0;i<200;i++){const t=performance.now();window.dispatchEvent(new CustomEvent('workbench:performance-request',{detail:{path:'/api/chat/private?secret=x',duration:1200,status:503,trace:'aaaaaaaaaaaaaaaa'}}));times.push(performance.now()-t)}times.sort((a,b)=>a-b);const raw=sessionStorage.getItem('workbench:page-performance:v1')||'';return {p95:times[189],bytes:new TextEncoder().encode(raw).length,count:JSON.parse(raw).rows.length,secret:raw.includes('secret=x')}}""")

@@ -40,7 +40,10 @@ def main():
                     pointer.write_text(json.dumps(report['previous']),encoding='utf-8')
                     context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':900},is_mobile=mobile,has_touch=mobile)
                     context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);page=context.new_page();page.set_default_timeout(20000)
-                    path='/posters/new?draft=upgrade-native-'+profile;page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
+                    # Start with the ordinary native composer that actually exists
+                    # in both releases. The previous legacy /posters/new default
+                    # was already incompatible with its hidden combined skill.
+                    path='/chat?fresh=1';page.goto(f['origin']+'/native/?'+urlencode({'path':path}),wait_until='domcontentloaded')
                     textarea=page.get_by_role('textbox',name=re.compile('^(素材与目标|对话输入)$'));expect(textarea).to_be_visible(timeout=30000)
                     raw='  在线升级仍保留全部原字。\n第二行 '+profile+'  ';textarea.fill(raw);page.locator('.chat-hero-title,h1').last.click()
                     page.wait_for_function('raw=>Object.entries(localStorage).some(([k,v])=>k.startsWith("toolbox:draft:")&&[JSON.parse(v).text,JSON.parse(v).material].includes(raw))',arg=raw)
@@ -59,9 +62,15 @@ def main():
                     page.screenshot(path=str(out/(profile+'-offline.png')),full_page=True);check(profile,'offline shell exposes retained native chat inputs without caching business JSON')
                     context.set_offline(False);page.reload(wait_until='domcontentloaded');stage(page,profile,'reconnected');expect(page.get_by_role('textbox',name='对话输入',exact=True)).to_have_value(raw,timeout=35000)
                     assert not f['adapter'].requests;check(profile,'reconnection restores the same raw native draft without sending a model turn')
+                    legacy_key='legacy-upgrade-'+profile;legacy_raw='  旧材料原字\n格式明确为贴图  '
+                    page.evaluate('value=>localStorage.setItem("toolbox:draft:"+value.key,JSON.stringify({material:value.text,command:{skill_id:"content-production"},files:[]}))',{'key':legacy_key,'text':legacy_raw})
+                    page.goto(f['origin']+'/native/?'+urlencode({'path':'/posters/new?draft='+legacy_key}),wait_until='domcontentloaded')
+                    expect(page.get_by_role('textbox',name='对话输入',exact=True)).to_have_value(legacy_raw,timeout=30000)
+                    page.wait_for_function('raw=>Object.entries(localStorage).some(([k,v])=>k.startsWith("toolbox:draft:chat:")&&JSON.parse(v).text===raw&&JSON.parse(v).command?.skill_id==="oil-pig-poster")',arg=legacy_raw)
+                    assert not f['adapter'].requests;check(profile,'new release maps an unsent legacy poster draft to its independent native skill without sending')
                     context.close()
             browser.close()
-        assert len(report['checks'])==8
+        assert len(report['checks'])==10
         assert sha(__file__)==report['harness_sha256'] and sha(Path(__file__).with_name('workbench_native_browser.py'))==report['fixture_sha256']
         if args.backend:
             selected=Path(args.backend).resolve();modules={name:str(Path(module.__file__).resolve()) for name,module in sys.modules.items() if (name=='easel' or name.startswith('easel.') or name=='easel_workbench' or name.startswith('easel_workbench.')) and getattr(module,'__file__',None)}

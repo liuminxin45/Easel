@@ -8,6 +8,12 @@ const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value
 const root=new URL('../../',import.meta.url),digest=file=>createHash('sha256').update(readFileSync(new URL(file,root))).digest('hex');
 function icons(){let sequence=0;return moduleLoader({imports:{react:{useId:()=>':avatar-'+sequence++},'react/jsx-runtime':jsx,'../../assets/workbench/oil-pig-avatar.jpg?inline':'approved-pig.jpg'}})('workbench/ui/skillIcons.tsx').workbenchSkillIcons}
 
+test('all current private skills share the Oil Pig prefix and official names stay unchanged',()=>{
+ const {displayName}=moduleLoader()('lib/skillDisplayNames.ts');
+ for(const id of ['oil-pig-poster','oil-pig-article','topic-research','content-writing','image-production','delivery-review','reference-analysis','publication-analysis'])assert.ok(displayName(id).startsWith('油猪·'),id);
+ assert.equal(displayName('skill-wechat-publisher'),'公众号');
+});
+
 test('seven exact project skills share the original approved avatar with distinct independent purpose marks',()=>{
  const registry=icons(),ids=['content-production','content-writing','image-production','delivery-review','publication-analysis','reference-analysis','topic-research'],purposes=[];
  for(const id of ids){const svg=registry[id]({size:26}),all=nodes(svg);assert.equal(svg.props.viewBox,'0 0 24 24');assert.equal(svg.props.width,26);assert.equal(svg.props['data-workbench-skill-icon'],id);

@@ -1,13 +1,13 @@
 ---
 name: reference-analysis
-description: "参考拆解：分析用户指定样本的标题、封面、结构与方法；适用于研究可借鉴的写法，不自动修改技能、画像或创建作品。"
+description: "油猪·参考拆解：分析用户指定样本的标题、封面、结构与方法；适用于研究可借鉴的写法，不自动修改技能、画像或创建作品。"
 layer: plan
 metadata:
   openclaw:
-    workbench: {"id":"reference-analysis","tasks":["reference"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"参考拆解","resources":[{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章学习.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/资料/风格研究/样本索引.md","kind":"historical_index","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/.agents/skills/neo-reference-analysis/references/reference-observation.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-reference-analysis/SKILL.md","entry_sha256":"366d5becdb31bdb4d7d409aeb3e25aac96dfbe425868022eecba213e3934b344"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
+    workbench: {"id":"reference-analysis","tasks":["reference"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"油猪·参考拆解","resources":[{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章学习.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/资料/风格研究/样本索引.md","kind":"historical_index","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/.agents/skills/neo-reference-analysis/references/reference-observation.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-reference-analysis/SKILL.md","entry_sha256":"366d5becdb31bdb4d7d409aeb3e25aac96dfbe425868022eecba213e3934b344"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
-# 参考拆解
+# 油猪·参考拆解
 
 ## 适用场景与边界
 

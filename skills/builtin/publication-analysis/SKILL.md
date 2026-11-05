@@ -1,13 +1,13 @@
 ---
 name: publication-analysis
-description: "发布复盘：依据实际发布实例、统计窗口和读者反馈分析表现；适用于复盘，不自动发布、回复或更改长期规则。"
+description: "油猪·发布复盘：依据实际发布实例、统计窗口和读者反馈分析表现；适用于复盘，不自动发布、回复或更改长期规则。"
 layer: attribute
 metadata:
   openclaw:
-    workbench: {"id":"publication-analysis","tasks":["analysis"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"发布复盘","resources":[{"path":"skills/shared/workbench/规范/发布与归档要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-publication-analysis/SKILL.md","entry_sha256":"e260e736afb9e9267d8689408fa7f9b284473f5f5337837df6d993a1cba37c92"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
+    workbench: {"id":"publication-analysis","tasks":["analysis"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"油猪·发布复盘","resources":[{"path":"skills/shared/workbench/规范/发布与归档要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-publication-analysis/SKILL.md","entry_sha256":"e260e736afb9e9267d8689408fa7f9b284473f5f5337837df6d993a1cba37c92"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
-# 发布复盘
+# 油猪·发布复盘
 
 ## 适用场景与边界
 

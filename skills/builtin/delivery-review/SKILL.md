@@ -1,13 +1,13 @@
 ---
 name: delivery-review
-description: "交付核验：核对指定版本的实际文件、原始要求和检查依据；适用于制作后的明确检查，不代替用户采纳或发布。"
+description: "油猪·交付核验：核对指定版本的实际文件、原始要求和检查依据；适用于制作后的明确检查，不代替用户采纳或发布。"
 layer: general
 metadata:
   openclaw:
-    workbench: {"id":"delivery-review","tasks":["review","poster","article","change"],"executor":"readonly-agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"交付核验","resources":[{"path":"skills/shared/workbench/规范/模板/创作检查-v1.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/设计说明-v2.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/creative_review.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/.agents/skills/neo-delivery-review/references/independent-check.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true},{"path":"skills/builtin/delivery-review/scripts/check_deliverables.py","kind":"script","scope":"on-demand"}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-delivery-review/SKILL.md","entry_sha256":"8832123f5576cdeac7d2310199e839e94ef8e8a0acfc2416f7c867fea118ef2b"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
+    workbench: {"id":"delivery-review","tasks":["review","poster","article","change"],"executor":"readonly-agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"油猪·交付核验","resources":[{"path":"skills/shared/workbench/规范/模板/创作检查-v1.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/设计说明-v2.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/creative_review.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/.agents/skills/neo-delivery-review/references/independent-check.md","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true},{"path":"skills/builtin/delivery-review/scripts/check_deliverables.py","kind":"script","scope":"on-demand"}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-delivery-review/SKILL.md","entry_sha256":"8832123f5576cdeac7d2310199e839e94ef8e8a0acfc2416f7c867fea118ef2b"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
-# 交付核验
+# 油猪·交付核验
 
 ## 适用场景与边界
 

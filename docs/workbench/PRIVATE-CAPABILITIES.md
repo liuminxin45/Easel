@@ -42,12 +42,12 @@
 | [PC-19 独立健康中控与每日全链路检查](private-capabilities/PC-19-independent-health.md) | 运维能力 | 项目外监控进程、入口/业务/性能及独立公网探测、受控恢复、隔离浏览器旅程及每日真实 Agent canary；外网异常不误重启健康后端。 | `codex.py` |
 | [PC-20 官方基线、PR 补丁及 fork 交付](private-capabilities/PC-20-upstream-maintenance.md) | 开发维护 | 基线/PR记录、同步技能、公共差异逐文件台账、登记自动门禁与可复现fork交付；不替代业务授权。 | `app.py`、`App.tsx`、`web_services` |
 | [PC-21 项目 Codex Spec 工作流与维护知识](private-capabilities/PC-21-project-tooling.md) | 开发维护 | 项目开发技能、隔离 CLI、spec 记录、维护文档和本私有能力速查表；与产品内容技能分开。 | 不修改产品代码；仅开发工作流 |
-| [PC-22 选题研究](private-capabilities/PC-22-topic-research.md) | 辅助业务 SKILL | 讨论、选题与新闻增强的方法和事实边界；是否调用由本轮所选技能或既有明确调用链决定。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-23 图文写作](private-capabilities/PC-23-content-writing.md) | 辅助业务 SKILL | 结构、表述、事实与原字约束；供明确选择的内容流程组合，不将所有文章变成贴图。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-24 配图制作与核验](private-capabilities/PC-24-image-production.md) | 辅助业务 SKILL | 根据准确输入制作配图，保留参考素材和真实产物；按需组合，不冒称实际调用未发生的生图能力。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-25 交付核验](private-capabilities/PC-25-delivery-review.md) | 辅助业务 SKILL | 按准确版本的真实文件/合同核对交付，区分制作方自检与独立核验；不自动采纳或发布。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-26 参考拆解](private-capabilities/PC-26-reference-analysis.md) | 辅助业务 SKILL | 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-27 发布复盘](private-capabilities/PC-27-publication-analysis.md) | 辅助业务 SKILL | 基于实际发布/反馈证据复盘，不凭生成结果虚构曝光或平台回执，不自动改规则。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-22 油猪·选题研究](private-capabilities/PC-22-topic-research.md) | 辅助业务 SKILL | 讨论、选题与新闻增强的方法和事实边界；是否调用由本轮所选技能或既有明确调用链决定。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-23 油猪·图文写作](private-capabilities/PC-23-content-writing.md) | 辅助业务 SKILL | 结构、表述、事实与原字约束；供明确选择的内容流程组合，不将所有文章变成贴图。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-24 油猪·配图制作与核验](private-capabilities/PC-24-image-production.md) | 辅助业务 SKILL | 根据准确输入制作配图，保留参考素材和真实产物；按需组合，不冒称实际调用未发生的生图能力。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-25 油猪·交付核验](private-capabilities/PC-25-delivery-review.md) | 辅助业务 SKILL | 按准确版本的真实文件/合同核对交付，区分制作方自检与独立核验；不自动采纳或发布。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-26 油猪·参考拆解](private-capabilities/PC-26-reference-analysis.md) | 辅助业务 SKILL | 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。 | `skills.py`、`SkillDrawer.tsx` |
+| [PC-27 油猪·发布复盘](private-capabilities/PC-27-publication-analysis.md) | 辅助业务 SKILL | 基于实际发布/反馈证据复盘，不凭生成结果虚构曝光或平台回执，不自动改规则。 | `skills.py`、`SkillDrawer.tsx` |
 
 ### 技能登记边界
 

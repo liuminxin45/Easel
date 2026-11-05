@@ -1,13 +1,13 @@
 ---
 name: image-production
-description: "配图设计与生成：按照主题、尺寸、画面要求和参考素材制作或修改图片；适用于明确的图片任务，不代替文章写作或发布。"
+description: "油猪·配图设计与生成：按照主题、尺寸、画面要求和参考素材制作或修改图片；适用于明确的图片任务，不代替文章写作或发布。"
 layer: produce
 metadata:
   openclaw:
-    workbench: {"id":"image-production","tasks":["poster","image","change","article"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"配图设计与生成","resources":[{"path":"skills/shared/workbench/规范/图片制作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/油猪大侠角色库.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-image-production/SKILL.md","entry_sha256":"b65468ee7062278b157bf5f6e3075c5b18feabb92fd5b89c0a0a8916b7db1520"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
+    workbench: {"id":"image-production","tasks":["poster","image","change","article"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"油猪·配图设计与生成","resources":[{"path":"skills/shared/workbench/规范/图片制作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/油猪大侠角色库.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/模板.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/规范/模板/TechPulse-图生-v1/风格说明.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/工具/内容工作流/poster_imagegen.py.txt","kind":"legacy_script","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-image-production/SKILL.md","entry_sha256":"b65468ee7062278b157bf5f6e3075c5b18feabb92fd5b89c0a0a8916b7db1520"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
-# 配图设计与生成
+# 油猪·配图设计与生成
 
 ## 适用场景与边界
 

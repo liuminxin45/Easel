@@ -1,13 +1,13 @@
 ---
 name: content-writing
-description: "图文写作：依据当前画像、材料和明确要求撰写或修改标题、配文与正文；适用于文字制作，不自动制作整套贴图或发布。"
+description: "油猪·图文写作：依据当前画像、材料和明确要求撰写或修改标题、配文与正文；适用于文字制作，不自动制作整套贴图或发布。"
 layer: produce
 metadata:
   openclaw:
-    workbench: {"id":"content-writing","tasks":["poster","article","change"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"图文写作","resources":[{"path":"skills/shared/workbench/规范/写作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/公众号贴图写作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章生产.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/贴图生产.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/规范/创作方案/目录.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-content-writing/SKILL.md","entry_sha256":"10592a68f9fb70353b62a41b7576ad9d09c50fc792081e9f8327fe0f939a34e7"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
+    workbench: {"id":"content-writing","tasks":["poster","article","change"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["通过 Easel 原生技能调用执行","核对真实产物与原文，不伪造用户采纳或平台发布"],"schema_version":1,"display_name":"油猪·图文写作","resources":[{"path":"skills/shared/workbench/规范/写作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/规范/公众号贴图写作要求.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/文章生产.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/provenance/.agents/skills/neo-content/references/贴图生产.md","kind":"legacy_operation","scope":"on-demand","executable":false,"historical":true},{"path":"skills/shared/workbench/规范/创作方案/目录.json","kind":"contract","scope":"on-demand"},{"path":"skills/shared/workbench/production-contract.md","kind":"contract","scope":"on-demand","required":true}],"source":{"registry_path":".agents/skills/capabilities.json","registry_sha256":"014bafced32c43692d7d6eb25b5f00216f45e18676f9c6f4b23837845a1079e8","entry_path":".agents/skills/neo-content-writing/SKILL.md","entry_sha256":"10592a68f9fb70353b62a41b7576ad9d09c50fc792081e9f8327fe0f939a34e7"},"migration":{"kind":"project_builtin_mechanical","published_style_change":false},"execution_model":"easel-native"}
 ---
 
-# 图文写作
+# 油猪·图文写作
 
 ## 适用场景与边界
 

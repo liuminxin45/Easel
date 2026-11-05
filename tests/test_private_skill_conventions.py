@@ -16,6 +16,7 @@ def test_official_skill_parser_exposes_conventions_and_persona_in_native_request
     row = next(item for item in context.get_skills() if item['name'] == skill)
     description, layer, body = context._parse_skill_md(ROOT/'skills/builtin'/skill/'SKILL.md')
     assert row['description'] == description and row['layer'] == layer and description
+    assert description.startswith('油猪·')
     for section in ('适用场景与边界', '当前画像', '输入', '执行流程', '输出与核验'):
         assert f'## {section}' in body
     message = context.prepare_skill_message(skill, '原始材料\n保留', '实际画像')

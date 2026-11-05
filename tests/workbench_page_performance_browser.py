@@ -24,14 +24,16 @@ def main():
             with patch.object(page_performance,'_sink',sink),patch.object(application,'create_app',native_app),sync_playwright() as pw:
               browser=pw.chromium.launch(executable_path='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless=True,args=['--ignore-certificate-errors'])
               for label,width,mobile in [('desktop',1280,False),('mobile',390,True)]:
+                sink.queue.join();before=sum(len(json.loads(line)['events']) for path in (Path(temporary)/'logs').glob('*.jsonl') for line in path.read_text(encoding='utf8').splitlines())
                 with helper.isolated(native,module.IMAGE) as f:
                   context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':844},is_mobile=mobile,has_touch=mobile,service_workers='block')
-                  context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);page=context.new_page();page.set_default_timeout(30000);delayed=[];requests=[]
+                  context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);page=context.new_page();page.set_default_timeout(30000);delayed=set();requests=[]
                   def route_handler(route):
                     url=urlsplit(route.request.url)
                     assert url.hostname in ('localhost','127.0.0.1'),'external request prohibited'
-                    if '/assets/ui-' in url.path and url.path.endswith('.js') and not delayed:
-                        delayed.append(True);time.sleep(3.3)
+                    for component in ('host','ui'):
+                        if '/assets/'+component+'-' in url.path and url.path.endswith('.js') and component not in delayed:
+                            delayed.add(component);time.sleep(3.3)
                     route.continue_()
                   page.route('**/*',route_handler)
                   page.on('request',lambda req:requests.append((req.method,urlsplit(req.url).path)))
@@ -40,13 +42,18 @@ def main():
                   page.wait_for_function("() => performance.now() > 4000 && document.querySelector('.native-host')",timeout=30000)
                   deadline=time.monotonic()+20
                   while not any(method=='POST' and path=='/api/diagnostics/page-performance' for method,path in requests) and time.monotonic()<deadline:page.wait_for_timeout(100)
-                  assert delayed and any(method=='POST' and path=='/api/diagnostics/page-performance' for method,path in requests),'startup telemetry did not reach server'
+                  assert delayed=={'host','ui'} and any(method=='POST' and path=='/api/diagnostics/page-performance' for method,path in requests),'startup telemetry did not reach server'
+                  page.wait_for_timeout(1000);page.evaluate("window.dispatchEvent(new Event('pagehide'))");page.wait_for_timeout(1000)
                   sink.queue.join();files=list((Path(temporary)/'logs').glob('*.jsonl'));assert files
-                  events=[item for path in files for line in path.read_text(encoding='utf8').splitlines() for item in json.loads(line)['events']]
+                  events=[item for path in sorted(files) for line in path.read_text(encoding='utf8').splitlines() for item in json.loads(line)['events']][before:]
                   slow=[event for event in events if event.get('kind')=='slow' and event.get('metric')=='boot' and event.get('duration_ms',0)>=3000]
+                  loading=[event for event in events if event.get('kind')=='slow' and event.get('metric')=='loading' and event.get('duration_ms',0)>=3000]
                   assert slow and all('?' not in json.dumps(event) for event in slow)
+                  assert loading,'visible loading-card wait was not recorded'
                   assert not f['adapter'].requests
-                  report['checks'].append({'layout':label,'slow_boot_recorded':True,'duration_ms':slow[-1]['duration_ms'],'real_model_calls':0})
+                  overhead=page.evaluate("""() => {const times=[];for(let i=0;i<200;i++){const t=performance.now();window.dispatchEvent(new CustomEvent('workbench:performance-request',{detail:{path:'/api/chat/private?secret=x',duration:1200,status:503,trace:'aaaaaaaaaaaaaaaa'}}));times.push(performance.now()-t)}times.sort((a,b)=>a-b);const raw=sessionStorage.getItem('workbench:page-performance:v1')||'';return {p95:times[189],bytes:new TextEncoder().encode(raw).length,count:JSON.parse(raw).rows.length,secret:raw.includes('secret=x')}}""")
+                  assert overhead['p95']<5 and overhead['bytes']<=65536 and overhead['count']<=100 and not overhead['secret'],overhead
+                  report['checks'].append({'layout':label,'slow_boot_recorded':True,'duration_ms':slow[-1]['duration_ms'],'loading_ms':loading[-1]['duration_ms'],'event_p95_ms':overhead['p95'],'queue_bytes':overhead['bytes'],'real_model_calls':0})
                   context.close()
               browser.close()
           finally:sink.close()

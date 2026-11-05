@@ -35,17 +35,28 @@ def reconcile_pending(adapter, store):
         store.event('repair_receipt_reconciled', at=time.time(), operation_id=pending, outcome=answer['outcome'])
 
 
-def report(store):
+def report(store,app_root=None):
     status = store.read('status.json', {})
     daily = store.read('daily-status.json', {})
     value = {'monitor': status, 'daily': daily, 'browser_journey': store.read('journey-status.json', {}),
         'observed_age_seconds': max(0, time.time()-status.get('at', 0)) if status else None}
+    from .page_performance import summarize,render as render_page_performance
+    try:cached=store.read('page-performance-report.json',{})
+    except (OSError,ValueError,TypeError):cached={'status':'unavailable'}
+    if app_root and (not isinstance(cached,dict) or time.time()-cached.get('at',0)>=60):
+        try:cached={'at':time.time(),**summarize(Path(app_root)/'data/logs/page-performance')};store.write('page-performance-report.json',cached)
+        except (OSError,ValueError,TypeError):cached={'status':'unavailable'}
+    value['page_performance']=cached if isinstance(cached,dict) else {'status':'unavailable'}
+    try:value['memory']=store.read('page-memory.json',{'status':'unavailable'})
+    except (OSError,ValueError,TypeError):value['memory']={'status':'unavailable'}
     body = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     body += '<title>Easel 健康报告</title><style>body{font:16px/1.6 system-ui;max-width:960px;margin:32px auto;padding:0 20px;color:#18212b}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f8;padding:20px;border-radius:10px}a{color:#135e98}</style>'
     body += '<h1>Easel 独立健康报告</h1><p>本报告只在检测完成后更新。入口连通、业务完成、性能与每日真实制作分别记录。</p>'
     body += '<p>生成时间：' + html.escape(dt.datetime.now().astimezone().isoformat(timespec='seconds')) + '</p>'
     body += '<style>.usage-table{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #dde2e7;padding:8px;overflow-wrap:anywhere}</style>'
     body += render_usage(status.get('observation', {}).get('usage'))
+    try:body += render_page_performance(value['page_performance'],value['memory'])
+    except (ValueError,TypeError,KeyError):body += '<p>页面性能汇总暂不可用。</p>'
     body += '<pre>' + html.escape(json.dumps(value, ensure_ascii=False, indent=2)) + '</pre>'
     # No script, credentials, business payload or external asset dependencies.
     target = store.root/'report.html'
@@ -74,16 +85,20 @@ def main(argv=None):
     config = json.loads(options.config.read_text(encoding='utf-8-sig'))
     store = StateStore(config['state_root'])
     if options.action == 'report':
-        value = report(store)
+        value = report(store,config.get('app_root'))
     elif options.action == 'daily':
         from .canary import scheduled_run
         value = scheduled_run(config, store)
-        report(store)
+        report(store,config.get('app_root'))
     else:
         adapter = ApplicationAdapter(config)
         monitor = Monitor(config, store, inspect_target=adapter.inspect, recovery_bridge=adapter.recover)
         deadline = time.monotonic() + max(0, min(options.duration, 50))
         while True:
+            try:
+                from .page_performance import sample_memory
+                sample_memory(store)
+            except (OSError,ValueError,TypeError):pass
             try:
                 from .journey import scheduled_tick
                 scheduled_tick(config, store)
@@ -101,7 +116,7 @@ def main(argv=None):
                     # monitor. Keep the original unknown budget/receipt intact.
                     pass
             value = monitor.tick(allow_repair=config.get('auto_repair') is True)
-            report(store)
+            report(store,config.get('app_root'))
             remaining = deadline-time.monotonic()
             if options.action == 'tick' or remaining <= 0:
                 break

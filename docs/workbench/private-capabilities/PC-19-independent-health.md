@@ -12,6 +12,8 @@
 
 **接口与状态归属：** 检测入口为独立 monitor、canary、business_health 和 health_endpoint；独立控制进程保存自己的计划/报告，业务检测只读取正式状态，canary 使用隔离数据/输出目录。
 
+**页面与资源诊断：** [PC-28](PC-28-page-performance.md) 的有界日志按分钟汇总到独立中控报告；内存观测在独立进程中进行，不以低内存或诊断失败触发业务重启。
+
 **技能收敛适配：** 新的每日验收种子与执行均使用 `oil-pig-poster`；历史回执仍允许准确记录的 `content-production` 身份。沿用原每日操作身份和一次预算，不因升级重启或重发当日请求；独立中控与业务运行包需要配对验收后再切换。涉及 [canary_export.py](../../../easel_workbench/diagnostics/canary_export.py) 和 [canary_worker.py](../../../tools/health-control/easel_health_control/canary_worker.py)。
 
 **公网入口探测：** 用户2026-11-05报告普通4G的 ERR_CONNECTION_CLOSED，现有本机健康不能代表外部入口可达。本轮在 [public_ingress.py](../../../tools/health-control/easel_health_control/public_ingress.py) 增加独立公网探测，monitor 通过 `public_ingress_enabled=true` 启用采样；使用DoH取得公网地址，TLS/SNI保持原host，绕开本机MagicDNS/系统代理造成的本机路径假绿，并复用nonce/release/PID响应核对。公网失败/变慢但本机正常时只记 network_degraded，不授权重启健康业务、更换业务状态或重发任务。配置仍归 [config.example.json](../../../tools/health-control/config.example.json) 及安装后的独立配置，不进入前端。服务器侧公网探测成功也不等于运营商4G、实体vivo/WebToApp已经实测通过。

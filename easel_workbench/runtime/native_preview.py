@@ -31,7 +31,7 @@ def member(root,release,name):
 def response(body,status=200,content_type='text/html; charset=utf-8',**extra):
     return Response(body,status_code=status,headers={'Content-Type':content_type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Frame-Options':'DENY',**extra})
 
-def page(root,directory,manifest,auth=False,template=None):
+def page(root,directory,manifest,auth=False,template=None,trace=''):
     selected_template=template or ('auth.html' if auth else 'index.html')
     if selected_template not in ('auth.html','index.html','check.html'):raise ValueError('Invalid native template')
     nonce=secrets.token_urlsafe(24);source=member(root,manifest['release'],selected_template).decode('utf-8')
@@ -42,8 +42,9 @@ def page(root,directory,manifest,auth=False,template=None):
         css=member(root,manifest['release'],href[len(prefix):]).decode('utf-8')
         return '<style nonce="'+nonce+'">'+css+'</style>'
     source=re.sub(r'<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>',inline,source)
+    if re.fullmatch(r'[a-f0-9]{16,64}',trace):source=source.replace('</head>','<meta name="desk-document-trace" content="'+trace+'"></head>')
     source=source.replace('__DESK_STYLE_NONCE__',nonce)
-    csp="default-src 'self'; script-src 'self'; style-src 'self' 'nonce-"+nonce+"'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    csp="default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self' 'nonce-"+nonce+"'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     return response(source,**{'Content-Security-Policy':csp})
 
 async def _handle_native(request,root,authenticated):
@@ -79,7 +80,7 @@ async def _handle_native(request,root,authenticated):
         import urllib.parse
         target=path.removeprefix('/native')+('?' + request.url.query if request.url.query else '')
         return response('',303,Location='/native/?'+urllib.parse.urlencode({'path':target}))
-    if path=='/native/':return page(root,directory,manifest)
+    if path=='/native/':return page(root,directory,manifest,trace=getattr(request.state,'workbench_trace',''))
     return response('not found',404,'text/plain')
 
 async def handle_native(request,root,authenticated):

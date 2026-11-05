@@ -24,6 +24,10 @@ def main():
         os.environ['EASEL_WORKBENCH_ADMISSION']='1'
     from .runtime import server_logging as journal
     journal.configure(root/'data/logs/toolbox','worker' if options.role in ('collector','publisher') else options.role)
+    if options.role=='server':
+        from .diagnostics import page_performance
+        try:page_performance.configure(root/'data/logs/page-performance')
+        except OSError:journal.emit('page_performance_unavailable')
     journal.install_exception_hooks()
     journal.emit('process_started')
     if options.role == 'server':

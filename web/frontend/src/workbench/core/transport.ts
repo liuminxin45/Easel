@@ -37,10 +37,12 @@ export class ApiTransport {
     const deadline=options.requestTimeout===undefined?(options.raw?this.options.uploadTimeout??45000:write?this.options.writeTimeout??30000:this.options.readTimeout??30000):options.requestTimeout;
     const timer=deadline===null?undefined:setTimeout(()=>controller.abort(),deadline);
     const stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
+    const perfStart=typeof performance!=='undefined'?performance.now():0;let perfStatus=0,perfTrace='';
     try{
       const multipart=typeof FormData!=='undefined'&&options.raw instanceof FormData;
       const headers:Record<string,string>={...(post?{...(!multipart?{'Content-Type':options.raw?'application/octet-stream':'application/json'}:{}),'X-CSRF-Token':options.csrf??'',...(options.id?{'X-Operation-Id':options.id}:{}),...(options.name?{'X-File-Name':encodeURIComponent(options.name)}:{})}:options.conditional&&options.etag?{'If-None-Match':options.etag}:{}),...(options.operationProtocol===2?{'X-Workbench-Operation-Protocol':'2'}:{})};
       const response=await this.fetcher(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,...(Object.keys(headers).length?{headers}:{}),...(post?{method:options.method??'POST',body:options.raw??JSON.stringify(options.body)}:{})});
+      perfStatus=response.status;perfTrace=response.headers.get('X-Desk-Trace')||'';
       if(epoch!==this.options.authEpoch?.())throw abortError();
       this.options.onConnectivity?.(true);
       if(response.status===401){if(epoch===this.options.authEpoch?.())this.options.onExpired?.();throw new RequestError('登录已过期，输入已保留，请重新登录。',{status:401})}
@@ -58,7 +60,7 @@ export class ApiTransport {
       if(caught instanceof Error&&caught.name==='AbortError')throw new RequestError(write?'提交回执待核对，请保留原操作。':'读取超时，请重试。',{cancelled:!!options.signal?.aborted,timedOut:!options.signal?.aborted,uncertain:write});
       if(caught instanceof TypeError)throw new RequestError(write?'提交回执待核对，请保留原操作。':'暂时无法连接服务器。',{unreachable:true,uncertain:write});
       throw caught;
-    }finally{if(timer!==undefined)clearTimeout(timer);options.signal?.removeEventListener('abort',stop);release?.()}
+    }finally{if(timer!==undefined)clearTimeout(timer);options.signal?.removeEventListener('abort',stop);release?.();try{const duration=performance.now()-perfStart;if(typeof window!=='undefined'&&!options.signal?.aborted&&(duration>=1000||perfStatus>=400||!perfStatus))window.dispatchEvent(new CustomEvent('workbench:performance-request',{detail:{path,duration,status:perfStatus,trace:perfTrace}}))}catch{}}
   }
   get<T=JsonRecord>(path:string,signal?:AbortSignal):Promise<T>{return this.request<T>(path,{signal})}
   conditionalGet<T=JsonRecord>(path:string,etag?:string,signal?:AbortSignal):Promise<ConditionalResponse<T>>{return this.request<ConditionalResponse<T>>(path,{conditional:true,etag,signal})}

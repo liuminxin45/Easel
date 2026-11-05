@@ -149,7 +149,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if method in ('GET','HEAD') and (headers.get('transfer-encoding') or int(headers.get('content-length','0'))):return error(400,'GET 不接受请求内容')
         streamed_upload=(method=='POST' and (path=='/api/uploads' or path=='/api/upload' and
                          headers.get('content-type','').split(';')[0].lower()=='multipart/form-data'))
-        raw=await body(request,20*1024*1024 if path=='/api/uploads' else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 512000) if method in ('POST','PUT','PATCH','DELETE') and not streamed_upload else b''
+        raw=await body(request,20*1024*1024 if path=='/api/uploads' else 5*1024*1024 if re.fullmatch(r'/api/media/uploads/[A-Za-z0-9_-]+/chunks/\d+',path) else 16384 if path=='/api/diagnostics/page-performance' else 512000) if method in ('POST','PUT','PATCH','DELETE') and not streamed_upload else b''
         if not streamed_upload:request._body=raw
         pairs=[(key.decode('latin1'),value.decode('latin1')) for key,value in headers.raw];ctx=Context(method,target,pairs,raw)
         ctx.auth_id=trace
@@ -310,6 +310,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 if len(raw)>2048:return error(413,'操作诊断过大')
                 from easel_workbench.diagnostics.client_operations import observe
                 return reply(observe(value,trace=trace))
+            if path=='/api/diagnostics/page-performance':
+                if len(raw)>16384:return error(413,'性能诊断过大')
+                from easel_workbench.diagnostics.page_performance import ingest
+                return reply(ingest(value))
             chat_response=await chat_api(chat,chat_business,path,request,value,authenticated=lambda:auth.session(cookies(ctx.headers).get(SESSION)),serve_file=file_response,admissions=admissions)
             if chat_response is not None:return chat_response
             if path=='/api/creative/preview':

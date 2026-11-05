@@ -19,6 +19,9 @@ def prepared(business):
 
 def test_export_minimal_seed_has_no_works_sessions_accounts_or_plain_credentials(business):
     prepared(business);value=export_seed(business.root,business.root)
+    import hashlib
+    poster=business.root/'skills/builtin/oil-pig-poster/SKILL.md'
+    assert value['native_skill_sha256']==hashlib.sha256(poster.read_bytes()).hexdigest()
     assert value['profile_id']=='oil-pig' and value['settings_revision']==2
     assert value['flow']=='official-native-skill'
     assert not set(value['rows']) & {'creator_skill_pointers','creator_skill_versions','creator_skill_blobs'}

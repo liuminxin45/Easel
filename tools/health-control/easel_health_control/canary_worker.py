@@ -136,7 +136,9 @@ def verify_image_receipt(root,turn_id,operation_id):
         if ordinary:
             if turn.get('session_id')!=operation_id or turn_id!=operation_id+'-poster':raise ValueError('canary_turn_identity_changed')
             context=turn.get('context') or {}
-            if context.get('skill_id')!='content-production' or context.get('action_id')!='native':raise ValueError('canary_skill_identity_changed')
+            # Past daily operations remain verifiable under their original
+            # skill identity; new operations use the independent poster skill.
+            if context.get('skill_id') not in ('content-production','oil-pig-poster') or context.get('action_id')!='native':raise ValueError('canary_skill_identity_changed')
             folder=root/'outputs'/operation_id/turn_id/'products'
             candidates=[{'id':None,'path':str(path)} for path in folder.rglob('*.png')] if folder.is_dir() else []
         else:
@@ -215,7 +217,7 @@ async def execute(request,context):
         '工具自带字体并写入操作身份元数据，禁止调用正式AppData/venv Python。你仍需依据真实素材完成标题、正文和配文并执行工具。'
         '来源：'+json.dumps(source,ensure_ascii=False))
     value={'sessionId':sid,'turnId':tid,'message':message,'attachments':[],
-           'context':{'profile_id':context['seed']['profile_id'],'skill_id':'content-production','action_id':'native',
+           'context':{'profile_id':context['seed']['profile_id'],'skill_id':'oil-pig-poster','action_id':'native',
                       **({'article_id':article_id} if article_id else {})}}
     if selected_release(context['application'])[1]!=context['pointer']:raise ValueError('active_release_changed_before_native_send')
     StateStore(context['workspace']).write('native-intent.json',{'operation_id':sid,'session_id':sid,'turn_id':tid,'release':context['pointer'],

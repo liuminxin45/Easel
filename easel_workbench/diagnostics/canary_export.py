@@ -61,7 +61,7 @@ def export_seed(application_root, source_root, profile_id='oil-pig', *, native=T
 def _native_seed(application_root,source_root,profile_id):
     """A native SKILL run needs current profile/settings, never skill DB pins."""
     root=Path(application_root).resolve();source=Path(source_root).resolve()
-    entry=source/'skills/builtin/content-production/SKILL.md'
+    entry=source/'skills/builtin/oil-pig-poster/SKILL.md'
     if not entry.is_file() or entry.is_symlink() or not entry.resolve().is_relative_to(source):raise ValueError('canary_native_skill_missing')
     with contextlib.closing(sqlite3.connect((root/'data/desk.sqlite').as_uri()+'?mode=ro',uri=True)) as c:
         c.row_factory=sqlite3.Row;c.execute('PRAGMA query_only=ON');c.execute('BEGIN')

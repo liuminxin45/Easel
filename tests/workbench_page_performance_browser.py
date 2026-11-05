@@ -23,6 +23,17 @@ def main():
           try:
             with patch.object(page_performance,'_sink',sink),patch.object(application,'create_app',native_app),sync_playwright() as pw:
               browser=pw.chromium.launch(executable_path='C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless=True,args=['--ignore-certificate-errors'])
+              with helper.isolated(native,module.IMAGE) as f:
+                context=browser.new_context(ignore_https_errors=True,service_workers='block');page=context.new_page();page.set_default_timeout(30000)
+                page.route('**/*',lambda route:route.continue_() if urlsplit(route.request.url).hostname in ('localhost','127.0.0.1') else route.abort())
+                page.goto(f['origin']+'/native/login',wait_until='domcontentloaded')
+                page.wait_for_function("() => {try{return JSON.parse(sessionStorage.getItem('workbench:page-performance:v1')||'null')?.rows?.length>0}catch{return false}}",timeout=30000)
+                context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}]);requests=[]
+                page.on('request',lambda req:requests.append((req.method,urlsplit(req.url).path)))
+                page.goto(f['origin']+'/native/',wait_until='domcontentloaded');deadline=time.monotonic()+25
+                while not any(method=='POST' and path=='/api/diagnostics/page-performance' for method,path in requests) and time.monotonic()<deadline:page.wait_for_timeout(100)
+                assert any(method=='POST' and path=='/api/diagnostics/page-performance' for method,path in requests),'pre-login observation was not sent after authentication'
+                assert not f['adapter'].requests;report['checks'].append({'layout':'login','pre_auth_buffer_sent_after_login':True,'real_model_calls':0});context.close()
               for label,width,mobile in [('desktop',1280,False),('mobile',390,True)]:
                 sink.queue.join();before=sum(len(json.loads(line)['events']) for path in (Path(temporary)/'logs').glob('*.jsonl') for line in path.read_text(encoding='utf8').splitlines())
                 with helper.isolated(native,module.IMAGE) as f:

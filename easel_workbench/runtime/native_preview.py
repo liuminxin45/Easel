@@ -64,7 +64,7 @@ async def _handle_native(request,root,authenticated):
         except FileNotFoundError:return response('not found',404,'text/plain')
         mime='text/javascript' if name.endswith('.js') else 'text/css' if name.endswith('.css') else mimetypes.guess_type(name)[0] or 'application/octet-stream'
         return response(body,content_type=mime,**{'Cache-Control':'private, max-age=31536000, immutable','Cross-Origin-Resource-Policy':'same-origin'})
-    if path=='/native/login':return page(root,directory,manifest,auth=True)
+    if path=='/native/login':return page(root,directory,manifest,auth=True,trace=getattr(request.state,'workbench_trace',''))
     if not authenticated:
         next_path=path+('?' + request.url.query if request.url.query else '')
         import urllib.parse

@@ -43,7 +43,8 @@ def report(store,app_root=None):
     from .page_performance import summarize,render as render_page_performance
     try:cached=store.read('page-performance-report.json',{})
     except (OSError,ValueError,TypeError):cached={'status':'unavailable'}
-    if app_root and (not isinstance(cached,dict) or time.time()-cached.get('at',0)>=60):
+    cached_at=cached.get('at') if isinstance(cached,dict) else None
+    if app_root and (type(cached_at) not in (int,float) or not 0 <= time.time()-cached_at < 60):
         try:cached={'at':time.time(),**summarize(Path(app_root)/'data/logs/page-performance')};store.write('page-performance-report.json',cached)
         except (OSError,ValueError,TypeError):cached={'status':'unavailable'}
     value['page_performance']=cached if isinstance(cached,dict) else {'status':'unavailable'}

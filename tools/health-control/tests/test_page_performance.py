@@ -33,3 +33,10 @@ def test_broken_optional_performance_cache_does_not_break_health_report(tmp_path
     assert value['memory']['status']=='unavailable'
     assert value['page_performance']['status']=='unavailable'
     assert (tmp_path/'report.html').is_file()
+
+
+def test_invalid_performance_cache_timestamp_does_not_break_health_report(tmp_path):
+    from easel_health_control.cli import report
+    store=StateStore(tmp_path)
+    (tmp_path/'page-performance-report.json').write_text('{"at":"invalid"}',encoding='utf8')
+    assert report(store,app_root=tmp_path)['page_performance']['status']=='unavailable'

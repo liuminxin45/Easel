@@ -243,7 +243,7 @@ def production_path(path: str, owners: dict[str, set[str]], scope: dict) -> bool
     if in_scope(path, scope):
         return True
     source = Path(path)
-    relevant = source.suffix in CODE_SUFFIXES or source.name == 'SKILL.md'
+    relevant = source.suffix in CODE_SUFFIXES or source.name == 'SKILL.md' or path == 'scripts/git-hooks/pre-push'
     owned = any(path == p or path.startswith(p.rstrip('/') + '/') for paths in owners.values() for p in paths)
     return relevant and (path.startswith(PRIVATE_ROOTS) or path.startswith('scripts/') or owned)
 

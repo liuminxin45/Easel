@@ -10,7 +10,7 @@ esac
 # Also protect direct pushes when hosted Actions is unavailable. This check is
 # read-only: it never refreshes the reviewed source lock or published versions.
 root=$(git rev-parse --show-toplevel) || exit 1
-if [ -f "$root/scripts/check_workbench_skill_bytes.py" ]; then
+if [ -f "$root/scripts/check_workbench_skill_bytes.py" ] || [ -f "$root/scripts/check_private_capabilities.py" ]; then
   if [ -x "$root/.runtime/workbench-python/Scripts/python.exe" ]; then
     python="$root/.runtime/workbench-python/Scripts/python.exe"
   elif command -v python >/dev/null 2>&1; then
@@ -21,6 +21,23 @@ if [ -f "$root/scripts/check_workbench_skill_bytes.py" ]; then
     echo 'Rejected: Python is required to verify private skill source bytes.' >&2
     exit 1
   fi
-  PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_skill_bytes.py" || exit 1
+  if [ -f "$root/scripts/check_workbench_skill_bytes.py" ]; then
+    PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_skill_bytes.py" || exit 1
+  fi
+fi
+# Hosted Actions may be disabled by GitHub even when a workflow is marked active.
+# Enforce the same read-only registry check locally, including exact main commits.
+if [ -f "$root/scripts/check_private_capabilities.py" ]; then
+  PYTHONUTF8=1 "$python" "$root/scripts/check_private_capabilities.py" || exit 1
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    remote_sha=$(printf '%s' "$remote_sha" | tr -d '\r')
+    [ "$remote_ref" = refs/heads/main ] || continue
+    case "$local_sha" in 0000000000000000000000000000000000000000) continue ;; esac
+    if [ "$remote_sha" = 0000000000000000000000000000000000000000 ]; then
+      PYTHONUTF8=1 "$python" "$root/scripts/check_private_capabilities.py" --head-ref "$local_sha" || exit 1
+    else
+      PYTHONUTF8=1 "$python" "$root/scripts/check_private_capabilities.py" --base-ref "$remote_sha" --head-ref "$local_sha" || exit 1
+    fi
+  done
 fi
 exit 0

@@ -18,6 +18,8 @@
 
 **官方历史例外：** 已记录准确官方基线的祖先原提交不要求补写私有trailer，不能为通过本项目CI改写官方原历史；自有整合提交仍须登记PC-20影响，最终公共文件差异仍全部核对台账，不能借此跳过私有适配登记。
 
+**本机强制入口：** [scripts/git-hooks/pre-push](../../../scripts/git-hooks/pre-push) 在保留官方远端推送拒绝、原技能字节检查的同时执行登记结构检查；推送main还读取Git提供的准确新旧SHA检查每个提交，不把“配置了CI”当成已运行。2026-11-05实际dispatch收到GitHub 422 “Actions has been disabled for this repository”，即便workflow元数据active也不能报告远端通过；本机hook继续拒绝失败推送，不以跳过检查交付。该限制不影响自有fork源码推送和本机正式部署。
+
 **官方复用／共通接缝：** [web/app.py](../../../web/app.py)、[web/frontend/src/App.tsx](../../../web/frontend/src/App.tsx)、[easel/web_services](../../../easel/web_services)
 
 **验证入口：** [tests/test_easel_base_alignment.py](../../../tests/test_easel_base_alignment.py)、[tests/test_workbench_git_delivery.py](../../../tests/test_workbench_git_delivery.py)、[tests/test_workbench_skill_bytes.py](../../../tests/test_workbench_skill_bytes.py)、[tests/test_private_capability_registry.py](../../../tests/test_private_capability_registry.py)。自动规则须验证漏登记等负例，不能以文档链接存在代替能力行为验证。

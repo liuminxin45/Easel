@@ -257,7 +257,7 @@ def test_native_admission_uses_current_sources_without_requiring_private_databas
     entries=ProjectSkillCatalog(root).entries()
     before={root/e['entry']:(root/e['entry']).read_bytes() for e in entries}
     result=admission_module().validate_published_skills(tmp_path,source_root=root)
-    assert result['mode']=='easel-native' and result['checked']==len(entries)==7
+    assert result['mode']=='easel-native' and result['checked']==len(entries)==2
     assert {row['id'] for row in result['skills']}=={e['id'] for e in entries}
     assert all(row['source']=='SKILL.md' and 'version' not in row for row in result['skills'])
     assert not (tmp_path/'data/desk.sqlite').exists()

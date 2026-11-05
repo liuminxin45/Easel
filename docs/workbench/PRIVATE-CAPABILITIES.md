@@ -51,7 +51,7 @@
 
 ### 技能登记边界
 
-当前 `ProjectSkillCatalog` 按 SKILL 中的工作台元数据读取到 9 个业务技能项：上表的油猪两个独立技能、6 个辅助技能，以及下表 C-04 的旧组合技能。**这不代表 9 项都应展示或可作为新创作入口**；原生目录会过滤旧 `content-production` 及六个已吸收的辅助技能；它们的项目文件与历史版本仍供旧记录、健康检测和冻结流程兼容。其余官方内置技能继续由官方目录和流程管理，不因存在于本仓库就登记成私有能力。
+当前 `ProjectSkillCatalog` 只读取两个油猪业务技能。旧组合及六个辅助技能原文已重命名为 `SKILL.retired.md` 归档，不再作为技能发现或执行；旧业务数据保留，但不提供旧技能历史兼容入口。其余官方内置技能继续由官方目录和流程管理，不因存在于本仓库就登记成私有能力。
 
 油猪·做贴图与油猪·做文章分别维护，互不套用流程。方法正文、资源和组合依赖以各自 `SKILL.md` 为准；本表仅登记业务边界和接入位置。开发技能 `codex-spec`、`easel-upstream-sync` 与产品内容技能分开登记。
 
@@ -62,7 +62,7 @@
 | [C-01 私有技能管理与整理经验](private-capabilities/C-01-retired-skill-management.md) | 已退役／历史只读 | 候选、试用、发布/回退、私有技能 pins 与整理经验；保留历史版本、原任务及准确回执。 |
 | [C-02 旧生产/媒体执行与 vendor](private-capabilities/C-02-legacy-production-media.md) | 兼容受限／部分入口已退役 | 旧任务的核对、进程及准确源码保护，旧媒体/生产方法与历史 vendor 原件。 |
 | [C-03 旧工作台、通知、资料库与自动检测](private-capabilities/C-03-retired-entrypoints.md) | 已退役／迁移兼容 | 旧 URL、旧壳/SW/安装入口、通知/设备、个人资料库、旧桥接与自动账号检测；旧统计页面不恢复，已有队列/历史保持。 |
-| [C-04 旧 content-production 组合技能](private-capabilities/C-04-legacy-content-production-skill.md) | 隐藏入口／兼容资源 | 原组合方法和历史冻结输入仍可解释；新贴图/文章入口分别使用 PC-08/PC-09。 |
+| [C-04 旧 content-production 组合技能](private-capabilities/C-04-legacy-content-production-skill.md) | 已归档／不再执行 | 保留旧业务数据；不要求旧技能历史兼容。新贴图/文章入口分别使用 PC-08/PC-09。 |
 | [C-05 本地项目关联、作品归档与 Git 同步存量](private-capabilities/C-05-local-project-operations.md) | 受限兼容／保留原操作 | 分别登记项目绑定/重试写入口、local_io worker开关、原决定和准确文件Git意图；不新增外部同步授权。 |
 | [C-06 证据索引、分类与分析设置存量](private-capabilities/C-06-evidence-index-compatibility.md) | 受限兼容／确定性索引与历史 | 区分仍可写的索引/分类/设置和HTTP层410的分析/提案动作；自动模型学习持续关闭。 |
 | [C-07 旧创作配方、图稿方案与样本导入存量](private-capabilities/C-07-legacy-creative-recipes.md) | 兼容受限／混合读写 | 区分只读预览、原件导入/方案保存、可能排Agent讨论的准备动作及退役参数预设；不恢复旧生产页。 |

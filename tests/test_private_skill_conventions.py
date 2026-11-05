@@ -4,8 +4,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-IDS = ('oil-pig-poster', 'oil-pig-article', 'topic-research', 'content-writing',
-       'image-production', 'delivery-review', 'reference-analysis', 'publication-analysis')
+IDS = ('oil-pig-poster', 'oil-pig-article')
 
 
 @pytest.mark.parametrize('skill', IDS)

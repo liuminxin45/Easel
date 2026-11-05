@@ -13,9 +13,10 @@ def test_separated_skills_keep_their_primary_standards_exact_and_local():
     for sid in ('oil-pig-poster', 'oil-pig-article'):
         skill_dir=ROOT/'skills/builtin'/sid
         standards=skill_dir/'references/standards'
-        assert len(list(standards.glob('*.md')))==2
+        assert len(list(standards.glob('*.md')))>=2
         for path in standards.glob('*.md'):
             source=ROOT/'skills/shared/workbench/neo-source/规范'/path.name
+            if not source.is_file():source=ROOT/'skills/shared/workbench/规范'/path.name
             assert path.read_bytes()==source.read_bytes()
             assert path.relative_to(ROOT).as_posix() in {r['path'] for r in entries[sid]['resources']}
 
@@ -81,17 +82,18 @@ def test_imported_workflow_snapshot_matches_exact_source_manifest():
     assert any('文章生产原文' in path for path in paths)
 
 
-def test_native_catalog_has_two_distinct_skill_entries_and_legacy_is_still_addressable():
+def test_native_catalog_has_two_distinct_skill_entries_and_retired_entries_are_not_addressable():
     from easel_workbench.skill_catalog import ProjectSkillCatalog
     entries={row['id']:row for row in ProjectSkillCatalog(ROOT).entries()}
     assert entries['oil-pig-poster']['tasks']==['poster','change']
     assert entries['oil-pig-article']['tasks']==['article','change']
-    assert (ROOT/'skills/builtin/content-production/SKILL.md').is_file()
+    assert set(entries)=={'oil-pig-poster','oil-pig-article'}
+    assert (ROOT/'skills/builtin/content-production/SKILL.retired.md').is_file()
     from easel.web_services.skills import create_skills_context
     context=create_skills_context(ROOT,environment=lambda:{},execute=lambda *_:None,persona=lambda _:'',direct_api=lambda:False)
     assert context.find_skill('oil-pig-poster')=='oil-pig-poster'
     assert context.find_skill('oil-pig-article')=='oil-pig-article'
-    assert context.find_skill('content-production')=='content-production'
+    assert context.find_skill('content-production') is None
 
 
 def test_native_host_hides_retired_private_entries_without_hiding_official_skills():

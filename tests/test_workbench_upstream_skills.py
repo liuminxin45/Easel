@@ -41,7 +41,7 @@ def test_official_catalog_discovers_project_and_official_skills_without_private_
     assert native.context().get_skills.__code__.co_filename.replace('\\','/').endswith('easel/web_services/skills.py')
 
 
-@pytest.mark.parametrize('sid',['card-quote','content-production'])
+@pytest.mark.parametrize('sid',['card-quote','oil-pig-poster'])
 def test_all_skill_details_have_identical_official_shape_and_read_current_source(library,sid,monkeypatch):
     from easel_workbench.runtime.native_skills import service
     b=library;native=service(b.box,b.chat)

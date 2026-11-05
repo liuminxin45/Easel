@@ -10,21 +10,22 @@ from collections.abc import Iterable, Mapping
 
 
 TASK_DEFAULTS = {
-    'poster': ['content-writing', 'image-production', 'delivery-review'],
-    'article': ['content-writing', 'image-production', 'delivery-review'],
-    'change': ['content-writing', 'image-production', 'delivery-review'],
-    'discuss': ['topic-research'], 'research': ['topic-research'],
-    'reference': ['reference-analysis'], 'review': ['delivery-review'],
-    'analysis': ['publication-analysis'], 'learning': [],
-    'news_enhancement': ['topic-research'], 'image': ['image-production', 'delivery-review'],
+    'poster': ['oil-pig-poster'],
+    'article': ['oil-pig-article'],
+    'change': [],
+    'discuss': [], 'research': [], 'reference': [], 'review': [],
+    'analysis': [], 'learning': [], 'news_enhancement': [],
+    'image': ['oil-pig-poster'],
     # Historical profiles may retain these empty, retired task slots.
     'media': [], 'speech': [], 'video': [], 'music': [], 'transcribe': [], 'compose': [],
 }
-RETIRED_TASKS = frozenset(task for task, defaults in TASK_DEFAULTS.items() if not defaults)
+RETIRED_TASKS = frozenset(task for task, defaults in TASK_DEFAULTS.items() if not defaults and task != 'change')
 RETIRED_EASEL_SKILLS = frozenset((
     'easel-voiceover', 'easel-image', 'easel-video', 'easel-music',
     'easel-transcribe', 'easel-compose',
-    'experience-distillation',
+    'experience-distillation', 'content-production', 'topic-research',
+    'content-writing', 'image-production', 'delivery-review',
+    'reference-analysis', 'publication-analysis',
 ))
 
 
@@ -41,10 +42,7 @@ def supports_task(skill: Mapping, task: str) -> bool:
         return False
     if task in tasks:
         return True
-    # The existing image workflow reserves this exact independent checker.
-    # Its canonical scope calls that role "review", rather than image creation.
-    return (task == 'image' and skill.get('id') == 'delivery-review'
-            and skill.get('executor') == 'readonly-agent' and 'review' in tasks)
+    return task == 'image' and skill.get('id') == 'oil-pig-poster' and 'poster' in tasks
 
 
 def require_task(skill: Mapping, task: str) -> None:
@@ -55,25 +53,21 @@ def require_task(skill: Mapping, task: str) -> None:
 def requirements(task: str) -> dict:
     required_all = []
     required_any = []
-    if task in ('poster', 'article', 'change', 'image'):
-        required_all.append('delivery-review')
-        if task == 'article':
-            required_all.append('content-writing')
-        elif task == 'image':
-            required_all.append('image-production')
-        else:
-            required_any.append(['content-writing', 'image-production'])
+    if task in ('poster', 'image'):
+        required_all.append('oil-pig-poster')
+    elif task == 'article':
+        required_all.append('oil-pig-article')
+    elif task == 'change':
+        required_any.append(['oil-pig-poster', 'oil-pig-article'])
     return {'required_all': required_all, 'required_any': required_any}
 
 
 def require_selection(task: str, skill_ids: Iterable[str]) -> None:
     selected = set(skill_ids)
     policy = requirements(task)
-    if 'delivery-review' in policy['required_all'] and 'delivery-review' not in selected:
-        raise ValueError('制作任务须保留交付核验技能；尚未启动制作')
     if (set(policy['required_all']) - selected
             or any(not selected.intersection(group) for group in policy['required_any'])):
-        raise ValueError('请选择能完成本次任务的写作或配图技能；尚未启动制作')
+        raise ValueError('请选择与本次任务对应的油猪技能；尚未启动制作')
 
 
 def task_policy(skills: Iterable[Mapping]) -> dict:

@@ -90,11 +90,7 @@ class SnapshotResolver:
                 skill['execution_role'] = 'workflow_entry'
                 lines.append('## 程序编排入口\n' + skill['name'] + ' v' + str(skill['version']) + ' 已冻结登记；由工作流服务编排所选子技能，本入口不新增模型调用。')
                 continue
-            reserved = task in ('poster', 'article', 'change', 'image') and skill['id'] == 'delivery-review'
-            skill['execution_role'] = 'reserved_independent' if reserved else 'active'
-            if reserved:
-                lines.append('## 后续独立检查\n' + skill['name'] + ' v' + str(skill['version']) + ' 已冻结供交付后的独立只读检查使用。本阶段执行制作；检查者的只读约束只作用于后续检查过程。')
-                continue
+            skill['execution_role'] = 'active'
             available_context = {**(context or {}), 'format': (context or {}).get('format', task if task in ('poster', 'article') else 'poster' if task == 'image' else None)}
             active_rules, rule_states = [], []
             for rule in skill.get('baseline_rules', []):

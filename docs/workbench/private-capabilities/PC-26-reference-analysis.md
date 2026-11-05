@@ -4,7 +4,7 @@
 
 **实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-26` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
 
-- **状态：** 已确认能力内化；新选择入口停用，方法已纳入两个主技能；旧文件与冻结版本暂作历史兼容，不能视为已删除。
+- **状态：** 已确认能力内化；旧技能源文件已归档且不再发现或执行；旧业务数据保留，不维护旧技能历史兼容入口。
 - **需求依据：** 用户要求保留迁入的业务 SKILL，并通过 Easel 原生技能方式组织能力；本项已在项目能力元信息中声明。 依据见下方原始规则/Spec；本卡不额外授予执行、采纳或发布权限。
 - **能力范围：** 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。
 - **官方复用与必要差异：** 共用原 SkillPage/SkillDrawer、skills 服务及原生执行；方法正文以所列 SKILL 为唯一来源，宿主不重写其业务方法。
@@ -12,7 +12,7 @@
 
 **接口与状态归属：** 接口沿原技能服务；方法与资源以本项 SKILL.md 为源，无独立 HTTP 或技能数据库。调用记录、冻结输入与真实输出由既有会话/任务保管，不在维护卡维护第二份技能正文。
 
-**私有入口／资源：** [skills/builtin/reference-analysis/SKILL.md](../../../skills/builtin/reference-analysis/SKILL.md)、[easel_workbench/skill_catalog.py](../../../easel_workbench/skill_catalog.py)、[easel_workbench/runtime/native_skills.py](../../../easel_workbench/runtime/native_skills.py)
+**私有入口／资源：** [skills/builtin/reference-analysis/SKILL.retired.md](../../../skills/builtin/reference-analysis/SKILL.retired.md)、[easel_workbench/skill_catalog.py](../../../easel_workbench/skill_catalog.py)、[easel_workbench/runtime/native_skills.py](../../../easel_workbench/runtime/native_skills.py)
 
 **官方复用／共通接缝：** [easel/web_services/skills.py](../../../easel/web_services/skills.py)、[web/frontend/src/components/SkillDrawer.tsx](../../../web/frontend/src/components/SkillDrawer.tsx)
 
@@ -27,3 +27,5 @@
 **2026-11-05 规范整理：** SKILL 增加适用场景、当前画像、输入、执行流程和输出核验，方法正文和资源仍以原 SKILL 与引用原件为准；不新增发布或采纳授权。验证见本轮技能规范 Spec。
 
 **显示名称：** 按用户要求统一以“油猪·”开头；原技能 ID 保持，用 Easel 原生技能库与选择器展示。
+
+**退役目录归属：** [原技能目录](../../../skills/builtin/reference-analysis/)，入口文件已归档且不再发现。

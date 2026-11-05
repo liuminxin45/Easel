@@ -2,6 +2,8 @@
 
 [返回私有能力登记表](../PRIVATE-CAPABILITIES.md)
 
+**本版修改入口：** [VersionOperations.tsx](../../../web/frontend/src/workbench/ui/VersionOperations.tsx) 读取准确版本与作品格式；文章选择油猪·做文章，贴图选择油猪·做贴图，格式未知时不猜测、不启动会话。修改仍保留原件，选择技能不等于发送请求。
+
 **实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-12` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
 
 - **状态：** 已确认保留；类型：私有业务。

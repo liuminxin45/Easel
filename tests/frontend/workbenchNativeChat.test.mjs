@@ -404,13 +404,18 @@ test('an explicit independent check binds only this version and does not submit 
 test('editing a chat product rereads its exact completed version and navigates with its frozen skill without starting production',async()=>{
  const f=productActionsFixture(completedActionWork());f.button(f.render(),'修改这版').props.onClick();await tick();await tick();
  assert.deepEqual(plain(f.calls.reads),[['/api/works/exact-work/versions/completed-v1/view',true]]);
- const [path,options]=f.calls.navigate[0];assert.equal(path,'/chat/ordinary-session');assert.equal(options.intent,'flow');const input=f.calls.opens[0];assert.match(input.draft.text,/completed-v1/);assert.equal(input.draft.command.action_id,'native');assert.equal(input.draft.command.version,undefined);assert.equal(input.query,undefined);
+ const [path,options]=f.calls.navigate[0];assert.equal(path,'/chat/ordinary-session');assert.equal(options.intent,'flow');const input=f.calls.opens[0];assert.match(input.draft.text,/completed-v1/);assert.equal(input.draft.command.skill_id,'oil-pig-poster');assert.equal(input.draft.command.action_id,'native');assert.equal(input.draft.command.version,undefined);assert.equal(input.query,undefined);
  assert.equal(f.calls.navigate.length,1);assert.equal(f.calls.actions.length,0);assert.equal(f.calls.errors.length,0);
  for(const kind of ['missing-version','unfinished-version']){
   const work=completedActionWork();if(kind==='missing-version')work.versions.shift();if(kind==='unfinished-version')work.versions[0].status='stopped';if(kind==='missing-session')delete work.native_chat;if(kind==='missing-frozen-skill')work.versions[0].creative.creator.skills=[];
   const blocked=productActionsFixture(completedActionWork(),{readWork:async()=>work});blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();
   assert.equal(blocked.calls.navigate.length,0,kind);assert.equal(blocked.calls.actions.length,0,kind);assert.match(blocked.calls.errors[0],/此版本的制作记录尚未核对|原版制作技能没有准确绑定/,kind);
  }
+});
+
+test('editing an article selects the article skill and refuses an unknown format',async()=>{
+ const article=completedActionWork();article.format='article';const f=productActionsFixture(article);f.button(f.render(),'修改这版').props.onClick();await tick();await tick();assert.equal(f.calls.opens[0].draft.command.skill_id,'oil-pig-article');
+ const unknown=completedActionWork();unknown.format='other';const blocked=productActionsFixture(unknown);blocked.button(blocked.render(),'修改这版').props.onClick();await tick();await tick();assert.equal(blocked.calls.opens.length,0);assert.match(blocked.calls.errors[0],/格式无法确定/);
 });
 
 test('a delayed product edit uses its pre-read navigation ticket and cannot take over after leaving the page',async()=>{

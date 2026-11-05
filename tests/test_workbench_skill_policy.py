@@ -2,6 +2,10 @@
 from pathlib import Path
 import importlib.util
 import pytest
+import json
+from types import SimpleNamespace
+from easel_workbench.runtime.creator_runtime import CreatorRuntime
+from easel_workbench.runtime.desk import Store
 
 from easel_workbench.skills import RETIRED_EASEL_SKILLS, require_selection, supports_task
 
@@ -46,3 +50,36 @@ def test_image_uses_poster_skill_but_article_cannot_satisfy_it():
     require_selection('image',['oil-pig-poster'])
     with pytest.raises(ValueError,match='油猪技能'):
         require_selection('image',['oil-pig-article'])
+
+
+@pytest.fixture
+def runtime(tmp_path):
+    project = tmp_path / 'content'
+    definitions = (
+        ('oil-pig-poster', ['poster', 'change'], 'agent'),
+        ('oil-pig-article', ['article', 'change'], 'agent'),
+        ('content-production', ['poster', 'article', 'change'], 'workflow'),
+        ('content-writing', ['poster', 'article', 'change'], 'agent'),
+        ('image-production', ['poster', 'image', 'article', 'change'], 'agent'),
+        ('delivery-review', ['review', 'poster', 'article', 'change'], 'readonly-agent'),
+        ('topic-research', ['research', 'discuss', 'news_enhancement'], 'agent'),
+        ('reference-analysis', ['reference'], 'agent'),
+        ('publication-analysis', ['analysis'], 'agent'),
+        ('experience-distillation', ['learning'], 'readonly-agent'),
+    )
+    skills = []
+    for sid, tasks, executor in definitions:
+        entry = '.agents/skills/' + sid + '/SKILL.md'
+        path = project / entry
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('---\nname: ' + sid + '\ndescription: A bounded test method.\n---\nTest method ' + sid + '.\n', encoding='utf-8')
+        skills.append({'id': sid, 'name': sid, 'description': 'Test method',
+                       'entry': entry, 'tasks': tasks, 'executor': executor, 'resources': [],
+                       'input_contract': {'required': ['material']},
+                       'output_contract': {'required': ['result']}})
+    manifest = project / '.agents/skills/capabilities.json'
+    manifest.write_text(json.dumps({'schema_version': 1, 'skills': skills}), encoding='utf-8')
+    box = SimpleNamespace(root=tmp_path, store=Store(tmp_path / 'data/desk.sqlite'),
+                          studio=SimpleNamespace(project=project))
+    box.creator = CreatorRuntime(box)
+    return box.creator

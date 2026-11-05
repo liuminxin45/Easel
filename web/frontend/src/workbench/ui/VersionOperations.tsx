@@ -37,9 +37,11 @@ export function VersionPanel({workId,versionId}:{workId:string;versionId:string}
  const openChat=(change=false)=>void action.run(async()=>{
   const ticket=vm.navigation.ticket?.(),current=await vm.client.read<Work>(versionViewPath(work.id,version.id),true),selected=current?.versions.find(item=>item.id===version.id);
   if(!current||!selected||change&&selected.status!=='completed')throw Error('此版本的制作记录尚未核对，请重新读取原版本。');
+  if(change&&current.format!=='poster'&&current.format!=='article')throw Error('此作品格式无法确定，请先选择贴图或文章。');
   const selectedTitle=selected.editable_text?.title||selected.copy?.title||selected.article?.title||current.title,selectedBody=selected.editable_text?.body||selected.copy?.caption||selected.article?.body||'',references=selected.artifacts.map(file=>file.name+'：'+('/api/files/'+encodeURIComponent(file.id))).join('\n');
   const text=[change?'请基于以下原版本进行修改，保留原文件，另存新产物。':'请围绕以下原版本讨论。','原版本：'+current.id+' / '+selected.id,selectedTitle,selectedBody,references].filter(Boolean).join('\n\n');
-  const session=await sessionOpenFlows(vm.client).open({navigate:false,profileId:work.creator?.id||'oil-pig',sourceKey:'version:'+work.id+':'+version.id,draft:{text,files:[],...(change?{command:{skill_id:'content-production',action_id:'native',task:'native',label:'content-production',requires_plan:false}}:{})}});
+  const skill=current.format==='article'?'oil-pig-article':'oil-pig-poster';
+  const session=await sessionOpenFlows(vm.client).open({navigate:false,profileId:work.creator?.id||'oil-pig',sourceKey:'version:'+work.id+':'+version.id,draft:{text,files:[],...(change?{command:{skill_id:skill,action_id:'native',task:'native',label:skill,requires_plan:false}}:{})}});
   if(!session?.id)throw Error('原会话创建状态尚未核对；输入已保留。');
   const target='/chat/'+encodeURIComponent(String(session.id));if(ticket&&vm.navigation.finishFlow)vm.navigation.finishFlow(target,ticket);else vm.navigate(target,{intent:'flow'});
 

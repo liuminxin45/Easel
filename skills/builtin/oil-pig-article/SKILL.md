@@ -4,7 +4,7 @@ description: "油猪·做文章：研究、撰写或修改公众号文章及按�
 layer: produce
 metadata:
   openclaw:
-    workbench: {"id":"oil-pig-article","tasks":["article","change"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["文章流程与贴图流程分开","文章按需配图，保留真实来源和修改范围"],"schema_version":1,"display_name":"油猪·做文章","resources":[{"path":"skills/builtin/oil-pig-article/references/文章生产原文.md","kind":"reference","scope":"on-demand","required":true},{"path":"skills/builtin/oil-pig-article/references/文章学习原文.md","kind":"reference","scope":"on-demand"},{"path":"skills/builtin/oil-pig-article/references/文章批注原文.md","kind":"reference","scope":"on-demand"},{"path":"skills/shared/workbench/neo-source/规范/写作要求.md","kind":"reference","scope":"on-demand","required":true},{"path":"skills/shared/workbench/neo-source/规范/公众号排版要求.md","kind":"reference","scope":"on-demand","required":true}]}
+    workbench: {"id":"oil-pig-article","tasks":["article","change"],"executor":"agent","input_contract":{"required":["user_input"],"optional":["persona","attachments","source_files"]},"output_contract":{"required":["actual_result"],"optional":["output_paths"]},"acceptance_cases":["文章流程与贴图流程分开","文章按需配图，保留真实来源和修改范围"],"schema_version":1,"display_name":"油猪·做文章","resources":[{"path":"skills/builtin/oil-pig-article/references/文章生产原文.md","kind":"reference","scope":"on-demand","required":true},{"path":"skills/builtin/oil-pig-article/references/文章学习原文.md","kind":"reference","scope":"on-demand"},{"path":"skills/builtin/oil-pig-article/references/文章批注原文.md","kind":"reference","scope":"on-demand"},{"path":"skills/builtin/oil-pig-article/references/standards/写作要求.md","kind":"reference","scope":"on-demand","required":true},{"path":"skills/builtin/oil-pig-article/references/standards/公众号排版要求.md","kind":"reference","scope":"on-demand","required":true}]}
 ---
 
 # 油猪·做文章
@@ -24,7 +24,7 @@ metadata:
 ## 执行流程
 
 
-仅处理用户明确要求的公众号文章及其修改；贴图组使用油猪·做贴图，不自动启动。读取 `references/文章生产原文.md`、`../../shared/workbench/neo-source/规范/写作要求.md` 和 `../../shared/workbench/neo-source/规范/公众号排版要求.md`；按需读取文章学习、批注原文和对应规范。原文是从 neo-content 原样保存的业务依据；其中旧项目根、工作台 API、归档、自动同步与命令不能直接当成 Easel 可执行路径。当前项目的授权和原生输出路径优先。
+仅处理用户明确要求的公众号文章及其修改；贴图组使用油猪·做贴图，不自动启动。读取 `references/文章生产原文.md`、`references/standards/写作要求.md` 和 `references/standards/公众号排版要求.md`；按需读取文章学习、批注原文和对应规范。原文是从 neo-content 原样保存的业务依据；其中旧项目根、工作台 API、归档、自动同步与命令不能直接当成 Easel 可执行路径。当前项目的授权和原生输出路径优先。
 
 确定读者、核心问题、来源与事实边界；区分亲历、原作者陈述和解释。结合本篇题材选择相关参考与结构，不机械套固定栏目；完整稿已获请求时直接完成，不强制中途停在提纲。保留用户锁定原字、原始反馈和修改前后，不虚构经历或实测。文章按需配图，不自动做贴图组，不套用贴图配文字数限制。
 

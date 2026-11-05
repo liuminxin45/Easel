@@ -7,6 +7,19 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
 
+def test_separated_skills_keep_their_primary_standards_exact_and_local():
+    from easel_workbench.skill_catalog import ProjectSkillCatalog
+    entries={row['id']:row for row in ProjectSkillCatalog(ROOT).entries()}
+    for sid in ('oil-pig-poster', 'oil-pig-article'):
+        skill_dir=ROOT/'skills/builtin'/sid
+        standards=skill_dir/'references/standards'
+        assert len(list(standards.glob('*.md')))==2
+        for path in standards.glob('*.md'):
+            source=ROOT/'skills/shared/workbench/neo-source/规范'/path.name
+            assert path.read_bytes()==source.read_bytes()
+            assert path.relative_to(ROOT).as_posix() in {r['path'] for r in entries[sid]['resources']}
+
+
 def test_imported_workflow_snapshot_matches_exact_source_manifest():
     manifest=json.loads((ROOT/'skills/shared/workbench/neo-source/source-manifest.json').read_text(encoding='utf8'))
     paths=set()

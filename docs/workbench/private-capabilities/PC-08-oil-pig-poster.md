@@ -10,6 +10,8 @@
 - **官方复用与必要差异：** 原 SkillPage/SkillDrawer 与原生执行，资源内化到本项目；不另建贴图执行器供新技能调用。
 - **不可破坏的合同：** 与油猪文章技能互不串流程；不带 V1/V2 展示版本号；旧版本只归档/历史读取；保留规范和原件，制作不等于采纳或发布。
 
+**技能收敛首批：** 贴图写作和图片制作两份基础规范的原字节副本放入本技能 `references/standards/` 并由 SKILL 引用；共享原件继续保留给历史流程。工具、其余资源与旧技能退役尚待后续批次，不代表已经实现完整目录自包含。
+
 **接口与状态归属：** 技能接口沿原技能服务；方法与资源以 oil-pig-poster/SKILL.md 为源，无独立 HTTP 或技能数据库；本轮快照、产物和采纳分别归会话/作品台账。
 
 **本项目工具与依赖：** [neo-tools/贴图生产/cli.mjs](../../../skills/shared/workbench/neo-tools/贴图生产/cli.mjs) 及 [lib.mjs](../../../skills/shared/workbench/neo-tools/贴图生产/lib.mjs) 负责贴图草稿包 check/render；[creative_review.py](../../../skills/shared/workbench/neo-tools/内容工作流/creative_review.py) 负责准确版本的创作检查/绑定/反馈，显式指定 `--root <项目根>`。这些是当前技能按需调用的本项目工具，不是独立工作台执行器。原来源与字节以 [source-manifest.json](../../../skills/shared/workbench/neo-source/source-manifest.json) 维护，旧项目API/自动同步命令不能直接执行。

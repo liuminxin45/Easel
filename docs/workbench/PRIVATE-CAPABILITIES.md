@@ -107,3 +107,5 @@
 ## 首版与本轮复核范围
 
 首版按主入口、原生API/技能绑定、业务服务、运维入口及历史决定建立33张卡，其原始文档验证与只读限制保留在 [首版 Spec](../../specs/private-capability-registry-20261105/spec.md)。本轮复核拆出C-05/C-06/C-07，现为27项PC、7项C、2项U，共36张卡，并补齐官方差异、油猪工具、质量确认与入口门控事实；实际构建、测试、提交和部署分别见 [本轮 Spec](../../specs/private-registry-hardening-20261105/spec.md)。任何文档分类均不代替真实模型、平台发布或实体4G/WebToApp验收。
+
+2026-11-05：PC-08、PC-09、PC-22～PC-27 按 Easel 技能写法补充画像、输入、流程和输出说明；见 [技能规范 Spec](../../specs/private-skill-conventions-20261105/spec.md)。

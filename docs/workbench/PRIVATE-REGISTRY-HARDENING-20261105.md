@@ -37,7 +37,8 @@
 | 后端manifest SHA256 | b069d758ed3a4ad0c5e1d87052408b29ef68de6e76808b1bf8625bacace4e87c |
 | 前端 | native-registry-hardening-20261105-r1 |
 | 前端manifest SHA256 | f68bb2a0a73a06e51bb988d178552fdc560cbdde8a5ad211a1560d9232448705 |
-| 独立中控 | 49518bff7e96391e，位于 D:/Services/EaselHealthControl |
+| 独立中控 | b71eef8bab863138，位于 D:/Services/EaselHealthControl；首轮49518bff7e96391e保留历史 |
+| 巡检诊断补查源码 | 29193a0ce6cb80a2105795c3f7cad9119be22c33；仅独立中控，不改变业务配对 |
 
 官方完整基线仍为0f43dc98277eac85fb48952878acad349731d3fc，PR overlay保持原台账；本轮不冒称已同步新的官方main。
 
@@ -51,6 +52,8 @@
 - 切换前后数据库文件身份相同；会话24、回合25、画像1/历史4、作品85、原件582、新闻3363保持。当天真实Agent操作身份、完成状态和启动次数1保持，没有为验收主动触发真实模型调用或发布。
 
 本轮脚本、TEMP测试、截图及真实只读证据位于 `.local/workbench-validation/private-registry-hardening-20261105/`；敏感生产材料不提交。
+
+持续观察曾出现一条inspection_unavailable，随后自动恢复，旧事件未留下具体错误类别，不能事后猜测原因。补查用TEMP慢失败复现报告沿用开始时间的问题，修正完成时间/耗时与脱敏错误类别持久记录；最终中控全套131项及16子测试通过。中控独立更新，业务后端未为此再次重启；不可用检查不产生新的重启权限。首轮生产健康记录保留，最终复验另存production-health-final.json。
 
 ## 托管CI的实际限制
 

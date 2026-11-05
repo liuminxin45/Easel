@@ -54,3 +54,5 @@ GitHub实际dispatch返回422 Actions has been disabled for this repository，�
 最终持续观察见一条inspection_unavailable，随后自动恢复，应用入口仍返回正常登录跳转且未观测到中控恢复后端的动作。旧事件没有记录错误类型，不能事后将其确定为某种IPC超时；发现报告用检查开始时间、长期日志丢失失败类别的确定性缺口。
 
 先用慢失败TEMP夹具复现报告时间1000而实际完成1003的错误；修正为记录开始/完成时间与耗时，错误类型进入独立事件日志，检查不可用仍不授予重启权限。最终中控全套131项与16子测试通过；只升级独立中控，不改变或重新切换已上线业务配对。该补查不将旧未留证据的错误粉饰为已查明根因。
+
+补查提交29193a0已推自有fork，最终独立中控b71eef8bab863138已安装并实际生成包含started_at/inspection_seconds的新报告。新旧三个入口均核对当前业务配对，7角色健康、业务后端未再次切换；最终证据production-health-final.json与controller-final.xml单独保存，首轮证据保留。

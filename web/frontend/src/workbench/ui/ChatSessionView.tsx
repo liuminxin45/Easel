@@ -143,7 +143,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   return messages;},
   [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore,receipt]);
  const copySurface=useRef<HTMLDivElement>(null);
- useEffect(()=>attachChatTextCopy(copySurface.current),[visibleMessages,running]);
+ useEffect(()=>attachChatTextCopy(copySurface.current),[id]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
  const recoveryTarget=activeTurn&&(visibleMessages.some(message=>message.role==='assistant'&&string(record(message).turnId||record(message).id)===activeTurn)?activeTurn:activeTurn+'-user');
  const recovery=activeTurn&&feedback?<ChatRecoveryStatus message={feedback.message} turnId={activeTurn} retry={()=>void runtime.reconcile(profileId)}/>:null;

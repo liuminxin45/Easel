@@ -16,33 +16,60 @@ export async function copyLiteralText(text:string,document:Document):Promise<voi
  finally{input.remove();active?.focus({preventScroll:true});if(selection){selection.removeAllRanges();for(const range of ranges)selection.addRange(range)}}
 }
 
-/** Bind per committed message update; no polling, observer or backend I/O. */
+/** Observe only this private chat's replaced native HTML; no polling/backend I/O. */
 export function attachChatTextCopy(root:HTMLElement|null):()=>void {
  if(!root)return ()=>{};
  const document=root.ownerDocument,window=document.defaultView!;
- const fields:{pre:HTMLElement;heading:HTMLElement;label:string}[]=[],restore:(()=>void)[]=[],timers=new Map<HTMLElement,number>();
+ type Field={pre:HTMLElement;heading:HTMLElement;label:string;anchor:Element|null};
+ const original=new Map<HTMLElement,Map<string,string|null>>(),timers=new Map<HTMLElement,number>();
  let disposed=false,gesture:{field:HTMLElement;x:number;y:number;time:number;moved:boolean}|null=null;
- function attribute(node:HTMLElement,name:string,value:string){const previous=node.getAttribute(name);node.setAttribute(name,value);restore.push(()=>previous===null?node.removeAttribute(name):node.setAttribute(name,previous))}
- for(const pre of root.querySelectorAll<HTMLElement>('.message-bubble.assistant pre')){
-  if(pre.closest('.message-bubble')?.querySelector('.streaming-cursor'))continue;
+ function attribute(node:HTMLElement,name:string,value:string){let attributes=original.get(node);if(!attributes){attributes=new Map();original.set(node,attributes)}if(!attributes.has(name))attributes.set(name,node.getAttribute(name));node.setAttribute(name,value)}
+ function fieldFor(pre:HTMLElement|null):Field|undefined{
+  if(!pre||pre.tagName!=='PRE'||!root!.contains(pre)||!pre.closest('.message-bubble.assistant')||pre.closest('.message-bubble')?.querySelector('.streaming-cursor'))return;
   const heading=pre.previousElementSibling as HTMLElement|null;
-  if(!heading||!heading.matches('p,h1,h2,h3,h4,h5,h6')||heading.querySelector('a,button,input'))continue;
-  const label=copySectionLabel(heading.textContent||'');if(!label||!pre.querySelector('code')?.textContent?.trim())continue;
-  fields.push({pre,heading,label});
-  attribute(pre,'data-ew-copy-target',label);attribute(pre,'role','button');attribute(pre,'tabindex','0');attribute(pre,'aria-label','点按复制完整'+label);attribute(pre,'title','点按复制完整'+label);
-  attribute(heading,'data-ew-copy-label',label);attribute(heading,'title','点按复制完整'+label);
+  if(!heading||!heading.matches('p,h1,h2,h3,h4,h5,h6')||heading.querySelector('a,button,input'))return;
+  const label=copySectionLabel(heading.textContent||'');if(!label||!pre.querySelector('code')?.textContent?.trim())return;
+  return {pre,heading,label,anchor:pre.closest('[data-native-anchor]')};
  }
- if(!fields.length)return ()=>{};
+ function decorate(bubble:Element){
+  if(bubble.querySelector('.streaming-cursor'))return;
+  for(const pre of bubble.querySelectorAll<HTMLElement>('pre')){const field=fieldFor(pre);if(!field)continue;
+   attribute(pre,'data-ew-copy-target',field.label);attribute(pre,'role','button');attribute(pre,'tabindex','0');attribute(pre,'aria-label','点按复制完整'+field.label);attribute(pre,'title','点按复制完整'+field.label);
+   attribute(field.heading,'data-ew-copy-label',field.label);attribute(field.heading,'title','点按复制完整'+field.label);
+  }
+ }
+ for(const bubble of root.querySelectorAll('.message-bubble.assistant'))decorate(bubble);
  const live=document.createElement('span');live.className='ew-chat-copy-announcement';live.setAttribute('role','status');live.setAttribute('aria-live','polite');root.append(live);
- const find=(target:EventTarget|null)=>target instanceof Element?fields.find(field=>field.pre.contains(target)||field.heading.contains(target)):undefined;
+ const observer=new MutationObserver(records=>{
+  const bubbles=new Set<Element>();
+  for(const record of records){
+   if(record.target===live||live.contains(record.target))continue;
+   const target=record.target instanceof Element?record.target:record.target.parentElement;
+   const bubble=target?.closest('.message-bubble.assistant');if(bubble){bubbles.add(bubble);continue}
+   for(const node of record.addedNodes)if(node instanceof Element){if(node.matches('.message-bubble.assistant'))bubbles.add(node);for(const added of node.querySelectorAll('.message-bubble.assistant'))bubbles.add(added)}
+  }
+  for(const node of original.keys())if(!root.contains(node)){original.delete(node);const timer=timers.get(node);if(timer)window.clearTimeout(timer);timers.delete(node)}
+  for(const bubble of bubbles)decorate(bubble);
+ });
+ observer.observe(root,{subtree:true,childList:true});
+ const find=(target:EventTarget|null)=>{
+  if(!(target instanceof Element))return;
+  const pre=target.closest<HTMLElement>('pre');if(pre)return fieldFor(pre);
+  const heading=target.closest('p,h1,h2,h3,h4,h5,h6');return fieldFor(heading?.nextElementSibling as HTMLElement|null);
+ };
  const hasSelection=()=>!!document.getSelection()?.toString();
- function feedback(field:typeof fields[number],message:string,error=false){
+ function feedback(field:Field,message:string,error=false){
   if(disposed)return;
+  if(!root!.contains(field.pre)){
+   const text=field.pre.querySelector('code')?.textContent;
+   const replacement=Array.from(field.anchor?.querySelectorAll<HTMLElement>('pre')||[]).map(fieldFor).find(next=>next?.label===field.label&&next.pre.querySelector('code')?.textContent===text);
+   if(!replacement)return;field=replacement;
+  }
   const timer=timers.get(field.heading);if(timer)window.clearTimeout(timer);
   field.heading.dataset.ewCopyFeedback=message;field.heading.dataset.ewCopyError=String(error);live.textContent=message;
   if(!error)timers.set(field.heading,window.setTimeout(()=>{field.heading.removeAttribute('data-ew-copy-feedback');field.heading.removeAttribute('data-ew-copy-error');timers.delete(field.heading)},1600));
  }
- function copy(field:typeof fields[number]){
+ function copy(field:Field){
   if(field.pre.closest('.message-bubble')?.querySelector('.streaming-cursor'))return;
   const code=field.pre.querySelector('code');if(!code)return;
   // Marked adds a terminal newline to fenced blocks; internal whitespace,
@@ -61,9 +88,9 @@ export function attachChatTextCopy(root:HTMLElement|null):()=>void {
  const key=(event:KeyboardEvent)=>{const field=find(event.target);if(field&&event.target===field.pre&&!event.repeat&&!event.isComposing&&(event.key==='Enter'||event.key===' ')){event.preventDefault();copy(field)}};
  root.addEventListener('pointerdown',down);root.addEventListener('pointermove',move);root.addEventListener('pointercancel',cancel);root.addEventListener('scroll',cancel,true);root.addEventListener('click',click);root.addEventListener('keydown',key);
  return ()=>{
-  disposed=true;for(const timer of timers.values())window.clearTimeout(timer);
+  disposed=true;observer.disconnect();for(const timer of timers.values())window.clearTimeout(timer);
   root.removeEventListener('pointerdown',down);root.removeEventListener('pointermove',move);root.removeEventListener('pointercancel',cancel);root.removeEventListener('scroll',cancel,true);root.removeEventListener('click',click);root.removeEventListener('keydown',key);
-  for(const field of fields){field.heading.removeAttribute('data-ew-copy-feedback');field.heading.removeAttribute('data-ew-copy-error')}
-  for(const undo of restore)undo();live.remove();
+  for(const [node,attributes] of original){node.removeAttribute('data-ew-copy-feedback');node.removeAttribute('data-ew-copy-error');for(const [name,value] of attributes)value===null?node.removeAttribute(name):node.setAttribute(name,value)}
+  live.remove();
  };
 }

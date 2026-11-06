@@ -16,6 +16,10 @@ def test_completed_native_skill_registers_exact_files_once(commands):
     turn={'id':'review-turn','session_id':'review-session','status':'completed','message':'制作贴图','actual_prompt_sha256':'a'*64,
           'native_turn_id':'exact-native-turn','created_at':'2026-11-06','output':'[配文]('+path.as_posix()+')','frozen_instructions':instructions(frame)}
     receipt=receive(business,turn);assert receipt['version_id']=='review-turn'
+    assert not receipt['whole_ready']
+    from easel_workbench.features.works.native_review import apply_decision
+    reply,decision=apply_decision(business,{'target':receipt,'kind':'accept','scope':None,'text':'采纳这版'},'partial')
+    assert decision is None and '尚未完整交付' in reply
     receive(business,turn)
     with box.store.connect() as c:
         assert c.execute('SELECT count(*) FROM toolbox_jobs WHERE id=?',('review-turn',)).fetchone()[0]==1

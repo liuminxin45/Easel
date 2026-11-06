@@ -153,6 +153,7 @@ def main():
     parser.add_argument('--delivery-plan-sha256')
     parser.add_argument('--skill-retirement-plan',type=Path)
     parser.add_argument('--skill-retirement-plan-sha256')
+    parser.add_argument('--authenticate-after-cutover',action='store_true',help='Recover a full legacy login-session table; authenticate before admitting workers')
     options=parser.parse_args()
     from easel_workbench.runtime.feedback_ledger import locked
     with locked(STATE/'runtime-release.lock',timeout=30),locked(STATE/'frontend-release.lock',timeout=30):
@@ -194,7 +195,15 @@ def upgrade(options):
         raise ValueError('Business data ownership does not match the current runtime')
     state=idle(ROOT/'data/desk.sqlite')
     if state['busy']:print(json.dumps({'status':'waiting','busy':state}));return
-    queue_idle();client=authenticate();stopped=False
+    queue_idle();client=None;stopped=False
+    if getattr(options,'authenticate_after_cutover',False):
+        from easel_workbench.runtime.auth_totp import CONFIG
+        auth=read(CONFIG);now=time.time()
+        live=sum(1 for value in auth.get('sessions',{}).values() if value.get('until',0)>now)
+        target=(ROOT/'workbench-releases'/choice['release']/'easel_workbench/runtime/auth_totp.py').read_text(encoding='utf-8')
+        if live<256 or "len(updated['sessions']) >= 256" in target:
+            raise ValueError('Deferred authentication is only for a saturated legacy session table with the limit removed')
+    else:client=authenticate()
     try:
         atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'fenced','candidate':choice})
         atomic(STATE/'admission.json',{'workers':False})
@@ -230,6 +239,19 @@ def upgrade(options):
         atomic(ROOT/'data/migration-owner.json',{**owner,'release':choice['release'],'manifest_sha256':choice['manifest_sha256']})
         (STATE/'paused').unlink(missing_ok=True)
         manager_pid=start_scheduled_manager(choice)
+        if client is None:
+            # Never admit workers until the new runtime issues a valid login.
+            import httpx
+            from easel_workbench.runtime.auth_totp import CONFIG
+            origin=read(CONFIG)['origin'];deadline=time.monotonic()+60
+            while True:
+                try:
+                    response=httpx.get(origin+'/login?next=%2Fnative%2F',follow_redirects=False,trust_env=False,timeout=3)
+                    if response.status_code==200:break
+                except httpx.HTTPError:pass
+                if time.monotonic()>deadline:raise RuntimeError('Updated login challenge unavailable; writes remain fenced')
+                time.sleep(1)
+            client=authenticate()
         deadline=time.monotonic()+60
         while True:
             try:ready=smoke(client,choice['native']);break
@@ -255,7 +277,8 @@ def upgrade(options):
             current={**read(ROOT/'data/active-workbench.json'),'native':read(ROOT/'data/active-native.json')}
             atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':current})
         raise
-    finally:client.close()
+    finally:
+        if client is not None:client.close()
 
 
 if __name__=='__main__':main()

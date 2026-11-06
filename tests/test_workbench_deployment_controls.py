@@ -61,14 +61,14 @@ def upgrade_fixture(tmp_path, monkeypatch):
     release.atomic(native/'native-manifest.json',{'release':native.name,'files':{'index.html':release.sha(native/'index.html')}})
     frontend={'release':native.name,'manifest_sha256':release.sha(native/'native-manifest.json')}
     (runtime/'launch.py').write_text('# fixture',encoding='utf-8')
-    for sid in ('content-production','topic-research','content-writing','image-production',
+    for sid in ('oil-pig-poster','content-production','topic-research','content-writing','image-production',
                 'reference-analysis','delivery-review','publication-analysis','experience-distillation'):
         shutil.copytree(PROJECT/'skills/builtin'/sid,tmp_path/'skills/builtin'/sid)
     shutil.copytree(PROJECT/'skills/shared/workbench',tmp_path/'skills/shared/workbench')
     shutil.copytree(PROJECT/'agents/workspace',tmp_path/'agents/workspace')
     shutil.copytree(tmp_path/'skills',runtime/'skills')
     shutil.copytree(tmp_path/'agents',runtime/'agents')
-    upgrade._fixture_skill_source=tmp_path/'skills/builtin/content-writing/SKILL.md'
+    upgrade._fixture_skill_source=tmp_path/'skills/builtin/oil-pig-poster/SKILL.md'
     release.atomic(runtime/'workbench-release.json',{'release':runtime.name,'native':frontend,
         'capabilities_type':'easel_project_builtin','capabilities_sha256':release.capabilities_revision(tmp_path),
         'workspace_sha256':release.workspace_revision(tmp_path),
@@ -160,7 +160,7 @@ def test_release_freezes_project_builtin_assets_and_workspace_in_temp(tmp_path,m
     assert manifest['source_commit']==source_commit
     assert manifest['upstream_commit']==json.loads((PROJECT/'docs/workbench/upstream-base.json').read_text(encoding='utf-8'))['upstream_commit']
     assert 'agents/workspace/AGENTS.md' in manifest['files']
-    assert 'skills/builtin/content-production/SKILL.md' in manifest['files']
+    assert 'skills/builtin/oil-pig-poster/SKILL.md' in manifest['files']
     assert any(name.endswith('认可母版.png') for name in manifest['files'])
 
 

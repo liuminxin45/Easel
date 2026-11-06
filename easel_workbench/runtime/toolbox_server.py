@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI,Request
 from fastapi.responses import JSONResponse,Response,StreamingResponse
 from easel_workbench.runtime.auth_forms import Forms,SESSION,cookies,cookie
-from easel_workbench.runtime.auth_totp import AuthState,CONFIG,equal
+from easel_workbench.runtime.auth_totp import AuthState,CONFIG,SESSION_AGE,equal
 from easel_workbench.runtime.http_context import Context
 from easel_workbench.runtime.toolbox_store import Toolbox
 from easel_workbench.contracts.values import ident, text, pack
@@ -187,6 +187,8 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         if path=='/media/downloads':
             return await downloads.serve_download(request,auth=auth,read_target=read_download_target,error=error)
         session=download_session or await asyncio.to_thread(forms.session,ctx)
+        if session and session.get('_renew_cookie') and not download_session:
+            request.state.renew_session_cookie=cookies(ctx.headers).get(SESSION)
         if path in ('/native','/native/') or path.startswith(('/native/','/native-assets/')):
             from easel_workbench.runtime import native_preview as native_preview
             native_response=await native_preview.handle_native(request,root,bool(session))
@@ -740,6 +742,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
         from easel_workbench.runtime.native_api import is_html_preview_response
         frame_policy='SAMEORIGIN' if request.method in ('GET','HEAD') and is_html_preview_response(result) else 'DENY'
         result.headers.update({'X-Desk-Trace':trace,'X-Desk-Architecture':'toolbox','X-Desk-Workspace':'integrated-v1','Strict-Transport-Security':'max-age=31536000','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':frame_policy})
+        renewed=getattr(request.state,'renew_session_cookie',None)
+        if renewed and result.status_code<400 and request.url.path not in ('/logout','/logout-all'):
+            result.headers.append('Set-Cookie',cookie(SESSION,renewed,SESSION_AGE))
+            result.headers['Cache-Control']='private, no-store'
         journal.emit('request_finished',trace_id=trace,route=request.url.path,method=request.method,status=result.status_code,duration_ms=round((time.monotonic()-start)*1000,3))
         if request.method=='HEAD':
             await close_read_response(result)

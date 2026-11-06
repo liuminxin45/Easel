@@ -3,7 +3,8 @@ import base64, hashlib, hmac, json, pathlib, re, secrets, struct, threading, tim
 from easel_workbench.runtime.auth_store import atomic, security
 
 CONFIG = pathlib.Path('C:/Users/38482/AppData/Local/hermes/private/ai-news-desk-auth/totp.json')
-SESSION_AGE = 30 * 24 * 60 * 60
+SESSION_AGE = 7 * 24 * 60 * 60
+SESSION_TOUCH_INTERVAL = 60
 FAILURE_WINDOW = 300
 FAILURE_LIMIT = 5
 
@@ -28,6 +29,13 @@ class AuthState:
             raise ValueError('TOTP authentication is not configured')
         base64.b32decode(self.data['secret'] + '=' * (-len(self.data['secret']) % 8))
         self.acl = security(self.path)
+        # Legacy records have no last-access timestamp: allow at most seven
+        # days from the upgrade without invalidating an active device at once.
+        now=time.time();maximum=now+SESSION_AGE
+        if any(value.get('until',0)>maximum for value in self.data.get('sessions',{}).values()):
+            updated=json.loads(json.dumps(self.data))
+            for value in updated['sessions'].values():value['until']=min(value.get('until',0),maximum)
+            self.save(updated)
 
     def save(self, updated):
         atomic(self.path, json.dumps(updated, ensure_ascii=False, indent=2) + '\n', self.acl)
@@ -37,9 +45,13 @@ class AuthState:
         if not token or len(token) > 128:
             return None
         with self.lock:
-            session = self.data['sessions'].get(token_hash(token))
-            if session and session['until'] > time.time():
-                return dict(session)
+            key=token_hash(token);session=self.data['sessions'].get(key);now=time.time()
+            if session and session['until'] > now:
+                renewed=session['until'] <= now+SESSION_AGE-SESSION_TOUCH_INTERVAL or session['until'] > now+SESSION_AGE
+                if renewed:
+                    updated=json.loads(json.dumps(self.data));updated['sessions'][key]['until']=now+SESSION_AGE
+                    self.save(updated);session=self.data['sessions'][key]
+                return {**session,'_renew_cookie':renewed}
         return None
 
     def login(self, code):
@@ -63,8 +75,6 @@ class AuthState:
                 return 401, None
             updated['last_step'] = matched
             updated['sessions'] = {k: v for k, v in updated['sessions'].items() if v['until'] > now}
-            if len(updated['sessions']) >= 256:
-                return 429, None
             token = secrets.token_urlsafe(32)
             updated['sessions'][token_hash(token)] = {'until': now + SESSION_AGE, 'csrf': secrets.token_urlsafe(32)}
             self.save(updated)

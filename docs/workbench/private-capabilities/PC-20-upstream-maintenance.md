@@ -20,6 +20,8 @@
 
 **本机强制入口：** [scripts/git-hooks/pre-push](../../../scripts/git-hooks/pre-push) 在保留官方远端推送拒绝、原技能字节检查的同时执行登记结构检查；推送main还读取Git提供的准确新旧SHA检查每个提交，不把“配置了CI”当成已运行。2026-11-05实际dispatch收到GitHub 422 “Actions has been disabled for this repository”，即便workflow元数据active也不能报告远端通过；本机hook继续拒绝失败推送，不以跳过检查交付。该限制不影响自有fork源码推送和本机正式部署。
 
+**饱和会话修复切换：** [upgrade_workbench_runtime.py](../../../scripts/upgrade_workbench_runtime.py) 仅在旧会话已达到旧上限且候选已移除上限时允许显式延后认证；先围栏与切换，成功登录并通过配对 smoke 后才恢复准入。失败保留围栏，不删除或伪造现存会话。
+
 **官方复用／共通接缝：** [web/app.py](../../../web/app.py)、[web/frontend/src/App.tsx](../../../web/frontend/src/App.tsx)、[easel/web_services](../../../easel/web_services)
 
 **验证入口：** [tests/test_easel_base_alignment.py](../../../tests/test_easel_base_alignment.py)、[tests/test_workbench_git_delivery.py](../../../tests/test_workbench_git_delivery.py)、[tests/test_workbench_skill_bytes.py](../../../tests/test_workbench_skill_bytes.py)、[tests/test_private_capability_registry.py](../../../tests/test_private_capability_registry.py)。自动规则须验证漏登记等负例，不能以文档链接存在代替能力行为验证。

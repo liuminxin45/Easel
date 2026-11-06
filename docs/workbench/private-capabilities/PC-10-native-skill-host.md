@@ -27,3 +27,5 @@
 **首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。
 
 **更新记录：** 2026-11-06 用户明确取消私有生成费用二次确认。在私有[指令适配](../../../easel_workbench/application/generation_policy.py)及[会话组装](../../../easel_workbench/application/chat.py)中集中调整本轮授权解释，官方工作区/原harness保持原样；不新增UI、收费网关或模型执行器。测试：[生成授权](../../../tests/test_workbench_generation_authorization.py)。
+
+**上线记录：** 2026-11-06 私有生成授权调整已在workbench-20261106-121428生效；官方文件和前端不改，旧会话下一次新请求沿原线程使用新规则。验证与源码/配对SHA见[交付Spec](../../../specs/private-generation-authorization-20261106/spec.md)。

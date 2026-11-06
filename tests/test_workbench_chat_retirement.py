@@ -83,7 +83,7 @@ def test_orphan_recovery_never_closes_a_live_owner_and_reclaims_exact_test_tree(
     proc=subprocess.Popen([sys.executable,'-c',code,str(pidfile)],creationflags=subprocess.CREATE_NO_WINDOW)
     try:
         until=time.monotonic()+5
-        while not pidfile.exists():
+        while not pidfile.exists() or not pidfile.read_text():
             assert time.monotonic()<until;time.sleep(.01)
         with ProcessIdentity(int(pidfile.read_text())) as child:
             ownership=process_ownership(proc.pid)

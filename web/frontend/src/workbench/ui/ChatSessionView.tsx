@@ -47,7 +47,7 @@ function CreationSummary({message,navigate}:{message:unknown;navigate:(path:stri
   {!pending&&legacy.error&&<div>本轮风格记录不可用</div>}
  </div>;
 }
-export function NativeTurnOutputs({message,showContinuation,continuationPath,recovery}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null;recovery?:React.ReactNode}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{recovery}</>}
+export function NativeTurnOutputs({message,showContinuation,continuationPath,recovery}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null;recovery?:React.ReactNode}){const value=record(message);return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{value.status==='unknown'&&value.execution_closed===true&&<TaskStatus title="本地执行已结束" description="原生结果尚未确认，已有内容已保留；可以继续发送新消息。" label="本轮状态"/>}{recovery}</>}
 /** A short interruption stays quiet; persistent recovery belongs to its exact message. */
 export function ChatRecoveryStatus({message,turnId,retry}:{message:string;turnId:string;retry:()=>void}){
  const transport=message.startsWith('连接暂时中断'),[elapsed,setElapsed]=useState(false);

@@ -39,3 +39,5 @@
 **更新记录：** 2026-11-06 会话标题/正文点按复制仅读取已显示纯文本，不提交任务、改消息或变更原回执；私有ChatSessionView沿原滚动/流式和会话生命周期更新事件绑定，离开即清理。归PC-12维护，见[本轮Spec](../../../specs/chat-tap-copy-20261106/spec.md)。
 
 **2026-11-06 立即停止整改：** 私有 stop 只保存并设置原适配器可选 stop_event，准确终态胜过停止ACK；进程关闭不能冒充原生完成。只有服务器证实退出并释放准确 pending 后，前端才能解除等待。执行代数旋转保留旧原生绑定与应用会话历史，首条新消息附只读历史，禁止重放旧任务。实现：[本地退出与代数](../../../easel_workbench/features/conversations/local_execution.py)、[受控旧执行退休](../../../easel_workbench/features/conversations/retirement.py)。公共可选接缝：[RunRequest](../../../easel/harnesses/base.py)、[原生停止等待](../../../easel/harnesses/codex_stop.py)、原 CodexAdapter 和 RPC 池；默认非协作调用合同保留，不引入私有依赖。同步时核对 stop_event、终态回调及池每次租用的退出回执归属。验证：[竞态及真实stdio测试](../../../tests/test_workbench_immediate_stop.py)、[本轮Spec](../../../specs/immediate-stop-recovery-20261106/spec.md)。
+
+已关闭但原生结果未知的历史回合，通过原 TaskStatus 在准确消息下显示“本地执行已结束”；无重发按钮、不阻止后续消息，不将其描述成原生已停止或完成，不新增顶部警告。

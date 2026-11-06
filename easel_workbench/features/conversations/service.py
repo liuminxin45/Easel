@@ -465,8 +465,9 @@ class ChatService:
                 messages[-1]['creation_summary']=copy.deepcopy(turn['display_summary'])
             elif (turn.get('context',{}).get('creation') or {}).get('intent')=='produce':
                 messages[-1]['creation_review']=True
+            observed=self.get_turn(turn['id'])
             messages.append({'id': turn['id'], 'role': 'assistant', 'content': turn.get('output', ''),
-                             'timestamp': turn['updated_at'], 'status': self.get_turn(turn['id'])['status'],
+                             'timestamp': turn['updated_at'], 'status': observed['status'], 'execution_closed':observed['execution_closed'],
                              'runtime': turn['runtime'], 'thinking': turn.get('thinking', ''), 'activity': turn.get('activity', ''), 'turnId': turn['id']})
             if turn.get('context',{}).get('creation'):
                 messages[-1]['creation']=copy.deepcopy(turn['context']['creation'])

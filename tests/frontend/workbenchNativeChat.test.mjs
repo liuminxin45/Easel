@@ -676,3 +676,10 @@ test('proven local closure frees the composer while preserving an unknown native
  assert.equal(f.calls.submit.length,1);
  f.draft={text:'新的明确请求',files:[]};f.render().chat.onSend();await tick();assert.equal(f.calls.submit.length,2);
 });
+
+
+test('a closed unknown outcome is described beside its exact message using the existing status card',()=>{
+ const f=fixture();const tree=f.lib.NativeTurnOutputs({message:{id:'old-turn',status:'unknown',execution_closed:true}});
+ const cards=nodes(tree).filter(node=>node.props?.label==='本轮状态');assert.equal(cards.length,1);assert.equal(cards[0].props.title,'本地执行已结束');
+ for(const message of [{status:'unknown'},{status:'completed',execution_closed:true},{status:'stopped',execution_closed:true}])assert.equal(nodes(f.lib.NativeTurnOutputs({message})).filter(node=>node.props?.label==='本轮状态').length,0);
+});

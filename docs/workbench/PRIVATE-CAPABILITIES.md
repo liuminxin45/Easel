@@ -23,7 +23,7 @@
 | --- | --- | --- | --- |
 | [PC-01 工作台访问、身份与请求安全](private-capabilities/PC-01-owner-access.md) | 宿主适配 | TOTP 登录、服务器会话、同源/CSRF、操作身份与准入；Tailscale 仅提供网络暴露，不承载业务。 | `App.tsx`、`api.ts` |
 | [PC-02 原生外壳与移动端宿主适配](private-capabilities/PC-02-native-host.md) | 共通适配 | 六主入口、导航/返回/焦点、触控会话长按菜单及其遮罩、移动视口/键盘、统一状态卡与静默刷新。 | `App.tsx`、`Sidebar.tsx`、`ResponsiveSidebar.tsx`、`Drawer.tsx`、`InteractionNotice.tsx` |
-| [PC-03 服务器会话、持久受理与停止恢复](private-capabilities/PC-03-persistent-chat.md) | 可靠性适配 | 准确回执、协作停止、原生终态与本地退出分离、执行代数恢复及首条标题原子保存；保留冻结输入，未知不重发。 | `chat.py`、`codex.py`、`ChatPage.tsx` |
+| [PC-03 服务器会话、持久受理与停止恢复](private-capabilities/PC-03-persistent-chat.md) | 可靠性适配 | 准确回执、协作停止、原生终态与本地退出分离、消息内状态卡、执行代数恢复及首条标题原子保存；保留冻结输入，未知不重发。 | `chat.py`、`codex.py`、`ChatPage.tsx` |
 | [PC-04 本机草稿、附件及离线输入保留](private-capabilities/PC-04-local-inputs.md) | 私有保留 | 获准的浏览器草稿、IndexedDB 附件、操作身份、页面位置和恢复入口；不在浏览器建立业务历史主库。 | `ChatPage.tsx`、`IdeasPage.tsx` |
 | [PC-05 自定义来源、自动采集与当天面板](private-capabilities/PC-05-collection.md) | 私有业务 | 来源修订、排期 slot、任务身份、入库/去重/回执、当日视图和明确手动采集。 | `runner.py`、`TrendsPage.tsx`、`DashboardPage.tsx` |
 | [PC-06 新闻摘要、中文标题与原始反馈](private-capabilities/PC-06-news-intelligence.md) | 私有业务 | 新闻概览、标题增强、原文/判断区分、准确来源和反馈记录；仅在既有任务边界调用只读执行。 | `TrendsPage.tsx`、`DashboardPage.tsx`、`codex.py` |

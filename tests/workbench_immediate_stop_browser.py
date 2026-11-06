@@ -1,5 +1,5 @@
 """Actual frozen UI/HTTPS/TEMP DB. The only substitute is the Agent executor."""
-import argparse,asyncio,importlib.util,json,sys,hashlib
+import argparse,asyncio,importlib.util,json,sys,hashlib,time
 from pathlib import Path
 from urllib.parse import parse_qs,urlsplit
 from unittest.mock import patch
@@ -44,10 +44,14 @@ def main():
      sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1].split('?')[0]
      composer=page.get_by_role('textbox',name='对话输入',exact=True);expect(composer).to_be_visible()
      before=len(adapter.requests);composer.fill('TEMP 发消息后立即停止');composer.press('Enter')
-     stop=page.locator('button[title="停止生成"]');expect(stop).to_be_visible();stop.click()
+     stop=page.locator('button[title="停止生成"]');expect(stop).to_be_visible()
+     deadline=time.monotonic()+30
+     while len(adapter.requests)==before:
+      assert time.monotonic()<deadline,'TEMP native adapter must be entered for this scenario';page.wait_for_timeout(25)
+     stop.click()
      page.wait_for_function("sid=>{const d=JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid));return d&&!d.pending}",arg=sid)
      receipt=page.request.get(f['origin']+'/api/chat/last/'+sid).json()
-     assert receipt['execution_status']=='unknown' and receipt['execution_closed'] and len(adapter.requests)==before+1
+     assert receipt.get('execution_status')=='unknown' and receipt.get('execution_closed') and len(adapter.requests)==before+1,receipt
      composer.fill('TEMP 后写草稿');expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled()
      expect(page.get_by_role('status',name='会话恢复',exact=True)).to_have_count(0)
      page.reload(wait_until='domcontentloaded');expect(composer).to_have_value('TEMP 后写草稿')
@@ -59,6 +63,7 @@ def main():
      assert adapter.requests[-1].session_key!=adapter.requests[-2].session_key
      old=page.request.get(f['origin']+'/api/chat/last/'+sid+'?turn_id='+receipt['turn_id']).json()
      assert old['execution_status']=='unknown' and old['execution_closed']
+     expect(page.get_by_role('status',name='本轮状态',exact=True)).to_be_visible()
      assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
      image=out/(layout+'.png');page.screenshot(path=str(image));report['screenshots'][image.name]=h.sha(image)
      report['checks'].append({'layout':layout,'passed':True,'checks':['immediate stop','unknown preserved with closure','composer unlocked','draft survives reload','next explicit message new native key','old receipt unchanged','no recovery banner','no horizontal overflow']})

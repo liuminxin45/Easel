@@ -1,0 +1,12 @@
+.ew-local-skill-controls{max-width:1100px;margin:0 auto 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:end;width:100%}
+.ew-local-skill-controls>label{display:flex;flex-direction:column;gap:6px;min-width:170px;flex:1}
+.ew-local-skill-controls>small,.ew-local-skill-controls>[role=alert]{flex-basis:100%;color:var(--text-secondary)}
+.ew-local-skill-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0;margin:6px 0;font-size:12px;color:var(--text-secondary)}
+.ew-local-skill-stars{white-space:nowrap;font-variant-numeric:tabular-nums;min-width:70px}
+.ew-local-skill-repository{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ew-local-skill-blocked{width:100%;color:var(--amber)}
+.ew-local-skill-selection{display:grid;gap:14px}
+.ew-local-skill-selection p{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.ew-local-skill-selection p span{color:var(--text-secondary);font-size:13px}
+.ew-local-skill-selection>label{display:grid;gap:8px;min-width:0}
+@media(max-width:600px){.ew-local-skill-controls>label{flex-basis:100%;min-width:0}.ew-local-skill-controls>button{min-height:44px}.ew-local-skill-meta>a{overflow-wrap:anywhere}}

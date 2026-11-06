@@ -35,6 +35,10 @@ def validate_source_binding(package,root):
         raise ValueError('Skill source changed after candidate validation')
     if package.get('workspace_sha256')!=workspace_revision(root):
         raise ValueError('Workspace instructions changed after candidate validation')
+    if package.get('local_skill_library'):
+        from easel_workbench.features.local_skills.catalog import Library
+        if not (Path(root)/'workbench-release.json').is_file() and Library(root).verify()!=package['local_skill_library']:
+            raise ValueError('Selected local skill library changed after validation')
     if package.get('upstream_baseline'):
         baseline=upstream_baseline(root)
         reference=package['upstream_baseline']
@@ -146,8 +150,14 @@ def freeze(native, *, candidate_path=None):
     capabilities=capabilities_revision(ROOT);workspace=workspace_revision(ROOT)
     name='workbench-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%S')
     target=ROOT/'workbench-releases'/name;target.mkdir(parents=True,exist_ok=False)
+    def ignore(directory,names):
+        import re
+        skipped=set(shutil.ignore_patterns('__pycache__','*.pyc','trend-sources.json','workbench-trend-sources.json','trend-collectors')(directory,names))
+        if Path(directory).resolve()==(ROOT/'skills/builtin').resolve():
+            skipped.update(name for name in names if re.fullmatch('local-[a-f0-9]{16}',name))
+        return skipped
     for folder in ('easel_workbench','easel','config','skills'):
-        shutil.copytree(ROOT/folder,target/folder,ignore=shutil.ignore_patterns('__pycache__','*.pyc','trend-sources.json','workbench-trend-sources.json','trend-collectors'))
+        shutil.copytree(ROOT/folder,target/folder,ignore=ignore)
     shutil.copytree(ROOT/'agents/workspace',target/'agents/workspace',ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     if (ROOT/'AGENTS.md').is_file():shutil.copy2(ROOT/'AGENTS.md',target/'AGENTS.md')
     (target/'docs/workbench').mkdir(parents=True,exist_ok=True)
@@ -187,6 +197,9 @@ main()
         'upstream_baseline':{'ledger':'docs/workbench/upstream-base.json','sha256':sha(target/'docs/workbench/upstream-base.json')},
         'source_commit':revision,
         'created_at':dt.datetime.now(dt.timezone.utc).isoformat()}
+    from easel_workbench.features.local_skills.catalog import Library
+    local_library=Library(ROOT).verify()
+    if local_library['revision']:value['local_skill_library']=local_library
     if overlays:value['upstream_pr_overlays']={'ledger':'docs/workbench/upstream-overlays.json','sha256':sha(target/'docs/workbench/upstream-overlays.json'),'pull_requests':[item['number'] for item in overlays['pull_requests']]}
     from easel_workbench.features.skills.retirement import native_mode
     if native_mode(target):value['skills_protocol']='easel-native-v1'

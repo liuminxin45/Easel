@@ -25,6 +25,9 @@ if [ -f "$root/scripts/check_workbench_skill_bytes.py" ] || [ -f "$root/scripts/
     PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_skill_bytes.py" || exit 1
   fi
 fi
+if [ -f "$root/scripts/check_workbench_local_skills.py" ]; then
+  PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_local_skills.py" || exit 1
+fi
 # Hosted Actions may be disabled by GitHub even when a workflow is marked active.
 # Enforce the same read-only registry check locally, including exact main commits.
 if [ -f "$root/scripts/check_private_capabilities.py" ]; then
@@ -34,8 +37,10 @@ if [ -f "$root/scripts/check_private_capabilities.py" ]; then
     [ "$remote_ref" = refs/heads/main ] || continue
     case "$local_sha" in 0000000000000000000000000000000000000000) continue ;; esac
     if [ "$remote_sha" = 0000000000000000000000000000000000000000 ]; then
+      PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_local_skills.py" --head-ref "$local_sha" || exit 1
       PYTHONUTF8=1 "$python" "$root/scripts/check_private_capabilities.py" --head-ref "$local_sha" || exit 1
     else
+      PYTHONUTF8=1 "$python" "$root/scripts/check_workbench_local_skills.py" --base-ref "$remote_sha" --head-ref "$local_sha" || exit 1
       PYTHONUTF8=1 "$python" "$root/scripts/check_private_capabilities.py" --base-ref "$remote_sha" --head-ref "$local_sha" || exit 1
     fi
   done

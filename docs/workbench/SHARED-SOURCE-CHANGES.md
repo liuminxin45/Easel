@@ -104,8 +104,8 @@
 | [web/frontend/src/components/SettingsPanel.tsx](../../web/frontend/src/components/SettingsPanel.tsx) | PC-16、PC-02 | 宿主端口 | M |
 | [web/frontend/src/components/SettingsSelect.tsx](../../web/frontend/src/components/SettingsSelect.tsx) | PC-02、PC-16 | 通用修复 | M |
 | [web/frontend/src/components/Sidebar.tsx](../../web/frontend/src/components/Sidebar.tsx) | PC-02、PC-03 | 宿主端口 | M |
-| [web/frontend/src/components/SkillDrawer.tsx](../../web/frontend/src/components/SkillDrawer.tsx) | PC-10、PC-02 | 混合差异 | M |
-| [web/frontend/src/components/SkillPage.tsx](../../web/frontend/src/components/SkillPage.tsx) | PC-10、PC-13 | 宿主端口 | M |
+| [web/frontend/src/components/SkillDrawer.tsx](../../web/frontend/src/components/SkillDrawer.tsx) | PC-10、PC-02、PC-33 | 混合差异 | M |
+| [web/frontend/src/components/SkillPage.tsx](../../web/frontend/src/components/SkillPage.tsx) | PC-10、PC-13、PC-33 | 宿主端口 | M |
 | [web/frontend/src/components/TextArtifact.tsx](../../web/frontend/src/components/TextArtifact.tsx) | PC-17 | 通用修复 | A |
 | [web/frontend/src/components/ThemeToggle.tsx](../../web/frontend/src/components/ThemeToggle.tsx) | PC-02 | 宿主端口 | M |
 | [web/frontend/src/components/TrendSourcesDialog.tsx](../../web/frontend/src/components/TrendSourcesDialog.tsx) | PC-05、PC-02、PC-04 | 混合差异 | M |
@@ -116,7 +116,7 @@
 | [web/frontend/src/components/skillIconsProduce.tsx](../../web/frontend/src/components/skillIconsProduce.tsx) | PC-10、PC-20 | 官方补丁 | A |
 | [web/frontend/src/components/skillIconsPublish.tsx](../../web/frontend/src/components/skillIconsPublish.tsx) | PC-10、PC-20 | 官方补丁 | A |
 | [web/frontend/src/components/useBrushPopover.ts](../../web/frontend/src/components/useBrushPopover.ts) | PC-02、PC-10 | 通用修复 | A |
-| [web/frontend/src/lib/api.ts](../../web/frontend/src/lib/api.ts) | PC-01、PC-03、PC-10、PC-13、PC-16 | 宿主端口 | M |
+| [web/frontend/src/lib/api.ts](../../web/frontend/src/lib/api.ts) | PC-01、PC-03、PC-10、PC-13、PC-16、PC-33 | 宿主端口 | M |
 | [web/frontend/src/lib/artifacts.ts](../../web/frontend/src/lib/artifacts.ts) | PC-12、PC-17 | 通用修复 | M |
 | [web/frontend/src/lib/download.ts](../../web/frontend/src/lib/download.ts) | PC-17 | 宿主端口 | A |
 | [web/frontend/src/lib/interaction.ts](../../web/frontend/src/lib/interaction.ts) | PC-02、PC-03 | 通用修复 | A |
@@ -142,3 +142,5 @@
 ## 2026-11-06 公众号逐文章统计
 
 新增登记 `skills/shared/scripts/weixin_mp_stats.py`（PC-14/PC-15）。保留原登录和统计流程，仅补有界文章窗口、准确URL身份与缺失值语义。实际理由和同步核对点见结构化台账；发布链接由用户手动提供，不自动发布。
+
+2026-11-07：PC-33仅扩展原SkillPage/SkillDrawer/API类型的可选通用展示接缝，用于本地第三方来源、仓库Star及明确阻塞信息；分类/缓存/资源冻结在私有层，缺省不改变官方页面。详情见结构化台账同路径与[PC-33维护卡](private-capabilities/PC-33-local-skill-library.md)。

@@ -24,8 +24,8 @@ export interface NativeSessions {sessions:NativeSession[]}
 interface HistoryPage {has_more:boolean;next_before:string|null;before?:string|null;limit:number}
 export function nativeSkillChoices(skills:NativeSkill[],_versionContext=false):(ChatCommand&{selection:NativeSelection})[]{
  return skills.map(skill=>{
-  const id=skill.name,position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0],fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!,label=position?.item.label||displayName(skill.name);
-  return {id:id+':native',label,prompt:`帮我做「${label}」`,tab:position?.tab.id||fallback.id,tabLabel:position?.tab.label||fallback.label,group:position?.group.label||'其他内置技能',status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description,selection:{skill_id:id,action_id:'native',task:'native',label,requires_plan:false}};
+  const id=skill.name,position=CAPABILITY_MENU.tabs.flatMap(tab=>tab.groups.flatMap(group=>group.items.filter(item=>item.skill===id).map(item=>({tab,group,item}))))[0],fallback=CAPABILITY_MENU.tabs.find(tab=>tab.id===(['discover','publish','attribute'].includes(skill.layer||'')?'operate':'make'))!,label=skill.display_name||position?.item.label||displayName(skill.name);
+  return {id:id+':native',label,prompt:`帮我做「${label}」`,tab:position?.tab.id||fallback.id,tabLabel:position?.tab.label||fallback.label,group:position?.group.label||string(record(record(skill).local_skill).category_label)||'其他内置技能',status:skill.needsApi&&!skill.apiConfigured?'need':'ready',description:skill.description,selection:{skill_id:id,action_id:'native',task:'native',label,requires_plan:false}};
  });
 }
 export function nativeArtifacts(message:unknown):ChatArtifact[]|undefined{const files=productArtifacts(record(message).output_files);return files.length?files:undefined}
@@ -45,6 +45,7 @@ function CreationSummary({message,navigate}:{message:unknown;navigate:(path:stri
   <div>技能：{pending?'已选择制作技能':string(details.skill_id)==='oil-pig-poster'?'油猪·做贴图':string(details.skill_id)==='oil-pig-article'?'油猪·做文章':string(details.skill_id)==='content-production'?'制作贴图 / 文章':legacy.error?'未记录':'正在核对'}</div>
   {!pending&&Object.keys(details).length>0&&<div>{[['writing','写法'],['visual','画面风格'],['character','角色呈现'],['layout','画面与结构']].filter(([key])=>details.format==='poster'||!!style[key!]).map(([key,label])=><span key={key}>{label}：{string(style[key!])||'未记录'}</span>)}</div>}
   {!pending&&legacy.error&&<div>本轮风格记录不可用</div>}
+  {!pending&&array<JsonRecord>(details.auxiliary_methods).map(method=><div key={string(method.stage)}>辅助{string(method.stage)}：{string(method.name)}（{string(method.repository)}）</div>)}
  </div>;
 }
 export function NativeTurnOutputs({message,showContinuation,continuationPath,recovery}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null;recovery?:React.ReactNode}){const value=record(message);return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{value.status==='unknown'&&value.execution_closed===true&&<TaskStatus title="本地执行已结束" description="原生结果尚未确认，已有内容已保留；可以继续发送新消息。" label="本轮状态"/>}{recovery}</>}

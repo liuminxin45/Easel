@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {StatusCard} from './InteractionNotice';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
 import SkillDrawer from './SkillDrawer';
@@ -17,7 +17,18 @@ import {
   IconNewsIntel, IconRssFeed, IconTrendingTopics, IconAudienceUgc,
 } from './icons';
 
+export interface SkillPresentation {
+  revision?:number;
+  controls?: ReactNode;
+  filter?: (skill:SkillItem)=>boolean;
+  compare?: (a:SkillItem,b:SkillItem)=>number;
+  searchText?: (skill:SkillItem)=>string;
+  cardMetadata?: (skill:SkillItem)=>ReactNode;
+  detailMetadata?: (skill:SkillItem)=>ReactNode;
+  icon?: (skill:SkillItem)=>IconC|undefined;
+}
 interface SkillPageProps {
+  presentation?: SkillPresentation;
   persona: string;
   viewState?:ViewStateStore<{query:string}>;
   onContentReady?:()=>void;
@@ -81,7 +92,7 @@ const LAYER_DESC: Record<string, string> = {
   publish: '发布层技能', attribute: '归因层技能', general: '通用技能', other: '技能',
 };
 
-export default function SkillPage({ persona,viewState,onContentReady,icons }: SkillPageProps) {
+export default function SkillPage({ persona,viewState,onContentReady,icons,presentation }: SkillPageProps) {
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -94,15 +105,16 @@ export default function SkillPage({ persona,viewState,onContentReady,icons }: Sk
     setLoading(true);
     fetchSkills().then(value=>{setSkills(value);setError('')}).catch(() => setError('加载 SKILL 列表失败')).finally(()=>setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(load, [presentation?.revision]);
   useEffect(()=>{if(!loading&&!error)onContentReady?.()},[loading,error,skills,onContentReady]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return skills;
-    return skills.filter((s) =>
-      s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q) || displayName(s.name).toLowerCase().includes(q));
-  }, [skills, query]);
+    const candidates=presentation?.filter?skills.filter(presentation.filter):skills;
+    const selected=!q?candidates:candidates.filter((s) =>
+      s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q) || (s.display_name||displayName(s.name)).toLowerCase().includes(q)||(presentation?.searchText?.(s)||'').toLowerCase().includes(q));
+    return presentation?.compare?[...selected].sort(presentation.compare):selected;
+  }, [skills, query,presentation]);
 
   const grouped = useMemo(() => {
     const g: Record<string, SkillItem[]> = {};
@@ -137,6 +149,7 @@ export default function SkillPage({ persona,viewState,onContentReady,icons }: Sk
         </div>
       </div>
 
+      {presentation?.controls}
       {error && <div role="alert" style={{ color: 'var(--red)', maxWidth: 1100, margin: '16px auto' }}>{error}</div>}
 
       <div className="skills-body">
@@ -158,7 +171,7 @@ export default function SkillPage({ persona,viewState,onContentReady,icons }: Sk
             <div className="skill-grid">
               {grouped[layer.key].map((s) => {
                 const meta = Object.hasOwn(LAYER_META, s.layer) ? LAYER_META[s.layer] : OTHER;
-                const Icon = icons?.[s.name]||iconFor(s.name, meta.Icon);
+                const Icon = presentation?.icon?.(s)||icons?.[s.name]||iconFor(s.name, meta.Icon);
                 return (
                   <div
                     key={s.name}
@@ -171,11 +184,12 @@ export default function SkillPage({ persona,viewState,onContentReady,icons }: Sk
                     <div className="skill-card-icon" style={{ color: meta.color }}><Icon size={26} /></div>
                     <div className="skill-card-content">
                       <div className="skill-card-head">
-                        <div className="skill-card-name">{displayName(s.name)}</div>
+                        <div className="skill-card-name">{s.display_name||displayName(s.name)}</div>
                         {s.needsApi && (s.apiConfigured
                           ? <span className="badge badge-ok">已配置</span>
                           : <span className="badge badge-warn" title="需要配置 API key">需 API</span>)}
                       </div>
+                      {presentation?.cardMetadata?.(s)}
                       <div className="skill-card-desc">{s.description?.trim() || LAYER_DESC[layer.key]}</div>
                     </div>
                   </div>
@@ -192,6 +206,7 @@ export default function SkillPage({ persona,viewState,onContentReady,icons }: Sk
           persona={persona}
           onClose={() => setSelected(null)}
           onConfigured={load}
+          headerExtra={skills.find(item=>item.name===selected)&&presentation?.detailMetadata?.(skills.find(item=>item.name===selected)!)}
         />
       )}
     </div>

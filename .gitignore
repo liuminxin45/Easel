@@ -70,6 +70,10 @@ logs/
 .last-session
 .pytest_cache/
 
+# 本机第三方技能原件与生成入口；不得进入公开 fork
+.local/
+skills/builtin/local-*/
+
 # 登录态 / 凭证（绝不入库——含 SESSDATA 等 token）
 cookies.json
 

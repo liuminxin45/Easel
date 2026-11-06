@@ -271,7 +271,10 @@ class ChatBusiness:
             if skill_id:
                 if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
                 from easel_workbench.runtime.native_skills import service
-                message=service(self.box,self.chat).prepare_message(skill_id,message,session['profile_id'])
+                selection=context.get('creation') or {}
+                message=service(self.box,self.chat).prepare_message(skill_id,message,session['profile_id'],
+                    turn_id=value.get('turnId') or value.get('turn_id') or value.get('id'),
+                    auxiliary=selection.get('auxiliary_skills'),auxiliary_revision=selection.get('auxiliary_revision'),format=selection.get('format'))
             else:
                 from easel_workbench.runtime.native_skills import service
                 message=service(self.box,self.chat).prepare_chat_message(message,session['profile_id'])

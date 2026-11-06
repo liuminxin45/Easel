@@ -108,7 +108,12 @@
     "easel_workbench/application/delivery_reconciliation.py",
     "easel_workbench/features/works/products.py",
     "easel_workbench/runtime/bridge.py",
-    "easel_workbench/runtime/native_api.py"
+    "easel_workbench/runtime/native_api.py",
+    "easel_workbench/features/local_skills/__init__.py",
+    "easel_workbench/features/local_skills/taxonomy.py",
+    "easel_workbench/features/local_skills/install.py",
+    "easel_workbench/features/local_skills/catalog.py",
+    "easel_workbench/features/local_skills/stars.py"
   ],
   "modules": [
     {
@@ -675,7 +680,8 @@
             "ProfileService._uploaded_asset",
             "ProfileService._profile_assets",
             "ProfileService._save_profile",
-            "ProfileService.profile_resource"
+            "ProfileService.profile_resource",
+            "read_profile"
           ]
         }
       ],
@@ -868,7 +874,8 @@
             "EvidenceRules.relationship",
             "EvidenceRules._match",
             "EvidenceRules._required_ref",
-            "EvidenceRules.resolve"
+            "EvidenceRules.resolve",
+            "compilation_work"
           ]
         }
       ],
@@ -1231,6 +1238,12 @@
             "main",
             "serve"
           ]
+        },
+        {
+          "area": "features/collection",
+          "members": [
+            "Store.collected_day"
+          ]
         }
       ],
       "prior_review": {
@@ -1268,6 +1281,22 @@
             "Toolbox.register_file",
             "Toolbox._store_file",
             "Toolbox.file"
+          ]
+        },
+        {
+          "area": "application/production",
+          "members": [
+            "Toolbox._compile_preview",
+            "Toolbox._change_input",
+            "Toolbox._action",
+            "Toolbox._version_creative_identity"
+          ]
+        },
+        {
+          "area": "features/works",
+          "members": [
+            "Toolbox.work_summaries",
+            "Toolbox.version_view"
           ]
         }
       ],
@@ -1397,7 +1426,8 @@
             "DistributionService._project",
             "DistributionService.finish_attempt",
             "DistributionService._reconcile",
-            "DistributionService.bootstrap"
+            "DistributionService.bootstrap",
+            "DistributionService.detail"
           ]
         }
       ],
@@ -2070,9 +2100,9 @@
       "path": "easel_workbench/runtime/easel_media_worker.py",
       "reviewed_sha256": "e0166cbfe6d318bc30b7d9bcceff2e1db2126f6b36949f9a6d1c16f5eca8d9c5",
       "area": "integrations/easel",
-      "responsibility": "p5 sole implementation: runtime",
+      "responsibility": "准确冻结的媒体阶段在隔离子进程调用主树官方脚本；保留准确HTTP任务凭据与只读核对",
       "lifecycle": "current canonical implementation with original state contracts",
-      "state_contract": "输出目录及已记录 task/receipt；未知 POST 不重发，vendor 仅在该子进程加载",
+      "state_contract": "输出目录及已记录task/receipt；未知POST不重发，仅允许既定官方媒体脚本；run_vendor已由run_official替代，不从历史vendor执行",
       "next_slice": "P4",
       "symbol_groups": [
         {
@@ -2081,10 +2111,15 @@
             "TaskPending",
             "read_only_reconcile",
             "atomic",
-            "run_vendor",
             "compose",
             "transcribe",
             "main"
+          ]
+        },
+        {
+          "area": "integrations/easel",
+          "members": [
+            "run_official"
           ]
         }
       ],
@@ -2250,7 +2285,17 @@
             "ChatService.answer",
             "ChatService.stop",
             "ChatService.close",
-            "ChatService._run"
+            "ChatService._run",
+            "ChatService.create_internal_session",
+            "ChatService._require_deletable",
+            "ChatService.delete_session",
+            "ChatService.history_window",
+            "ChatService.reconcile",
+            "ChatService._recovery_receipt",
+            "ChatService._scrub",
+            "ChatService._reconcile_orphan",
+            "ChatService.complete_review",
+            "ChatService._complete_review"
           ]
         }
       ],
@@ -2315,11 +2360,8 @@
           "members": [
             "ChatBusiness",
             "ChatBusiness.__init__",
-            "ChatBusiness.skills",
-            "ChatBusiness.skill",
             "ChatBusiness.history",
             "ChatBusiness._session",
-            "ChatBusiness._selection",
             "ChatBusiness._parent",
             "ChatBusiness._news_source",
             "ChatBusiness._attachments",
@@ -2329,8 +2371,6 @@
             "ChatBusiness._workspace",
             "ChatBusiness._bundle",
             "ChatBusiness._plan_request",
-            "ChatBusiness.plan",
-            "ChatBusiness._public_plan",
             "ChatBusiness.prepare",
             "ChatBusiness.accept",
             "ChatBusiness._accept_work",
@@ -2479,7 +2519,31 @@
             "NativeApi._accounts",
             "handle",
             "NativeApi._build_profile",
-            "NativeApi._build_profile.documents"
+            "NativeApi._build_profile.documents",
+            "NativeApi.commit_local_result"
+          ]
+        },
+        {
+          "area": "features/profiles",
+          "members": [
+            "NativeApi._profile_build_status",
+            "NativeApi._start_profile_enhancement",
+            "NativeApi._profile_deletion",
+            "NativeApi._remove_profile"
+          ]
+        },
+        {
+          "area": "features/works",
+          "members": [
+            "NativeApi._library_revision",
+            "NativeApi._build_library",
+            "NativeApi._thumbnail"
+          ]
+        },
+        {
+          "area": "composition/native-api",
+          "members": [
+            "adapter"
           ]
         }
       ],
@@ -2536,6 +2600,13 @@
           "members": [
             "record_delivery"
           ]
+        },
+        {
+          "area": "application/delivery",
+          "members": [
+            "_projection_receipt",
+            "_project_delivery"
+          ]
         }
       ],
       "prior_review": {
@@ -2543,6 +2614,119 @@
         "path": "easel_workbench/runtime/production_delivery.py",
         "reviewed_sha256": "b3c8e51c4845c12e07627e950a1c8c6decf707b64855017254ab10d4d92320e3"
       }
+    },
+    {
+      "path": "easel_workbench/features/local_skills/__init__.py",
+      "reviewed_sha256": "ad89fa5dea3343e6c3311b579d8deb292e4c90160e7a2408c652b85b2ba04bf6",
+      "area": "package",
+      "responsibility": "本地第三方方法包声明，不创建新模型执行器",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "无业务状态或启动副作用",
+      "next_slice": "PC-33"
+    },
+    {
+      "path": "easel_workbench/features/local_skills/taxonomy.py",
+      "reviewed_sha256": "76b162d0b2a103d9a969c410881829c3ab7b660501e155c2cfaa1394ff3e6467",
+      "area": "features/local_skills",
+      "responsibility": "来源方法的中文标签、13细分类与原六层/可选阶段映射",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "纯映射，无文件/网络/模型调用",
+      "next_slice": "PC-33",
+      "symbol_groups": [
+        {
+          "area": "features/local_skills",
+          "members": [
+            "classify",
+            "normalized",
+            "without_version"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/features/local_skills/install.py",
+      "reviewed_sha256": "fd309e923d57eae6c03aae95905c3adfb6f7d48d2762e219163c332552f9122d",
+      "area": "infrastructure/local-skills",
+      "responsibility": "复用本机skill-installer的Git稀疏克隆/准确SHA检出与归档解压帮助函数，最多3个来源并发获取；完整本地清单一次激活",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "安装进程持有本地锁；只写Git忽略的原件/目录和原生入口，不运行第三方脚本/包管理器，禁用Git钩子及交互凭据；固定提交、不全成功不激活目录",
+      "next_slice": "PC-33",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/local-skills",
+          "members": [
+            "digest",
+            "encoded",
+            "atomic",
+            "helper",
+            "install",
+            "_install",
+            "_install.download",
+            "_install.run_git",
+            "_install.fetch"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/features/local_skills/catalog.py",
+      "reviewed_sha256": "a94021bfbdd6bbe55906cd100bf31b4a6a5df381accc1b955c153f31f84f3765",
+      "area": "features/local_skills",
+      "responsibility": "摘要投影、目录与相对路径校验、阶段选择和本轮准确资源冻结",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "只读本地catalog/原件与独立Star投影，写本轮只读输入；内容指纹不含Star；列表不读全部正文",
+      "next_slice": "PC-33",
+      "symbol_groups": [
+        {
+          "area": "features/local_skills",
+          "members": [
+            "_read",
+            "checked_path",
+            "Library",
+            "Library.__init__",
+            "Library.document",
+            "Library.rows",
+            "Library.find",
+            "Library.package",
+            "Library.available",
+            "Library.descriptors",
+            "Library.summary",
+            "Library.verify",
+            "Library.selection",
+            "Library.freeze"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "easel_workbench/features/local_skills/stars.py",
+      "reviewed_sha256": "1a9f8a24dc224f9295076ba30440b98856a15e7b332218c5ae7ee7ca22bbea13",
+      "area": "infrastructure/local-skills",
+      "responsibility": "后台仓库关注数元数据刷新、ETag与限流退避",
+      "lifecycle": [
+        "current"
+      ],
+      "state_contract": "每来源仓库共享Star缓存，24小时TTL/手动刷新、线程与文件锁；不修改技能内容修订或执行回执",
+      "next_slice": "PC-33",
+      "symbol_groups": [
+        {
+          "area": "infrastructure/local-skills",
+          "members": [
+            "values",
+            "refresh",
+            "schedule",
+            "status"
+          ]
+        }
+      ]
     }
   ],
   "limits": [
@@ -2657,5 +2841,43 @@
     "skills/builtin/skill-bilibili-upload/scripts/bili_upload.py",
     "skills/builtin/skill-wechat-publisher/scripts/api.py",
     "skills/builtin/skill-wechat-publisher/scripts/html_converter.py"
+  ],
+  "maintenance_updates": [
+    {
+      "date": "2026-11-07",
+      "spec": "local-skill-library-20261107",
+      "scope": "补齐PC-33五个模块职责及旧review漏登记/过时符号；不修改生产源码、不扩大业务授权。旧reviewed_sha256保留以显式显示之后源码变化。",
+      "existing_modules_corrected": [
+        "easel_workbench/features/profiles/service.py",
+        "easel_workbench/features/evidence/rules.py",
+        "easel_workbench/runtime/desk.py",
+        "easel_workbench/runtime/toolbox_store.py",
+        "easel_workbench/features/distribution/service.py",
+        "easel_workbench/runtime/easel_media_worker.py",
+        "easel_workbench/features/conversations/service.py",
+        "easel_workbench/application/chat.py",
+        "easel_workbench/runtime/native_api.py",
+        "easel_workbench/runtime/production_delivery.py"
+      ],
+      "removed_missing_members": {
+        "easel_workbench/runtime/easel_media_worker.py": [
+          "run_vendor"
+        ],
+        "easel_workbench/application/chat.py": [
+          "ChatBusiness.skills",
+          "ChatBusiness.skill",
+          "ChatBusiness._selection",
+          "ChatBusiness.plan",
+          "ChatBusiness._public_plan"
+        ]
+      },
+      "new_modules": [
+        "easel_workbench/features/local_skills/__init__.py",
+        "easel_workbench/features/local_skills/taxonomy.py",
+        "easel_workbench/features/local_skills/install.py",
+        "easel_workbench/features/local_skills/catalog.py",
+        "easel_workbench/features/local_skills/stars.py"
+      ]
+    }
   ]
 }

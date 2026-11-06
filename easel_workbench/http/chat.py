@@ -67,9 +67,28 @@ def stream(service, turn_id, after=0, accepted=False,authenticated=None):
 async def handle(service,business,path,request,value=None,*,authenticated=None,serve_file=None,admissions=None):
     method=request.method
     get=method in ('GET','HEAD')
-    if not (path.startswith('/api/chat/') or path in ('/api/skills','/api/skill','/api/chat') or path.startswith('/api/skill/')):
+    if not (path.startswith('/api/chat/') or path in ('/api/skills','/api/skill','/api/chat') or path.startswith('/api/skill/') or path.startswith('/api/local-skills')):
         return None
     try:
+        if path.startswith('/api/local-skills'):
+            from easel_workbench.features.local_skills.catalog import Library
+            from easel_workbench.features.local_skills.stars import schedule,status
+            if path=='/api/local-skills' and get:
+                library=Library(business.root)
+                if request.query_params.get('view')=='sources':
+                    from easel_workbench.features.local_skills.taxonomy import CATEGORIES
+                    return response({'categories':{key:value[0] for key,value in CATEGORIES.items()},'repositories':[source['repository'] for source in library.document()['sources']]})
+                if request.query_params.get('view')=='selection':
+                    from easel_workbench.features.local_skills.taxonomy import STAGES
+                    return response({'revision':library.document()['revision'],'stages':STAGES,'skills':[
+                        {'name':item.get('reuse',item['id']),'display_name':item['display_name'],
+                         'executionBlocked':item.get('execution_blocked','') if library.available(item) else '本地技能原件缺失',
+                         'local_skill':{'stages':item['stages']}} for item in library.rows() if item['stages']]})
+                return response(await run_sync(library.summary))
+            if path=='/api/local-skills/sources' and get:return response(status(business.root))
+            if path=='/api/local-skills/sources/refresh' and method=='POST':
+                return response({'scheduled':schedule(business.root,force=True),**status(business.root)})
+            return response({'error':'unknown_local_skill_route'},404)
         if path=='/api/chat/submit' and method=='POST':
             if admissions is None:return response({'error':'接收端口未连接'},503)
             return response(await admissions.receive(value),202)

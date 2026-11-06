@@ -15,7 +15,7 @@
 - **存量核对记录（U）**：保留初版核对ID及本轮结论；已核对/已分类不等于新能力批准，仍保留各调用的限制，不授予新增许可或直接删除授权。
 - 文档描述的能力状态不等同于每个函数都正确实现或已通过本轮运行验收。首版是按页面组装、服务入口、SKILL 与既有记录建立的能力级清单，不是逐行代码合规证明。新发现的遗漏必须补登记，不因“首版没列”自动删除或默认获批。
 
-## 已确认能力（32 项）
+## 已确认能力（33 项）
 
 表内的“官方复用／共通接缝”列是阅读入口，完整代码、合同与验证入口见各维护卡。文件被引用不表示它全部属于私有代码；改动官方文件时还须核对实际 diff。
 
@@ -54,9 +54,11 @@
 | [PC-31 制作复盘与逐条核销](private-capabilities/PC-31-production-reviews.md) | 私有业务 | 完整交付后的对话提炼、原始反馈及每技能总文档；建议不自动改写技能。 | 原版本详情与原 Drawer |
 | [PC-32 优秀制作模板](private-capabilities/PC-32-excellent-templates.md) | 私有业务 | 人工确认的准确方法/风格/参考快照，通过原生生产技能冻结使用。 | 原新闻制作 Drawer |
 
+| [PC-33 本地第三方技能库、分类与辅助选择](private-capabilities/PC-33-local-skill-library.md) | 本地方法与原生适配 | 指定29源的中文分类、仓库Star及明确阶段选择；原件仅留本地，原技能页和Agent唯一。 | 原 SkillPage/SkillDrawer 与新闻制作 Drawer |
+
 ### 技能登记边界
 
-当前 `ProjectSkillCatalog` 读取两个油猪制作技能和两个独立学习技能：[PC-29 学习贴图](private-capabilities/PC-29-oil-pig-learn-poster.md)、[PC-30 学习文章](private-capabilities/PC-30-oil-pig-learn-article.md)。旧组合及六个辅助技能原文已归档，不再作为技能发现或执行；旧业务数据保留，但不提供旧技能历史兼容入口。其余官方内置技能继续由官方目录和流程管理。
+当前 `ProjectSkillCatalog` 读取两个油猪制作技能和两个独立学习技能：[PC-29 学习贴图](private-capabilities/PC-29-oil-pig-learn-poster.md)、[PC-30 学习文章](private-capabilities/PC-30-oil-pig-learn-article.md)。旧组合及六个辅助技能原文已归档，不再作为技能发现或执行；旧业务数据保留，但不提供旧技能历史兼容入口。其余官方内置技能继续由官方目录和流程管理。用户2026-11-07明确新增的本地第三方方法由PC-33按来源固定提交接入原发现/执行；它不是旧六个辅助技能的恢复，也不进入四个自有业务技能目录。
 
 油猪·做贴图与油猪·做文章分别维护，互不套用流程。方法正文、资源和组合依赖以各自 `SKILL.md` 为准；本表仅登记业务边界和接入位置。开发技能 `codex-spec`、`easel-upstream-sync` 与产品内容技能分开登记。
 
@@ -92,7 +94,7 @@
 | `App.tsx`、原侧栏、`ResponsiveSidebar`、`Drawer`、`InteractionNotice` | PC-02 | 应用壳、布局与控件由共通实现提供；宿主仅组装路由、状态和扩展内容。原入口默认行为、移动几何和焦点仍需分别验证。 |
 | `lib/api.ts`、`lib/whoami.ts` | PC-01、PC-13、PC-14 | 请求绑定、身份、缓存代数和账号核验策略集中在宿主，不散布鉴权分支。 |
 | `ChatPage`、共享 `chat.py`、原 harness | PC-03、PC-04、PC-17 | 继续复用模型传输、消息和问题 UI；持久受理、停止意图、冻结配置及未知不重放在边界保留。 |
-| `SkillPage`、`SkillDrawer`、共享 `skills.py` | PC-08～10、PC-22～27 | 原详情、配置与执行为唯一流程；私有 SKILL/图标通过数据或可选映射接入，不能隐藏原区域或引入候选前提。 |
+| `SkillPage`、`SkillDrawer`、共享 `skills.py` | PC-08～10、PC-22～27、PC-33 | 原详情、配置与执行为唯一流程；私有 SKILL/图标通过数据或可选映射接入，不能隐藏原区域或引入候选前提。 |
 | `ProfilePage`、`OnboardingWizard`、共享 `profiles.py` | PC-11 | 原表单/向导与构造函数共用；版本、素材、账号映射由服务器存储适配。 |
 | `DashboardPage`、`TrendsPage`、`IdeasPage`、`CalendarPage`、`BreakdownPage`、共享 planning/analytics | PC-05～07、PC-13 | 共通页及 CRUD 复用，来源/存储适配；私有新闻页只承接自己的阅读和创作输入，不重写官方会话。 |
 | `OutputsPage`、`DownloadLink`、共享 outputs/uploads | PC-12、PC-13、PC-17 | 原列表、详情与文件读取共用；准确版本、授权和输入保留在私有边界。 |
@@ -118,3 +120,5 @@
 2026-11-06：PC-05/06/19修复后台新闻对退役技能的依赖、当天中文标题结果健康；PC-11提供唯一画像只读接缝。见 [后台合同修复](../../specs/background-news-contracts-20261106/spec.md)，不恢复退役技能或旧缓存。
 
 2026-11-06：PC-07新增制作贴图默认预设与显式恢复最近已完成风格，复用原抽屉/控件和服务器回合记录，见 [Spec](../../specs/poster-style-presets-20261106/spec.md)。
+
+2026-11-07：PC-33登记本地第三方技能分类、仓库Star与按阶段选用方法；PC-07/08/09/10/18同步记录原生接入和本地原件发布边界。见[本轮Spec](../../specs/local-skill-library-20261107/spec.md)，安装、测试、提交与正式上线分别核验。

@@ -59,5 +59,9 @@ jobs:
         run: python -m pip install pytest pyyaml fastapi httpx requests websocket-client cryptography python-multipart sse-starlette
       - name: Verify reviewed raw bytes and Git attributes
         run: python scripts/check_workbench_skill_bytes.py
+      - name: Reject local third-party files in the public fork
+        run: python scripts/check_workbench_local_skills.py
+      - name: Verify local skill selection, metadata and frozen input contracts
+        run: python -m pytest -q tests/test_workbench_local_skills.py
       - name: Verify publication, exact bytes and deployment rejection
         run: python -m pytest -q tests/test_workbench_skill_bytes.py tests/test_workbench_skill_source_sync.py tests/test_workbench_deployment_controls.py tests/test_workbench_release_source.py tests/test_workbench_git_delivery.py tests/test_workbench_chat_business.py tests/test_workbench_official_skills.py tests/test_workbench_skill_retirement.py

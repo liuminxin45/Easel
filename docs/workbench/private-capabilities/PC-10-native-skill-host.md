@@ -29,3 +29,5 @@
 **更新记录：** 2026-11-06 用户明确取消私有生成费用二次确认。在私有[指令适配](../../../easel_workbench/application/generation_policy.py)及[会话组装](../../../easel_workbench/application/chat.py)中集中调整本轮授权解释，官方工作区/原harness保持原样；不新增UI、收费网关或模型执行器。测试：[生成授权](../../../tests/test_workbench_generation_authorization.py)。
 
 **上线记录：** 2026-11-06 私有生成授权调整已在workbench-20261106-121428生效；官方文件和前端不改，旧会话下一次新请求沿原线程使用新规则。验证与源码/配对SHA见[交付Spec](../../../specs/private-generation-authorization-20261106/spec.md)。
+
+**更新记录：** 2026-11-07 [原生宿主](../../../easel_workbench/runtime/native_skills.py)把[PC-33](PC-33-local-skill-library.md)本地摘要合并到原发现结果，详情按需读取原文，执行前冻结明确选择的资源后仍经唯一技能服务和原生会话执行。[NativeSkills](../../../web/frontend/src/workbench/ui/NativeSkills.tsx)向原SkillPage/SkillDrawer传可选展示端口，来源和Star不进入公共业务层；默认官方页面行为保持，旧发布指针和私有执行计划不恢复。 验证进展及部署事实见[本轮Spec](../../../specs/local-skill-library-20261107/spec.md)。

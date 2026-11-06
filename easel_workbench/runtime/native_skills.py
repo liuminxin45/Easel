@@ -44,9 +44,22 @@ class NativeSkills:
             environment=self.chat.settings.environment,execute=execute or unavailable,
             persona=self._persona,direct_api=lambda:self.chat.settings.current()['runtime']=='api',ports=ports)
 
-    def prepare_message(self,skill,value,persona=None):
+    def prepare_message(self,skill,value,persona=None,*,turn_id=None,auxiliary=None,auxiliary_revision=None,format=None):
         if not isinstance(skill,str) or not re.fullmatch(r'[A-Za-z0-9_-]+',skill):raise HTTPException(404,'技能不存在')
         native=self.context()
+        from easel_workbench.features.local_skills.catalog import Library
+        library=Library(self.root);selected=library.find(skill)
+        if skill.startswith('local-') and selected is None:raise ValueError('本地技能未安装或已归档')
+        methods=[]
+        if selected:
+            if selected.get('execution_blocked'):raise ValueError(selected['execution_blocked'])
+            methods=[{**selected,'stage':'standalone'}]
+        if auxiliary is not None:
+            if skill not in ('oil-pig-poster','oil-pig-article'):raise ValueError('辅助技能仅附加到油猪生产技能')
+            methods=library.selection(auxiliary,auxiliary_revision,format)
+        if methods:
+            if not turn_id:raise ValueError('本地技能必须绑定本轮操作身份')
+            value+=library.freeze(methods,turn_id)
         return native._publishing_message(native.prepare_skill_message(skill,value,persona))
 
     def prepare_chat_message(self,value,persona=None):
@@ -56,11 +69,26 @@ class NativeSkills:
     def items(self):
         # Keep the original handler callable for frozen historical requests;
         # new selections use the two explicit formats.
-        return [item for item in self.context().get_skills() if item.get('name') not in RETIRED_PRIVATE_SKILLS]
+        from easel_workbench.features.local_skills.catalog import Library
+        from easel_workbench.features.local_skills.stars import schedule
+        local={item['name']:item for item in Library(self.root).descriptors()}
+        schedule(self.root)
+        return [{**item,**local.get(item['name'],{})} for item in self.context().get_skills()
+                if item.get('name') not in RETIRED_PRIVATE_SKILLS and (not item['name'].startswith('local-') or item['name'] in local)]
     async def detail(self,name):
         configuration=self.chat.settings.skill_configuration()
         native=self.context(ports={'_read_env':lambda:configuration['environment']})
-        return {**await native.api_skill_detail(name),'configuration_revision':configuration['revision']}
+        result={**await native.api_skill_detail(name),'configuration_revision':configuration['revision']}
+        from easel_workbench.features.local_skills.catalog import Library
+        library=Library(self.root);item=library.find(name)
+        if name.startswith('local-') and not item:raise ValueError('本地技能已归档或未安装')
+        if item:
+            _,directory=library.package(item)
+            raw=(directory/item['entry']).read_text(encoding='utf-8-sig')
+            from easel.web_services.skills import parse_skill_text
+            result['body']=parse_skill_text(raw)[2]
+        descriptor=next((item for item in library.descriptors() if item['name']==name),{})
+        return {**result,**descriptor}
 
     async def execute(self,request,value,*,plain_chat=False):
         from easel_workbench.runtime.native_api import adapter
@@ -115,7 +143,9 @@ class NativeSkills:
                     '_attachment_context':lambda req:'','chat_turn_message':lambda message,name:self._persona(name)+chat_turn_message(message,None),
                     '_direct_chat_content':lambda req:(req.message,''),'SESSIONS_DIR':self.root/'outputs/_sessions'})
                 result=await context.api_chat(SimpleNamespace(message=value,persona=persona,sessionId=fields.get('sessionId'),turnId=None,attachments=[]))
-            else:result=await self.context(execute).api_skill(SimpleNamespace(skill=skill,input=value,persona=persona))
+            else:
+                result=await self.context(execute,ports={'prepare_skill_message':lambda name,content,profile=None:
+                    self.prepare_message(name,content,profile,turn_id='skill-turn-'+operation)}).api_skill(SimpleNamespace(skill=skill,input=value,persona=persona))
         except HTTPException as exc:
             if getattr(exc,'native_unknown',False):raise
             await asyncio.to_thread(api._save_operation,operation,{**pending,'state':'rejected','result':{'detail':str(exc.detail)}})

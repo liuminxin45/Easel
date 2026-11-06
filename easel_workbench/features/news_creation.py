@@ -283,7 +283,7 @@ class NewsCreation:
         from easel_workbench.features.creation_skills import PRODUCTION_SKILLS
         return {'title': title, 'format': creation.get('format'),
                 'skill_id': skill_id if skill_id in PRODUCTION_SKILLS else None,
-                'styles': styles}
+                'styles': styles,**({'auxiliary_methods':creation['auxiliary_methods']} if creation.get('auxiliary_methods') else {})}
 
     def api_source_text(self, prepared):
         """API chat has no local-file tools; inline only verified frozen source bytes."""
@@ -359,7 +359,7 @@ class NewsCreation:
         return self._freeze(directory, fingerprint, turn_id, message + suffix, summary, chosen)
 
     def prepare(self, creation, profile_id, article_id, turn_id):
-        if not isinstance(creation, dict) or set(creation) - {'intent', 'format', 'style', 'catalog_revision', 'profile_revision', 'source_revision', 'note', 'template_id', 'template_revision'}:
+        if not isinstance(creation, dict) or set(creation) - {'intent', 'format', 'style', 'catalog_revision', 'profile_revision', 'source_revision', 'note', 'template_id', 'template_revision','auxiliary_skills','auxiliary_revision'}:
             raise ValueError('创作请求字段无效')
         if creation.get('intent') not in ('discuss', 'produce'):
             raise ValueError('请选择讨论或制作')
@@ -387,6 +387,13 @@ class NewsCreation:
             template, template_materials = Templates(self.box).materials(creation['template_id'], profile_id, format, creation['template_revision'])
         elif creation.get('template_revision'):
             raise ValueError('模板版本缺少对应模板身份')
+        auxiliary_methods = []
+        if 'auxiliary_skills' in creation:
+            if creation['intent']!='produce':raise ValueError('讨论不启动辅助制作技能')
+            from easel_workbench.features.local_skills.catalog import Library
+            from easel_workbench.features.local_skills.taxonomy import STAGES
+            auxiliary_methods = [{'stage':STAGES[item['stage']], 'name':item['display_name'], 'repository':item['repository'], 'commit':item['commit']}
+                                 for item in Library(self.root).selection(creation['auxiliary_skills'],creation.get('auxiliary_revision'),format)]
         # Selection is explicit; an omitted style is never silently expanded from defaults.
         style = _style(creation.get('style', template['style'] if template else {}), entries)
         if creation['intent'] == 'produce':
@@ -402,6 +409,7 @@ class NewsCreation:
         if sum(len(raw) for _, raw, _, _, _ in chosen) > MAX_FILE:
             raise ValueError('本轮创作材料总量最多40MB')
         summary = copy.deepcopy(creation) | {'style': style, 'note': note}
+        if auxiliary_methods:summary['auxiliary_methods'] = auxiliary_methods
         if template:
             summary['template'] = template
         target = '仅讨论这条资讯与创作方向，不制作文件、不调用生成工具、不采纳或发布。此限制仅约束本轮；后续用户明确选择制作技能时可以制作。' if creation['intent'] == 'discuss' else '根据明确选择制作' + ('贴图' if format == 'poster' else '文章') + '；不采纳、不发布。'
@@ -410,7 +418,7 @@ class NewsCreation:
             input_text += ('\n\n本轮明确选择优秀制作模板：' + template['name'] + '（' + template['id'] + '@' + template['revision'] + '）。'
                            '附件template.json保留用户确认的制作方法与图片规范，template-reference是历史成品参考。'
                            '仅参考其制作方法、结构和视觉规范，不复用历史新闻事实、旧标题、旧主题或一次性备注；'
-                           '本轮原始要求及当前新闻优先，风格以以上本轮明确组件为准。继续使用本轮同一个原生制作技能，不调用其他技能、不改写技能或长期规则。')
+                           '本轮原始要求及当前新闻优先，风格以以上本轮明确组件为准。继续使用本轮同一个原生制作技能；仅按本轮明确的辅助清单使用辅助方法，不改写技能或长期规则。')
         return self._freeze(directory, fingerprint, turn_id, input_text, summary, chosen)
 
     def _freeze(self, directory, fingerprint, turn_id, input_text, summary, chosen):

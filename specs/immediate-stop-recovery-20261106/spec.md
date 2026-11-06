@@ -1,5 +1,7 @@
 # 发送后立即停止与可恢复会话
 
+状态：已提交自有fork并正式上线；旧受影响会话已解锁，原任务结果仍unknown且未重发。
+
 用户批准：停止持久意图、原生终态优先、受控关闭本地执行、保留未知结果、同一应用会话换新原生执行代数；完整验证、提交自有 fork 并部署。包含上一批点按复制。
 
 ## 根因与保留合同
@@ -32,3 +34,16 @@
 最终显示补充后，相关后端67项、前端73项通过；先前185项架构/业务及原引擎106项通过。最终两套实际Edge/TEMP HTTPS验收覆盖桌面、390/320明暗主题：停止/刷新/后写草稿/新原生代数/旧unknown保留/消息状态卡/无横向溢出五组全部通过；点按复制30项通过。准备阶段与原生阶段另由真实CodexAdapter+假协议回归覆盖，真实本地进程树及后端死亡回收也通过。浏览器发送验收等待原按钮可用后点击，不以测试脚本即时Enter取代用户触控。
 
 证据：同目录message-state-final.log、frontend-card-final.log、native-card-build.log、official-card-build.log、final-browser-stop-verified/report.json、final-browser-copy/report.json。旧空rollout不当作原生停止证明；准确退休计划SHA已记录，正式切换和上线后核对下一步执行。
+
+
+## 正式交付与上线核验
+
+已通过准确验收SHA、原生队列与其余任务空闲检查，经准入围栏停止原profile；按PID/创建时间/参数哈希持有句柄确认退出后，给原回合54fe99f6-14c2-4797-a0ec-48c2042c1e71追加受控退休回执。旧结果继续unknown；原生绑定、冻结提示/技能/原话/上下文/产物关联不变，pending解除，后续显式消息使用新原生代数。
+
+活动后端workbench-20261106-152722，前端native-stop-recovery-20261106-r3，完整SHA见上节。托管manager26548/server11672与7个角色均运行，准入恢复、cutover=live、cutover_paused=false，未恢复或复制数据库。上线前后同一数据库身份；31个会话、42个回合、87个作品、587个产物、3519条新闻及画像历史数量均保持。
+
+正式HTTPS四路认证smoke通过；准确旧回合API返回execution_status=unknown/execution_closed=true，会话pending为空。实际线上Edge桌面与390窄屏只读验收：原会话历史、准确消息状态卡、无连接恢复横幅、输入可用、发送按钮可用、无横向溢出均通过；仅写隔离浏览器本机草稿，没有发消息/调用真实模型。后台原设置已恢复，不重置每日canary。
+
+证据：`.local/workbench-validation/immediate-stop-recovery-20261106/acceptance.json`、`deployment.log`、`postflight.json`、`live-browser-report.json`；正式不可变切换另在`.local/workbench-deployment/upgrades/workbench-20261106-152722.json`。产品源码6d2f6f24f0041447030dc402024bf67ec491fdb0已推送origin/main；验收与本上线文档另形成后续清晰提交。upstream推送地址仍disabled，未向官方贡献或推送。
+
+本次真实浏览器运行于Windows，窄屏为模拟移动视口；未冒称实体vivo/WebToApp或真实制作质量已验证。剪贴板端点为合成；原DOM、触控事件、选择和焦点真实执行。普通网络/远端故障不能保证永不发生，合同是有界核对、可证实回收、保留未知和不重放，而非将所有异常标成成功。

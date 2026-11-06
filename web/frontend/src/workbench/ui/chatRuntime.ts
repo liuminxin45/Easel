@@ -11,6 +11,7 @@ export interface SessionDraft {text:string;files:DraftAttachment[];article_id?:s
 const emptyStream=():StreamState=>({content:'',thinking:'',activity:'',questions:[]});
 const recovering=():InteractionFeedback=>({kind:'status',message:'连接暂时中断，正在恢复原任务状态。输入已保留。'});
 const awaitingReceipt=(receipt:JsonRecord):InteractionFeedback=>({kind:'status',message:'暂未取得原任务的明确结束回执。'+(string(receipt.error)?string(receipt.error).slice(0,300)+' ':'')+'正在自动核对，输入和文件已保留，不会重复执行。'});
+const settled=(receipt:JsonRecord)=>{const status=string(receipt.execution_status)||string(receipt.stop_reason);return ['completed','stopped','failed'].includes(status)&&receipt.delivery_state!=='unknown'||status==='unknown'&&receipt.execution_closed===true};
 export class SessionRuntime {
  readonly state=createStore<{stream?:StreamState;running:boolean;accepted:boolean;error:string;feedback?:InteractionFeedback;receipt?:JsonRecord}>(()=>({running:false,accepted:false,error:''}));
  readonly blocked=new Set<string>();readonly completed=new Set<string>();readonly closed=new Set<string>();
@@ -27,7 +28,7 @@ export class SessionRuntime {
  private reload(){return this.client.read('/api/chat/sessions/'+encodeURIComponent(this.id)+'?limit=50',true)}
  private finishDraft(turn:FrozenTurn,receipt:JsonRecord){
   const current=this.client.drafts.get<SessionDraft>('chat:'+this.id);
-  const restore=(receipt.admission_failed===true||receipt.execution_status==='stopped'&&receipt.delivery_state==='not_started')&&current&&!current.text&&!current.files.length&&!current.command;
+  const restore=(receipt.admission_failed===true||['stopped','failed'].includes(string(receipt.execution_status))&&receipt.delivery_state==='not_started')&&current&&!current.text&&!current.files.length&&!current.command;
   this.patch({...(restore?turn.inputs:{}),pending:undefined});
  }
  private acknowledge(turn:FrozenTurn){
@@ -44,7 +45,7 @@ export class SessionRuntime {
  /** All recovery paths accept only the receipt of the original, still-current turn. */
  private settle(turn:FrozenTurn,receipt:JsonRecord):boolean{
   const status=string(receipt.execution_status)||string(receipt.stop_reason);
-  if(string(receipt.turn_id)!==turn.turnId||receipt.session_id&&receipt.session_id!==this.id||!['completed','stopped','failed'].includes(status)||receipt.delivery_state==='unknown')return false;
+  if(string(receipt.turn_id)!==turn.turnId||receipt.session_id&&receipt.session_id!==this.id||!settled(receipt))return false;
   if(this.saved()?.turnId!==turn.turnId||this.activeTurn&&this.activeTurn!==turn.turnId)return false;
   this.clearRecovery();this.owner=undefined;this.controller?.abort();this.controller=undefined;
   this.acknowledge(turn);this.completed.add(turn.turnId);this.blocked.delete(turn.turnId);this.finishDraft(turn,receipt);
@@ -155,7 +156,7 @@ export class SessionRuntime {
   const interruptionMessage='连接中断，正在核对原任务；不会重新发送。';
   const verify=()=>void(async()=>{if(finalizing||!active())return;finalizing=true;try{
    const receipt=await this.client.api.get<JsonRecord>('/api/chat/last/'+encodeURIComponent(this.id)+'?turn_id='+encodeURIComponent(turn.turnId));if(!active())return;
-   const terminal=string(receipt.execution_status)||string(receipt.stop_reason),known=string(receipt.turn_id)===turn.turnId&&['completed','stopped','failed'].includes(terminal)&&receipt.delivery_state!=='unknown';
+   const known=string(receipt.turn_id)===turn.turnId&&settled(receipt);
    if(known){this.settle(turn,receipt);return}
    else{this.blocked.add(turn.turnId);this.state.setState({feedback:string(receipt.turn_id)===turn.turnId?awaitingReceipt(receipt):recovering(),error:string(receipt.error)||'原回合结果尚未核对，已保留原请求，不会重复发送。'});this.patch({pending:{...turn,state:'unknown',accepted:this.saved()?.accepted}})}
    if(!active())return;this.owner=undefined;this.state.setState({running:false,stream:undefined});void this.reload();if(!known)this.scheduleRecovery(turn,profileId);const linked=string(record(receipt.work).work_id);void this.client.invalidate(['chat','works','studio',...(linked?['work:'+linked]:[])]);

@@ -69,6 +69,28 @@ def test_question_mark_inside_quoted_original_title_is_one_sentence():
     with pytest.raises(ValueError):validate('这是第一句中文内容。这里是第二句中文内容。')
 
 
+@pytest.mark.parametrize('call_state',[None,'unknown','failed','completed'])
+def test_only_proven_unstarted_legacy_contract_errors_can_be_reopened(setup,monkeypatch,call_state):
+    root,store,service,rows=setup
+    monkeypatch.setattr(store,'collected_day',lambda source,day:{'items':[r for r in rows if r['source_job']==source]})
+    for row in rows:
+        save(service,row,None,'error')
+    with service.connect() as c:
+        c.execute("UPDATE overviews SET error='中文概述未完成（ValueError），原始资料已保留',attempts=3")
+    with store.connect() as c:
+        c.execute('CREATE TABLE IF NOT EXISTS creator_model_calls(id TEXT PRIMARY KEY,document TEXT)')
+        if call_state:
+            c.execute('INSERT INTO creator_model_calls VALUES(?,?)',('original',json.dumps({'task':'news_enhancement','status':call_state,'input':[rows[0]]})))
+    preview=service.reopen_unstarted(sources=['hacker-news','product-hunt'],day='2026-11-03')
+    assert preview['eligible']==(['ph'] if call_state else ['hn','ph'])
+    assert preview['held']==(['hn'] if call_state else [])
+    with service.connect() as c:assert c.execute("SELECT count(*) FROM overviews WHERE status='error'").fetchone()[0]==2
+    result=service.reopen_unstarted(sources=['hacker-news','product-hunt'],day='2026-11-03',apply=True)
+    assert result['model_calls']==0
+    with service.connect() as c:
+        assert c.execute("SELECT count(*) FROM overviews WHERE status='pending' AND attempts=0").fetchone()[0]==len(preview['eligible'])
+
+
 @pytest.mark.parametrize('status,tampered', [('completed',False),('unknown',False),('completed',True)])
 def test_reconcile_checks_original_completed_receipt_and_exact_inputs(setup,status,tampered,monkeypatch):
     import hashlib

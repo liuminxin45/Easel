@@ -33,9 +33,9 @@ def recent_context(root=ROOT,hours=48):
 
 
 def editorial_prompt(candidates,snapshot,recent,root=ROOT):
-    from easel_workbench.runtime.task_runtime import registry,runtime_box
+    from easel_workbench.features.collection.news_contracts import snapshot as news_snapshot
     from easel_workbench.runtime.capability_contracts import resource_text
-    frozen=registry(runtime_box(root)).resolve(task='news_enhancement')
+    frozen=news_snapshot(root)
     contract=resource_text(frozen,'watcha-editorial.md')
     return contract.replace('{profile_json}',json.dumps(snapshot,ensure_ascii=False)).replace('{recent_json}',json.dumps(recent,ensure_ascii=False)).replace('{candidates_json}',json.dumps(candidates,ensure_ascii=False))
 

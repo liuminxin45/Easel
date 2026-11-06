@@ -119,6 +119,27 @@ class Overviews:
             c.execute('CREATE TABLE IF NOT EXISTS overview_sources(article_id TEXT PRIMARY KEY,input_hash TEXT NOT NULL,origin TEXT NOT NULL,source_run TEXT NOT NULL)')
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20,factory=Connection);c.row_factory=sqlite3.Row;c.execute('PRAGMA journal_mode=WAL');return c
+    def reopen_unstarted(self, *, sources, day, apply=False):
+        """Explicit repair of the retired-contract preparation regression only.
+
+        The ledger is persisted BEFORE any title transport. Any original call,
+        including unknown/failed, blocks reopening; it must be reconciled first.
+        Nothing here starts a model, rewrites original news or resets other days.
+        """
+        rows=[r for source in sources for r in self.store.collected_day(source,day)['items']]
+        eligible=[];held=[]
+        with locked(self.root/'data/news-overviews.lock',timeout=.1), self.store.connect() as ledger, self.connect() as c:
+            has_calls=ledger.execute("SELECT 1 FROM sqlite_master WHERE name='creator_model_calls'").fetchone()
+            for row in rows:
+                old=c.execute('SELECT * FROM overviews WHERE article_id=?',(row['id'],)).fetchone()
+                if not old or old['input_hash']!=fingerprint(row) or old['status']!='error' or old['error']!='中文概述未完成（ValueError），原始资料已保留':continue
+                sent=has_calls and ledger.execute('''SELECT 1 FROM creator_model_calls m,json_tree(m.document,'$.input') i
+                    WHERE json_extract(m.document,'$.task')='news_enhancement' AND i.key='id' AND i.value=? LIMIT 1''',(row['id'],)).fetchone()
+                if sent:held.append(row['id']);continue
+                eligible.append(row['id'])
+                if apply:
+                    c.execute("UPDATE overviews SET status='pending',error=NULL,attempts=0,retry_at=0,updated_at=? WHERE article_id=?",(stamp(),row['id']))
+        return {'eligible':eligible,'held':held,'applied':apply,'day':day,'model_calls':0}
     def reconcile_completed(self,receipt_path,*,sources,day):
         """Explicitly inspect a completed original call; never send a model request."""
         receipt_path=pathlib.Path(receipt_path).resolve()

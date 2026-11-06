@@ -33,6 +33,17 @@ def read_owner(c, work_id):
     return json.loads(row['document']) if row else None
 
 
+def read_profile(c, profile_id, revision=None):
+    """Read the existing profile without initializing skill releases or defaults."""
+    if revision is None:
+        row = c.execute('SELECT document FROM creator_profiles WHERE id=?', (key(profile_id),)).fetchone()
+    else:
+        row = c.execute('SELECT document FROM creator_profile_history WHERE id=? AND revision=?', (key(profile_id), revision)).fetchone()
+    if not row:
+        raise ValueError('找不到创作画像或指定修订')
+    return json.loads(row['document'])
+
+
 class ProfileService:
     def __init__(self, *, store, root, skills):
         self.store=store
@@ -43,13 +54,7 @@ class ProfileService:
         self._resource=skills._resource
 
     def _profile(self, c, profile_id, revision=None):
-        if revision is None:
-            row = c.execute('SELECT document FROM creator_profiles WHERE id=?', (key(profile_id),)).fetchone()
-        else:
-            row = c.execute('SELECT document FROM creator_profile_history WHERE id=? AND revision=?', (key(profile_id), revision)).fetchone()
-        if not row:
-            raise ValueError('找不到创作画像或指定修订')
-        return json.loads(row['document'])
+        return read_profile(c, profile_id, revision)
 
     def _put_profile(self, c, profile):
         for index, resource in enumerate(profile.get('asset_refs', [])):

@@ -119,7 +119,8 @@ class Monitor:
             numeric_fields = {'age_seconds', 'enabled_source_count', 'latest_failed_source_count',
                 'latest_partial_source_count', 'latest_completed_source_count', 'latest_active_source_count',
                 'unobserved_source_count', 'late_source_count', 'max_late_seconds', 'max_success_age_seconds',
-                'schedule_unobserved_source_count', 'external_provider_source_count', 'execution_grace_seconds', 'latest_empty_source_count'}
+                'schedule_unobserved_source_count', 'external_provider_source_count', 'execution_grace_seconds', 'latest_empty_source_count',
+                'local_failure_source_count', 'today_title_count', 'today_title_ready_count', 'today_title_failed_count', 'today_title_late_count'}
             for role, signal in business.get('roles', {}).items() if isinstance(business.get('roles'), dict) else []:
                 if role not in known_roles or not isinstance(signal, dict): continue
                 safe = {key: signal[key] for key in numeric_fields if key in signal and number(signal[key])}

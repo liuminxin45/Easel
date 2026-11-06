@@ -388,7 +388,7 @@ def run_source(source_id,task_dir,report=None,force=False,*,root=ROOT):
             progress(report,'fetching')
             def annotate(candidates,snapshot,recent,configuration,output):
                 progress(report,'screening',fetched=len(candidates))
-                return invoke(watcha.editorial_prompt(candidates,{k:v for k,v in snapshot.items() if k!='read_at'},recent),{},output,root=root)
+                return invoke(watcha.editorial_prompt(candidates,{k:v for k,v in snapshot.items() if k!='read_at'},recent,root),{},output,root=root)
             value=watcha.run({'job_id':source_id,'profile_dir':str(cfg['profile_dir']),'state_dir':str(state),'project_root':str(root)},interpreter=annotate,progress=report,task_dir=folder,resume=(folder/'resume.json').exists(),force=force)
             coverage=json.loads((state/'last-collection.json').read_text(encoding='utf-8')) if (state/'last-collection.json').exists() else {}
             progress(report,'persisting',selected=value.get('selected',0))

@@ -139,7 +139,7 @@ def _collection(root, now, grace_seconds):
                   'latest_active_source_count': 0, 'unobserved_source_count': len(enabled),
                   'late_source_count': 0, 'max_late_seconds': 0,
                   'max_success_age_seconds': 0, 'schedule_unobserved_source_count': 0,
-                  'external_provider_source_count': 0, 'external_provider': False,
+                  'external_provider_source_count': 0, 'local_failure_source_count': 0, 'external_provider': False,
                   'latest_empty_source_count': 0,
                   'execution_grace_seconds': grace_seconds}
         observed_revisions = set()
@@ -169,10 +169,16 @@ def _collection(root, now, grace_seconds):
                     diagnostic+=' '+str(coverage.get('errors',[]))
                 except (OSError,ValueError):
                     pass
-            if status in ('failed', 'partial', 'blocked') and re.search(
+            provider_failure = status in ('failed', 'partial', 'blocked') and re.search(
                     r'\bHTTPError\b|\bHTTP(?:\s+Error|[_ :])\s*5\d\d\b|\bupstream[_ : -]+5\d\d\b',
-                    diagnostic, re.IGNORECASE):
+                    diagnostic, re.IGNORECASE)
+            local_failure = status in ('failed', 'blocked') and (
+                re.search(r'\b(?:ValueError|KeyError|ImportError|AttributeError|TypeError)\b', str(error or ''))
+                or not provider_failure)
+            if provider_failure:
                 counts['external_provider_source_count'] += 1
+            if local_failure:
+                counts['local_failure_source_count'] += 1
         schedule_states = {row[0]: {'next_run_at': _at(row[1]), 'last_slot': row[2], 'schedule_hash': row[3]}
             for row in connection.execute('SELECT source_id,next_run_at,last_slot,schedule_hash FROM collection_schedule_state')}
         # SQL performs timestamp normalization/grouping; raw article bodies and
@@ -220,9 +226,44 @@ def _collection(root, now, grace_seconds):
             if execution is None or execution + 1 < required:
                 counts['late_source_count'] += 1
                 counts['max_late_seconds'] = max(counts['max_late_seconds'], round(max(0, now-required-grace_seconds), 2))
-        counts['external_provider'] = counts['external_provider_source_count'] > 0
+        counts['external_provider'] = counts['external_provider_source_count'] > 0 and not counts['local_failure_source_count']
         counts['coverage_status']='failed' if counts['latest_failed_source_count'] else 'partial' if counts['latest_partial_source_count'] else 'observed'
         return counts
+
+
+def news_title_health(root, now, grace_seconds=900):
+    """Observe today's title-dependent feeds with SQL aggregates, no bodies/calls.
+
+    A fresh loop heartbeat cannot turn exhausted or unknown title tasks green.
+    Old days remain history; fresh pending batches have an execution grace.
+    """
+    root = Path(root)
+    path = root/'data/news-overviews.sqlite'
+    if not path.is_file():
+        return {'status': 'not_configured', 'ok': True}
+    start = dt.datetime.fromtimestamp(now, TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + dt.timedelta(days=1)
+    with sqlite3.connect((root/'data/desk.sqlite').resolve().as_uri()+'?mode=ro', uri=True, timeout=.5) as c:
+        c.execute('PRAGMA query_only=ON')
+        c.execute('ATTACH DATABASE ? AS titles', (path.resolve().as_uri()+'?mode=ro',))
+        rows = c.execute('''WITH observations AS (
+          SELECT p.article_id id,r.run_at observed FROM provenance p JOIN runs r ON r.id=p.run
+          WHERE r.source_job IN ('hacker-news','product-hunt') AND julianday(r.run_at)>=julianday(?) AND julianday(r.run_at)<julianday(?)
+          UNION ALL
+          SELECT id,run_at FROM articles WHERE source_job IN ('hacker-news','product-hunt')
+          AND julianday(run_at)>=julianday(?) AND julianday(run_at)<julianday(?)
+        ), latest AS (SELECT id,max(julianday(observed)) observed FROM observations GROUP BY id)
+        SELECT coalesce(o.status,'pending'),count(*),min((l.observed-2440587.5)*86400)
+        FROM latest l LEFT JOIN titles.overviews o ON o.article_id=l.id GROUP BY coalesce(o.status,'pending')''',
+                         (start.isoformat(), end.isoformat(), start.isoformat(), end.isoformat())).fetchall()
+    counts = {state: count for state, count, _ in rows}
+    late = sum(count for state, count, oldest in rows if state != 'ready' and now-oldest > grace_seconds)
+    failed = counts.get('error', 0)
+    result = {'today_title_count': sum(counts.values()), 'today_title_ready_count': counts.get('ready', 0),
+              'today_title_failed_count': failed, 'today_title_late_count': late}
+    if failed or late:
+        return {**result, 'status': 'degraded', 'ok': False, 'reason': 'today_news_titles_incomplete'}
+    return {**result, 'status': 'healthy', 'ok': True}
 
 
 def session_creation_health(root, now):
@@ -312,11 +353,16 @@ def snapshot(root, *, now=None, max_age=180, collection_grace=900):
         try:
             document = _json(root / _FILES['overviews'])
             results['overviews'] = _signal({**document, 'state': 'ready' if not document.get('error_type') else 'error'}, now, max_age, pids.get('release'))
-        except (OSError, ValueError):
+            titles = news_title_health(root, now)
+            results['overviews'].update({k:v for k,v in titles.items() if k.startswith('today_')})
+            if titles['ok'] is False:
+                results['overviews'].update(status='degraded', ok=False, reason=titles['reason'])
+        except (OSError, ValueError, sqlite3.Error):
             results['overviews'] = {'status': 'unknown', 'ok': None, 'reason': 'progress_unavailable'}
     degraded = [role for role, result in results.items() if result['ok'] is False]
     unknown = [role for role, result in results.items() if result['ok'] is None]
     return {'status': 'degraded' if degraded else 'unknown' if unknown else 'healthy',
             'ok': False if degraded else None if unknown else True,
-            'external_provider': results.get('collector', {}).get('external_provider', False),
+            'external_provider': results.get('collector', {}).get('external_provider', False)
+                and all(role == 'collector' for role in degraded),
             'degraded_roles': degraded, 'unknown_roles': unknown, 'roles': results}

@@ -23,3 +23,5 @@
 **后续维护：** 变更时先核对上述调用链与当前官方实现；优先共用、缩小上游补丁。同步维护本卡的范围、入口、共通差异及验证依据；被上游吸收时移除对应适配并更新登记状态。原方法、历史输入和交付证据不在本卡复制或改写。
 
 **首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。
+
+**2026-11-06 后台合同修复：** [本轮Spec](../../../specs/background-news-contracts-20261106/spec.md)。后台筛选不再解析退役用户技能；内部合同归 [news_contracts.py](../../../easel_workbench/features/collection/news_contracts.py) 与其 [references](../../../easel_workbench/features/collection/references/)，保留原筛选、画像与准确回执。集中接缝 [task_runtime.py](../../../easel_workbench/runtime/task_runtime.py)、[capability_contracts.py](../../../easel_workbench/runtime/capability_contracts.py)，[watcha_pipeline.py](../../../easel_workbench/runtime/watcha_pipeline.py) 和 [builtin.py](../../../easel_workbench/integrations/collection/builtin.py) 使用相同合同；不恢复技能选择入口。

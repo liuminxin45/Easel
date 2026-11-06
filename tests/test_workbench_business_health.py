@@ -306,3 +306,39 @@ def test_partial_provider_evidence_can_live_in_bounded_stage_diagnostics_without
     assert result['roles']['collector']['late_source_count']==0 and result['roles']['collector']['coverage_status']=='partial'
     assert result['external_provider'] and result['roles']['collector']['external_provider_source_count']==1
     assert 'DO-NOT-RETURN' not in json.dumps(result) and 'sub-provider' not in json.dumps(result)
+
+
+def test_local_processing_failure_is_not_masked_by_partial_provider_warning(tmp_path):
+    with collection_fixture(tmp_path) as c:
+        c.execute('ALTER TABLE collection_tasks ADD COLUMN id TEXT')
+        c.execute('INSERT INTO collection_tasks(id,source_id,status,source_snapshot,error) VALUES(?,?,?,?,?)',
+                  ('local-failure','active','failed','{"revision":0}','来源处理未完成（ValueError）'))
+    put(tmp_path,'data/collection/tasks/local-failure/coverage.json',{'errors':[{'error':'HTTPError private upstream detail'}]})
+    result=snapshot(tmp_path,now=1000)
+    assert result['ok'] is False and result['external_provider'] is False
+    assert result['roles']['collector']['local_failure_source_count']==1
+    assert result['roles']['collector']['external_provider_source_count']==1
+    assert 'private upstream' not in json.dumps(result)
+
+
+def test_fresh_heartbeat_does_not_hide_today_title_failure_or_restore_old_failures(tmp_path):
+    from easel_workbench.runtime.desk import Store
+    from easel_workbench.runtime.news_overviews import Overviews,fingerprint
+    from easel_workbench.business_health import news_title_health
+    controls(tmp_path,['server'])
+    now=dt.datetime(2026,11,6,12,tzinfo=TZ)
+    store=Store(tmp_path/'data/desk.sqlite');service=Overviews(store,tmp_path)
+    with store.connect() as c:
+        for aid,source,day in [('today','hacker-news','2026-11-06'),('old','product-hunt','2026-11-05')]:
+            c.execute('INSERT INTO articles(id,source_job,title,body,url,run_at,run) VALUES(?,?,?,?,?,?,?)',
+                      (aid,source,'title','body','https://example.test/'+aid,day+'T09:30:00+08:00','run'))
+    with service.connect() as c:
+        for aid in ('today','old'):c.execute('INSERT INTO overviews VALUES(?,?,?,NULL,?,3,0,?)',(aid,'hash','error','ValueError',now.isoformat()))
+    before=(tmp_path/'data/desk.sqlite').read_bytes()
+    result=news_title_health(tmp_path,now.timestamp())
+    assert result['ok'] is False and result['today_title_count']==1 and result['today_title_failed_count']==1
+    put(tmp_path,'data/news-overviews-status.json',{'at':now.isoformat(),'last_batch':0})
+    assert snapshot(tmp_path,now=now.timestamp())['roles']['overviews']['ok'] is False
+    with service.connect() as c:c.execute("UPDATE overviews SET status='ready' WHERE article_id='today'")
+    assert snapshot(tmp_path,now=now.timestamp())['roles']['overviews']['ok'] is True
+    assert (tmp_path/'data/desk.sqlite').read_bytes()==before

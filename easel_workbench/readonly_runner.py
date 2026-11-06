@@ -46,6 +46,9 @@ def sha(raw):
 
 
 def project_snapshot(snapshot):
+    from easel_workbench.features.collection.news_contracts import is_snapshot
+    if is_snapshot(snapshot):
+        return True
     rows = snapshot.get('skills') if isinstance(snapshot, dict) else None
     return bool(rows) and all(isinstance(row, dict) and str(row.get('entry', '')).startswith('skills/builtin/')
                               and type(row.get('version')) is int and row['version'] >= 2 for row in rows)

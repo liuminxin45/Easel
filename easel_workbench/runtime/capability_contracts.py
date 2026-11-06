@@ -4,6 +4,8 @@ def resource_text(snapshot, name):
     resources = [resource for skill in snapshot.get('skills', [])
                  for resource in skill.get('resources', [])
                  if resource.get('path', '').endswith(suffix)]
+    resources += [resource for resource in snapshot.get('execution_contract', {}).get('resources', [])
+                  if resource.get('path', '').endswith(suffix)]
     if len(resources) != 1:
         raise ValueError('技能版本缺少唯一执行合同：' + name)
     item = resources[0]

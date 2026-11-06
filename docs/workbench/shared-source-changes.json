@@ -476,8 +476,8 @@
         "PC-02"
       ],
       "kind": "shared-extraction",
-      "reason": "由官方SkillDrawer结构最小提取唯一抽屉外壳，原技能及私有详情共同使用。",
-      "upstream_check": "核对原CSS/尺寸/关闭控件、portal/focus/history所有权，不演变平行Modal框架。"
+      "reason": "由官方SkillDrawer结构最小提取唯一抽屉外壳，原技能及私有详情共同使用。；可选overlayClassName供私有会话菜单使用紧凑底部几何，默认样式不变。",
+      "upstream_check": "核对原CSS/尺寸/关闭控件、portal/focus/history所有权，不演变平行Modal框架。 保留可选遮罩class参数；不可将私有菜单尺寸应用到其他抽屉。"
     },
     {
       "path": "web/frontend/src/components/EnvBoard.tsx",

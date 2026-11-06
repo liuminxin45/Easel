@@ -11,14 +11,15 @@ export interface DrawerProps {
   children: ReactNode;
   panelRef?: Ref<HTMLDivElement>;
   container?: Element | DocumentFragment | null;
+  overlayClassName?: string;
 }
 
 /** The original SkillDrawer shell, shared without an alternative dialog layout. */
-export default function Drawer({open = true, header, title, label, onClose, children, panelRef, container}: DrawerProps) {
+export default function Drawer({open = true, header, title, label, onClose, children, panelRef, container,overlayClassName}: DrawerProps) {
   const headingId = useId();
   if (!open) return null;
   const content = (
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className={'drawer-overlay'+(overlayClassName?' '+overlayClassName:'')} onClick={onClose}>
       <div className="drawer" ref={panelRef} role="dialog" aria-modal="true"
         aria-label={label || title} aria-labelledby={label || title ? undefined : headingId}
         onClick={(event) => event.stopPropagation()}>

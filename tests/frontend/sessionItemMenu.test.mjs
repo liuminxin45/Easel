@@ -45,3 +45,10 @@ test('optional presentation preserves native defaults and reuses the original re
  assert.deepEqual(f.calls,[['open','one'],['rename','one','新标题'],['archive','one',true],['delete','one']]);
  f.props.canDeleteSession=false;f.render();assert.equal(actions.delete,undefined);
 });
+
+test('shared Drawer retains its default shell and accepts only an optional host overlay class',()=>{
+ const {default:Drawer}=moduleLoader({imports:{react:{useId:()=> 'heading'},'react-dom':{createPortal:()=>assert.fail('No container means no portal')},'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})}}})('components/Drawer.tsx');
+ const base={title:'原抽屉',onClose(){},children:'内容'};
+ assert.equal(Drawer(base).props.className,'drawer-overlay');assert.equal(Drawer({...base,overlayClassName:'host-menu'}).props.className,'drawer-overlay host-menu');
+ assert.equal(nodes(Drawer(base)).find(n=>n.props.role==='dialog').props['aria-label'],'原抽屉');
+});

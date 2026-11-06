@@ -23,9 +23,9 @@ export function Panel({title,children}:{title?:string;children:ReactNode}){retur
 export function Field({label,children}:{label:string;children:ReactNode}){return <label className="ew-field"><span>{label}</span>{children}</label>}
 export function Pending({scope,reload}:{scope:string;reload?:()=>void}){const p=useOperation(scope),previous=useRef(p.pending?.uncertain?p.pending.id:undefined);useEffect(()=>{if(previous.current&&!p.pending)reload?.();previous.current=p.pending?.uncertain?p.pending.id:undefined},[p.pending?.id,p.pending?.uncertain,reload]);return p.pending?.uncertain&&!p.busy?<StatusCard tone="warning" className="ew-status-card-compact">{p.feedback?.message||p.error||'连接中断，正在恢复操作状态。输入已保留。'}</StatusCard>:null}
 /** Only host history/focus is adapted; the visible shell is the original drawer. */
-type HostDrawerProps={open:boolean;title:string;onClose:()=>void;onDismiss?:()=>void|boolean;children:ReactNode};
+type HostDrawerProps={open:boolean;title:string;onClose:()=>void;onDismiss?:()=>void|boolean;children:ReactNode;overlayClassName?:string};
 export function Drawer(props:HostDrawerProps){return props.open?<MountedDrawer {...props}/>:null}
-function MountedDrawer({title,onClose,onDismiss,children}:HostDrawerProps){
+function MountedDrawer({title,onClose,onDismiss,children,overlayClassName}:HostDrawerProps){
  const panel=useRef<HTMLDivElement>(null),{navigation}=useWorkbench(),dismiss=useRef(onDismiss||onClose),close=useRef(onClose);
  dismiss.current=onDismiss||onClose;close.current=onClose;
  const previous=useRef(typeof document!=='undefined'&&document.activeElement instanceof HTMLElement?document.activeElement:null);
@@ -49,7 +49,7 @@ function MountedDrawer({title,onClose,onDismiss,children}:HostDrawerProps){
    queueMicrotask(()=>requestAnimationFrame(()=>{if(previous.current?.isConnected)previous.current.focus({preventScroll:true})}));
   };
  },[navigation.registerLayer]);
- return <EaselDrawer title={title} onClose={onClose} panelRef={panel} container={container.current}>{children}</EaselDrawer>;
+ return <EaselDrawer title={title} onClose={onClose} panelRef={panel} container={container.current} overlayClassName={overlayClassName}>{children}</EaselDrawer>;
 }
 export function ArtifactView({file}:{file:Artifact}){const image=useSessionMediaImage(file);return <figure className="ew-artifact">{file.mime.startsWith('image/')?<img src={image.src||fileUrl(file)} alt={file.name}/>:file.mime.startsWith('video/')?<video src={fileUrl(file)} controls preload="metadata"/>:file.mime.startsWith('audio/')?<audio src={fileUrl(file)} controls preload="metadata"/>:<p>{file.name}</p>}<figcaption><DownloadLink href={fileDownload(file)} download={file.name}>{file.name} · 下载原件</DownloadLink></figcaption></figure>}
 function RecordDetails({title,renderContent}:{title:string;renderContent:()=>ReactNode}){const [open,setOpen]=useState(false);return <><button className="ew-record-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><span>{title}</span><DetailChevron/></button><Drawer open={open} title={title} onClose={()=>setOpen(false)}>{open?renderContent():null}</Drawer></>}

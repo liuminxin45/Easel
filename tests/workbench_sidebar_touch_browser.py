@@ -63,7 +63,7 @@ def main():
                 report['before_escape']=page.evaluate("()=>({active:document.activeElement?.tagName,modal:document.activeElement?.closest('[aria-modal=true]')?.className,nested:!!document.querySelector('.sidebar-panel .drawer-overlay'),expanded:document.querySelector('.sidebar-toggle')?.getAttribute('aria-expanded')})")
                 page.keyboard.press('Escape');expect(menu).to_have_count(0);report['after_escape']=page.evaluate("()=>({active:document.activeElement?.tagName,expanded:document.querySelector('.sidebar-toggle')?.getAttribute('aria-expanded')})");check('Escape closes only nested menu',panel.is_visible())
                 hold(item);page.go_back();expect(menu).to_have_count(0);check('Back closes menu before sidebar and keeps route',panel.is_visible() and route()==before)
-                hold(item);page.locator('.sidebar-backdrop').tap(position={'x':375,'y':600});expect(menu).to_have_count(0);expect(panel).not_to_be_visible();check('closing sidebar also removes its menu and modal layer',True);sidebar()
+                hold(item);page.locator('.ew-session-menu-overlay').tap(position={'x':375,'y':120});expect(menu).to_have_count(0);check('blank backdrop closes only the menu',panel.is_visible());page.locator('.sidebar-backdrop').tap(position={'x':375,'y':120});expect(panel).not_to_be_visible();check('sidebar closes normally after nested menu is dismissed',True);sidebar()
                 item.get_by_role('button',name='会话操作：TEMP 会话 34',exact=True).focus();page.keyboard.press('Shift+F10');expect(menu).to_be_visible()
                 check('keyboard menu shortcut reuses accessible entry',True)
                 page.keyboard.press('Tab');check('focus stays inside menu',menu.evaluate('el=>el.contains(document.activeElement)'))

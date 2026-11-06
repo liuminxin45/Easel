@@ -2,7 +2,7 @@
 
 2026-11-06：用户批准移动触控侧栏改为450ms长按操作菜单，默认只显示会话标题；点击仍打开原会话，8px移动/滚动/取消/第二触点取消识别，吞掉原长按的合成点击，下一次触摸不受影响。菜单复用官方Drawer、图标、原生重命名编辑器及已有归档/删除确认；桌面hover行为保持。键盘/读屏有具名操作入口，菜单绑定准确会话，导航/侧栏关闭/来源修订变化时退出。
 
-私有实现：[SessionItemMenu.tsx](../../../web/frontend/src/workbench/ui/SessionItemMenu.tsx)、[sessionPress.ts](../../../web/frontend/src/workbench/ui/sessionPress.ts)。必要共通接缝：[Sidebar.tsx](../../../web/frontend/src/components/Sidebar.tsx) 只增加可选条目呈现接口并传出原动作；ResponsiveSidebar增加可见性通知和嵌套对话框键盘让行，无私有依赖、不复制会话操作。移除mobile.css强制常显session-actions的旧规则，样式只用于新私有菜单和手势区域。
+私有实现：[SessionItemMenu.tsx](../../../web/frontend/src/workbench/ui/SessionItemMenu.tsx)、[sessionPress.ts](../../../web/frontend/src/workbench/ui/sessionPress.ts)、[菜单样式](../../../web/frontend/src/workbench/ui/styles/sidebar.css)、[原抽屉宿主适配](../../../web/frontend/src/workbench/ui/common.tsx)。必要共通接缝：[Sidebar.tsx](../../../web/frontend/src/components/Sidebar.tsx) 只增加可选条目呈现接口并传出原动作；ResponsiveSidebar增加可见性通知和嵌套对话框键盘让行；Drawer增加可选overlayClassName，供此私有菜单扩展遮罩到视口并呈现紧凑底部操作区，原默认外观不变。所有共通文件均无私有依赖、不复制会话操作。移除mobile.css强制常显session-actions的旧规则，样式只用于新私有菜单和手势区域。
 
 新增验证入口：[手势及原生操作复用测试](../../../tests/frontend/sessionItemMenu.test.mjs)、[真实触控输入的隔离浏览器旅程](../../../tests/workbench_sidebar_touch_browser.py)，实施与上线依据见 [本轮Spec](../../../specs/sidebar-touch-menu-20261106/spec.md)。同步官方时核对可选参数、原操作回调及嵌套键盘行为，缺省参数仍使用官方行与按钮。
 

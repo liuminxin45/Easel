@@ -45,7 +45,7 @@ export function useSessionItemMenu(sessions:ChatSession[],path:string){
   actions:<button type="button" className="btn btn-sm ew-session-menu-trigger" aria-label={'会话操作：'+session.title} aria-haspopup="dialog" aria-expanded={selection?.session.id===session.id} onClick={event=>{event.stopPropagation();show(session,actions,event.currentTarget)}}>会话操作</button>,
  };
  const run=(action:()=>void)=>{close();queueMicrotask(()=>requestAnimationFrame(()=>requestAnimationFrame(action)))};
- return {presentation,onPanelVisibilityChange,overlay:selection&&<Drawer open title="会话操作" onClose={close}>
+ return {presentation,onPanelVisibilityChange,overlay:selection&&<Drawer open title="会话操作" onClose={close} overlayClassName="ew-session-menu-overlay">
   <p className="ew-session-menu-title">{selection.session.title}</p>
   <div className="ew-session-menu-actions">
    <button className="btn btn-ghost ew-session-menu-action" onClick={()=>run(selection.actions.rename)}><IconEdit size={18}/>重命名</button>

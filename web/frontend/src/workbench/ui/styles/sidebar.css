@@ -22,3 +22,6 @@ html[data-native-platform] .sidebar-backdrop[data-compact="true"].is-open {displ
 .ew-session-menu-actions {display:flex;flex-direction:column;gap:4px}
 .ew-session-menu-action {justify-content:flex-start;gap:10px;min-block-size:44px;white-space:normal;text-align:start}
 .ew-session-menu-danger {color:var(--red)}
+.ew-session-menu-overlay {inline-size:100vw;block-size:var(--native-height,100dvh);align-items:flex-end}
+.ew-session-menu-overlay > .drawer {width:100%;height:auto;max-height:75%;border-radius:var(--radius) var(--radius) 0 0;overflow-y:auto}
+.ew-session-menu-overlay .drawer-body {padding-bottom:max(20px,env(safe-area-inset-bottom))}

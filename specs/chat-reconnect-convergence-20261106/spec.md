@@ -31,3 +31,9 @@
 实际日志位于 `.local/workbench-validation/chat-reconnect-{release-tests,architecture,batch3-frontend,check,build,official-build}.log`。冻结实现提交 `49dbb83`，候选后端 `workbench-20261106-061505`，前端 `native-chat-recovery-20261106-r2`。真实 Windows Edge 内核的390px模拟触控浏览器12项故障旅程通过，报告和截图在 `.local/workbench-validation/chat-reconnect-browser-r3/`：半开续流且历史读取失败仍补齐回复、解除准确旧锁；同一会话刷新后可继续；未知执行不重放。该测试使用TEMP服务器/SQLite及假模型，真实模型调用与平台写入均为0，未测试实体vivo。
 
 准入证据为 `chat-reconnect-preflight.json`：空闲、原生队列空、数据库身份保持，1条已审阅旧unknown继续保留。推送 SHA 与最终活动配对另在同前缀 `acceptance/deploy/delivery` 证据核验，候选不代表上线。浏览器脚本的延迟反馈等待时限和消息定位使用真实官方DOM锚点，不改变应用源码或DOM来获得通过。
+
+## 正式交付
+
+2026-11-06 已切换上述冻结前后端，部署结果 `status=live`，Windows任务计划监督进程已接管。4个带登录态只读接口通过；另对用户提供链接对应会话进行线上GET核验，两轮均 completed，服务器无pending，前端版本为 `native-chat-recovery-20261106-r2`。独立中控的公网探测返回200并识别准确新后端；其既有采集提供方降级分类保持，未据此宣称所有外部来源恢复。
+
+原SQLite文件身份及会话26、回合33、作品85、文件582、新闻3437等计数保持；没有回退数据库、重放原任务或发送新的业务POST。完整交付记录为 `.local/workbench-validation/chat-reconnect-delivery.json`，验收绑定见 `chat-reconnect-acceptance.json`，部署日志见 `chat-reconnect-deploy.log`。实现提交49dbb83与浏览器验收提交f4f1cb5已推送自有fork；后续仅补充交付文档，不改变冻结源码。

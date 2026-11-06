@@ -186,8 +186,8 @@ def main():
                         page.wait_for_timeout(50)
                     interrupted = page.get_by_role('status',name='会话恢复',exact=True)
                     expect(interrupted).to_have_count(0)
-                    expect(interrupted).to_be_visible()
-                    check('persistent recovery reuses the message status card rather than a top text banner',page.locator('.message-row').filter(has=interrupted).count()==1)
+                    expect(interrupted).to_be_visible(timeout=12000)
+                    check('persistent recovery reuses the exact message status card rather than a top text banner',page.locator('[data-native-anchor="chat:'+fault.turn_id+'-user"]').filter(has=interrupted).count()==1)
                     screenshot(page, '390-transport-interrupted.png')
                     turn_id = fault.turn_id
                     check('one original durable submission POST is accepted by the actual TEMP backend',

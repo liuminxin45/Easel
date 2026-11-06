@@ -28,4 +28,6 @@
 
 已通过：73项后端会话/受理/超时/原生回执测试，62项架构与技能策略/命令测试，67项前端恢复/暂停/草稿/跨设备竞态测试；私有检查、私有构建、原 Easel 独立构建与私有登记门禁通过。测试夹具改用当前原生聊天冻结合同，未恢复已退役讨论计划；官方差异检查补登记已上线学习技能与已审阅名称映射准确 blob，没有扩大目录豁免。
 
-实际日志位于 `.local/workbench-validation/chat-reconnect-{release-tests,architecture,batch3-frontend,check,build,official-build}.log`。完整冻结浏览器故障验收、推送 SHA、准入和活动配对将在同前缀 `candidate/acceptance/deploy` 证据记录核验。当前阶段尚未切换正式版本；不将合成执行冒称实体手机或真实模型验收。
+实际日志位于 `.local/workbench-validation/chat-reconnect-{release-tests,architecture,batch3-frontend,check,build,official-build}.log`。冻结实现提交 `49dbb83`，候选后端 `workbench-20261106-061505`，前端 `native-chat-recovery-20261106-r2`。真实 Windows Edge 内核的390px模拟触控浏览器12项故障旅程通过，报告和截图在 `.local/workbench-validation/chat-reconnect-browser-r3/`：半开续流且历史读取失败仍补齐回复、解除准确旧锁；同一会话刷新后可继续；未知执行不重放。该测试使用TEMP服务器/SQLite及假模型，真实模型调用与平台写入均为0，未测试实体vivo。
+
+准入证据为 `chat-reconnect-preflight.json`：空闲、原生队列空、数据库身份保持，1条已审阅旧unknown继续保留。推送 SHA 与最终活动配对另在同前缀 `acceptance/deploy/delivery` 证据核验，候选不代表上线。浏览器脚本的延迟反馈等待时限和消息定位使用真实官方DOM锚点，不改变应用源码或DOM来获得通过。

@@ -482,7 +482,7 @@ class Service:
                     identity = contracts.digest({'version': value['version_id'], 'lesson': item['lesson'], 'category': item['category']})[:24]
                     if identity not in seen:
                         seen.add(identity); items.append({**item, 'id': 'review-'+identity, 'status': 'pending'})
-            value.update(items=items, summary='\n\n'.join(summaries), status='completed')
+            value.update(items=items, summary='\n\n'.join(dict.fromkeys(summaries)), status='completed')
         else:
             value['status'] = 'queued'
 

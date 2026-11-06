@@ -8,3 +8,22 @@
   padding-block: 16px;
   border-bottom: 1px solid var(--border);
 }
+
+.ew-production-insights .markdown-body ul,
+.ew-production-insights .markdown-body ol {
+  padding-inline-start: 1.25rem;
+}
+
+.ew-production-insights label.ew-row {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.ew-production-insights label.ew-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: .25em;
+}
+
+.ew-production-insights label.ew-row span {
+  min-width: 0;
+}

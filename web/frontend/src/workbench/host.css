@@ -1,3 +1,4 @@
+@import "./ui/chat-text-copy.css";
 /* Viewport and offline shell only; Easel owns typography and controls. */
 :root{--native-height:100dvh;--native-keyboard-inset:0px}
 body,#root{height:var(--native-height);overflow:hidden}

@@ -15,6 +15,7 @@ import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
 import {TaskStatus} from './TaskStatus';
+import {attachChatTextCopy} from './lib/chatTextCopy';
 
 export type NativeSkill=SkillItem;
 export interface NativeSelection {skill_id:string;version?:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
@@ -141,6 +142,8 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
   }
   return messages;},
   [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore,receipt]);
+ const copySurface=useRef<HTMLDivElement>(null);
+ useEffect(()=>attachChatTextCopy(copySurface.current),[visibleMessages,running]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
  const recoveryTarget=activeTurn&&(visibleMessages.some(message=>message.role==='assistant'&&string(record(message).turnId||record(message).id)===activeTurn)?activeTurn:activeTurn+'-user');
  const recovery=activeTurn&&feedback?<ChatRecoveryStatus message={feedback.message} turnId={activeTurn} retry={()=>void runtime.reconcile(profileId)}/>:null;
@@ -152,7 +155,7 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId||!!session?.pendingSubmissionId;
  const historyPath=(before?:string)=>{const query=new URLSearchParams(search);if(before)query.set('history_before',before);else query.delete('history_before');return '/chat/'+encodeURIComponent(id)+(query.size?'?'+query:'')};
- return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} recovery={!historyBefore&&string(record(message).turnId||record(message).id)===recoveryTarget?recovery:null} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:userExtra(message)}
+ return <div className="ew-chat-layout" ref={copySurface}><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} recovery={!historyBefore&&string(record(message).turnId||record(message).id)===recoveryTarget?recovery:null} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:userExtra(message)}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}

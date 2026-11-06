@@ -35,3 +35,5 @@
 **首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。
 
 **更新记录：** 2026-11-06 完整原生交付事务内追加 PC-31 复盘队列；准确版本、采纳标记、原始反馈继续由原作品流程维护。内容详情仅增加进入原Drawer的制作复盘入口，不增加会话工具条。
+
+**更新记录：** 2026-11-06 用户要求会话内标题/正文直接点按复制。[chatTextCopy.ts](../../../web/frontend/src/workbench/ui/lib/chatTextCopy.ts) 在原[ChatSessionView](../../../web/frontend/src/workbench/ui/ChatSessionView.tsx)外集中适配，复用原Markdown/消息布局及浏览器剪贴板，不改官方组件；只识别非流式助手消息的明确字段，避免滚动/长按/选区误触。反馈样式限定[chat-text-copy.css](../../../web/frontend/src/workbench/ui/chat-text-copy.css)，由私有[host.css](../../../web/frontend/src/workbench/host.css)载入。用例：[前端](../../../tests/frontend/chatTextCopy.test.mjs)、[浏览器](../../../tests/workbench_chat_text_copy_browser.py)，[Spec](../../../specs/chat-tap-copy-20261106/spec.md)。

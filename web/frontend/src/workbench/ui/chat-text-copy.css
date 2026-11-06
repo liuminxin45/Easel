@@ -1,0 +1,29 @@
+.ew-chat-layout [data-ew-copy-target],
+.ew-chat-layout [data-ew-copy-label] {
+  cursor: copy;
+}
+.ew-chat-layout [data-ew-copy-target]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.ew-chat-layout [data-ew-copy-feedback]::after {
+  content: attr(data-ew-copy-feedback);
+  margin-inline-start: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--green);
+}
+.ew-chat-layout [data-ew-copy-error="true"]::after {
+  color: var(--red);
+}
+.ew-chat-copy-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}

@@ -30,7 +30,7 @@
 | [PC-07 私有新闻原文页与讨论/创作衔接](private-capabilities/PC-07-news-creation.md) | 私有业务 | 来源阅读、讨论与制作的显式选择、风格及角色素材、准确新闻关联、完整冻结输入和消息内新闻链接。 | `Drawer.tsx`、`ChatPage.tsx`、`skills.py` |
 | [PC-08 油猪·做贴图](private-capabilities/PC-08-oil-pig-poster.md) | 业务 SKILL | 微信公众号贴图制作、贴图修改、准确角色/画面风格、参考资源及成品文件；方法正文只在本技能维护。 | `skills.py`、`SkillPage.tsx` |
 | [PC-09 油猪·做文章](private-capabilities/PC-09-oil-pig-article.md) | 业务 SKILL | 选题/提纲/完整文章或局部修改、按需配图与 HTML 等指定交付；以本技能正文和本轮要求为准。 | `skills.py`、`SkillDrawer.tsx` |
-| [PC-10 原生技能宿主、配置与私有图标](private-capabilities/PC-10-native-skill-host.md) | 共通适配 | 磁盘 SKILL 目录、详情/资源、配置修订、服务器操作身份和私有图标注入；支持技能另见 PC-22 至 PC-27。 | `skills.py`、`SkillPage.tsx`、`SkillDrawer.tsx` |
+| [PC-10 原生技能宿主、配置与私有图标](private-capabilities/PC-10-native-skill-host.md) | 共通适配 | 磁盘 SKILL 目录、详情/资源、配置修订、服务器操作身份、私有生成授权解释和图标注入；支持技能另见 PC-22 至 PC-27。 | `skills.py`、`SkillPage.tsx`、`SkillDrawer.tsx` |
 | [PC-11 版本化画像、素材与账号绑定](private-capabilities/PC-11-profiles.md) | 私有业务 | 画像稳定 ID、修订/历史、素材绑定、账号归属、默认保护、明确导入及后台增强的安全存储。 | `profiles.py`、`ProfilePage.tsx`、`OnboardingWizard.tsx` |
 | [PC-12 准确作品版本、修改、采纳与反馈](private-capabilities/PC-12-versioned-works.md) | 私有业务 | 对话采纳/不采纳只更新准确产物目录状态标记，保留原话、范围和子版本；不触发归档或 Git。 | 原生会话与内容库，私有服务接入 |
 | [PC-13 内容索引、分层请求与返回性能](private-capabilities/PC-13-read-performance.md) | 可靠性适配 | 摘要/目录/详情/文件分层、会话历史窗口、内容索引、缓存代数、失效标签和有界读取。 | `OutputsPage.tsx`、`SkillPage.tsx`、`ProfilePage.tsx` |

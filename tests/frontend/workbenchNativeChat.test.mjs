@@ -15,10 +15,10 @@ const {interactionFeedback}=moduleLoader()('lib/interaction.ts');
 const productionRecovery=moduleLoader()('workbench/core/production-recovery.ts');
 const skill=(id,actions)=>({id,name:id,version:3,available:true,execution_kind:id==='content-production'?'workflow':'agent',launch_actions:actions});
 const catalog=[skill('content-production',[{id:'poster',label:'贴图',task:'poster',requires_plan:true},{id:'article',label:'文章',task:'article',requires_plan:true},{id:'change',label:'修改',task:'change',requires_context:true,path:'/works',requires_plan:true}]),skill('topic-research',[{id:'discuss',label:'讨论',task:'discuss'}]),skill('experience-distillation',[{id:'learning',label:'整理经验',task:'learning',requires_context:true,path:'/toolbox?section=skills&pane=experience'}])];
-function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride}={}){
- let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],navigate:[],invalidate:[],resources:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
+function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendingTurnId,receipt={turn_id:'exact-turn',execution_status:'completed',delivery_state:'known'},search='',postOverride,submitOverride,now=()=>Date.now()}={}){
+ let cursor=0,draft=initial;const hooks=[],effects=[],calls={stream:[],post:[],submit:[],get:[],reconcile:[],navigate:[],invalidate:[],resources:[]},resources={session:{id:'session-one',profile_id:'oil-pig',messages:[],created:1,title:'原生会话',pendingTurnId},linked_works:[]};
  const react={useCallback:(fn)=>fn,useMemo:(fn,deps)=>{const index=cursor++,old=hooks[index];if(!old||!deps||!old.deps||deps.length!==old.deps.length||deps.some((value,i)=>!Object.is(value,old.deps[i])))hooks[index]={deps,value:fn()};return hooks[index].value},useState:value=>{const index=cursor++;if(!(index in hooks))hooks[index]=value;return [hooks[index],next=>{hooks[index]=typeof next==='function'?next(hooks[index]):next}]},useRef:value=>{const index=cursor++;if(!(index in hooks))hooks[index]={current:value};return hooks[index]},useEffect:fn=>{cursor++;effects.push(fn)}};
- const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{if(path==='/api/chat/submit'){calls.submit.push({path,body,csrf});return submitOverride?submitOverride(path,body,csrf):{id:body.turnId,session_id:body.sessionId,accepted_by_server:true}}calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
+ const vm={config:{csrf:'fixture-csrf'},navigation:{registerLayer:()=>()=>{}},navigate:path=>calls.navigate.push(path),client:{drafts:{get:()=>draft,set:(_key,next)=>{draft=next;return true}},read:async()=>resources,authenticationEpoch:0,session:require('zustand/vanilla').createStore(()=>({config:{csrf:'fixture-csrf'}})),invalidate:async tags=>calls.invalidate.push(tags)},service:{uploadFiles:async files=>files,attach:async files=>files},api:{get:async path=>{calls.get.push(path);return receipt},post:async(path,body,csrf)=>{if(path==='/api/chat/reconcile'){calls.reconcile.push({path,body});return receipt}if(path==='/api/chat/submit'){calls.submit.push({path,body,csrf});return submitOverride?submitOverride(path,body,csrf):{id:body.turnId,session_id:body.sessionId,accepted_by_server:true}}calls.post.push({path,body,csrf});if(postOverride)return postOverride(path,body,csrf);return path==='/api/chat/plan'?{plan_token:'exact-plan-token',plan:{production_input:{title:'目标'},execution_prompt:{body:'真实冻结指令'}}}:{stopped:true}}}};
  vm.client.api=vm.api;
  const hookSource=readFileSync(new URL('workbench/ui/hooks/context.tsx',sourceRoot),'utf8'),hookAst=ts.createSourceFile('react.tsx',hookSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),hook=hookAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='useAsyncAction'),hookExports={};
  runInNewContext(ts.transpileModule(hook.getText(hookAst),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:hookExports,useState:react.useState,useRef:react.useRef,useCallback:fn=>fn,useContext:()=>({client:vm.client}),Context:{},useEffect:react.useEffect,interactionFeedback,Error,RequestError});
@@ -28,8 +28,8 @@ function fixture({draft:initial={text:'  原字材料\n保留  ',files:[]},pendi
  const components={...presentation,ChatPage:()=>{},ProductionPlan:()=>{},ArtifactView:()=>{},ProductionParameters:()=>{},ArtifactGallery:()=>{},CopyableText:()=>{},Completion:()=>{}};
  const products=module('workbench/ui/ChatTurnProducts.tsx',{react,'../../components/ArtifactGallery':components.ArtifactGallery,'../../components/CopyableText':components.CopyableText,'@workbench/core':core,'./WorkCompletion':{Completion:components.Completion},'./lib/workChatPath':module('workbench/ui/lib/workChatPath.ts',{'@workbench/core':core}),'./ExtensionDetails':presentation,'./TaskStatus':presentation,'./common':{Notice:()=>{},Drawer:()=>{},Field:()=>{},ActionButton:'button'}});
  const timers=new Map();
- const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal});
- const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./ChatTurnProducts':products,'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/skillDisplayNames':module('lib/skillDisplayNames.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
+ const runtime=module('workbench/ui/chatRuntime.ts',{'zustand/vanilla':require('zustand/vanilla'),'@workbench/core':core,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}}},{setTimeout:(fn,ms)=>{const key={unref(){}};timers.set(key,{fn,ms});return key},clearTimeout:key=>timers.delete(key),AbortSignal,Date:{now}});
+ const lib=module('workbench/ui/ChatSessionView.tsx',{react,'zustand':{useStore:store=>store.getState()},'./lib/nativeAsset':{nativeAsset:path=>'./'+path},'./chatRuntime':runtime,'./TaskStatus':presentation,'./ChatTurnProducts':products,'../../components/Drawer':'Drawer','../../lib/capabilityMenu':module('lib/capabilityMenu.ts',{}),'../../lib/skillDisplayNames':module('lib/skillDisplayNames.ts',{}),'../../lib/store':{generateSessionTitle:message=>'首条：'+message},'@workbench/core':core,'../../components/ChatPage':components.ChatPage,'../../lib/api':{streamChat:(...args)=>{calls.stream.push(args);return {abort:()=>{}}}},'./ExtensionDetails':presentation,'./common':{Notice:()=>{},ArtifactView:components.ArtifactView},'./components/icons':{},'./production':{ProductionPlan:components.ProductionPlan},'./ProductionParameters':{ProductionParameters:components.ProductionParameters}});
  const render=()=>{cursor=0;effects.length=0;const tree=lib.ChatSessionView({id:'session-one',search:new URLSearchParams(search)});return {tree,chat:nodes(tree).find(n=>n.type===components.ChatPage).props,plan:nodes(tree).find(n=>n.type===components.ProductionPlan)?.props}};
  return {calls,resources,lib,runtime,vm,components,render,effects,get recoveryCount(){return timers.size},runRecovery:async()=>{const [key,value]=[...timers][0]||[];assert.ok(value,'scheduled recovery');timers.delete(key);value.fn();await tick();await tick()},get draft(){return draft},set draft(next){draft=next}};
 }
@@ -42,6 +42,69 @@ function interruptedMessage(){return {role:'assistant',content:'已保留原文�
 const historicalInterruption='原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。';
 const retainedDraft=()=>({text:'  后写的新要求\n逐字保留  ',files:[{id:'later-file',name:'后来添加.png'}],command:{skill_id:'content-production',version:2,action_id:'poster',label:'生成贴图',requires_plan:true}});
 const savedTurn=(turnId='interrupted-version',state='unknown')=>({turnId,state,message:'旧冻结输入',attachments:[],context:{profile_id:'oil-pig'},inputs:{text:'旧冻结输入',files:[]}});
+
+test('watchdog reads completion without EOF or done and unlocks the same session',async()=>{
+ const f=fixture({pendingTurnId:'exact-turn',draft:{...retainedDraft(),pending:savedTurn('exact-turn')},receipt:{session_id:'session-one',turn_id:'exact-turn',execution_status:'completed',delivery_state:'accepted',message:'原话',output:'恢复的完整回复'}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ runtime.connect(f.draft.pending,'oil-pig',true);await f.runRecovery();
+ assert.equal(f.draft.pending,undefined);assert.equal(runtime.state.getState().running,false);assert.equal(f.recoveryCount,0);
+ assert.equal(f.calls.submit.length,0);assert.equal(f.calls.stream.length,1);assert.equal(f.render().chat.composer.disabled,false);
+ assert.ok(f.render().chat.session.messages.some(message=>message.role==='assistant'&&message.content==='恢复的完整回复'),'receipt supplies final text even if history refresh is stale');
+});
+
+test('a silent running stream is replaced by a same-turn GET subscription; fresh heartbeat bytes prevent replacement',async()=>{
+ for(const fresh of [false,true]){
+  let now=0;const f=fixture({now:()=>now,draft:{...retainedDraft(),pending:savedTurn('exact-turn')},receipt:{turn_id:'exact-turn',execution_status:'running',delivery_state:'accepted'}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  runtime.connect(f.draft.pending,'oil-pig',true);now=31000;if(fresh)f.calls.stream[0][16].onStreamActivity();await f.runRecovery();
+  assert.equal(f.calls.stream.length,fresh?1:2);assert.equal(f.calls.submit.length,0);assert.equal(f.calls.post.length,0);
+  if(!fresh){assert.equal(f.calls.stream[1][9],'exact-turn');assert.equal(f.calls.stream[1][10],true);f.calls.stream[0][3]('旧连接晚到');assert.equal(runtime.state.getState().stream.content,'')}
+  runtime.clear();
+ }
+});
+
+test('another device restores the server pending identity and reconciles it without sending local draft',async()=>{
+ const f=fixture({pendingTurnId:'exact-turn',draft:retainedDraft()}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ f.render();for(const effect of [...f.effects])effect();assert.equal(f.draft.pending.turnId,'exact-turn');
+ await f.runRecovery();assert.deepEqual(plain(f.draft),retainedDraft());assert.equal(f.render().chat.composer.disabled,false);
+ assert.equal(f.calls.submit.length,0);assert.equal(f.calls.stream.length,1);runtime.clear();
+});
+
+test('unknown native evidence is reconciled without dispatch and runtime feedback is attached to its message',async()=>{
+ const f=fixture({draft:{...retainedDraft(),pending:savedTurn('exact-turn')},receipt:{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ f.resources.session.messages=[{id:'exact-turn-user',role:'user',content:'原请求'},{id:'exact-turn',turnId:'exact-turn',role:'assistant',status:'unknown',content:'部分回复'}];
+ await runtime.reconcile('oil-pig');assert.equal(f.calls.reconcile.length,1);assert.equal(f.calls.submit.length,0);
+ const ui=f.render(),extra=ui.chat.renderMessageExtra(ui.chat.session.messages.at(-1));
+ assert.equal(extra.props.recovery.type,f.lib.ChatRecoveryStatus);assert.equal(extra.props.recovery.props.turnId,'exact-turn');
+ assert.equal(nodes(ui.chat.notice).some(n=>n.type===f.lib.ChatRecoveryStatus),false,'no duplicated top recovery card');
+ runtime.clear();
+});
+
+test('completed history reconciles an owned half-open stream and preserves later draft without replay',async()=>{
+ const f=fixture({draft:{...retainedDraft(),pending:savedTurn('exact-turn')}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+ runtime.connect(f.draft.pending,'oil-pig',true);f.calls.stream[0][8]();
+ f.resources.session.messages=[{role:'assistant',turnId:'exact-turn',status:'completed',content:'最终结果'}];
+ f.render();for(const effect of [...f.effects])effect();await tick();await tick();
+ assert.equal(runtime.state.getState().running,false);assert.equal(runtime.state.getState().feedback,undefined);
+ assert.deepEqual(plain(f.draft),retainedDraft());assert.equal(f.render().chat.composer.disabled,false);
+ assert.equal(f.calls.stream.length,1);assert.equal(f.calls.submit.length,0);assert.equal(f.calls.post.length,0);
+ f.calls.stream[0][3]('旧流晚到');assert.equal(runtime.state.getState().stream,undefined);
+});
+
+test('late reconciliation cannot clear a different turn or cross an authentication epoch',async()=>{
+ for(const mode of ['new-turn','auth-change']){
+  const f=fixture({draft:{...retainedDraft(),pending:savedTurn('exact-turn')}}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  let resolve;f.vm.api.get=()=>new Promise(done=>{resolve=done});const check=runtime.reconcile('oil-pig');
+  if(mode==='new-turn')f.draft={...retainedDraft(),pending:savedTurn('new-turn')};else {f.vm.client.authenticationEpoch++;runtime.clear()}
+  const before=plain(f.draft);resolve({session_id:'session-one',turn_id:'exact-turn',execution_status:'completed',delivery_state:'accepted'});await check;
+  assert.deepEqual(plain(f.draft),before);assert.equal(runtime.completed.has('exact-turn'),false);
+ }
+});
+
+test('a wrong-session or unknown receipt never unlocks a pending turn',async()=>{
+ for(const receipt of [{session_id:'other-session',turn_id:'exact-turn',execution_status:'completed',delivery_state:'accepted'},{turn_id:'exact-turn',execution_status:'unknown',delivery_state:'unknown'}]){
+  const f=fixture({draft:{...retainedDraft(),pending:savedTurn('exact-turn')},receipt}),runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
+  await runtime.reconcile('oil-pig');assert.equal(f.draft.pending.turnId,'exact-turn');assert.equal(runtime.completed.has('exact-turn'),false);assert.equal(f.calls.submit.length,0);
+ }
+});
 
 test('older history windows retain the draft and refuse new sends until returning to latest',async()=>{
  const f=fixture({search:'history_before=older-turn',draft:{text:'后写的未发送输入',files:[]}});
@@ -273,11 +336,11 @@ test('a known timeout receipt is reported as execution uncertainty until the sam
  f.render().chat.onSend();await tick();const callbacks=f.calls.stream[0];callbacks[16].onAccepted();
  f.draft={...f.draft,text:'新草稿不能被恢复清空'};callbacks[8]();callbacks[4]();await tick();await tick();
  const runtime=f.runtime.sessionRuntime(f.vm.client,'session-one');
- assert.match(runtime.state.getState().feedback.message,/原任务执行结果待核对/);
+ assert.match(runtime.state.getState().feedback.message,/明确结束回执/);
  assert.match(runtime.state.getState().feedback.message,/Codex 本轮超时/);
  assert.doesNotMatch(runtime.state.getState().feedback.message,/连接暂时中断/);
  callbacks[16].onConnectionRestored();assert.ok(f.draft.pending,'late transport recovery must not resolve an unknown receipt');
- await f.runRecovery();assert.match(runtime.state.getState().feedback.message,/原任务执行结果待核对/);
+ await f.runRecovery();assert.match(runtime.state.getState().feedback.message,/明确结束回执/);
  f.vm.api.get=async path=>{f.calls.get.push(path);return {turn_id:'exact-turn',execution_status:'stopped',delivery_state:'interrupted',error:'原生接口已核对本回合中断；未重新发送，原文件保留，制作与交付未完成。'}};
  await f.runRecovery();assert.equal(f.draft.pending,undefined);assert.equal(f.draft.text,'新草稿不能被恢复清空');
  assert.equal(runtime.state.getState().feedback,undefined);assert.equal(runtime.state.getState().error,'');assert.equal(runtime.state.getState().running,false);

@@ -56,7 +56,8 @@ def service(commands,monkeypatch):
     return service,adapter
 
 
-def snapshot(service):return service.box.creator.resolve(task='discuss')
+# Native chat freezes workspace instructions, not the retired private discussion plan.
+def snapshot(service):return None
 def value(operation='operation-one'):return {'operation_id':operation,'turnId':operation,'sessionId':'workbench-session','message':'用户原话'}
 async def completed(service,turn_id):
     task=service._tasks.get(turn_id)
@@ -412,7 +413,7 @@ def test_real_codex_adapter_uses_real_pool_store_and_native_turn_hook(commands,m
         service.create_session({'id':'new-upstream','session_id':'upstream-pool','profile_id':'oil-pig'})
         for index in (1,2):
             request={'operation_id':'turn-'+str(index),'session_id':'upstream-pool','message':'用户 '+str(index)}
-            result=await service.submit(request,snapshot=commands.creator.resolve(task='discuss'),
+            result=await service.submit(request,snapshot=None,
                 actual_prompt='EXACT actual user prompt '+str(index),frozen_instructions='EXACT developer instruction')
             await completed(service,result['id'])
             turn=service.get_turn(result['id']);assert turn['native_turn_id']=='upstream-turn-'+str(index)
@@ -422,7 +423,7 @@ def test_real_codex_adapter_uses_real_pool_store_and_native_turn_hook(commands,m
         assert harness_store.binding(service.sessions_dir,'upstream-pool')['native_id']=='upstream-native-thread'
         complete_turns[0]=False
         pending=await service.submit({'operation_id':'third','session_id':'upstream-pool','message':'停止验收'},
-            snapshot=commands.creator.resolve(task='discuss'),actual_prompt='EXACT actual user prompt third',
+            snapshot=None,actual_prompt='EXACT actual user prompt third',
             frozen_instructions='EXACT developer instruction')
         while not service.get_turn(pending['id']).get('native_turn_id'):
             await asyncio.sleep(.001)
@@ -435,7 +436,7 @@ def test_real_codex_adapter_uses_real_pool_store_and_native_turn_hook(commands,m
             same=await service.submit({'operation_id':'third','session_id':'upstream-pool','message':'停止验收'},snapshot=None,actual_prompt='Must not recompile')
             assert same['id']==pending['id'] and methods.count('turn/start')==3
             with pytest.raises(ChatConflict):
-                await service.submit({'operation_id':'fourth','session_id':'upstream-pool','message':'不能重发'},snapshot=commands.creator.resolve(task='discuss'),actual_prompt='Blocked')
+                await service.submit({'operation_id':'fourth','session_id':'upstream-pool','message':'不能重发'},snapshot=None,actual_prompt='Blocked')
         assert service.get_turn(pending['id'])['output']=='上游真实事件'
         await service.close();assert instances[0].process.returncode==0
     asyncio.run(scenario())

@@ -743,6 +743,8 @@ export interface StreamChatOptions {
   onAccepted?: (value: {sessionId:string;turnId?:string}) => void;
   // Transport recovery is separate from the one-time turn acceptance.
   onConnectionRestored?: () => void;
+  /** Optional host liveness observation; never changes the ordinary stream UI. */
+  onStreamActivity?: () => void;
 }
 export function streamChat(
   message: string,
@@ -833,6 +835,7 @@ export function streamChat(
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        options?.onStreamActivity?.();
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split(/\r?\n/);

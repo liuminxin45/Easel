@@ -796,8 +796,8 @@
         "PC-16"
       ],
       "kind": "host-port",
-      "reason": "原API函数接可选传输/缓存绑定与认证代数，统一操作身份并保留默认fetch。",
-      "upstream_check": "核对首屏绑定顺序、401/身份切换及迟到响应隔离、原请求/响应和支持路径一致。"
+      "reason": "原API函数接可选传输/缓存绑定与认证代数，统一操作身份并保留默认fetch。；流读取增加可选 onStreamActivity 字节活动回调，私有看门狗沿用原流传输。",
+      "upstream_check": "核对首屏绑定顺序、401/身份切换及迟到响应隔离、原请求/响应和支持路径一致。 保留可选活动回调，无宿主时不改变默认流行为。"
     },
     {
       "path": "web/frontend/src/lib/artifacts.ts",

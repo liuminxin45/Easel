@@ -178,6 +178,14 @@ async def handle(service,business,path,request,value=None,*,authenticated=None,s
                         'execution_status':current['status'],'text':current.get('output',''),'turn_id':current['id'],
                         'clean_end':current['status']=='completed','stop_reason':None if current['status']=='completed' else current['status']}
             return response(result)
+        if path=='/api/chat/reconcile' and method=='POST':
+            sid=identity(value.get('sessionId'));tid=identity(value.get('turnId'))
+            try:return response(await service.reconcile(sid,tid))
+            except ValueError:
+                if admissions is None:raise
+                turn=await run_sync(admissions.get_turn,tid)
+                if turn['session_id']!=sid:raise ChatConflict('回合与会话不一致')
+                return response(turn)
         if path=='/api/chat/stop' and method=='POST':
             sid=identity(value.get('sessionId') or value.get('session_id'));tid=value.get('turnId') or value.get('turn_id')
             if admissions is not None and tid:

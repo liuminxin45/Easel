@@ -124,6 +124,7 @@ def main():
                 adapter = fixture['adapter']
                 adapter.mode = 'hold'
                 started = threading.Event()
+                finish = threading.Event()
 
                 async def run(request, emit, ask, bind):
                     adapter.requests.append(request)
@@ -135,6 +136,10 @@ def main():
                     if adapter.mode == 'unknown':
                         raise HarnessError('TEMP 原执行结果未知，禁止重发')
                     started.set()
+                    if adapter.mode == 'finish-on-signal':
+                        while not finish.is_set():await asyncio.sleep(.01)
+                        emit('token','TEMP 完整最终回复；不靠流关闭也能读回。')
+                        return
                     try:
                         await asyncio.Future()
                     except asyncio.CancelledError:
@@ -179,8 +184,10 @@ def main():
                     while not fault.ended.is_set():
                         assert time.monotonic() < deadline, 'The actual initial stream must reach the injected EOF after preparation'
                         page.wait_for_timeout(50)
-                    interrupted = page.get_by_role('status').filter(has_text='连接暂时中断，正在恢复原任务状态。输入已保留。')
+                    interrupted = page.get_by_role('status',name='会话恢复',exact=True)
+                    expect(interrupted).to_have_count(0)
                     expect(interrupted).to_be_visible()
+                    check('persistent recovery reuses the message status card rather than a top text banner',page.locator('.message-row').filter(has=interrupted).count()==1)
                     screenshot(page, '390-transport-interrupted.png')
                     turn_id = fault.turn_id
                     check('one original durable submission POST is accepted by the actual TEMP backend',
@@ -213,6 +220,33 @@ def main():
                     expect(interrupted).to_have_count(0)
                     screenshot(page, '390-confirmed-interrupted-history.png')
 
+                    # EOF followed by an HTTP-successful, permanently silent
+                    # replay must not own the session forever. Completion is
+                    # available only through the original receipt/history.
+                    fault.turn_id=None;fault.allow_resume.clear();fault.ended.clear();started.clear()
+                    adapter.mode='finish-on-signal'
+                    completed_sid=new_session();send_poster('TEMP 半开连接回执收敛')
+                    deadline=time.monotonic()+10
+                    while not fault.ended.is_set():
+                        assert time.monotonic()<deadline;page.wait_for_timeout(50)
+                    completed_turn=fault.turn_id
+                    stale_history='**/api/chat/sessions/'+completed_sid+'?*'
+                    page.route(stale_history,lambda route:route.abort('connectionreset'))
+                    finish.set()
+                    page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending",arg=completed_sid)
+                    expect(page.get_by_role('button',name='发送',exact=True)).to_be_disabled()  # empty composer
+                    expect(page.get_by_text('TEMP 本回合已受理；这是隔离假执行器输出。TEMP 完整最终回复；不靠流关闭也能读回。',exact=True)).to_be_visible()
+                    composer=page.get_by_role('textbox',name='对话输入',exact=True);composer.fill('TEMP 后续输入仍可编辑')
+                    expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled()
+                    check('half-open subscription converges completed receipt and unlocks later input without another execution',
+                          len(adapter.requests)==2 and len([r for r in requests if r['path']=='/api/chat/submit' and r['method']=='POST'])==2)
+                    screenshot(page,'390-half-open-completed.png')
+                    page.unroute(stale_history)
+                    page.reload(wait_until='domcontentloaded')
+                    expect(page.get_by_role('textbox',name='对话输入',exact=True)).to_have_value('TEMP 后续输入仍可编辑')
+                    expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled()
+                    check('same conversation stays usable after reload with retained later input',True)
+
                     # A real unknown receipt is a distinct second case, never
                     # overwritten with a simulated completed or stopped result.
                     fault.enabled = False
@@ -225,16 +259,16 @@ def main():
                     receipt = page.request.get(fixture['origin'] + '/api/chat/last/' + second_sid + '?turn_id=' + unknown_turn).json()
                     check('unknown native execution remains unknown with original production version', receipt['execution_status'] == receipt['delivery_state'] == 'unknown')
                     expect(page.get_by_role('button', name='发送', exact=True)).to_be_disabled()
-                    expect(page.get_by_role('status').filter(has_text='原任务执行结果')).to_be_visible()
+                    expect(page.get_by_role('status',name='会话恢复',exact=True)).to_contain_text('任务状态待确认')
                     expect(page.get_by_role('status').filter(has_text='连接暂时中断')).to_have_count(0)
                     screenshot(page, '390-unknown-execution.png')
                     page.reload(wait_until='domcontentloaded')
                     expect(page.get_by_role('button', name='发送', exact=True)).to_be_disabled()
-                    expect(page.get_by_role('status').filter(has_text='原任务执行结果')).to_be_visible()
+                    expect(page.get_by_role('status',name='会话恢复',exact=True)).to_contain_text('任务状态待确认')
                     check('unknown receipt survives reload without replay, losing original ID, or claiming success',
                           page.evaluate("sid=>JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending.turnId", second_sid) == unknown_turn
-                          and len(adapter.requests) == 2
-                          and len([r for r in requests if r['path'] == '/api/chat/submit' and r['method'] == 'POST']) == 2)
+                          and len(adapter.requests) == 3
+                          and len([r for r in requests if r['path'] == '/api/chat/submit' and r['method'] == 'POST']) == 3)
                     check('actual mobile page has no JavaScript errors', not errors)
                     report['errors'] = errors
                     report['requests'] = requests

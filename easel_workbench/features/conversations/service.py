@@ -55,6 +55,7 @@ class ChatService:
         self._questions = {}
         self._stop_requested = set()
         self._closing = False
+        self._reconciliations = {}
         with self.store.connect() as c:
             for statement in (
                 'CREATE TABLE IF NOT EXISTS easel_chat_sessions(id TEXT PRIMARY KEY,document TEXT NOT NULL)',
@@ -311,6 +312,75 @@ class ChatService:
     def _ownership_snapshot(self, turn_id):
         with self._ownership_lock:
             return turn_id in self._owned_turns or turn_id in self._tasks, self._ownership_generation
+
+    async def reconcile(self, session_id, turn_id):
+        """Converge an orphan from exact native evidence, never re-execute it."""
+        session_id, turn_id = identity(session_id), identity(turn_id)
+        original = self.get_turn(turn_id,private=True)
+        if original['session_id'] != session_id: raise ChatConflict('回合与会话不一致')
+        if original['status'] in ('completed','stopped','failed') or self._ownership_snapshot(turn_id)[0]:
+            return self._recovery_receipt(turn_id)
+        with self.store.connect() as c:original=self._turn(c,turn_id)
+        if turn_id in self._reconciliations:
+            return await asyncio.shield(self._reconciliations[turn_id])
+        task=asyncio.create_task(self._reconcile_orphan(original))
+        self._reconciliations[turn_id]=task
+        task.add_done_callback(lambda done:self._reconciliations.pop(turn_id,None) if self._reconciliations.get(turn_id) is done else None)
+        try:return await asyncio.shield(task)
+        finally:
+            if task.done() and self._reconciliations.get(turn_id) is task:self._reconciliations.pop(turn_id,None)
+
+    def _recovery_receipt(self, turn_id):
+        turn=self.get_turn(turn_id)
+        return {**turn,'turn_id':turn['id'],'execution_status':turn['status']}
+
+    @staticmethod
+    def _scrub(value, environment):
+        result=str(value)
+        for key,secret in environment.items():
+            if any(marker in key.upper() for marker in ('KEY','TOKEN','SECRET','PASSWORD')) and isinstance(secret,str) and len(secret)>=4:
+                result=result.replace(secret,'***')
+        return result
+
+    async def _reconcile_orphan(self, original):
+        from .native_receipts import terminal
+        from .generated_images import _home
+        environment=self._environment()
+        evidence=await asyncio.to_thread(terminal,environment.get('CODEX_HOME') or _home(),original)
+        if not evidence:return self._recovery_receipt(original['id'])
+        tid=original['id']
+        with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            current=self._turn(c,tid)
+            if self._ownership_snapshot(tid)[0] or current!=original:
+                return self._recovery_receipt(tid)
+            if current['native_id']!=original['native_id'] or current.get('native_turn_id')!=original.get('native_turn_id'):
+                return self._recovery_receipt(tid)
+            # Preserve the previous execution receipt and error for diagnostics.
+            current['recovery_previous']={key:current.get(key) for key in ('status','delivery_state','error','hook_status')}
+            current.update(status=evidence['status'],delivery_state='accepted' if evidence['status']=='completed' else 'interrupted',
+                           error=None,updated_at=now(),native_receipt_reconciliation={**evidence['evidence'],'observed_at':now()})
+            if evidence['output'] is not None:current['output']=self._scrub(evidence['output'],environment)
+            if current['status']=='stopped':current['interrupt_confirmed']=True
+            current['hook_status']='pending' if self.on_finish else 'completed'
+        if self.on_finish:
+            try:
+                receipt=self.on_finish(copy.deepcopy(current))
+                if inspect.isawaitable(receipt):receipt=await receipt
+                current.update(hook_status='completed',business_receipt=receipt)
+            except Exception as error:
+                current.update(hook_status='failed',hook_error_type=type(error).__name__,hook_error='回复已恢复，作品记录仍待核对；不会重新制作。')
+        with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if self._turn(c,tid)!=original or self._ownership_snapshot(tid)[0]:return self._recovery_receipt(tid)
+            self._put_turn(c,current)
+            session=self._session(c,current['session_id'])
+            if session.get('pendingTurnId')==tid:
+                session.update(pendingTurnId=None,updated=now(),revision=session['revision']+1);self._put_session(c,session)
+        self._save_last(current);self._save_metadata(current['session_id'])
+        from easel_workbench.runtime.server_logging import emit,reference
+        emit('chat_native_reconciled',operation_ref=reference(tid),phase=current['status'])
+        return self._recovery_receipt(tid)
 
     def _register_owned(self, turn_id):
         with self._ownership_lock:
@@ -709,6 +779,7 @@ class ChatService:
     async def close(self):
         self._closing = True
         if self._admissions:await asyncio.gather(*list(self._admissions),return_exceptions=True)
+        if self._reconciliations:await asyncio.gather(*list(self._reconciliations.values()),return_exceptions=True)
         tasks = list(self._tasks.values())
         for task in tasks:
             if not task.done() and not task.cancelling():
@@ -728,15 +799,8 @@ class ChatService:
         path.parent.mkdir(parents=True, exist_ok=True)
         started_hook_task = None
         native_invoked = False
-        secret_values = [value for key, value in environment.items()
-                         if any(marker in key.upper() for marker in ('KEY', 'TOKEN', 'SECRET', 'PASSWORD'))
-                         and isinstance(value, str) and len(value) >= 4]
-
         def scrub(value):
-            result = str(value)
-            for secret in secret_values:
-                result = result.replace(secret, '***')
-            return result
+            return self._scrub(value,environment)
 
         def persist():
             if turn_id in self._stop_requested:turn['stop_requested']=True

@@ -1,5 +1,5 @@
 import {ChatTurnProducts,productArtifacts} from './ChatTurnProducts';
-import {useCallback,useEffect,useRef,useMemo} from 'react';
+import {useCallback,useEffect,useRef,useMemo,useState} from 'react';
 import {useStore} from 'zustand';
 import {sessionRuntime,type FrozenTurn,type SessionDraft} from './chatRuntime';
 import ChatPage,{type ChatCommand,type ChatViewState} from '../../components/ChatPage';
@@ -13,6 +13,7 @@ import {useWorkbench,useResource,useDraft,useAsyncAction,useViewState} from './h
 import {Notice} from './common';
 import {ExtensionDetails} from './ExtensionDetails';
 import {nativeAsset} from './lib/nativeAsset';
+import {TaskStatus} from './TaskStatus';
 
 export type NativeSkill=SkillItem;
 export interface NativeSelection {skill_id:string;version?:number;action_id:string;requires_plan:boolean;label:string;trial?:boolean;path?:string;task?:string;source_revision?:string}
@@ -44,7 +45,16 @@ function CreationSummary({message,navigate}:{message:unknown;navigate:(path:stri
   {!pending&&legacy.error&&<div>本轮风格记录不可用</div>}
  </div>;
 }
-export function NativeTurnOutputs({message,showContinuation,continuationPath}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/></>}
+export function NativeTurnOutputs({message,showContinuation,continuationPath,recovery}:{message:unknown;showContinuation?:boolean;continuationPath?:string|null;recovery?:React.ReactNode}){return <><ChatTurnProducts message={message} showContinuation={showContinuation} continuationPath={continuationPath}/>{recovery}</>}
+/** A short interruption stays quiet; persistent recovery belongs to its exact message. */
+export function ChatRecoveryStatus({message,turnId,retry}:{message:string;turnId:string;retry:()=>void}){
+ const transport=message.startsWith('连接暂时中断'),[elapsed,setElapsed]=useState(false);
+ useEffect(()=>{setElapsed(false);const timer=setTimeout(()=>setElapsed(true),5000);return ()=>clearTimeout(timer)},[turnId,transport]);
+ if(transport&&!elapsed)return null;
+ return <TaskStatus title={transport?'正在恢复连接':'任务状态待确认'} description={transport?'原任务和输入已保留，正在自动重连，不会重复发送。':message} label="会话恢复">
+  <button className="btn btn-sm" onClick={retry}>重试连接</button>
+ </TaskStatus>;
+}
 /** Bind server-authorized continuation to this view's exact stopped version. */
 export function confirmedContinuation(message:unknown,sessionId:string,profileId:string):string|null{
  const value=record(message),work=record(value.work),versionId=string(value.turnId||value.id),workId=string(work.work_id),link=record(record(value.business_recovery).continuation);
@@ -57,11 +67,18 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const viewState=useViewState<ChatViewState>('chat-view:'+id,{top:0,following:true});
  const onContentReady=useCallback(()=>{if(resource.data?.session)vm.navigation.contentReady?.({entryId:vm.navigation.entryKey})},[resource.data?.session,vm.navigation.entryKey,vm.navigation.contentReady]);
  const key='chat:'+id,[draft,patch]=useDraft<SessionDraft>(key,{text:'',files:[]}),action=useAsyncAction();
- const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback}=useStore(runtime.state);
+ const runtime=useMemo(()=>sessionRuntime(vm.client,id),[vm.client,id,vm.client.authenticationEpoch]),{stream,running,accepted,error,feedback,receipt}=useStore(runtime.state);
  const applied=useRef(''),repair=useRef('');
- const session=resource.data?.session,profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
+ const sourceSession=resource.data?.session,session=sourceSession?{...sourceSession,pendingTurnId:runtime.completed.has(string(sourceSession.pendingTurnId))?undefined:sourceSession.pendingTurnId,pendingSubmissionId:runtime.completed.has(string(sourceSession.pendingSubmissionId))?undefined:sourceSession.pendingSubmissionId}:undefined;
+ const profileId=session?.profile_id||session?.persona||search.get('profile')||'oil-pig',workId=search.get('work')||'',parentVersion=search.get('version')||'',versionContext=!!workId&&!!parentVersion,choices=session?.runtime==='api'?[]:nativeSkillChoices(catalog.data||[],versionContext);
  const continuationIdle=!running&&!session?.pendingTurnId&&!session?.pendingSubmissionId&&!(draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state));
  const lastAssistant=session?.messages.filter(message=>message.role==='assistant').at(-1),lastTurn=string(record(lastAssistant).turnId||record(lastAssistant).id);
+ useEffect(()=>{
+  if(typeof window==='undefined'||typeof document==='undefined')return;
+  const resume=()=>{if(!document.hidden)void vm.client.checkAuthentication().then(ok=>{if(ok)return runtime.reconcile(profileId)})};
+  window.addEventListener('online',resume);window.addEventListener('pageshow',resume);window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);
+  return ()=>{window.removeEventListener('online',resume);window.removeEventListener('pageshow',resume);window.removeEventListener('focus',resume);document.removeEventListener('visibilitychange',resume)};
+ },[runtime,profileId,vm.client]);
  const continuationWork=useResource<Work>(search.get('continue')==='1'&&workId&&parentVersion?'/api/works/'+encodeURIComponent(workId)+'/versions/'+encodeURIComponent(parentVersion)+'/view':null),continuationApplied=useRef('');
  const continuationVersion=continuationWork.data?.versions.find(v=>v.id===parentVersion),continuationPath=continuationWork.data?nativeContinuationPath(workProductionRecovery(continuationWork.data,continuationVersion),workId,parentVersion):null;
  useEffect(()=>{if(search.get('continue')!=='1'||!continuationPath||!session||session.pendingTurnId||draft.pending||continuationApplied.current===search.toString())return;continuationApplied.current=search.toString();runtime.state.setState({error:'',feedback:undefined});if(!draft.text.trim()&&!draft.files.length)patch({text:'请继续完成《'+continuationWork.data!.title+'》，沿用所选版本的原始素材、制作要求和保留文件，完成后另存新版本。'})},[continuationPath,session?.pendingTurnId,draft.pending,search.toString()]);
@@ -71,7 +88,10 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  },[catalog.data,id,search.toString()]);
  const confirmedStoppedPath=confirmedContinuation(lastAssistant,id,profileId),historicalError=string(record(lastAssistant).business_error);
  useEffect(()=>{if(!historyBefore&&confirmedStoppedPath&&!session?.pendingTurnId)runtime.restoreStopped(lastTurn,historicalError)},[runtime,historyBefore,confirmedStoppedPath,session?.pendingTurnId,lastTurn,historicalError]);
- useEffect(()=>{const pendingId=session?.pendingTurnId||session?.pendingSubmissionId||draft.pending?.turnId;if(!session||!pendingId||runtime.state.getState().running||runtime.blocked.has(pendingId)||runtime.completed.has(pendingId)||draft.pending?.state==='rejected')return;
+ useEffect(()=>{const pendingId=session?.pendingTurnId||session?.pendingSubmissionId||draft.pending?.turnId;if(!session||!pendingId)return;
+  const matching=session.messages.find(message=>message.role==='assistant'&&string(record(message).turnId||record(message).id)===pendingId);
+  if(!historyBefore&&draft.pending?.turnId===pendingId&&matching&&['completed','stopped','failed'].includes(string(record(matching).status))){void runtime.reconcile(profileId);return}
+  if(runtime.state.getState().running||runtime.blocked.has(pendingId)||runtime.completed.has(pendingId)||draft.pending?.state==='rejected')return;
   const saved=draft.pending?.turnId===pendingId?draft.pending:{turnId:pendingId,message:'',attachments:[],context:{profile_id:profileId},inputs:{text:'',files:[]},state:'accepted' as const};
   runtime.connect(saved,profileId,true);
  },[resource.data,id,runtime]);
@@ -109,20 +129,36 @@ export function ChatSessionView({id,search}:{id:string;search:URLSearchParams}){
  const historyJson=useMemo(()=>JSON.stringify(session?.messages||[]),[session?.messages]);
  const visibleMessages=useMemo(()=>
   {const messages=(JSON.parse(historyJson) as ChatSession['messages']).map(message=>{const path=string(record(message).library_path);return message.role==='assistant'&&path?{...message,content:message.content+'\n\n[内容库 › 本版产物](#/outputs/'+path.split('/').map(encodeURIComponent).join('/')+')'}:message}).filter(message=>!((running||!!session?.pendingTurnId||!!session?.pendingSubmissionId)&&message.role==='assistant'&&(record(message).turnId===activeTurn||record(message).id===activeTurn)));
-  const pending=draft.pending;if(!historyBefore&&pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments,article_id:pending.context.article_id,creation_pending:record(pending.context.creation).intent==='produce'} as ChatSession['messages'][number]);return messages;},
-  [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore]);
+  const pending=draft.pending;if(!historyBefore&&pending?.accepted&&!messages.some(message=>record(message).id===pending.turnId+'-user'))messages.push({id:pending.turnId+'-user',role:'user',content:pending.message,timestamp:'',attachments:pending.attachments,article_id:pending.context.article_id,creation_pending:record(pending.context.creation).intent==='produce'} as ChatSession['messages'][number]);
+  if(!historyBefore&&receipt){
+   const tid=string(receipt.turn_id),index=messages.findIndex(message=>message.role==='assistant'&&string(record(message).turnId||record(message).id)===tid);
+   if(index>=0){if(!['completed','stopped','failed'].includes(string(record(messages[index]).status)))messages[index]={...messages[index]!,content:string(receipt.text||receipt.output)||messages[index]!.content,status:receipt.execution_status} as ChatSession['messages'][number]}
+   else if(tid){
+    if(!messages.some(message=>record(message).id===tid+'-user'))messages.push({id:tid+'-user',role:'user',content:string(receipt.message),timestamp:string(receipt.created_at),attachments:array(receipt.attachments)} as ChatSession['messages'][number]);
+    messages.push({id:tid,turnId:tid,role:'assistant',content:string(receipt.text||receipt.output),status:receipt.execution_status,timestamp:string(receipt.updated_at)} as ChatSession['messages'][number]);
+   }
+  }
+  return messages;},
+  [historyJson,session?.id,running,session?.pendingTurnId,session?.pendingSubmissionId,activeTurn,draft.pending?.accepted,historyBefore,receipt]);
  const shown:ChatSession=session?{...session,messages:visibleMessages}:{id,title:'对话',messages:visibleMessages,created:0};
+ const recoveryTarget=activeTurn&&(visibleMessages.some(message=>message.role==='assistant'&&string(record(message).turnId||record(message).id)===activeTurn)?activeTurn:activeTurn+'-user');
+ const recovery=activeTurn&&feedback?<ChatRecoveryStatus message={feedback.message} turnId={activeTurn} retry={()=>void runtime.reconcile(profileId)}/>:null;
+ const attached=!!recovery&&visibleMessages.some(message=>string(record(message).turnId||record(message).id)===recoveryTarget);
+ const userExtra=(message:unknown)=>{
+  const value=record(message),source=string(value.article_id)?(value.creation_summary||value.creation_review||value.creation_pending?<CreationSummary message={message} navigate={vm.navigate}/>:<NewsMessageLink articleId={string(value.article_id)} navigate={vm.navigate}/>):null;
+  return !historyBefore&&string(value.id)===recoveryTarget&&recovery?<>{source}{recovery}</>:source;
+ };
  const selected=draft.command?{id:draft.command.skill_id+':'+draft.command.action_id,label:draft.command.label}:undefined;
  const unknown=!!draft.pending&&['connecting','accepted','unknown'].includes(draft.pending.state),busy=running||!!session?.pendingTurnId||!!session?.pendingSubmissionId;
  const historyPath=(before?:string)=>{const query=new URLSearchParams(search);if(before)query.set('history_before',before);else query.delete('history_before');return '/chat/'+encodeURIComponent(id)+(query.size?'?'+query:'')};
- return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:string(record(message).article_id)?(record(message).creation_summary||record(message).creation_review||record(message).creation_pending?<CreationSummary message={message} navigate={vm.navigate}/>:<NewsMessageLink articleId={string(record(message).article_id)} navigate={vm.navigate}/>):null}
+ return <div className="ew-chat-layout"><ChatPage viewState={viewState} onContentReady={onContentReady} apiDirect={session?.runtime==='api'} session={shown} stream={!historyBefore&&running&&accepted?stream:undefined} onSend={submit} onStop={stop} onResend={index=>retry(index)} canResend={(message,index)=>!readOnly&&!historyBefore&&!busy&&!unknown&&!record(session?.messages[index+1]).work&&!record(record(session?.messages[index+1]).business_receipt).work_id} resolveArtifactPath={nativeArtifactPath} messageArtifacts={nativeArtifacts} renderMessageExtra={message=>message.role==='assistant'?<NativeTurnOutputs message={message} recovery={!historyBefore&&string(record(message).turnId||record(message).id)===recoveryTarget?recovery:null} continuationPath={continuationIdle?confirmedContinuation(message,id,profileId):null} showContinuation={!readOnly&&!historyBefore&&!(search.get('continue')==='1'&&string(record(message).turnId||record(message).id)===parentVersion)}/>:userExtra(message)}
   questionServices={{answer:payload=>runtime.answer(payload),status:ids=>runtime.status(ids)}}
   onQuestionAnswered={questionId=>{runtime.closeQuestion(questionId);void resource.reload()}}
   onQuestionClosed={questionId=>runtime.closeQuestion(questionId)}
   composer={{text:draft.text,attachments:draft.files.map(file=>({id:file.id,name:file.name,path:file.id})),onTextChange:text=>patch({text,...(draft.creation?{creation:{...draft.creation,note:text}}:{})}),onUpload:async files=>patch({files:await vm.service.attach(files,draft.files)}),onRemoveAttachment:fileId=>patch({files:draft.files.filter(file=>file.id!==fileId)}),commands:choices,selectedCommand:selected,
    onCommandSelect:(commandId,text)=>{const command=choices.find(choice=>choice.id===commandId)?.selection||null;patch({command,creation:undefined,...(text!==undefined?{text}:{})})},disabled:readOnly||!!historyBefore||busy||unknown||!session||(search.get('continue')==='1'&&!continuationPath),busy:action.busy,canSend:!readOnly&&!historyBefore&&!!(draft.text.trim()||draft.files.length),label:'对话输入',placeholder:readOnly?'此对话仅可查看；输入仍保留在本机':historyBefore?'查看历史消息；返回最新消息后可继续输入':'说说你的想法，输入 / 或点画笔选择技能…',sendLabel:'发送',registerLayer:vm.navigation.registerLayer}}
   emptyState={{icon:<img src={nativeAsset('static/easel-icon-transparent.png')} alt=""/>}}
-  notice={<><Notice sources={[resource,catalog,action,{error,feedback:feedback||(!busy&&unknown?{kind:'status',message:'正在恢复原任务状态，输入已保留。'}:undefined)}]}/>{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
+  notice={<><Notice sources={[resource,catalog,action,{error:feedback?undefined:error,feedback:activeTurn?undefined:feedback}]}/>{!historyBefore&&!attached&&recovery}{(resource.data?.history_page?.has_more||historyBefore)&&<div className="ew-row">{resource.data?.history_page?.next_before&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(resource.data!.history_page!.next_before!),{intent:'object'})}>查看更早消息</button>}{historyBefore&&<button className="btn btn-sm" onClick={()=>vm.navigate(historyPath(),{intent:'object'})}>返回最新消息</button>}</div>}</>}
   footer={<>
    {versionContext&&<ExtensionDetails className="ew-composer-context" title={search.get('continue')==='1'?'继续制作 · 已选原版本':'已选作品版本'}>
     {versionContext&&<><p>{search.get('continue')==='1'?'发送后基于所选版本继续制作，结果另存新版本。':draft.command&&['poster','article'].includes(draft.command.action_id)?'本轮将新建作品，原作品与版本保留。':'本轮围绕选定作品版本讨论或修改。'}</p><a href={"#/outputs/"+encodeURIComponent("workbench-"+workId)+"/"+encodeURIComponent(parentVersion)}>内容库 › 所选版本</a></>}

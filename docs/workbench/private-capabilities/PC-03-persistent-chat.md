@@ -1,5 +1,11 @@
 # PC-03 服务器会话、持久受理与停止恢复
 
+2026-11-06 断线恢复三批整改：准确 session/turn 回执统一收敛，覆盖已完成历史、半开流、漏 done、前台/在线恢复、旧回调及登录代数；服务器终态优先于浏览器旧 pending，保留后写草稿和附件。私有看门狗每15秒核对活动任务，连续30秒无流字节时只更换 GET 订阅。真实 unknown 通过同源 CSRF 的 `/api/chat/reconcile` 读取 Codex 准确线程/回合终态，缺失或歧义证据继续 unknown，不调用模型或 resume。恢复提示复用消息旁状态卡，短断线5秒内静默；状态诊断沿现有有界脱敏日志，每回合至多12次阶段上报。参见 [本轮 Spec](../../../specs/chat-reconnect-convergence-20261106/spec.md)。
+
+新增私有入口：[原生终态只读核验](../../../easel_workbench/features/conversations/native_receipts.py)、[HTTP 接口](../../../easel_workbench/http/chat.py)、[会话视图适配](../../../web/frontend/src/workbench/ui/ChatSessionView.tsx)。共通文件 `web/frontend/src/lib/api.ts` 仅增加可选 `onStreamActivity` 回调供宿主观察流字节，默认行为不变；不复制传输实现。同步 upstream 时保留可选参数及每次读取的通知即可。
+
+验证入口：[原生回执恢复测试](../../../tests/test_workbench_chat_reconcile.py)、[移动浏览器故障旅程](../../../tests/workbench_chat_recovery_browser.py)、[前端状态与竞态测试](../../../tests/frontend/workbenchNativeChat.test.mjs)。完整构建、Git 与部署证据在上述 Spec 按实际结果登记。
+
 2026-11-06：明确的版本决定沿原持久受理入口，保存本地回合和准确操作身份，复用事件日志。重启只核对/恢复同一幂等本地记录，模型 unknown 仍不重放；见 PC-12 的对话闭环测试。
 
 [返回私有能力登记表](../PRIVATE-CAPABILITIES.md)

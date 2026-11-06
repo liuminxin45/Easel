@@ -18,6 +18,7 @@ class Insights:
 
     async def start(self):
         self.loop=asyncio.get_running_loop()
+        await asyncio.to_thread(self.metrics.recover_inflight)
 
     def fetch(self):
         async def read():
@@ -25,7 +26,9 @@ class Insights:
             return await self.analytics()
         if self.loop is None or not self.loop.is_running():
             raise ValueError('公众号统计服务尚未就绪')
-        return asyncio.run_coroutine_threadsafe(read(),self.loop).result(timeout=210)
+        # The original analytics service owns its bounded subprocess and cleanup.
+        # A second deadline here would hide a still-running shielded native task.
+        return asyncio.run_coroutine_threadsafe(read(),self.loop).result()
 
     def allowed(self):
         if os.environ.get('EASEL_WORKBENCH_ADMISSION')=='1':

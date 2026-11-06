@@ -1,0 +1,10 @@
+.ew-production-insights,
+.ew-production-insights .markdown-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ew-production-insights .ew-insight-item {
+  padding-block: 16px;
+  border-bottom: 1px solid var(--border);
+}

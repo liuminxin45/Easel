@@ -153,6 +153,35 @@ def test_crash_after_claim_before_receipt_never_creates_a_second_request(command
     assert instance.view(receipt['work_id'], turn['id'])['status'] == 'unknown'
 
 
+@pytest.mark.parametrize('receipt_status,expected_call,expected_review', [
+    (None, 'unknown', 'unknown'), ('preparing', 'unknown', 'unknown'),
+    ('accepted', 'unknown', 'unknown'), ('unknown', 'unknown', 'unknown'),
+    ('not_started', 'not_started', 'blocked'), ('failed', 'failed', 'blocked'),
+    ('completed', 'completed', 'completed'),
+])
+def test_restart_settles_original_running_model_observation_without_resending(commands, receipt_status, expected_call, expected_review):
+    from easel_workbench.runtime import task_runtime
+    turn, receipt = seed(commands); instance = Service(commands, execute=lambda *a: pytest.fail('must not resend'))
+    instance.enqueue(turn, receipt)
+    with commands.store.connect() as c:
+        value = json.loads(c.execute('SELECT document FROM '+TABLE).fetchone()[0])
+        value = instance._freeze(value); part = value['parts'][0]
+        part['status'] = 'running'; value['status'] = 'running'; instance._put(c, value)
+    call = 'production-review-'+part['receipt_id']
+    task_runtime.begin_call(commands, 'production_review', {'exact_version': turn['id']}, 'exact frozen prompt',
+                            operation_id=call, snapshot=contracts.snapshot({'id': 'oil-pig', 'revision': 1}), task_id=turn['id'])
+    if receipt_status:
+        atomic(commands.root/'data/readonly-receipts'/(part['receipt_id']+'.json'),
+               {'id': part['receipt_id'], 'status': receipt_status, 'model_output_text': json.dumps(answer(value, part))})
+    assert instance.run_pending_once()
+    assert instance.view(receipt['work_id'], turn['id'])['status'] == expected_review
+    with commands.store.connect() as c:
+        observations = c.execute('SELECT document FROM creator_model_calls WHERE task_id=?', (turn['id'],)).fetchall()
+    assert len(observations) == 1
+    observation = json.loads(observations[0][0])
+    assert observation['id'] == call and observation['status'] == expected_call
+
+
 def test_fabricated_evidence_is_blocked_without_claiming_a_successful_review(commands):
     turn, receipt = seed(commands)
     def invalid(value, part):
@@ -266,3 +295,22 @@ def test_confirmed_template_is_real_per_item_application_evidence(commands):
     assert applied['applied_evidence']['template_id'] == template['id']
     assert '已落地' in instance.master('oil-pig-poster')['text']
     assert skill.read_bytes() == before
+
+
+def test_production_contract_uses_real_native_runner_and_reserved_id_cannot_replay(tmp_path, monkeypatch):
+    from easel_workbench import readonly_runner
+    folder = tmp_path/'call'; folder.mkdir()
+    (folder/'schema.json').write_text(json.dumps(contracts.SCHEMA), encoding='utf-8')
+    binding = contracts.snapshot({'id': 'oil-pig', 'revision': 1})
+    assert readonly_runner.project_snapshot(binding)
+    assert not readonly_runner.project_snapshot({**binding, 'task': 'different'})
+    identity = 'a'*32
+    path = tmp_path/'data/readonly-receipts'/(identity+'.json')
+    atomic(path, {'id': identity, 'status': 'accepted', 'native_turn_id': 'already-accepted'})
+    before = path.read_bytes()
+    monkeypatch.setattr(readonly_runner, 'external_auth', lambda *a: pytest.fail('must not reach a second transport'))
+    with pytest.raises(readonly_runner.ReadonlyExecutionUnknown) as caught:
+        readonly_runner.run(binding, ['never-run', '--output-schema', str(folder/'schema.json'),
+                                      '--output-last-message', str(folder/'answer.json')],
+                            input='exact prompt', cwd=folder, timeout=5, runtime_root=tmp_path, receipt_id=identity)
+    assert caught.value.receipt['native_turn_id'] == 'already-accepted' and path.read_bytes() == before

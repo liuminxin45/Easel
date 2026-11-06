@@ -142,6 +142,51 @@ def test_orphaned_running_command_is_closed_unknown_without_blocking_future_depl
     assert not calls
 
 
+def test_native_read_timeout_is_unknown_not_lock_busy_and_is_not_resent(box):
+    calls = []
+    def fetch():
+        calls.append(True)
+        raise TimeoutError("native owner timed out after cleanup")
+    service = Service(box, fetch=fetch, connected=lambda: True, clock=lambda: NOW)
+    bind(service)
+    first = service.sync({"operation_id": "read-timeout"})
+    assert first["status"] == "unknown" and first["outcome"] == "read_timeout"
+    assert Service(box, fetch=fetch).sync({"operation_id": "read-timeout"}) == first
+    assert len(calls) == 1
+    assert service.view("work-one", "version-one")["observations"] == []
+
+
+def test_startup_reconciles_all_manual_and_daily_orphans_without_fetch(box):
+    calls = []
+    service = Service(box, fetch=lambda: calls.append(True), connected=lambda: True, clock=lambda: NOW)
+    for operation in ("manual-old", "wechat-daily-2026-11-05"):
+        service._command(operation, '{"kind":"sync"}', "sync", {"started_at": "2026-11-05T10:00:00+08:00"}, NOW)
+    with box.store.connect() as c:
+        c.execute("UPDATE production_metric_commands SET state='running' WHERE id='manual-old'")
+    service._command("bind-pending", "binding", "bind", {"work_id": "work-one"}, NOW)
+    recovered = service.recover_inflight()
+    assert recovered["status"] == "completed" and recovered["count"] == 2
+    assert set(recovered["recovered"]) == {"manual-old", "wechat-daily-2026-11-05"}
+    assert service.operation_result("manual-old")["status"] == "unknown"
+    assert service.operation_result("manual-old")["started_at"] == "2026-11-05T10:00:00+08:00"
+    assert service.operation_result("bind-pending")["status"] == "reserved"
+    assert service.recover_inflight()["count"] == 0
+    assert not calls
+
+
+def test_startup_cannot_close_a_read_still_owned_by_an_existing_process(box):
+    from easel_workbench.runtime.feedback_ledger import locked
+    service = Service(box, clock=lambda: NOW)
+    service._command("active-read", '{"kind":"sync"}', "sync", {"started_at": NOW.isoformat()}, NOW)
+    with box.store.connect() as c:
+        c.execute("UPDATE production_metric_commands SET state='running' WHERE id='active-read'")
+    with locked(box.root / "data/production-insights/metrics-sync.lock"):
+        result = service.recover_inflight()
+        assert result == {"status": "busy", "recovered": [], "count": 0}
+        assert service.operation_result("active-read")["status"] == "running"
+    assert service.recover_inflight()["count"] == 1
+
+
 def test_signed_original_url_is_retained_separately_from_article_identity(box):
     service = Service(box, clock=lambda: NOW)
     original = "https://mp.weixin.qq.com/s?__biz=ABC%3D%3D&mid=123&idx=1&sn=real-signature&scene=1#rd"

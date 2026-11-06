@@ -127,3 +127,42 @@ def test_product_registration_and_new_review_outbox_roll_back_together(commands,
     native_review.receive(business, turn)
     with commands.store.connect() as c:
         assert c.execute('SELECT count(*) FROM '+TABLE+' WHERE id=?', (turn['id'],)).fetchone()[0] == 1
+
+
+def test_committed_template_stays_successful_when_review_application_needs_reconciliation(commands, monkeypatch):
+    from starlette.requests import Request
+    from easel_workbench.http import production_insights as api
+    composition = importlib.import_module('easel_workbench.features.production_insights.service')
+    api.initialize(commands); calls = {'create': 0, 'apply': 0}
+    template = {'id': 'template-real', 'revision': 'exact-revision', 'source_work_id': 'w', 'source_version_id': 'v', 'review_item_ids': ['item']}
+    def create(*args):
+        calls['create'] += 1; return template
+    def apply(value):
+        calls['apply'] += 1
+        if calls['apply'] == 1:
+            raise ValueError('review item was changed concurrently after template commit')
+        return [{'status': 'applied'}]
+    hub = SimpleNamespace(reviews=SimpleNamespace(mark_template_applied=apply), templates=SimpleNamespace(create=create), metrics=SimpleNamespace())
+    monkeypatch.setattr(composition, 'service', lambda box: hub)
+    path = '/api/production-insights/works/w/versions/v/templates'; operation = 'postcommit-template'
+    request = Request({'type': 'http', 'method': 'POST', 'path': path, 'query_string': b'', 'headers': [(b'x-operation-id', operation.encode())], 'scheme': 'https', 'server': ('temp.local', 443)})
+    result = asyncio.run(api.handle(commands, path, request, {'id': operation, 'confirmed': True}))
+    assert result.status_code == 200 and json.loads(result.body)['review_application_pending'] is True
+    recovered = api.receipt(commands, hub, operation)
+    assert recovered['state'] == 'completed' and not recovered['result'].get('review_application_pending')
+    again = asyncio.run(api.handle(commands, path, request, {'id': operation, 'confirmed': True}))
+    assert again.status_code == 200 and json.loads(again.body)['id'] == template['id']
+    assert calls == {'create': 1, 'apply': 2}
+
+
+def test_http_receipt_never_recovers_another_domain_with_same_operation_id(commands):
+    from easel_workbench.http import production_insights as api
+    api.initialize(commands); operation = 'same-id-other-domain'
+    document = {'id': operation, 'path': '/api/production-insights/works/w/versions/v/decisions', 'status': 'unknown'}
+    with commands.store.connect() as c:
+        c.execute('INSERT INTO production_insight_http_operations VALUES(?,?,?,?)', (operation, 'signature', 'unknown', json.dumps(document)))
+    hub = SimpleNamespace(reviews=SimpleNamespace(operation_result=lambda op: None),
+                          templates=SimpleNamespace(operation_result=lambda op: pytest.fail('not a template request')),
+                          metrics=SimpleNamespace(operation_result=lambda op: pytest.fail('not a metrics request')))
+    value = api.receipt(commands, hub, operation)
+    assert value['state'] == 'unavailable' and 'result' not in value

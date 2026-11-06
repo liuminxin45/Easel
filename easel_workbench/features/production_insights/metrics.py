@@ -121,6 +121,30 @@ CREATE TABLE IF NOT EXISTS production_metric_commands (
             return None
         return {"operation_id": operation, "status": row["state"], **json.loads(row["document"])}
 
+    def recover_inflight(self):
+        """Close orphaned read identities only after proving no reader owns them.
+
+        A daily id cannot reconcile an older manual id. Startup therefore checks
+        all pending reads under the same OS lock as execution, without sending
+        anything to the platform. An existing reader keeps its exact ownership.
+        """
+        try:
+            with locked(self.root / "data/production-insights/metrics-sync.lock", timeout=.1):
+                recovered = []
+                with self.store.connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    rows = c.execute("SELECT id,document FROM production_metric_commands WHERE kind='sync' AND state IN ('reserved','running')").fetchall()
+                    for row in rows:
+                        document = json.loads(row["document"])
+                        document.update(recovered_at=self._time().isoformat(),
+                                        message="上次读取尚未确认完成；原操作已保留，不会自动重发")
+                        c.execute("UPDATE production_metric_commands SET state='unknown',document=? WHERE id=? AND state IN ('reserved','running')",
+                                  (pack(document), row["id"]))
+                        recovered.append(row["id"])
+                return {"status": "completed", "recovered": recovered, "count": len(recovered)}
+        except TimeoutError:
+            return {"status": "busy", "recovered": [], "count": 0}
+
     def _finish(self, operation, state, result):
         with self.store.connect() as c:
             c.execute("UPDATE production_metric_commands SET state=?,document=? WHERE id=?", (state, pack(result), operation))
@@ -255,8 +279,10 @@ CREATE TABLE IF NOT EXISTS production_metric_commands (
             return self._finish(operation, "completed", {"observed_at": started.isoformat(), "matched": 0, "bound": 0, "outcome": "empty"})
         if not self.fetch or self.connected and not self.connected():
             return self._finish(operation, "blocked", {"observed_at": started.isoformat(), "outcome": "login_required", "message": "请在原生账号页连接微信公众号，再刷新数据"})
+        lock_owned = False
         try:
             with locked(self.root / "data/production-insights/metrics-sync.lock", timeout=.1):
+                lock_owned = True
                 with self.store.connect() as c:
                     claimed = c.execute("UPDATE production_metric_commands SET state='running' WHERE id=? AND state='reserved'", (operation,)).rowcount
                 if not claimed:
@@ -302,7 +328,9 @@ CREATE TABLE IF NOT EXISTS production_metric_commands (
                     "outcome": "measured" if matched else "no_data", "coverage": data.get("coverage"),
                     "unmatched": [b["id"] for b in bindings if b["id"] not in {m["id"] for m, _ in matched}]})
         except TimeoutError:
-            return self._finish(operation, "blocked", {"observed_at": started.isoformat(), "outcome": "busy", "message": "已有一次公众号数据读取在执行"})
+            if not lock_owned:
+                return self._finish(operation, "blocked", {"observed_at": started.isoformat(), "outcome": "busy", "message": "已有一次公众号数据读取在执行"})
+            return self._finish(operation, "unknown", {"observed_at": started.isoformat(), "outcome": "read_timeout", "message": "公众号数据读取超时，原操作已保留，不会重复执行该请求"})
         except Exception as exc:
             # This is a read-only request, but transport ambiguity remains a
             # durable unknown receipt. A new explicit refresh uses a new id.

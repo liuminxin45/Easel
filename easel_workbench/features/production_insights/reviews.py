@@ -424,6 +424,35 @@ class Service:
         except (OSError, ValueError):
             return None
 
+    def _settle_recovered_call(self, part, receipt, error=None):
+        """A dead worker must not leave its observation marked as executing.
+
+        This only reconciles the pre-existing exact call. It never creates a
+        call or retries transport. Unknown remains distinct from not started.
+        """
+        call_id = 'production-review-'+part['receipt_id']
+        with self.store.connect() as c:
+            if not c.execute("SELECT 1 FROM sqlite_master WHERE name='creator_model_calls'").fetchone():
+                return
+            row = c.execute('SELECT document FROM creator_model_calls WHERE id=?', (call_id,)).fetchone()
+        if not row:
+            return
+        current = json.loads(row[0])
+        status = (receipt or {}).get('status')
+        terminal = status if status in ('completed', 'not_started', 'failed') else 'unknown'
+        # Preserve a definitive observation if its secondary file went missing.
+        if current.get('status') == 'completed' and terminal != 'completed':
+            return
+        from easel_workbench.runtime.task_runtime import finish_call
+        result = {'execution_receipt': receipt} if receipt else None
+        if status == 'completed':
+            try:
+                result['model_output'] = json.loads(receipt['model_output_text'])
+            except (KeyError, ValueError, TypeError):
+                result['model_output_text'] = receipt.get('model_output_text')
+        finish_call(self.box, call_id, terminal, result=result,
+                    error=type(error).__name__ if error else None)
+
     def _validate(self, answer, part):
         if not isinstance(answer, dict) or not isinstance(answer.get('items'), list) or len(answer['items']) > 12:
             raise ValueError('复盘模型结果结构无效')
@@ -526,8 +555,9 @@ class Service:
                     receipt = self._receipt(part)
                     if receipt and receipt.get('status') == 'completed':
                         answer = json.loads(receipt['model_output_text'])
-                        from easel_workbench.runtime.task_runtime import finish_call
-                        finish_call(self.box, 'production-review-'+part['receipt_id'], 'completed', {'model_output': answer, 'execution_receipt': receipt})
+                        self._settle_recovered_call(part, receipt)
+                    elif receipt and receipt.get('status') in ('not_started', 'failed'):
+                        raise ValueError('原复盘请求确认未启动或已失败；原记录保留，未重新调用模型')
                     else:
                         raise ConnectionError('复盘进程曾中断，原请求未自动重发')
                 else:
@@ -535,6 +565,8 @@ class Service:
                 self._finish_part(value, part, answer)
             except Exception as error:
                 receipt = self._receipt(part)
+                if recovering:
+                    self._settle_recovered_call(part, receipt, error)
                 value['status'] = 'unknown' if isinstance(error, (ConnectionError, TimeoutError)) or receipt and receipt.get('status') in ('accepted', 'unknown', 'preparing') else 'blocked'
                 part['status'] = value['status']; value['error'] = str(error)[:500]
             with self.store.connect() as c:

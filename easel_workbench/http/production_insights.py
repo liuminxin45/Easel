@@ -29,20 +29,34 @@ def initialize(box):
 def response(value,status=200):return JSONResponse(value,status_code=status,headers={'Cache-Control':'no-store'})
 
 
+def applied_receipt(hub,template):
+    """A committed template is successful even if a review changed concurrently."""
+    try:
+        hub.reviews.mark_template_applied(template)
+        return {key:value for key,value in template.items() if key not in ('review_application_pending','review_application_message')}
+    except Exception:
+        return {**template,'review_application_pending':True,'review_application_message':'模板已保存，部分复盘条目尚未核销，请核对原记录；没有重复创建模板。'}
+
+
 def receipt(box,hub,operation):
     with box.store.connect() as c:row=c.execute('SELECT document FROM production_insight_http_operations WHERE id=?',(operation,)).fetchone()
     if not row:return {'id':operation,'state':'unavailable'}
     doc=json.loads(row[0])
-    if doc['status'] not in ('completed','rejected'):
-        for owner in (hub.reviews,hub.templates,hub.metrics):
+    action=doc.get('path','').rsplit('/',1)[-1]
+    owner={'decisions':hub.reviews,'templates':hub.templates,'publication':hub.metrics,'sync':hub.metrics}.get(action)
+    if doc['status'] not in ('completed','rejected') and owner is not None:
+        for owner in (owner,):
             recover=getattr(owner,'operation_result',None)
             result=recover(operation) if recover else None
             if isinstance(result,dict) and result.get('status') in ('reserved','running','queued'):continue
             if result is not None:
-                if owner is hub.templates:hub.reviews.mark_template_applied(result)
+                if owner is hub.templates:result=applied_receipt(hub,result)
                 doc.update(status='completed',result=result)
                 with box.store.connect() as c:c.execute('UPDATE production_insight_http_operations SET status=?,document=? WHERE id=?',('completed',json.dumps(doc,ensure_ascii=False),operation))
                 break
+    if doc['status']=='completed' and action=='templates' and doc.get('result',{}).get('review_application_pending'):
+        doc['result']=applied_receipt(hub,doc['result'])
+        with box.store.connect() as c:c.execute('UPDATE production_insight_http_operations SET document=? WHERE id=?',(json.dumps(doc,ensure_ascii=False),operation))
     return {'id':operation,'state':doc['status'] if doc['status'] in ('completed','rejected') else 'unavailable',**({'result':doc['result']} if 'result' in doc else {})}
 
 
@@ -61,7 +75,7 @@ def execute(box,hub,operation,path,value,wid,vid,action):
         if action=='decisions':result=hub.reviews.decide(wid,vid,value)
         elif action=='templates':
             result=hub.templates.create(wid,vid,value)
-            hub.reviews.mark_template_applied(result)
+            result=applied_receipt(hub,result)
         elif action=='publication':result=hub.metrics.bind(wid,vid,value)
         elif action=='sync':
             # Verify this precise version before requesting read-only statistics.

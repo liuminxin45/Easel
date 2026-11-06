@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import traceback
 from types import SimpleNamespace
 from urllib.parse import urlencode, urlsplit
 from unittest.mock import patch
@@ -54,6 +55,10 @@ def seed(f, image):
     hub.metrics.connected = lambda: True
     hub.metrics.fetch = lambda: {'loggedIn': True, 'coverage': {'articles': 1}, 'articles': [{
         'title': 'TEMP 准确发布标题', 'url': URL, 'structured_metrics': {'read_uv': 25, 'likes': 0, 'shares': None}}]}
+    # Manual fixture registration bypasses ChatBusiness.finished's normal signal.
+    native = getattr(f['box'], '_native_api', None)
+    if native is not None:
+        native.library.invalidate()
     return frame, hub
 
 
@@ -67,6 +72,7 @@ def main():
     h = importlib.util.module_from_spec(spec); spec.loader.exec_module(h)
     helper, application, create_app = h.infrastructure(backend, native)
     from playwright.sync_api import sync_playwright, expect
+    expect.set_options(timeout=20000)
     report = {'passed': False, 'checks': [], 'backend': h.frozen(backend, 'workbench-release.json'), 'native': h.frozen(native, 'native-manifest.json'),
               'real_model_calls': 0, 'real_platform_calls': 0, 'platform_writes': 0, 'production_data_access': False,
               'physical_device_tested': False, 'errors': [], 'screenshots': {}, 'harness_sha256': h.sha(__file__)}
@@ -96,34 +102,41 @@ def main():
             drawer = page.get_by_role('dialog', name='制作复盘', exact=True); expect(drawer).to_be_visible()
             expect(drawer.get_by_text('手机阅读与主线组织', exact=True)).to_be_visible()
             drawer.get_by_role('button', name='同意，待实施', exact=True).click()
-            expect(drawer.get_by_role('button', name='同意，待实施', exact=True)).to_be_disabled()
+            expect(drawer.locator('.ew-insight-item > small')).to_contain_text('同意，待实施')
             assert hub.reviews.view(frame['work_id'], frame['version_id'])['items'][0]['status'] == 'approved'
+            shot('review-approved')
+            assert drawer.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
             check(layout, 'original content detail and Drawer perform an exact per-item approval through authenticated HTTP')
             drawer.get_by_role('button', name='优秀模板', exact=True).click()
-            drawer.get_by_label('模板名称', exact=True).fill('TEMP 已确认的优秀模板')
+            drawer.get_by_role('textbox', name='模板名称', exact=True).fill('TEMP 已确认的优秀模板')
             drawer.get_by_role('button', name='以已同意建议为初稿', exact=True).click()
-            expect(drawer.get_by_label('制作方法与图片规范', exact=True)).to_have_value(METHOD)
-            drawer.get_by_label('手机阅读与主线组织', exact=True).check()
+            expect(drawer.get_by_role('textbox', name='制作方法与图片规范', exact=True)).to_have_value(METHOD)
+            drawer.get_by_role('checkbox', name='手机阅读与主线组织', exact=False).check()
             drawer.get_by_label('我已核对，并确认这是可复用的优秀制作模板', exact=True).check()
             drawer.get_by_role('button', name='确认保存模板', exact=True).click()
             expect(drawer.get_by_text('已保存“TEMP 已确认的优秀模板”，可在制作内容时选择。', exact=True)).to_be_visible()
             templates = hub.templates.list('oil-pig', 'poster'); assert len(templates) == 1 and templates[0]['available']
             assert not hub.templates.list('oil-pig', 'article')
             assert hub.reviews.view(frame['work_id'], frame['version_id'])['items'][0]['status'] == 'applied'
+            shot('template-confirmed')
+            assert drawer.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
             check(layout, 'human confirmation creates one immutable exact-version template with approved review provenance')
             drawer.get_by_role('button', name='发布数据', exact=True).click()
-            drawer.get_by_label('已发布的微信公众号文章链接', exact=True).fill(URL)
+            drawer.get_by_role('textbox', name='已发布的微信公众号文章链接', exact=True).fill(URL)
             drawer.get_by_role('button', name='关联此准确版本', exact=True).click()
             expect(drawer.get_by_role('link', name='查看微信公众号文章', exact=True)).to_be_visible()
             drawer.get_by_role('button', name='刷新发布数据', exact=True).click()
             expect(drawer.get_by_text('25', exact=True)).to_be_visible()
             expect(drawer.get_by_text('0', exact=True)).to_be_visible()
+            shot('publication-metrics')
+            assert drawer.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
             check(layout, 'manual publication URL and read-only synthetic statistics preserve true zero versus missing')
             drawer.get_by_role('button', name='技能总记录', exact=True).click()
             expect(drawer.get_by_text('用户原话：这次角色表现非常满意，保留这个规范。', exact=True)).to_be_visible()
+            shot('master')
+            report.setdefault('geometry', {})[layout] = drawer.evaluate('(n)=>({width:n.clientWidth,scrollWidth:n.scrollWidth,overflows:[...n.querySelectorAll("*")].filter(x=>x.scrollWidth>x.clientWidth+1).map(x=>({tag:x.tagName,cls:x.className,width:x.clientWidth,scrollWidth:x.scrollWidth,text:x.textContent.slice(0,180)})).slice(0,30)})')
             assert drawer.evaluate('(n)=>n.scrollWidth<=n.clientWidth+1')
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
-            shot('master')
             drawer.get_by_role('button', name='关闭', exact=True).click(); expect(drawer).not_to_be_visible()
             expect(launcher).to_be_focused()
             check(layout, 'per-skill master preserves verbatim feedback; drawer closes to launcher without horizontal overflow')
@@ -146,6 +159,7 @@ def main():
         assert not report['errors'], report['errors']; report['passed'] = True
     except Exception as error:
         report['error'] = repr(error)
+        report['traceback'] = traceback.format_exc()
     finally:
         (out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({'passed': report['passed'], 'checks': len(report['checks']), 'error': report.get('error')}, ensure_ascii=False))

@@ -63,6 +63,7 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     insights_api.initialize(box)
     app.state.production_insights=production_insights(box)
     async def production_analytics():
+        if app.state.production_insights.metrics.connected and not app.state.production_insights.metrics.connected():return {'loggedIn':False}
         from easel_workbench.runtime.native_api import adapter
         native=await adapter(box)
         return await native.analytics_context().api_analytics('wechat-oa')
@@ -93,6 +94,10 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.easel_connection_support import ConnectionConflict as IntegrationConflict
     from easel_workbench.runtime.easel_accounts import service as easel_account_service
     accounts=easel_account_service(box,distribution);app.state.easel_accounts=accounts
+    def production_connected():
+        native=accounts.native_context()
+        return bool(native._account_logged_in('wechat-oa',native.LOGIN_RUNNERS.get('wechat-oa',{})))
+    app.state.production_insights.metrics.connected=production_connected
     app.add_event_handler('shutdown',accounts.close_native)
     from easel_workbench.runtime.completion_service import CompletionService,CompletionConflict
     from easel_workbench.runtime.completion_preferences import PreferencesConflict

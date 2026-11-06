@@ -182,7 +182,34 @@ class NewsCreation:
                 'source_revision': _sha(_json(source).encode()), 'formats': list(FORMATS),
                 'components': components, 'packs': visible_packs,
                 'defaults': copy.deepcopy(profile.get('creation_defaults', {})),
+                'last_poster_style': self._last_poster_style(profile_id, entries, availability),
                 'source': {key: source[key] for key in ('id', 'title', 'reading_summary', 'url', 'publisher', 'published_at')}}
+
+    def _last_poster_style(self, profile_id, entries, availability):
+        """Read four IDs from the existing completed-turn ledger, no new history.
+
+        Never reuse another profile, a failed/unknown attempt, article options,
+        source text or one-off note. Unavailable recent choices are not silently
+        replaced with an older record or a different component.
+        """
+        with self.box.store.connect() as c:
+            if not c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_turns'").fetchone():
+                return None
+            row = c.execute('''SELECT id,json_extract(document,'$.context.creation.style') style
+                FROM easel_chat_turns WHERE json_extract(document,'$.profile_id')=?
+                AND json_extract(document,'$.status')='completed'
+                AND json_extract(document,'$.context.creation.intent')='produce'
+                AND json_extract(document,'$.context.creation.format')='poster'
+                ORDER BY julianday(json_extract(document,'$.updated_at')) DESC,rowid DESC LIMIT 1''', (_id(profile_id),)).fetchone()
+        if not row:
+            return None
+        try:
+            style = _format_style('poster', _style(json.loads(row['style']), entries))
+        except (ValueError, TypeError):
+            return None
+        if not all(availability.get(identifier, False) for identifier in style.values()):
+            return None
+        return {'turn_id': row['id'], 'style': style}
 
     def asset(self, component_id, index):
         _, entries, _ = _catalog(self.root)

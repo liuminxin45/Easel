@@ -18,6 +18,7 @@ export interface NewsCreationContext {
  formats:NewsFormat[];components:Record<NewsSlot,NewsComponent[]>;
  packs:{id:string;name:string;formats:NewsFormat[];components:NewsStyle;available?:boolean}[];
  defaults:Partial<Record<NewsFormat,Partial<NewsStyle>>>;
+ last_poster_style?:{turn_id:string;style:NewsStyle}|null;
  source:{id:string;title:string;reading_summary?:string;publisher?:string;published_at?:string;url?:string};
  linked_session?:{id:string;profile_id:string;archived?:boolean;deleted_at?:string;pendingTurnId?:string;pendingSubmissionId?:string}|null;
 }
@@ -28,8 +29,15 @@ export const newsFormatLabel=(format:NewsFormat)=>format==='poster'?'贴图':'�
 export const creationContextPath=(articleId:string,profileId:string)=>'/api/news/'+encodeURIComponent(articleId)+'/creation-context?profile_id='+encodeURIComponent(profileId);
 export const creationDraftKey=(articleId:string,profileId:string,format:NewsFormat)=>'news:creation:'+encodeURIComponent(articleId)+':'+encodeURIComponent(profileId)+':'+format;
 export function initialCreationDraft(context:NewsCreationContext,format:NewsFormat):NewsCreationDraft {
- const defaults=context.defaults[format]??{};
+ const defaults=context.defaults[format]??(format==='poster'?context.packs.find(pack=>pack.id==='editorial-poster'&&pack.formats.includes(format)&&pack.available!==false)?.components:undefined)??{};
  return {style:Object.fromEntries(newsSlots.map(slot=>[slot,context.components[slot]?.some(item=>item.id===defaults[slot]&&item.available)?defaults[slot]:''])) as Record<NewsSlot,string>,note:''};
+}
+/** Older empty drafts get the default; explicit partial choices and notes win. */
+export function creationDraftWithDefault(context:NewsCreationContext,format:NewsFormat,draft:NewsCreationDraft):NewsCreationDraft {
+ return format==='poster'&&!newsSlots.some(slot=>draft.style[slot])?{...initialCreationDraft(context,format),note:draft.note}:draft;
+}
+export function creationPackId(context:NewsCreationContext,format:NewsFormat,draft:NewsCreationDraft):string {
+ return context.packs.find(pack=>pack.formats.includes(format)&&pack.available!==false&&newsSlots.every(slot=>(pack.components[slot]??'')===draft.style[slot]))?.id??'';
 }
 export function creationMissing(context:NewsCreationContext,draft:NewsCreationDraft,format:NewsFormat='poster'):NewsSlot[]{
  const slots:NewsSlot[]=format==='poster'?newsSlots:['writing',...(draft.style.visual||draft.style.character?['visual','character'] as NewsSlot[]:[]),...(draft.style.layout?['layout'] as NewsSlot[]:[])];

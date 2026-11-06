@@ -4,7 +4,7 @@ import SettingsSelect from '../../components/SettingsSelect';
 import {useDraft,useResource,useWorkbench} from './hooks';
 import {Notice} from './common';
 import {StatusCard} from '../../components/InteractionNotice';
-import {acknowledgedCreationContext,creationContextPath,creationDraftKey,creationMissing,creationRequest,creationThumbnail,initialCreationDraft,linkedCreationSession,newsFormatLabel,newsSlotLabels,newsSlots,type NewsCreationContext,type NewsCreationDraft,type NewsCreationRequest,type NewsFormat} from './newsCreation';
+import {acknowledgedCreationContext,creationContextPath,creationDraftKey,creationDraftWithDefault,creationPackId,creationMissing,creationRequest,creationThumbnail,initialCreationDraft,linkedCreationSession,newsFormatLabel,newsSlotLabels,newsSlots,type NewsCreationContext,type NewsCreationDraft,type NewsCreationRequest,type NewsFormat} from './newsCreation';
 import './news-creation.css';
 
 export interface NewsCreationDrawerProps {
@@ -28,9 +28,24 @@ export default function NewsCreationDrawer(props:NewsCreationDrawerProps){
 }
 
 function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreationDrawerProps&{context:NewsCreationContext;format:NewsFormat;reload:()=>Promise<NewsCreationContext|null>;onAcknowledged:(value:NewsCreationContext)=>void}){
- const vm=useWorkbench(),[draft,patch]=useDraft<NewsCreationDraft>(creationDraftKey(props.articleId,props.profileId,format),()=>initialCreationDraft(context,format));
+ const vm=useWorkbench(),[stored,patch]=useDraft<NewsCreationDraft>(creationDraftKey(props.articleId,props.profileId,format),()=>initialCreationDraft(context,format));
+ const draft=creationDraftWithDefault(context,format,stored);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false),[illustrations,setIllustrations]=useState(!!(draft.style.visual||draft.style.character)),lock=useRef(false);
  const missing=creationMissing(context,draft,format),packs=context.packs.filter(pack=>pack.formats.includes(format)&&pack.available!==false);
+ const applyStyle=(style:NewsCreationDraft['style'])=>{patch({style});setIllustrations(!!(style.visual||style.character));setSaved(false);setError('')};
+ const restoreLast=async()=>{
+  if(lock.current)return;lock.current=true;setBusy(true);setError('');
+  try{
+   const fresh=await reload();
+   if(!fresh)throw Error('未能读取最近的贴图风格，当前选择已保留。');
+   const last=fresh.last_poster_style;
+   if(!last)throw Error('暂无可恢复的已完成贴图风格记录。');
+   const style={writing:'',visual:'',character:'',layout:'',...last.style};
+   if(creationMissing(fresh,{style,note:draft.note},'poster').length)throw Error('上次风格当前不可用，当前选择已保留。');
+   applyStyle(style);
+  }catch(reason){setError(reason instanceof Error?reason.message:'读取未完成，当前选择已保留。')}
+  finally{lock.current=false;setBusy(false)}
+ };
  const run=async(saveDefault=false)=>{
   if(lock.current)return;lock.current=true;setBusy(true);setError('');setSaved(false);
   try{
@@ -44,7 +59,8 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
   finally{lock.current=false;setBusy(false)}
  };
  return <div className="ew-news-creation-form">
-  {packs.length>0&&<label className="ew-news-field">已确认的风格组合<SettingsSelect label="已确认的风格组合" value="" disabled={busy} options={[{value:'',label:'按需选择组合'},...packs.map(pack=>({value:pack.id,label:pack.name}))]} onChange={id=>{const pack=packs.find(item=>item.id===id);if(pack){patch({style:{writing:'',visual:'',character:'',layout:'',...pack.components}});setIllustrations(!!(pack.components.visual||pack.components.character));setSaved(false)}}}/></label>}
+  {packs.length>0&&<label className="ew-news-field">已确认的风格组合<SettingsSelect label="已确认的风格组合" value={creationPackId(context,format,draft)} disabled={busy} options={[{value:'',label:'选择风格组合'},...packs.map(pack=>({value:pack.id,label:pack.name}))]} onChange={id=>{const pack=packs.find(item=>item.id===id);if(pack)applyStyle({writing:'',visual:'',character:'',layout:'',...pack.components})}}/></label>}
+  {format==='poster'&&<div className="ew-news-preset-actions"><button type="button" className="btn" disabled={busy} onClick={()=>applyStyle(initialCreationDraft(context,'poster').style)}>恢复默认预设</button><button type="button" className="btn" disabled={busy} onClick={()=>void restoreLast()}>恢复上次贴图风格</button></div>}
   {newsSlots.filter(slot=>format==='poster'||slot==='writing'||slot==='layout'||illustrations).map(slot=>{const selected=context.components[slot]?.find(item=>item.id===draft.style[slot]),image=selected?.available?creationThumbnail(selected.thumbnail_url):undefined;return <div className="ew-news-field" key={slot}>
    <span className="field-label">{newsSlotLabels[slot]}</span>
    <SettingsSelect label={newsSlotLabels[slot]} value={draft.style[slot]} disabled={busy} options={[{value:'',label:format==='article'&&slot==='layout'?'不指定结构':'请选择'+newsSlotLabels[slot]},...(context.components[slot]??[]).filter(item=>item.available).map(item=>({value:item.id,label:item.name}))]} onChange={value=>{patch({style:{...draft.style,[slot]:value}});setSaved(false)}}/>

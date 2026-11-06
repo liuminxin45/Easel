@@ -48,15 +48,15 @@ def test_original_skill_uses_explicit_profile_default_material_and_preserves_ret
     with b.store.connect() as c:
         profile=b.creator._profile(c,'oil-pig');profile['creation_defaults']=defaults
         c.execute('UPDATE creator_profiles SET document=? WHERE id=?',(json.dumps(profile,ensure_ascii=False),'oil-pig'))
-    value=fixtures.value(tid='native-production');value['message']='按这条热点制作内容，具体形式先讨论。'
+    value=fixtures.value(tid='native-production');value['message']='按这条热点制作贴图。'
     prepared=b.prepare(value);material=package(b,value['turnId'])
-    assert '/content-production' in prepared['actual_prompt']
-    assert material['creation']['defaults']==defaults and 'format' not in material['creation']
-    files=material['material_manifest']['files'];assert len(files)==8
+    assert '/oil-pig-poster' in prepared['actual_prompt']
+    assert material['creation']['defaults']=={'poster':defaults['poster']} and 'format' not in material['creation']
+    files=material['material_manifest']['files'];assert len(files)==7
     import hashlib
     for file in files:assert hashlib.sha256((b.root/file['path']).read_bytes()).hexdigest()==file['sha256']
     assert any(file['slot']=='poster:visual' and file['role']=='example' for file in files)
-    assert '先使用原生问答询问' in material['input_text'] and '不得同时制作两套' in material['input_text']
+    assert '只使用该格式的默认材料' in material['input_text'] and '不选择另一格式' in material['input_text']
     with b.store.connect() as c:
         profile['creation_defaults']={};c.execute('UPDATE creator_profiles SET document=? WHERE id=?',(json.dumps(profile),'oil-pig'))
         c.execute("UPDATE articles SET body='changed after preparation'")

@@ -27,3 +27,7 @@
 **旧草稿新调用验证：** [privateDraftCreation.test.mjs](../../../tests/frontend/privateDraftCreation.test.mjs)、[nativeSkillDrafts.test.mjs](../../../tests/frontend/nativeSkillDrafts.test.mjs) 和 [workbenchNativeChat.test.mjs](../../../tests/frontend/workbenchNativeChat.test.mjs) 核对明确格式→对应油猪技能、原字与附件不改写、只预填普通会话且不自动发送；未知格式拒绝猜测，原pending身份仍阻止新增转发。
 
 **首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。
+
+**贴图风格便捷预设（2026-11-06）：** [Spec](../../../specs/poster-style-presets-20261106/spec.md)。原私有制作抽屉优先画像默认、否则采用已有editorial-poster组合；允许恢复默认及服务器最近completed贴图的四项风格，只填选项、保留本条补充，不自动发送/改默认。最近记录通过原NewsCreation.context只读投影，无新表、无浏览器业务历史。前端唯一选择逻辑见 [newsCreation.ts](../../../web/frontend/src/workbench/ui/newsCreation.ts)，样式仅限 [news-creation.css](../../../web/frontend/src/workbench/ui/news-creation.css)。
+
+**预设交互验收：** [workbench_poster_presets_browser.py](../../../tests/workbench_poster_presets_browser.py) 覆盖原新闻抽屉的桌面/320px/390px明暗主题、默认选项、打开后新增服务器记录再恢复、补充原字、无自动执行/画像写入及文章隔离。

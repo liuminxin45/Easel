@@ -15,6 +15,18 @@ test('news defaults use only current available catalog IDs and never infer a sty
  assert.throws(()=>helper.creationRequest(c,'produce',draft,'poster'),/完成本次/);
 });
 
+test('poster gets the existing default pack; saved defaults and explicit drafts take precedence',()=>{
+ const c=context();c.packs=[{id:'editorial-poster',name:'默认',formats:['poster'],components:{...full},available:true}];
+ assert.deepEqual(plain(helper.initialCreationDraft(c,'poster').style),full);
+ const empty={style:{writing:'',visual:'',character:'',layout:''},note:'  保留本次原话  '};
+ const fresh=helper.creationDraftWithDefault(c,'poster',empty);assert.deepEqual(plain(fresh.style),full);assert.equal(fresh.note,empty.note);
+ const partial={style:{...empty.style,character:'character-1'},note:'原话'};assert.equal(helper.creationDraftWithDefault(c,'poster',partial),partial);
+ assert.equal(helper.creationDraftWithDefault(c,'article',empty),empty);
+ assert.equal(helper.creationPackId(c,'poster',fresh),'editorial-poster');
+ c.defaults.poster={...full,visual:'visual-missing'};assert.equal(helper.initialCreationDraft(c,'poster').style.visual,'');
+ delete c.defaults.poster;c.packs[0].available=false;assert.deepEqual(plain(helper.initialCreationDraft(c,'poster').style),empty.style);
+});
+
 test('article requires writing only, optional illustration style must be a valid pair',()=>{
  const c=context(),draft={style:{writing:'writing-1',visual:'',character:'',layout:''},note:'  原始要求\n保持  '};
  const request=helper.creationRequest(c,'produce',draft,'article');assert.deepEqual(plain(request),{intent:'produce',format:'article',style:{writing:'writing-1'},catalog_revision:'catalog-1',source_revision:'source-1',profile_revision:4,note:draft.note});
@@ -83,4 +95,18 @@ test('acknowledged default revisions allow a second save and production while th
  nodes(tree).find(node=>node.type==='button'&&text(node)==='保存为画像默认').props.onClick();await tick();tree=form();
  assert.deepEqual(f.saves.map(call=>call[1].base_revision),[4,5]);assert.equal(f.c.profile_revision,4,'the stale resource must not be needed to unblock the action');
  nodes(tree).find(node=>node.type==='button'&&text(node)==='开始制作贴图').props.onClick();await tick();assert.equal(f.starts.length,1);assert.equal(f.starts[0][1].profile_revision,6);
+});
+
+test('restore last loads fresh server choices only and never sends, saves or replaces this news note',async()=>{
+ const f=fixture();f.c.packs=[{id:'editorial-poster',name:'默认',formats:['poster'],components:{...full},available:true}];
+ let finish,calls=0;f.resource.reload=()=>{calls++;return new Promise(resolve=>finish=resolve)};
+ const form=f.form('poster');let tree=form();
+ nodes(tree).find(n=>n.type==='textarea').props.onChange({target:{value:'本条新闻独有要求'}});tree=form();
+ const restore=nodes(tree).find(n=>n.type==='button'&&text(n)==='恢复上次贴图风格');restore.props.onClick();restore.props.onClick();assert.equal(calls,1);
+ finish({...f.c,last_poster_style:{turn_id:'previous',style:{...full}}});await tick();tree=form();
+ assert.equal(nodes(tree).find(n=>n.type==='textarea').props.value,'本条新闻独有要求');
+ assert.deepEqual(plain(f.drafts.get(helper.creationDraftKey('news-1','profile-1','poster')).style),full);
+ assert.equal(f.starts.length,0);assert.equal(f.saves.length,0);
+ f.resource.reload=async()=>({...f.c,last_poster_style:null});tree=form();nodes(tree).find(n=>n.type==='button'&&text(n)==='恢复上次贴图风格').props.onClick();await tick();tree=form();
+ assert.match(text(tree),/暂无可恢复/);assert.equal(f.starts.length,0);assert.equal(f.saves.length,0);
 });

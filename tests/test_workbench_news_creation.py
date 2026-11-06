@@ -68,6 +68,7 @@ def creation(news, intent='produce', **changes):
 def test_context_is_lightweight_confirmed_and_never_guesses_defaults(news):
     context = news.context('news-one', 'p')
     assert context['defaults'] == {}
+    assert context['last_poster_style'] is None
     assert 'body' not in context['source']
     assert [pack['id'] for pack in context['packs']] == ['confirmed']
     assert all(item['available'] for items in context['components'].values() for item in items)
@@ -76,6 +77,35 @@ def test_context_is_lightweight_confirmed_and_never_guesses_defaults(news):
     assert news.asset('character', 0).read_bytes() == b'TEMP exact approved PNG'
     for component, index in [('candidate', 0), ('tech-pulse', 0), ('character', -1), ('character', True)]:
         with pytest.raises(ValueError): news.asset(component, index)
+
+
+def test_recent_poster_style_is_completed_profile_scoped_and_does_not_copy_note_or_news(news):
+    def put(c,tid,profile='p',status='completed',format='poster',style=None):
+        record={'profile_id':profile,'status':status,'context':{'article_id':'old-news','creation':{
+            'intent':'produce','format':format,'note':'PRIVATE old one-off instruction',
+            'style':style or {slot:slot for slot in ('writing','visual','character','layout')}}}}
+        c.execute('INSERT INTO easel_chat_turns VALUES(?,?)',(tid,json.dumps(record)))
+    with news.box.store.connect() as c:
+        c.execute('CREATE TABLE easel_chat_turns(id TEXT PRIMARY KEY,document TEXT)')
+        put(c,'original');put(c,'other-profile',profile='other');put(c,'failed',status='failed')
+        put(c,'unknown',status='unknown');put(c,'article',format='article')
+    context=news.context('news-one','p')
+    assert context['last_poster_style']=={'turn_id':'original','style':{slot:slot for slot in ('writing','visual','character','layout')}}
+    assert 'PRIVATE' not in json.dumps(context) and 'old-news' not in json.dumps(context)
+    with news.box.store.connect() as c:put(c,'newest',style={'writing':'removed'})
+    # Do not silently pick the older valid attempt when the newest choices are unavailable.
+    assert news.context('news-one','p')['last_poster_style'] is None
+
+
+def test_recent_style_read_does_not_write_profile_or_start_a_task(news):
+    before=news.box.store.connect()
+    with before as c:
+        rows=[tuple(r) for r in c.execute('SELECT * FROM creator_profiles')]
+        tables=[r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+    for _ in range(2):assert news.context('news-one','p')['last_poster_style'] is None
+    with news.box.store.connect() as c:
+        assert [tuple(r) for r in c.execute('SELECT * FROM creator_profiles')]==rows
+        assert [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")]==tables
 
 
 def test_explicit_materials_only_raw_source_and_readonly_accurate_replay(news):

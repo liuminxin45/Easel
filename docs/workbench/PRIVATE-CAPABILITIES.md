@@ -114,3 +114,5 @@
 2026-11-05：PC-08、PC-09、PC-22～PC-27 按 Easel 技能写法补充画像、输入、流程和输出说明；见 [技能规范 Spec](../../specs/private-skill-conventions-20261105/spec.md)。
 
 2026-11-06：PC-05/06/19修复后台新闻对退役技能的依赖、当天中文标题结果健康；PC-11提供唯一画像只读接缝。见 [后台合同修复](../../specs/background-news-contracts-20261106/spec.md)，不恢复退役技能或旧缓存。
+
+2026-11-06：PC-07新增制作贴图默认预设与显式恢复最近已完成风格，复用原抽屉/控件和服务器回合记录，见 [Spec](../../specs/poster-style-presets-20261106/spec.md)。

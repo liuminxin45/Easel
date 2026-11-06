@@ -26,6 +26,8 @@
 .ew-news-creation-form > .btn { margin-bottom: 18px; }
 .ew-news-creation-actions { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 0 max(12px,env(safe-area-inset-bottom)); }
 .ew-news-creation-actions .btn { min-height: 44px; }
+.ew-news-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.ew-news-preset-actions .btn { min-height: 44px; }
 @media (max-width: 900px) {
  .ew-news-page { padding-bottom: calc(176px + env(safe-area-inset-bottom)); }
  .ew-news-layout { display: block; margin-top: 20px; }

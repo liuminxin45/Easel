@@ -39,14 +39,15 @@ def test_native_prompt_uses_selected_materials_and_original_skill_only(business,
     creation={k:context[k] for k in ('catalog_revision','profile_revision','source_revision')}
     creation.update(intent=intent,note='原话\n不得改变')
     if intent=='produce':creation.update(format='poster',style=next(p['components'] for p in context['packs'] if p['id']=='oil-pig-simple'))
-    value={'sessionId':'test-chat','turnId':'news-native-'+intent,'message':'本次明确请求','context':{'article_id':aid,'profile_id':'oil-pig','creation':creation,**({'skill_id':'content-production','action_id':'native'} if intent=='produce' else {})}}
+    value={'sessionId':'test-chat','turnId':'news-native-'+intent,'message':'本次明确请求','context':{'article_id':aid,'profile_id':'oil-pig','creation':creation,**({'skill_id':'oil-pig-poster','action_id':'native'} if intent=='produce' else {})}}
     prepared=business.prepare(value)
     assert prepared['snapshot'] is None and prepared['work'] is None
     assert '原话\n不得改变' in prepared['actual_prompt']
-    attached=json.loads(prepared['actual_prompt'].split('## 本轮附件\n',1)[1])
+    # Production appends its output contract after the exact attachment JSON.
+    attached=json.JSONDecoder().raw_decode(prepared['actual_prompt'].split('## 本轮附件\n',1)[1])[0]
     assert attached and all(Path(item['path']).is_file() for item in attached)
     assert all(Path(item['path']).parent==business.root/'outputs/_sessions/inputs'/value['turnId'] for item in attached)
-    assert ('请执行 /content-production' in prepared['actual_prompt'])==(intent=='produce')
+    assert ('请执行 /oil-pig-poster' in prepared['actual_prompt'])==(intent=='produce')
     manifest=json.loads((business.root/'outputs/_sessions/inputs'/value['turnId']/'manifest.json').read_text(encoding='utf-8'))
     assert manifest['creation']==creation|{'style':creation.get('style',{})}
     if intent=='discuss':assert '不制作文件' in prepared['actual_prompt']

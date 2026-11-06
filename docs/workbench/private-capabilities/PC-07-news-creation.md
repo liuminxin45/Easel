@@ -31,3 +31,5 @@
 **贴图风格便捷预设（2026-11-06）：** [Spec](../../../specs/poster-style-presets-20261106/spec.md)。原私有制作抽屉优先画像默认、否则采用已有editorial-poster组合；允许恢复默认及服务器最近completed贴图的四项风格，只填选项、保留本条补充，不自动发送/改默认。最近记录通过原NewsCreation.context只读投影，无新表、无浏览器业务历史。前端唯一选择逻辑见 [newsCreation.ts](../../../web/frontend/src/workbench/ui/newsCreation.ts)，样式仅限 [news-creation.css](../../../web/frontend/src/workbench/ui/news-creation.css)。
 
 **预设交互验收：** [workbench_poster_presets_browser.py](../../../tests/workbench_poster_presets_browser.py) 覆盖原新闻抽屉的桌面/320px/390px明暗主题、默认选项、打开后新增服务器记录再恢复、补充原字、无自动执行/画像写入及文章隔离。
+
+**更新记录：** 2026-11-06 优秀模板通过 PC-32 私有服务附加到既有制作请求，原 SettingsSelect/Drawer 与默认及恢复上次风格保留；仅显式选择后冻结模板修订、方法及参考，不自动选择或自动制作。

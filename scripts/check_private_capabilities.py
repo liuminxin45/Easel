@@ -21,7 +21,7 @@ KINDS = {'official-overlay', 'shared-extraction', 'host-port', 'generic-fix', 'p
 PRIVATE_ROOTS = ('easel_workbench/', 'web/frontend/src/workbench/', 'tools/health-control/',
                  '.agents/skills/', 'skills/builtin/', 'skills/shared/workbench/')
 CODE_SUFFIXES = {'.py', '.pyw', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.css', '.json', '.ps1', '.sh'}
-SHARED_INCLUDE = {'easel/', 'web/app.py', 'web/frontend/src/'}
+SHARED_INCLUDE = {'easel/', 'web/app.py', 'web/frontend/src/', 'skills/shared/scripts/weixin_mp_stats.py'}
 SHARED_EXCLUDE = {'web/frontend/src/workbench/', 'web/frontend/src/assets/workbench/'}
 
 

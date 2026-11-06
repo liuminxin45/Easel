@@ -30,6 +30,28 @@ def test_only_explicit_local_v2_snapshots_use_new_runner():
     assert not runner.project_snapshot(old)
 
 
+def test_review_contract_is_exact_and_does_not_become_a_selected_skill():
+    from easel_workbench.features.production_insights.contracts import snapshot as review_snapshot
+    frozen=review_snapshot({'id':'oil-pig','revision':1})
+    assert runner.project_snapshot(frozen)
+    assert frozen['skills']==[]
+    frozen['prompt_text']+=' altered'
+    assert not runner.project_snapshot(frozen)
+
+
+def test_reserved_review_receipt_is_never_replaced_or_resent(tmp_path,monkeypatch):
+    from easel_workbench.features.production_insights.contracts import snapshot as review_snapshot
+    identity='1'*32;path=tmp_path/'data/readonly-receipts'/f'{identity}.json'
+    path.parent.mkdir(parents=True)
+    original={'id':identity,'status':'accepted','native_turn_id':'exact-turn'}
+    path.write_text(json.dumps(original),encoding='utf-8')
+    schema=tmp_path/'schema.json';schema.write_text('{}',encoding='utf-8')
+    monkeypatch.setattr(runner,'external_auth',lambda *_:pytest.fail('No new transport or auth may run'))
+    with pytest.raises(runner.ReadonlyExecutionUnknown) as error:
+        runner.run(review_snapshot({'id':'p'}),['codex','--output-schema',str(schema)],input='exact',cwd=tmp_path,timeout=5,runtime_root=tmp_path,receipt_id=identity)
+    assert error.value.receipt==original and json.loads(path.read_text(encoding='utf-8'))==original
+
+
 def test_legacy_and_injected_runners_keep_original_arguments_and_output(tmp_path):
     calls = []
     def legacy(*args, **kwargs):

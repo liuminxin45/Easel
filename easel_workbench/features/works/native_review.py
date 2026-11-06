@@ -61,6 +61,8 @@ def read_binding(turn):
     return frame
 
 def receive(business,turn):
+    from easel_workbench.features.production_insights.reviews import service
+    service(business.box)
     result=_receive(business,turn)
     if result:
         from easel_workbench.features.works.review_marker import project
@@ -122,6 +124,8 @@ def _receive(business,turn):
         receipt={**frame,'status':outcome['status'],'available_scopes':scopes,'whole_ready':whole}
         files=[{'path':row['path'],'sha256':hashlib.sha256(Path(row['path']).read_bytes()).hexdigest()} for row in c.execute('SELECT path FROM artifacts WHERE task_id=?',(tid,))]
         c.execute('UPDATE toolbox_meta SET value=? WHERE key=?',(json.dumps({'identity':identity,'files':files,'receipt':receipt},ensure_ascii=False),key))
+        from easel_workbench.features.production_insights.reviews import service
+        service(business.box).enqueue(turn,receipt,c=c)
     return receipt
 
 def decision(business,value):

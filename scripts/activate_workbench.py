@@ -67,7 +67,7 @@ def idle(database=None):
         c.row_factory=sqlite3.Row
         with archived_reads(ROOT,OLD,base,automation):
             status=automation.busy_state(HistoricalAuditConnection(c),audited('historical_unknown_audit'),audited('collection_historical_unknown_audit'))
-        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns','easel_chat_submissions'):
+        for table in ('creator_model_calls','distribution_executions','distribution_attempts','media_install_jobs','media_account_sessions','easel_chat_turns','easel_chat_submissions','production_insight_reviews','production_insight_http_operations'):
             if not base.exists_table(c,table):continue
             cols={r[1] for r in c.execute('pragma table_info('+table+')')}
             if 'document' in cols:
@@ -87,6 +87,9 @@ def idle(database=None):
                                 or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending')
                     if active:
                         status['busy']=True;status.setdefault('additional',[]).append({'table':table,'id':ident})
+        if base.exists_table(c,'production_metric_commands'):
+            for ident,state in c.execute("SELECT id,state FROM production_metric_commands WHERE kind='sync' AND state IN ('reserved','running')"):
+                status['busy']=True;status.setdefault('additional',[]).append({'table':'production_metric_commands','id':ident,'state':state})
         if base.exists_table(c,'easel_chat_creation_intents'):
             for ident,state in c.execute("SELECT id,state FROM easel_chat_creation_intents WHERE state NOT IN ('completed','rejected','sealed_not_accepted') OR state IS NULL"):
                 status['busy']=True;status.setdefault('additional',[]).append({'table':'easel_chat_creation_intents','id':ident,'state':state})

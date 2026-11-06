@@ -20,7 +20,7 @@ import signal
 import sys
 import time
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, parse_qs
 
 if os.name == "nt":
     import msvcrt
@@ -363,12 +363,33 @@ def cmd_stats(a):
                 return 1
             result["loggedIn"] = True
             # 打开发表记录页，让 Vue 自然发出带正确参数的数据 XHR（我们拦截它，避免自己拼易变参数/fingerprint）
-            page.goto(f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin=0&count={a.count}"
+            step = max(1, min(20, int(a.count)))
+            page.goto(f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin=0&count={step}"
                       f"&token={token}&lang=zh_CN", wait_until="commit", timeout=60000)
             for _ in range(10):
                 if cap["publish"]:
                     break
                 page.wait_for_timeout(1000)
+            # Keep the original twenty visible notes; expose a bounded article
+            # window for exact-link consumers instead of matching by title.
+            publish_pages = [cap["publish"]] if cap["publish"] else []
+            try:
+                first = json.loads(cap["publish"] or "{}").get("publish_page", {})
+                first = json.loads(first) if isinstance(first, str) else first
+                total = int(first.get("total_count") or 0)
+                for begin in range(step, min(total, step * 5), step):
+                    cap["publish"] = None
+                    page.goto(f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin={begin}&count={step}"
+                              f"&token={token}&lang=zh_CN", wait_until="commit", timeout=12000)
+                    for _ in range(4):
+                        if cap["publish"]:
+                            break
+                        page.wait_for_timeout(500)
+                    if not cap["publish"]:
+                        break
+                    publish_pages.append(cap["publish"])
+            except Exception:
+                pass  # Coverage stays partial; never invent missing counters.
             # 打开数据分析页，触发阅读/分享趋势 + 单篇文章数据 + 用户数据 XHR
             try:
                 page.goto(f"https://mp.weixin.qq.com/misc/appmsganalysis?action=report&type=daily_v2"
@@ -384,7 +405,7 @@ def cmd_stats(a):
                 for k, v in cap.items():
                     if v:
                         Path(a.dump_dir, f"{k}.json").write_text(v, encoding="utf-8")
-            _parse_publish(cap["publish"], result)
+            _parse_publish_pages(publish_pages, result)
             _parse_analytics(cap, result)
             if result.get("followers") is None:
                 _fetch_followers(page, token, result)
@@ -405,6 +426,57 @@ def _deep_find(obj, keys, out):
     elif isinstance(obj, list):
         for x in obj:
             _deep_find(x, keys, out)
+
+
+def _counter(info, *keys):
+    """An absent counter is unknown; an explicit zero is a measured zero."""
+    for key in keys:
+        value = info.get(key)
+        if value is None or value == "" or isinstance(value, bool):
+            continue
+        try:
+            number = int(value)
+        except (ValueError, TypeError, OverflowError):
+            continue
+        if number >= 0:
+            return number
+    return None
+
+
+def _article_identity(info):
+    url = info.get("link") or info.get("content_url") or info.get("url") or ""
+    try:
+        parsed = urlparse(url)
+        if parsed.hostname == "mp.weixin.qq.com":
+            query = parse_qs(parsed.query)
+            if all(query.get(key) for key in ("__biz", "mid", "idx")):
+                return "wechat:" + ":".join(query[key][0] for key in ("__biz", "mid", "idx"))
+            if re.fullmatch(r"/s/[A-Za-z0-9_-]+", parsed.path):
+                return "wechat:" + parsed.path
+    except ValueError:
+        pass
+    # An appmsg id without an account identity is insufficient to join articles.
+    return ""
+
+
+def _article_metrics(info):
+    return {"read_uv": _counter(info, "total_read_uv", "int_page_read_uv"),
+            "read_pv": _counter(info, "total_read_pv", "int_page_read_count"),
+            "read_num": _counter(info, "read_num"),
+            "likes": _counter(info, "like_num", "like_count"),
+            "comments": _counter(info, "comment_num", "comment_count"),
+            "share_uv": _counter(info, "share_uv"),
+            "shares": _counter(info, "share_num", "share_count")}
+
+
+def _metric_stat(metrics):
+    parts = []
+    for key, label in (("read_uv", "阅读人数"), ("read_pv", "阅读次数"),
+                       ("read_num", "阅读"), ("likes", "赞"),
+                       ("shares", "分享次数"), ("share_uv", "分享人数")):
+        if metrics.get(key) is not None:
+            parts.append(f"{label} {metrics[key]}")
+    return " · ".join(parts)
 
 
 def _parse_publish(raw, result):
@@ -431,21 +503,28 @@ def _parse_publish(raw, result):
                 if found:
                     arts = [found]
             for am in arts:
-                rn = int(am.get("read_num", 0) or 0)
-                ln = int(am.get("like_num", 0) or 0)
-                total_read += rn
-                like_sum += ln
+                metrics = _article_metrics(am)
+                rn, ln = metrics["read_num"], metrics["likes"]
+                total_read += rn or 0
+                like_sum += ln or 0
                 notes.append({
                     "title": am.get("title", ""),
                     "url": am.get("link") or am.get("content_url", ""),
                     "cover": am.get("cover", ""),
-                    "stat": (f"阅读 {rn} · 赞 {ln}" if rn or ln else ""),
+                    "stat": _metric_stat(metrics),
+                    "article_identity": _article_identity(am),
+                    "structured_metrics": metrics,
+                    "published_at": am.get("create_time") or (info.get("sent_info", {}).get("time") if isinstance(info.get("sent_info", {}), dict) else None),
                 })
         result["notes"] = notes[:20]
+        result["articles"] = notes[:100]
+        groups = len(page.get("publish_list") or [])
+        result["coverage"] = {"kind": "recent_publish_list", "returned": len(notes[:100]),
+                              "groups_returned": groups, "total": total, "complete": groups >= total}
         published = pub_cnt or total or len(notes)
         result["posts"] = published
-        result["likes"] = like_sum or None
-        result["reads"] = total_read or None
+        result["likes"] = like_sum if any(n["structured_metrics"]["likes"] is not None for n in notes) else None
+        result["reads"] = total_read if any(n["structured_metrics"]["read_num"] is not None for n in notes) else None
         result["metrics"] = [
             {"label": "已发表", "value": published, "vs": ""},
             {"label": "群发次数", "value": mass_cnt, "vs": ""},
@@ -455,6 +534,30 @@ def _parse_publish(raw, result):
             result["metrics"].append({"label": "列表累计阅读", "value": total_read, "vs": ""})
     except Exception as e:
         result["error"] = f"发表记录解析失败：{e}"
+
+
+def _parse_publish_pages(pages, result):
+    if not pages:
+        return _parse_publish(None, result)
+    _parse_publish(pages[0], result)
+    articles = list(result.get("articles", []))
+    seen = {n.get("article_identity") or n.get("url") for n in articles}
+    groups = result.get("coverage", {}).get("groups_returned", 0)
+    for raw in pages[1:5]:
+        part = {}
+        _parse_publish(raw, part)
+        groups += part.get("coverage", {}).get("groups_returned", 0)
+        for note in part.get("articles", []):
+            key = note.get("article_identity") or note.get("url")
+            if key and key in seen:
+                continue
+            seen.add(key)
+            articles.append(note)
+    result["articles"] = articles[:100]
+    coverage = result.get("coverage", {})
+    coverage.update(returned=len(result["articles"]), pages=len(pages[:5]), groups_returned=groups,
+                    complete=groups >= coverage.get("total", groups))
+    result["coverage"] = coverage
 
 
 def _daily_totals(lst):
@@ -479,7 +582,7 @@ def _parse_analytics(cap, result):
             d = json.loads(cap["tendency"])
             daily = _daily_totals((d.get("all_article_stat_tendency") or {}).get("list") or [])
             read = sum(int(x.get("read_uv", 0) or 0) for x in daily)
-            result["reads"] = read or result.get("reads")
+            result["reads"] = read if any(x.get("read_uv") is not None for x in daily) else result.get("reads")
             result["period_metrics"] = {
                 "day": _tendency_metrics(daily, 1),
                 "week": _tendency_metrics(daily, 7),
@@ -493,23 +596,29 @@ def _parse_analytics(cap, result):
     try:
         if cap.get("article_list"):
             d = json.loads(cap["article_list"])
-            by_title = {}
+            by_identity = {}
             extras = []
             for a in (d.get("article_list") or []):
                 info = a.get("appmsg_info") or a
                 title = info.get("title") or a.get("title")
                 if not title:
                     continue
-                uv = int(info.get("total_read_uv") or info.get("read_num") or info.get("int_page_read_uv") or 0)
-                share = int(info.get("share_num") or info.get("share_uv") or 0)
-                stat = f"阅读 {uv} · 分享 {share}"
-                by_title[title] = stat
-                extras.append({"title": title, "url": info.get("link") or info.get("content_url") or "", "cover": info.get("cover") or "", "stat": stat})
-            for n in result.get("notes", []):
-                if n.get("title") in by_title:
-                    n["stat"] = by_title[n["title"]]
+                metrics = _article_metrics(info)
+                identity = _article_identity(info)
+                note = {"title": title, "url": info.get("link") or info.get("content_url") or "", "cover": info.get("cover") or "", "stat": _metric_stat(metrics), "article_identity": identity, "structured_metrics": metrics}
+                if identity:
+                    by_identity[identity] = note
+                extras.append(note)
+            for collection in (result.get("notes", []), result.get("articles", [])):
+                for n in collection:
+                    match = by_identity.get(n.get("article_identity"))
+                    if match:
+                        values = dict(n.get("structured_metrics") or {})
+                        values.update({k: v for k, v in match["structured_metrics"].items() if v is not None})
+                        n.update(structured_metrics=values, stat=_metric_stat(values))
             if not result.get("notes"):
                 result["notes"] = extras[:20]
+                result["articles"] = extras[:100]
     except Exception:
         pass
     # 粉丝数（尽力：从用户汇总的累计关注取；新号为 0）
@@ -526,11 +635,13 @@ def _parse_analytics(cap, result):
 
 def _tendency_metrics(lst, days):
     chunk = lst[-days:] if days and lst else []
-    read = sum(int(x.get("read_uv", 0) or 0) for x in chunk)
-    share = sum(int(x.get("share_uv", 0) or 0) for x in chunk)
+    read_values = [_counter(x, "read_uv") for x in chunk]
+    share_values = [_counter(x, "share_uv") for x in chunk]
+    read = sum(x for x in read_values if x is not None) if any(x is not None for x in read_values) else None
+    share = sum(x for x in share_values if x is not None) if any(x is not None for x in share_values) else None
     return [
         {"label": "阅读人数", "value": read, "vs": ""},
-        {"label": "分享次数", "value": share, "vs": ""},
+        {"label": "分享人数", "value": share, "vs": ""},
         {"label": "统计天数", "value": len(chunk), "vs": ""},
     ]
 

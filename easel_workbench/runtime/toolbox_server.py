@@ -58,6 +58,16 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
     from easel_workbench.runtime.creator_runtime import CreatorRuntime,CreatorConflict
     from easel_workbench.features.skills.retirement import SkillFeatureRetired
     creator=CreatorRuntime(box,project=studio.project);box.creator=creator;app.state.creator=creator
+    from easel_workbench.features.production_insights.service import service as production_insights
+    from easel_workbench.http import production_insights as insights_api
+    insights_api.initialize(box)
+    app.state.production_insights=production_insights(box)
+    async def production_analytics():
+        from easel_workbench.runtime.native_api import adapter
+        native=await adapter(box)
+        return await native.analytics_context().api_analytics('wechat-oa')
+    app.state.production_insights.analytics=production_analytics
+    app.add_event_handler('startup',app.state.production_insights.start)
     from easel_workbench.features.conversations.service import ChatService
     from easel_workbench.application.chat import ChatBusiness
     from easel_workbench.http.chat import handle as chat_api
@@ -198,6 +208,17 @@ def create_app(store=None,auth=None,box=None,root=ROOT,wiki=None,studio=None,dis
                 native_target='/native/?'+urllib.parse.urlencode({'path':target})
                 forms.send(ctx,303,location='/native/login?next='+urllib.parse.quote(native_target,safe=''));return ctx.response()
             return error(401,'authentication_required')
+        if path.startswith('/api/production-insights'):
+            insights_value=None
+            if method=='POST':
+                if not same:return error(403,'origin_rejected')
+                if len(headers.getlist('x-csrf-token'))!=1 or not equal(headers.get('x-csrf-token',''),csrf):return error(403,'csrf_rejected')
+                if len(headers.getlist('x-operation-id'))!=1:return error(400,'操作缺少唯一身份')
+                if headers.get('content-type','').split(';')[0]!='application/json':return error(415,'请求类型无效')
+                if len(raw)>32768:return error(413,'复盘操作内容过大')
+                insights_value=json.loads(raw)
+                if not isinstance(insights_value,dict):return error(400,'请求需要JSON对象')
+            return await insights_api.handle(box,path,request,insights_value)
         if path=='/api/downloads':
             return await downloads.issue_download(request,raw,session=session,
                 token=cookies(ctx.headers).get(SESSION),same_origin=same,csrf=csrf,

@@ -46,6 +46,9 @@ def sha(raw):
 
 
 def project_snapshot(snapshot):
+    from easel_workbench.features.production_insights.contracts import is_snapshot as production_snapshot
+    if production_snapshot(snapshot):
+        return True
     from easel_workbench.features.collection.news_contracts import is_snapshot
     if is_snapshot(snapshot):
         return True
@@ -263,7 +266,7 @@ async def invoke(request, command, receipt, persist, *, adapter=None, preflight=
         await close_sessions(request.session_key)
 
 
-def run(snapshot, arguments, *, input, cwd, timeout, runner=None, runtime_root=None, task_id=None, **kwargs):
+def run(snapshot, arguments, *, input, cwd, timeout, runner=None, runtime_root=None, task_id=None, receipt_id=None, **kwargs):
     if runner is not None or not project_snapshot(snapshot):
         return (runner or subprocess.run)(arguments, input=input, cwd=cwd, timeout=timeout, **kwargs)
     folder = Path(cwd).resolve(); prompt = input.decode('utf-8') if isinstance(input, bytes) else input
@@ -280,7 +283,9 @@ def run(snapshot, arguments, *, input, cwd, timeout, runner=None, runtime_root=N
     for index, value in enumerate(arguments[:-1]):
         if value == '-c' and arguments[index + 1].startswith('model_reasoning_effort='):
             effort = json.loads(arguments[index + 1].split('=', 1)[1])
-    identity = uuid.uuid4().hex
+    identity = receipt_id or uuid.uuid4().hex
+    if not isinstance(identity,str) or len(identity)!=32 or any(ch not in '0123456789abcdef' for ch in identity):
+        raise ValueError('只读回执身份必须为准确UUID十六进制值')
     selected_root = runtime_root if isinstance(runtime_root, (str, os.PathLike)) else getattr(runtime_root, 'root', None)
     root = Path(selected_root or folder).resolve()
     receipt_path = root / 'data/readonly-receipts' / (identity + '.json')
@@ -291,7 +296,17 @@ def run(snapshot, arguments, *, input, cwd, timeout, runner=None, runtime_root=N
         'skill_refs': [{key: row[key] for key in ('id', 'version', 'sha256') if key in row} for row in snapshot['skills']],
         'receipt_path': str(receipt_path), 'notice': '程序记录原生ACK和实际提交参数；不把请求模型当作已核实实际模型。'}
     persist = lambda: save_receipt(receipt_path, receipt)
-    persist()
+    # Reserve before transport, exclusively: an interrupted accepted call must
+    # never be silently replaced by a second native execution of the same ID.
+    receipt_path.parent.mkdir(parents=True,exist_ok=True)
+    try:
+        with receipt_path.open('x',encoding='utf-8') as stream:
+            json.dump(receipt,stream,ensure_ascii=False,sort_keys=True)
+            stream.flush();os.fsync(stream.fileno())
+    except FileExistsError:
+        try:previous=json.loads(receipt_path.read_text(encoding='utf-8'))
+        except (OSError,ValueError):previous={'id':identity,'status':'unknown','receipt_path':str(receipt_path)}
+        raise ReadonlyExecutionUnknown(previous)
     auth_source = None
     prepared_auth_sha256 = None
     started = time.monotonic()

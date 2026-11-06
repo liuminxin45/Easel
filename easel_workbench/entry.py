@@ -47,6 +47,7 @@ def main():
                     stop.wait(1)
             if not stop.is_set():background(app.state.overviews,stop)
         threading.Thread(target=start_background,daemon=True).start()
+        threading.Thread(target=app.state.production_insights.background,args=(stop,),daemon=True).start()
         try:
             uvicorn.run(app, host='127.0.0.1', port=options.port, access_log=False)
         finally:

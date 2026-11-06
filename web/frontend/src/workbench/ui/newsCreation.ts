@@ -12,21 +12,24 @@ export function creationDraftSkillId(format:unknown,selected?:string):string {
 export type NewsSlot='writing'|'visual'|'character'|'layout';
 export type NewsStyle=Partial<Record<NewsSlot,string>>;
 export interface NewsComponent {id:string;name:string;slot:NewsSlot;available:boolean;reason?:string;thumbnail_url?:string}
-export interface NewsCreationRequest {intent:'discuss'|'produce';format?:NewsFormat;style?:NewsStyle;catalog_revision:string;source_revision:string;profile_revision:number;note:string}
+export interface ProductionTemplate {id:string;revision:string;name:string;style:NewsStyle;available:boolean;reason?:string;format:NewsFormat;source_version_id:string}
+export interface NewsCreationRequest {intent:'discuss'|'produce';format?:NewsFormat;style?:NewsStyle;catalog_revision:string;source_revision:string;profile_revision:number;note:string;template_id?:string;template_revision?:string}
 export interface NewsCreationContext {
  catalog_revision:string;source_revision:string;profile_revision:number;
  formats:NewsFormat[];components:Record<NewsSlot,NewsComponent[]>;
  packs:{id:string;name:string;formats:NewsFormat[];components:NewsStyle;available?:boolean}[];
  defaults:Partial<Record<NewsFormat,Partial<NewsStyle>>>;
  last_poster_style?:{turn_id:string;style:NewsStyle}|null;
+ templates?:Partial<Record<NewsFormat,ProductionTemplate[]>>;
  source:{id:string;title:string;reading_summary?:string;publisher?:string;published_at?:string;url?:string};
  linked_session?:{id:string;profile_id:string;archived?:boolean;deleted_at?:string;pendingTurnId?:string;pendingSubmissionId?:string}|null;
 }
-export interface NewsCreationDraft {style:Record<NewsSlot,string>;note:string}
+export interface NewsCreationDraft {style:Record<NewsSlot,string>;note:string;template_id?:string;template_revision?:string}
 export const newsSlots:NewsSlot[]=['writing','visual','character','layout'];
 export const newsSlotLabels:Record<NewsSlot,string>={writing:'写法',visual:'画面风格',character:'角色呈现',layout:'画面与结构'};
 export const newsFormatLabel=(format:NewsFormat)=>format==='poster'?'贴图':'文章';
 export const creationContextPath=(articleId:string,profileId:string)=>'/api/news/'+encodeURIComponent(articleId)+'/creation-context?profile_id='+encodeURIComponent(profileId);
+export const productionTemplatePath=(id:string,profileId:string,format:NewsFormat,revision:string)=>'/api/production-insights/templates/'+encodeURIComponent(id)+'?'+new URLSearchParams({profile_id:profileId,format,revision}).toString();
 export const creationDraftKey=(articleId:string,profileId:string,format:NewsFormat)=>'news:creation:'+encodeURIComponent(articleId)+':'+encodeURIComponent(profileId)+':'+format;
 export function initialCreationDraft(context:NewsCreationContext,format:NewsFormat):NewsCreationDraft {
  const defaults=context.defaults[format]??(format==='poster'?context.packs.find(pack=>pack.id==='editorial-poster'&&pack.formats.includes(format)&&pack.available!==false)?.components:undefined)??{};
@@ -34,7 +37,7 @@ export function initialCreationDraft(context:NewsCreationContext,format:NewsForm
 }
 /** Older empty drafts get the default; explicit partial choices and notes win. */
 export function creationDraftWithDefault(context:NewsCreationContext,format:NewsFormat,draft:NewsCreationDraft):NewsCreationDraft {
- return format==='poster'&&!newsSlots.some(slot=>draft.style[slot])?{...initialCreationDraft(context,format),note:draft.note}:draft;
+ return format==='poster'&&!newsSlots.some(slot=>draft.style[slot])?{...draft,...initialCreationDraft(context,format),note:draft.note}:draft;
 }
 export function creationPackId(context:NewsCreationContext,format:NewsFormat,draft:NewsCreationDraft):string {
  return context.packs.find(pack=>pack.formats.includes(format)&&pack.available!==false&&newsSlots.every(slot=>(pack.components[slot]??'')===draft.style[slot]))?.id??'';
@@ -45,7 +48,15 @@ export function creationMissing(context:NewsCreationContext,draft:NewsCreationDr
 }
 export function creationRequest(context:NewsCreationContext,intent:'discuss'|'produce',draft:NewsCreationDraft,format?:NewsFormat):NewsCreationRequest {
  if(intent==='produce'&&(!format||!context.formats.includes(format)||creationMissing(context,draft,format).length))throw Error('请完成本次创作选项。');
- return {intent,...(intent==='produce'?{format,style:Object.fromEntries(Object.entries(draft.style).filter(([,value])=>value))}:{}),catalog_revision:context.catalog_revision,source_revision:context.source_revision,profile_revision:context.profile_revision,note:draft.note};
+ const template=intent==='produce'&&draft.template_id?context.templates?.[format!]?.find(item=>item.id===draft.template_id&&item.revision===draft.template_revision&&item.available&&item.format===format):undefined;
+ if(intent==='produce'&&draft.template_id&&!template)throw Error('所选优秀模板当前不可用，请重新选择；本次要求已保留。');
+ return {intent,...(intent==='produce'?{format,style:Object.fromEntries(Object.entries(draft.style).filter(([,value])=>value)),...(template?{template_id:template.id,template_revision:template.revision}:{})}:{}),catalog_revision:context.catalog_revision,source_revision:context.source_revision,profile_revision:context.profile_revision,note:draft.note};
+}
+export function creationWithTemplate(context:NewsCreationContext,format:NewsFormat,draft:NewsCreationDraft,id:string):NewsCreationDraft {
+ if(!id)return {...draft,template_id:undefined,template_revision:undefined};
+ const template=context.templates?.[format]?.find(item=>item.id===id&&item.available&&item.format===format);
+ if(!template)throw Error('优秀模板当前不可用，原有选择已保留。');
+ return {...draft,template_id:template.id,template_revision:template.revision,style:{writing:'',visual:'',character:'',layout:'',...template.style}};
 }
 /** Only catalog-served image capabilities may be rendered; never arbitrary paths. */
 export function creationThumbnail(value?:string):string|undefined {

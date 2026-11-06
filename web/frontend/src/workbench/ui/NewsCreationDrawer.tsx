@@ -2,9 +2,10 @@ import {useRef,useState} from 'react';
 import Drawer from '../../components/Drawer';
 import SettingsSelect from '../../components/SettingsSelect';
 import {useDraft,useResource,useWorkbench} from './hooks';
-import {Notice} from './common';
+import {Markdown,Notice} from './common';
+import {ExtensionDetails} from './ExtensionDetails';
 import {StatusCard} from '../../components/InteractionNotice';
-import {acknowledgedCreationContext,creationContextPath,creationDraftKey,creationDraftWithDefault,creationPackId,creationMissing,creationRequest,creationThumbnail,initialCreationDraft,linkedCreationSession,newsFormatLabel,newsSlotLabels,newsSlots,type NewsCreationContext,type NewsCreationDraft,type NewsCreationRequest,type NewsFormat} from './newsCreation';
+import {acknowledgedCreationContext,creationContextPath,creationDraftKey,creationDraftWithDefault,creationPackId,creationMissing,creationRequest,creationThumbnail,creationWithTemplate,initialCreationDraft,linkedCreationSession,newsFormatLabel,newsSlotLabels,newsSlots,productionTemplatePath,type ProductionTemplate,type NewsCreationContext,type NewsCreationDraft,type NewsCreationRequest,type NewsFormat} from './newsCreation';
 import './news-creation.css';
 
 export interface NewsCreationDrawerProps {
@@ -32,6 +33,7 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
  const draft=creationDraftWithDefault(context,format,stored);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false),[illustrations,setIllustrations]=useState(!!(draft.style.visual||draft.style.character)),lock=useRef(false);
  const missing=creationMissing(context,draft,format),packs=context.packs.filter(pack=>pack.formats.includes(format)&&pack.available!==false);
+ const templates=context.templates?.[format]??[],selectedTemplate=templates.find(item=>item.id===draft.template_id),invalidTemplate=!!draft.template_id&&(!selectedTemplate?.available||selectedTemplate.revision!==draft.template_revision);
  const applyStyle=(style:NewsCreationDraft['style'])=>{patch({style});setIllustrations(!!(style.visual||style.character));setSaved(false);setError('')};
  const restoreLast=async()=>{
   if(lock.current)return;lock.current=true;setBusy(true);setError('');
@@ -59,6 +61,9 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
   finally{lock.current=false;setBusy(false)}
  };
  return <div className="ew-news-creation-form">
+  {(templates.length>0||draft.template_id)&&<label className="ew-news-field">优秀制作模板<SettingsSelect label="优秀制作模板" value={draft.template_id??''} disabled={busy} options={[{value:'',label:'不使用优秀模板'},...templates.filter(template=>template.available&&!(invalidTemplate&&template.id===draft.template_id)).map(template=>({value:template.id,label:template.name})),...(invalidTemplate?[{value:draft.template_id!,label:(selectedTemplate?.name??'原模板')+' · 请重新核对'}]:[])]} onChange={id=>{try{const next=creationWithTemplate(context,format,draft,id);patch(next);setIllustrations(!!(next.style.visual||next.style.character));setSaved(false);setError('')}catch(reason){setError(reason instanceof Error?reason.message:'模板不可用')}}}/><span className="ew-news-muted">仅使用你已确认的制作方法和规范，本轮仍可调整风格与要求。</span></label>}
+  {invalidTemplate&&<StatusCard className="ew-status-card-compact" tone="warning">{selectedTemplate?.reason||'原模板已更新或不可用，请重新选择模板，或选择不使用优秀模板。本次要求已保留。'}</StatusCard>}
+  {selectedTemplate&&!invalidTemplate&&<TemplateDetails key={selectedTemplate.id+':'+selectedTemplate.revision} template={selectedTemplate} profileId={props.profileId}/>}
   {packs.length>0&&<label className="ew-news-field">已确认的风格组合<SettingsSelect label="已确认的风格组合" value={creationPackId(context,format,draft)} disabled={busy} options={[{value:'',label:'选择风格组合'},...packs.map(pack=>({value:pack.id,label:pack.name}))]} onChange={id=>{const pack=packs.find(item=>item.id===id);if(pack)applyStyle({writing:'',visual:'',character:'',layout:'',...pack.components})}}/></label>}
   {format==='poster'&&<div className="ew-news-preset-actions"><button type="button" className="btn" disabled={busy} onClick={()=>applyStyle(initialCreationDraft(context,'poster').style)}>恢复默认预设</button><button type="button" className="btn" disabled={busy} onClick={()=>void restoreLast()}>恢复上次贴图风格</button></div>}
   {newsSlots.filter(slot=>format==='poster'||slot==='writing'||slot==='layout'||illustrations).map(slot=>{const selected=context.components[slot]?.find(item=>item.id===draft.style[slot]),image=selected?.available?creationThumbnail(selected.thumbnail_url):undefined;return <div className="ew-news-field" key={slot}>
@@ -72,7 +77,13 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
   {missing.length>0&&<p className="ew-news-muted">还需选择：{missing.map(slot=>newsSlotLabels[slot]).join('、')}</p>}
   {error&&<StatusCard className="ew-status-card-compact" tone="error">{error}<button type="button" className="btn btn-sm" disabled={busy} onClick={()=>void reload()}>重新读取设置</button></StatusCard>}
   {saved&&<StatusCard className="ew-status-card-compact" tone="ready">已保存为画像默认，本次尚未开始制作。</StatusCard>}
-  <div className="ew-news-creation-actions"><button type="button" className="btn btn-primary" disabled={busy||missing.length>0} onClick={()=>void run()}>{busy?'正在处理…':format==='article'?'开始写文章':'开始制作贴图'}</button>
-   <button type="button" className="btn" disabled={busy||missing.length>0} onClick={()=>void run(true)}>保存为画像默认</button></div>
+  <div className="ew-news-creation-actions"><button type="button" className="btn btn-primary" disabled={busy||missing.length>0||invalidTemplate} onClick={()=>void run()}>{busy?'正在处理…':format==='article'?'开始写文章':'开始制作贴图'}</button>
+   <button type="button" className="btn" disabled={busy||missing.length>0||invalidTemplate} onClick={()=>void run(true)}>保存为画像默认</button></div>
  </div>;
+}
+
+/** The full method is requested only when this selected template is opened. */
+function TemplateDetails({template,profileId}:{template:ProductionTemplate;profileId:string}){
+ const [open,setOpen]=useState(false),resource=useResource<ProductionTemplate&{method:string;references:{id:string;name:string;sha256:string}[]}>(open?productionTemplatePath(template.id,profileId,template.format,template.revision):null);
+ return <ExtensionDetails title="模板方法与参考" onToggle={event=>setOpen(event.currentTarget.open)}>{open&&<><Notice sources={[resource]}/>{resource.data?<><Markdown text={resource.data.method}/>{resource.data.references.length>0&&<ul>{resource.data.references.map(reference=><li key={reference.id}>{reference.name} · {reference.sha256.slice(0,12)}</li>)}</ul>}<p className="ew-news-muted">参考来源版本：{resource.data.source_version_id}。只沿用制作方法与规范，不自动复用旧新闻。</p></>:!resource.error&&<StatusCard className="ew-status-card-compact">正在读取模板方法…</StatusCard>}</>}</ExtensionDetails>;
 }

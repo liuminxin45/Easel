@@ -23,6 +23,24 @@ function fixture(fetcher,storage=new Map()){
  client.session.setState({config:{csrf:'fixture'},loading:false});return {client,storage};
 }
 
+test('private insight mutations recover their exact receipt without posting the decision again',async()=>{
+ const posts=[],reads=[];let operation;
+ const {client}=fixture(async(url,options={})=>{
+  const path=String(url);
+  if(path.includes('/api/production-insights/works/')&&options.method==='POST'){
+   const body=JSON.parse(options.body);operation=body.id;posts.push(body);
+   throw new TypeError('TEMP lost acknowledgment');
+  }
+  if(path.includes('/api/production-insights/operations/')){reads.push(path);return json({id:operation,state:'completed',result:{status:'approved',item_id:'review-item',operation_id:operation}})}
+  return json({});
+ });
+ const result=await client.service.productionInsight('work','version','decisions',{item_id:'review-item',decision:'approve',note:'原始核销意见'});
+ assert.equal(result.status,'approved');assert.equal(posts.length,1);
+ assert.equal(posts[0].item_id,'review-item');assert.notEqual(posts[0].id,'review-item');
+ assert.ok(reads.some(url=>url.endsWith('/api/production-insights/operations/'+operation)));
+ assert.equal(client.operation('production-insight:work:version:decisions').getState().pending,null);
+});
+
 test('a resource failure stays visible through retries and clears only after successful data',async()=>{
  let mode='ok',held;
  const {client}=fixture(async()=>{

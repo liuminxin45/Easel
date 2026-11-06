@@ -8,9 +8,9 @@
 
 - 完整官方基线：`0f43dc98277eac85fb48952878acad349731d3fc`，来自 [upstream-base.json](upstream-base.json)；这不是远端当前最新main。
 - 首版源码盘点：`49193c821055841ad6930eafd81cd662ff349be6`，2026-11-05；本次仅记录已有差异，没有启用新能力。
-- 范围：`easel/**`、`web/app.py`、`web/frontend/src/**`。
+- 范围：`easel/**`、`web/app.py`、`web/frontend/src/**`，以及 `skills/shared/scripts/weixin_mp_stats.py`。
 - 排除私有宿主 `web/frontend/src/workbench/**` 和私有头像资产 `web/frontend/src/assets/workbench/**`；它们仍需按所属能力维护卡登记，并非豁免私有能力规则。
-- 共 **85** 个文件差异。官方PR来源及已审阅的私有blob仍以 [upstream-overlays.json](upstream-overlays.json) 为出处，不把官方选取补丁冒称全量同步。
+- 共 **86** 个文件差异。官方PR来源及已审阅的私有blob仍以 [upstream-overlays.json](upstream-overlays.json) 为出处，不把官方选取补丁冒称全量同步。
 
 ## 分类与维护边界
 
@@ -138,3 +138,7 @@
 3. 同步官方后，以新准确基线重新比较，移除已不再存在的差异条目；保存原Git历史，不修改旧发布manifest。不能删除一行台账就绕过真实文件差异。
 4. 本表不是审批系统；只有用户或已确认业务需求能够决定功能范围。C/U条目可记录兼容和待核对差异，绝不因登记而自动获批。
 5. 文档检查只证明差异被解释、路径和归属可查，不能替代双入口构建、相关业务回归、视觉或真实设备/网络验收。
+
+## 2026-11-06 公众号逐文章统计
+
+新增登记 `skills/shared/scripts/weixin_mp_stats.py`（PC-14/PC-15）。保留原登录和统计流程，仅补有界文章窗口、准确URL身份与缺失值语义。实际理由和同步核对点见结构化台账；发布链接由用户手动提供，不自动发布。

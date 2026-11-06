@@ -7,6 +7,7 @@ import {ExtensionDetails} from './ExtensionDetails';
 import {Notice,ActionButton,Field,Drawer,Pending,TextRecord,Markdown} from './common';
 import {TaskStatus} from './TaskStatus';
 import {ProductionParameters} from './ProductionParameters';
+import {ProductionInsights} from './ProductionInsights';
 import {Completion} from './WorkCompletion';
 import {StatusCard} from '../../components/InteractionNotice';
 
@@ -64,6 +65,7 @@ export function VersionPanel({workId,versionId}:{workId:string;versionId:string}
   {body&&<div onMouseUp={event=>selectText(work.format==='article'?'article_body':'caption',event)}><CopyableText label={work.format==='article'?'正文':'配文'} text={body}/></div>}
   {annotation&&<div><blockquote>{annotation.quote}</blockquote><Field label="批注意见"><textarea className="field" value={annotationText} onChange={event=>setAnnotationText(event.target.value)}/></Field><ActionButton action={action} className="btn" disabled={!annotationText.trim()||action.busy} onClick={()=>void action.run(async()=>{const source=review.data?.sources[annotation.field];if(!source)throw Error('原文指纹尚未取得');await vm.service.saveAnnotation(work.id,version.id,{kind:'create',...annotation,source_sha256:source.sha256,note:annotationText,dimension:annotation.field.includes('title')?'title':'text',scope:'work'});setAnnotation(null);setAnnotationText('');void review.reload()})}>保存到此版本</ActionButton><button className="btn btn-ghost" onClick={()=>setAnnotation(null)}>取消批注</button></div>}
   <div className="ew-row">
+   {version.status==='completed'&&['poster','article'].includes(work.format)&&<ProductionInsights workId={work.id} versionId={version.id} artifacts={version.artifacts}/>}
    <ActionButton action={action} className="btn" onClick={()=>openChat(false)}>讨论这版</ActionButton>
    {version.status==='completed'&&<><ActionButton action={action} className="btn" onClick={()=>void action.run(async()=>{await vm.service.manualReview(work.id,version.id);refresh()})}>独立检查</ActionButton><button className="btn btn-primary" onClick={()=>setDialog('accept')}>{record(version).decision_mode==='directory_marker'?'采纳':'采纳并完成'}</button><button className="btn" onClick={()=>setDialog('reject')}>不采纳</button><ActionButton action={action} className="btn" onClick={()=>openChat(true)}>修改这版</ActionButton></>}
    <button className="btn btn-ghost" onClick={manual}>使用自写文案</button>

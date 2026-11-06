@@ -49,16 +49,44 @@ const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value
 const text=value=>Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):value==null?'':String(value);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
- const c=context(),drafts=new Map(),states=new Map(),saves=[],starts=[];let current,index,serverRevision=c.profile_revision;
+ const c=context(),drafts=new Map(),states=new Map(),saves=[],starts=[],reads=[];let current,index,serverRevision=c.profile_revision;
  const react={useState:initial=>{const i=index++,state=current;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return [state[i],value=>{state[i]=typeof value==='function'?value(state[i]):value}]},useRef:initial=>{const i=index++;if(!(i in current))current[i]={current:initial};return current[i]}};
  const resource={data:c,error:'',reload:async()=>{c.profile_revision=serverRevision;return c}};
- const hooks={useResource:()=>resource,useWorkbench:()=>({service:{creatorCommand:async(...args)=>{saves.push(plain(args));return {result:{profile:{revision:++serverRevision,creation_defaults:args[1].document.creation_defaults}}}}}}),useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,typeof initial==='function'?initial():initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]}};
- const load=moduleLoader({imports:{react,'react/jsx-runtime':jsx,'./hooks':hooks,'./common':{Notice:'Notice'},'../../components/Drawer':'Drawer','../../components/SettingsSelect':'SettingsSelect','./news-creation.css':{}}});
+ const hooks={useResource:path=>{reads.push(path);return resource},useWorkbench:()=>({service:{creatorCommand:async(...args)=>{saves.push(plain(args));return {result:{profile:{revision:++serverRevision,creation_defaults:args[1].document.creation_defaults}}}}}}),useDraft:(key,initial)=>{if(!drafts.has(key))drafts.set(key,typeof initial==='function'?initial():initial);return [drafts.get(key),patch=>drafts.set(key,{...drafts.get(key),...patch})]}};
+ const load=moduleLoader({imports:{react,'react/jsx-runtime':jsx,'./hooks':hooks,'./common':{Notice:'Notice',Markdown:'Markdown'},'./ExtensionDetails':{ExtensionDetails:'ExtensionDetails'},'../../components/Drawer':'Drawer','../../components/SettingsSelect':'SettingsSelect','./news-creation.css':{}}});
  const Drawer=load('workbench/ui/NewsCreationDrawer.tsx').default;
  const props={articleId:'news-1',profileId:'profile-1',onClose(){},onStart:async(...args)=>starts.push(plain(args))};
  const render=(component=Drawer,input=props)=>{if(!states.has(component))states.set(component,[]);current=states.get(component);index=0;return component(input)};
- return {c,resource,drafts,saves,starts,props,render,form(format){let tree=render();nodes(tree).find(node=>node.type==='button'&&text(node)===(format==='poster'?'贴图':'文章')).props.onClick();return ()=>{const form=nodes(render()).find(node=>typeof node.type==='function');return render(form.type,form.props)}}};
+ return {c,resource,drafts,saves,starts,reads,props,render,form(format){let tree=render();nodes(tree).find(node=>node.type==='button'&&text(node)===(format==='poster'?'贴图':'文章')).props.onClick();return ()=>{const form=nodes(render()).find(node=>typeof node.type==='function');return render(form.type,form.props)}}};
 }
+
+test('selecting a human-confirmed template uses the original select and sends its exact revision only on start',async()=>{
+ const f=fixture();f.c.templates={poster:[{id:'approved-template',revision:'exact-revision',name:'人工确认的模板',format:'poster',style:{...full},available:true,source_version_id:'original'}]};
+ const form=f.form('poster');let tree=form();
+ const picker=nodes(tree).find(node=>node.type==='SettingsSelect'&&node.props.label==='优秀制作模板');
+ assert.equal(picker.props.value,'');assert.equal(f.starts.length,0);assert.equal(f.saves.length,0);
+ picker.props.onChange('approved-template');tree=form();
+ nodes(tree).find(node=>node.type==='textarea').props.onChange({target:{value:'本轮新闻的新要求'}});tree=form();
+ nodes(tree).find(node=>node.type==='button'&&text(node)==='开始制作贴图').props.onClick();await tick();
+ assert.equal(f.starts.length,1);assert.equal(f.starts[0][1].template_id,'approved-template');assert.equal(f.starts[0][1].template_revision,'exact-revision');assert.equal(f.starts[0][1].note,'本轮新闻的新要求');
+ f.c.templates.poster[0].available=false;tree=form();
+ assert.equal(nodes(tree).find(node=>node.type==='button'&&text(node)==='开始制作贴图').props.disabled,true);
+ assert.match(text(tree),/原模板已更新或不可用/);
+ nodes(tree).find(node=>node.type==='SettingsSelect'&&node.props.label==='优秀制作模板').props.onChange('');tree=form();
+ assert.equal(nodes(tree).find(node=>node.type==='button'&&text(node)==='开始制作贴图').props.disabled,false);
+});
+
+test('the selected template method is fetched only after an explicit detail opening',()=>{
+ const f=fixture();f.c.templates={poster:[{id:'approved-template',revision:'exact-revision',name:'人工确认的模板',format:'poster',style:{...full},available:true,source_version_id:'original'}]};
+ const form=f.form('poster');let tree=form();nodes(tree).find(node=>node.type==='SettingsSelect'&&node.props.label==='优秀制作模板').props.onChange('approved-template');tree=form();
+ const detail=nodes(tree).find(node=>typeof node.type==='function'&&node.props.template);
+ let preview=f.render(detail.type,detail.props);assert.equal(preview.type,'ExtensionDetails');assert.equal(f.reads.at(-1),null);
+ assert.equal(f.reads.some(path=>path?.startsWith('/api/production-insights/templates/')),false);
+ preview.props.onToggle({currentTarget:{open:true}});f.resource.data={...f.c.templates.poster[0],method:'人工核对后的完整制作规范',references:[]};
+ preview=f.render(detail.type,detail.props);assert.equal(f.reads.at(-1),helper.productionTemplatePath('approved-template','profile-1','poster','exact-revision'));
+ assert.equal(nodes(preview).find(node=>node.type==='Markdown').props.text,'人工核对后的完整制作规范');
+ assert.equal(f.starts.length,0);assert.equal(f.saves.length,0);
+});
 
 test('the original Drawer never starts on mount; form selection and raw note stay local until an explicit start',async()=>{
  const f=fixture();let tree=f.render();assert.equal(tree.type,'Drawer');assert.equal(f.starts.length,0);assert.equal(f.saves.length,0);

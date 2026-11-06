@@ -8,7 +8,8 @@
     "include": [
       "easel/",
       "web/app.py",
-      "web/frontend/src/"
+      "web/frontend/src/",
+      "skills/shared/scripts/weixin_mp_stats.py"
     ],
     "exclude": [
       "web/frontend/src/workbench/",
@@ -268,6 +269,17 @@
       "kind": "shared-extraction",
       "reason": "原生multipart和聊天raw上传共用受限流式writer及清理边界。",
       "upstream_check": "核对鉴权先于接收、50MB限制、取消/超限临时文件清理、幂等附件及未读取未授权body。"
+    },
+    {
+      "path": "skills/shared/scripts/weixin_mp_stats.py",
+      "status": "M",
+      "capabilities": [
+        "PC-14",
+        "PC-15"
+      ],
+      "kind": "generic-fix",
+      "reason": "沿原公众号登录与统计实现提供可选宿主根目录、准确账号ID及有界逐文章指标；URL/平台身份精确关联，缺失与真0分别保留，不以标题归因。",
+      "upstream_check": "核对公众号响应字段、签名链接保留、原notes20条和原统计展示兼容；新articles最多5页100篇，读取缺页显式coverage，不扩大发布或登录权限。"
     },
     {
       "path": "web/app.py",

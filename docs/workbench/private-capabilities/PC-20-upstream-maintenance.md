@@ -35,3 +35,5 @@
 **首版登记记录：** 2026-11-05 按业务源码 `1901f83` 建立首版；首版为只读盘点及文档登记，未新增启用能力，未逐项重新执行产品验收。本轮补充项按当前源码及各自验证记录另行核对，不将首版记录冒称本轮业务验收。
 
 **新闻后台CI回归：** [workbench-mobile-state.yml](../../../.github/workflows/workbench-mobile-state.yml) 纳入退役技能解析禁止下的后台合同、筛选/中文标题真实服务边界与原生只读回执测试。见 [后台合同Spec](../../../specs/background-news-contracts-20261106/spec.md)，自有fork远端Actions是否可运行需另行核验，不冒称CI通过。
+
+**更新记录：** 2026-11-06 共通差异核对范围显式增加 skills/shared/scripts/weixin_mp_stats.py，登记现有宿主身份接缝和本次逐文章统计通用补丁；其余skills共享目录未因此获豁免或扩大变更许可。

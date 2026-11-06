@@ -4,7 +4,7 @@
 
 - **状态：** 已确认；私有业务。
 
-**需求依据：** 2026-11-06用户明确批准；实施中。
+**需求依据：** 2026-11-06用户明确批准，已实施并上线，见[交付记录](../PRODUCTION-INSIGHTS-20261106.md)。
 - **能力范围：** 人工从准确完整版本确认优秀制作方法、图片规范、风格及参考；不可变模板按画像/技能/格式隔离，下次明确选择后附加给同一原生生产技能。
 - **官方复用：** 原新闻制作 Drawer、SettingsSelect、两个生产 SKILL；不增加技能或会话按钮。
 - **接口与状态归属：** [模板服务](../../../easel_workbench/features/production_insights/templates.py)、[新闻制作](../../../easel_workbench/features/news_creation.py)、[请求类型](../../../web/frontend/src/workbench/ui/newsCreation.ts)、[制作表单](../../../web/frontend/src/workbench/ui/NewsCreationDrawer.tsx)、[模板确认](../../../web/frontend/src/workbench/ui/ProductionInsights.tsx)、[HTTP](../../../easel_workbench/http/production_insights.py)。

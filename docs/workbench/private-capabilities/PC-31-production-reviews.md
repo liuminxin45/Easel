@@ -4,7 +4,7 @@
 
 - **状态：** 已确认；私有业务。
 
-**需求依据：** 2026-11-06用户明确批准；实施中。
+**需求依据：** 2026-11-06用户明确批准，已实施并上线，见[交付记录](../PRODUCTION-INSIGHTS-20261106.md)。
 - **能力范围：** 仅两项油猪生产技能真实完整交付后的对话提炼、原始反馈、逐条核销及每技能总文档。AI建议与人类反馈分开；不得运行时编辑技能。
 - **官方复用：** 原生只读 Codex 适配器、准确作品回执、原 Drawer/状态卡；不恢复 C-01/C-06 退役管理。
 - **接口与状态归属：** [production_insights](../../../easel_workbench/features/production_insights/)、[HTTP适配](../../../easel_workbench/http/production_insights.py)、[作品回执](../../../easel_workbench/features/works/native_review.py)、[入口](../../../easel_workbench/entry.py)、[私有服务组装](../../../easel_workbench/runtime/toolbox_server.py)、[只读调用](../../../easel_workbench/readonly_runner.py)、[部署空闲](../../../scripts/activate_workbench.py)、[复盘界面](../../../web/frontend/src/workbench/ui/ProductionInsights.tsx)、[版本操作](../../../web/frontend/src/workbench/ui/VersionOperations.tsx)、[请求客户端](../../../web/frontend/src/workbench/core/client.ts)。路由 `/api/production-insights/`。

@@ -186,7 +186,10 @@ class ChatService:
                         old = json.loads(row[0]).get('session', {})
                         if old.get('id') == session_id and old.get('revision', 1) > 1:
                             raise ChatConflict('历史对话有手动操作，保留原名')
-                    if not c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?', (session_id,)).fetchone():
+                    has_message=c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?', (session_id,)).fetchone()
+                    if not has_message and c.execute("SELECT 1 FROM sqlite_master WHERE name='easel_chat_submissions'").fetchone():
+                        has_message=c.execute('SELECT 1 FROM easel_chat_submissions WHERE session_id=?',(session_id,)).fetchone()
+                    if not has_message:
                         raise ChatConflict('空对话不自动命名')
                     session.update(title=text(value.get('title'), 200, True), title_source='automatic')
                 elif action == 'delete':

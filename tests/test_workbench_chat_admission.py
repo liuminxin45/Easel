@@ -44,6 +44,35 @@ def request(tid='fast-one'):
     return value
 
 
+def test_first_title_is_saved_at_admission_even_if_preparation_fails(business,monkeypatch):
+    _,admissions,adapter=setup(business,monkeypatch)
+    def fail(_):raise ValueError('TEMP preparation failed')
+    monkeypatch.setattr(admissions.business,'prepare',fail)
+    async def scenario():
+        value={**request('title-failure'),'initial_title':'owner/repository'}
+        admissions._receive(value)
+        assert admissions.chat.history('test-chat')['session']['title']=='owner/repository'
+        await admissions._process(value['turnId'])
+        assert admissions.get_turn(value['turnId'])['admission_failed']
+        assert admissions.chat.history('test-chat')['session']['title']=='owner/repository'
+        admissions._receive(value)
+        assert len(adapter.requests)==0
+        second={**request('title-second'),'initial_title':'Do not overwrite'}
+        admissions._receive(second)
+        assert admissions.chat.history('test-chat')['session']['title']=='owner/repository'
+        await admissions.close();await admissions.chat.close()
+    asyncio.run(scenario())
+
+
+def test_admission_preserves_manual_title_and_invalid_title_rolls_back(business,monkeypatch):
+    _,a,_=setup(business,monkeypatch)
+    with pytest.raises(ValueError):a._receive({**request(),'initial_title':''})
+    assert not a.chat.history('test-chat')['session'].get('pendingSubmissionId')
+    a.chat.rename_session('test-chat',{'id':'manual-name','expected_revision':1,'title':'我的标题'})
+    a._receive({**request(),'initial_title':'Automatic'})
+    assert a.chat.history('test-chat')['session']['title']=='我的标题'
+
+
 async def wait_for(predicate):
     async with asyncio.timeout(10):
         while not predicate():await asyncio.sleep(.01)

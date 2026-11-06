@@ -23,7 +23,7 @@ import {startNewsTurn} from './newsCreationStart';
 import type {NewsCreationRequest} from './newsCreation';
 import {creationDraftSkillId} from './newsCreation';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
-import {generateSessionTitle} from '../../lib/store';
+import {generateSessionTitle} from './lib/sessionTitle';
 import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
 import {useSessionItemMenu} from './SessionItemMenu';
 import type {WorkbenchClient} from '../core/client';

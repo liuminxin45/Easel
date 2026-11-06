@@ -79,6 +79,12 @@ class ChatAdmission:
                 raise ChatConflict('API 仅聊天模式没有本机技能和制作工具')
             row={'id':tid,'session_id':sid,'signature':signature,'request':copy.deepcopy(value),
                  'anchor':self._anchor(c,value,session),'status':'queued','created_at':now(),'updated_at':now()}
+            initial=value.get('initial_title')
+            if initial is not None:
+                initial=text(initial,200,True)
+                first=not c.execute('SELECT 1 FROM easel_chat_turns WHERE session_id=?',(sid,)).fetchone() and not c.execute('SELECT 1 FROM easel_chat_submissions WHERE session_id=?',(sid,)).fetchone()
+                if first and session.get('title_source')=='default' and session['title'] in ('新对话','New Chat'):
+                    session.update(title=initial,title_source='automatic')
             c.execute('INSERT INTO easel_chat_submissions VALUES(?,?,?,?)',(tid,sid,signature,packed(row)))
             session.update(pendingSubmissionId=tid,revision=session['revision']+1,updated=now())
             self.chat._put_session(c,session)

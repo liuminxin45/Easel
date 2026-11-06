@@ -1,5 +1,7 @@
 # PC-03 服务器会话、持久受理与停止恢复
 
+2026-11-06 私有标题修复：普通文字仍调用官方generateSessionTitle；只有纯URL且官方返回占位标题时，经 [sessionTitle.ts](../../../web/frontend/src/workbench/ui/lib/sessionTitle.ts) 提供仓库名/公众号文章/域名可读路径回退，不联网、不调用模型、不使用凭据或查询参数。首条标题沿原受理事务保存，后续准备失败不丢失；人工命名和已有名称不覆盖。历史未命名受理记录可沿原auto-title接口在打开时修复，不重放任务。验证见 [标题测试](../../../tests/frontend/privateSessionTitle.test.mjs)、[受理测试](../../../tests/test_workbench_chat_admission.py)；交付见 [本轮Spec](../../../specs/private-session-title-20261106/spec.md)。全部业务修复在私有目录，原官方规则未改。
+
 2026-11-06 断线恢复三批整改：准确 session/turn 回执统一收敛，覆盖已完成历史、半开流、漏 done、前台/在线恢复、旧回调及登录代数；服务器终态优先于浏览器旧 pending，保留后写草稿和附件。私有看门狗每15秒核对活动任务，连续30秒无流字节时只更换 GET 订阅。真实 unknown 通过同源 CSRF 的 `/api/chat/reconcile` 读取 Codex 准确线程/回合终态，缺失或歧义证据继续 unknown，不调用模型或 resume。恢复提示复用消息旁状态卡，短断线5秒内静默；状态诊断沿现有有界脱敏日志，每回合至多12次阶段上报。参见 [本轮 Spec](../../../specs/chat-reconnect-convergence-20261106/spec.md)。
 
 新增私有入口：[原生终态只读核验](../../../easel_workbench/features/conversations/native_receipts.py)、[HTTP 接口](../../../easel_workbench/http/chat.py)、[会话视图适配](../../../web/frontend/src/workbench/ui/ChatSessionView.tsx)。共通文件 `web/frontend/src/lib/api.ts` 仅增加可选 `onStreamActivity` 回调供宿主观察流字节，默认行为不变；不复制传输实现。同步 upstream 时保留可选参数及每次读取的通知即可。

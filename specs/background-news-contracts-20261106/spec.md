@@ -40,5 +40,31 @@ HN/PH 当天各入库10条，但中文标题同样在准备前失败，展示投
 ## 进度与证据
 
 已通过271项回归、2项子测试（含架构、技能、只读执行、准确回执、画像及中控）；前端check:workbench通过。
-尚未切换线上；本地证据目录 `.local/workbench-validation/background-news-20261106/`。
+已正式上线并完成真实恢复；本地证据目录 `.local/workbench-validation/background-news-20261106/`。
 提交、活动版本、真实采集/模型回执与浏览器结果分别记录，不以 TEMP 结果冒称线上恢复。
+
+
+## 正式交付结果
+
+- 业务源码提交 `5d2c3cb04a11095bbf90197a194975e460a636ec`，仅推送自有 `origin/main`；无官方提交或PR。
+- 正式后端 `workbench-20261106-094618`，manifest SHA256 `d3873a59e2f28ef12961e3cd1671a51bdd31daa583c261a9a48c2754a919af5c`。
+- 复用未改动的正式前端 `native-private-title-20261106-r2`，配对SHA256 `ccfed21f584bf9c93b1b2340f4014baad142c0ea8ab9ba6c2e5b254d3202c0a1`。
+- 项目外中控已更新到 `e0b4a2d05aa444f3`，原每日回执/预算逐字保持，未额外触发canary。
+- 本机271项回归、2项子测试通过；冻结包60项检查通过；check:workbench及登记/原技能175文件字节门禁通过。
+- 线上24条准备失败标题均无任何原调用账本，显式重开后2次真实原生调用全部完成。
+  三来源通过原CollectionService.retry续接准确旧阶段，4次真实筛选调用全部完成。
+  不复位其他日期/错误/未知记录，不伪造采集、制作、采纳或发布。
+- 2026-11-06 17:58:46恢复回执：AIHOT completed（抓取19、选中/新增16），
+  NewsNow partial（抓取31、选中/新增1；覆盖补查后仍有第三方HTTP读取不完整），
+  观猹 completed（抓取7、选中/新增5）。已有正常排期继续执行，包括18:00下一轮，未关闭自动采集。
+- 正式雷达GET投影：AIHOT16、NewsNow1、观猹5、GitHub4、HN10、PH10；HN/PH均完整中文句子。
+  无真实结果的来源保持空面板，不读旧缓存，不增加常驻失败提示。
+- 线上只读浏览器验收4页：390x844模拟触控和1280x900桌面，分别覆盖工作台与雷达；
+  原控件显示、列数、当天数据、无横向溢出、无脚本错误均通过。诊断POST仅在验收浏览器内拦截，未提交业务POST。
+  工作台按原接口limit=6预览，雷达各10条；初版验收误把首页预览当完整列表，已纠正验收断言，未修改产品限制。
+- 正式数据库inode保持；会话、回合、画像/历史、作品与附件数量保持，新增新闻22条。
+  旧已审计unknown保持、不重放；恢复调用无新unknown。独立中控当天标题失败=0、本地来源失败=0，公网探测成功。
+- 证据：final-tests.xml/log、frozen-tests.xml/log、acceptance.json、deploy.log、
+  title-repair-preview/applied.json、collection-recovery-plan/receipts.json、model-recovery-audit.json、
+  recovery-observation.json、live-browser.json/PNG、controller-install.log、delivery.json。
+  浏览器为本机Edge自动化与模拟移动端，不冒称实体vivo/WebToApp实测。远端Actions未作为本轮通过证据。

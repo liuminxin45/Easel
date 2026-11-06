@@ -66,5 +66,10 @@ def test_native_production_decision_and_modification_are_version_bound(business,
             await admissions._process(interrupted['turnId'])
             assert business.chat.get_turn(interrupted['turnId'])['status']=='completed'
             assert len(calls)==2
+            from easel_workbench.features.works.native_review import latest
+            with business.store.connect() as c:
+                failed={'id':'later-failed','session_id':'test-chat','status':'failed','hook_status':'completed','context':{'skill_id':'oil-pig-'+format}}
+                c.execute('INSERT INTO easel_chat_turns VALUES(?,?,?,?,?)',('later-failed','test-chat','later-failed','failed',json.dumps(failed)))
+            assert latest(business,'test-chat') is None
         finally:await admissions.close();await business.chat.close()
     asyncio.run(run())

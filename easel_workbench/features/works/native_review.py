@@ -9,8 +9,10 @@ MARKER='\n\n## 工作台本轮审阅绑定\n'
 
 def latest(business,sid):
     with business.store.connect() as c:
-        row=c.execute("SELECT json_extract(document,'$.business_receipt.review_candidate') FROM easel_chat_turns WHERE session_id=? AND json_extract(document,'$.business_receipt.review_candidate.status')='completed' ORDER BY rowid DESC LIMIT 1",(sid,)).fetchone()
-        if row:return json.loads(row[0])
+        row=c.execute("SELECT json_extract(document,'$.business_receipt.review_candidate'),json_extract(document,'$.status'),json_extract(document,'$.hook_status') FROM easel_chat_turns WHERE session_id=? AND json_extract(document,'$.local_review') IS NULL AND (json_extract(document,'$.context.skill_id') IN ('oil-pig-poster','oil-pig-article') OR instr(json_extract(document,'$.frozen_instructions'),?)>0) ORDER BY rowid DESC LIMIT 1",(sid,MARKER)).fetchone()
+        if row and row[0] and row[1]=='completed' and row[2]=='completed':
+            candidate=json.loads(row[0])
+            if candidate.get('status')=='completed':return candidate
     return None
 
 def modifying(message):

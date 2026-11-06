@@ -27,6 +27,7 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
     if(!narrow||!open)return;
     return props.registerLayer?.(()=>setOpen(false));
   },[narrow,open,props.registerLayer]);
+  useEffect(()=>{props.onPanelVisibilityChange?.(!narrow||open)},[narrow,open,props.onPanelVisibilityChange]);
 
   // Also dismiss when navigation is initiated outside the sidebar.
   useEffect(() => { setOpen(false); }, [props.currentPage, props.activeSessionId, props.selectedPersona]);
@@ -50,7 +51,9 @@ export default function ResponsiveSidebar(props: ComponentProps<typeof Sidebar>)
         && !node.closest('[inert]') && node.getClientRects().length > 0
         && getComputedStyle(node).visibility !== 'hidden');
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing||event.defaultPrevented) return;
+      const nested=panel.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+      if(nested&&nested.getClientRects().length&&getComputedStyle(nested).visibility!=='hidden')return;
       if (event.key === 'Escape') {
         event.preventDefault();
         setOpen(false);

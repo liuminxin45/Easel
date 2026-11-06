@@ -25,6 +25,7 @@ import {creationDraftSkillId} from './newsCreation';
 import {sessionRuntime,type FrozenTurn} from './chatRuntime';
 import {generateSessionTitle} from '../../lib/store';
 import {SessionOpenStage,useSessionOpenFlow} from './SessionOpenStage';
+import {useSessionItemMenu} from './SessionItemMenu';
 import type {WorkbenchClient} from '../core/client';
 
 import {Profiles,Accounts} from './management';
@@ -52,6 +53,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const nativeId=p.startsWith('/chat/')?decodeURIComponent(p.slice(6)):q.get('session')||'',activeSession=sessions.data?.sessions.find(session=>session.id===nativeId),profile=q.get('profile')||activeSession?.profile_id||activeSession?.persona||selected.profile_id;
  useEffect(()=>{const profiles=creators.data?.profiles;if(!profiles||activeSession)return;const current=profiles.find(value=>value.id===selected.profile_id);if(current?.active===false){const fallback=profiles.find(value=>value.active!==false);if(fallback)patch({profile_id:fallback.id});}},[creators.data,activeSession,selected.profile_id,patch]);
  const {owner:sessionFlows,flow:sessionFlow}=useSessionOpenFlow(vm.client);
+ const sessionMenu=useSessionItemMenu(sessions.data?.sessions||[],path);
  useEffect(()=>{if(vm.ready&&p==='/chat'&&q.get('flow'))sessionFlows.restore(q.get('flow')!)},[vm.ready,p,q.get('flow'),sessionFlows]);
  useEffect(()=>bindOutputNavigation(path=>vm.navigate('/works?'+new URLSearchParams({path}),{intent:'object'})),[vm.navigation]);
  const open=(target:string)=>{navigate(target,{intent:'module'})};
@@ -107,6 +109,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
  const onPageChange=(value:Page)=>open(nativePageRoutes[value]||'/toolbox');
  return <App host={{currentPage,onPageChange,sidebar:{currentPage,onPageChange,
   compactQuery:COMPACT_LAYOUT_QUERY,registerLayer:vm.navigation.registerLayer,
+  sessionItemPresentation:sessionMenu.presentation,onPanelVisibilityChange:sessionMenu.onPanelVisibilityChange,
   personas:[],selectedPersona:profile,onPersonaChange:changeProfile,onNewProfile:()=>open('/toolbox?section=profiles&item=new'),
   sessions:sessions.data?.sessions||[],activeSessionId:nativeId||null,hasMessages:session=>!!(session as import('./ChatSessionView').NativeSession).message_count||session.messages?.length>0,
   onSessionSelect:id=>open('/chat/'+encodeURIComponent(id)),onSessionDelete:deleteSession,
@@ -120,7 +123,7 @@ export function EaselWorkbench({theme,onThemeChange}:EaselProps){const vm=useWor
   navigation:config?.tools.map(tool=>({id:tool.id,label:tool.name,icon:icons[tool.id]||<IconDashboard size={18}/>,active:active(tool.id,shownPath),onSelect:()=>open(tool.path)}))||[],
  },pageHostProps:{id:'easel-main',tabIndex:-1,'data-native-scroll':'main'} as React.HTMLAttributes<HTMLDivElement>,
  notice:<Notice sources={[{error:chatAction.error,feedback:chatAction.feedback}]}/>,
- overlays:settingsOpen&&apiReady&&vm.ready?<Settings/>:undefined,
+ overlays:<>{settingsOpen&&apiReady&&vm.ready?<Settings/>:null}{sessionMenu.overlay}</>,
  content:<>{(!vm.ready||!apiReady)&&<div className="ew-loading"><Notice sources={[vm]}/><StatusCard className="ew-status-card-compact" tone={vm.expired?'warning':'status'}>{vm.expired?'登录已过期，输入已保留。':'正在连接工作台…'}</StatusCard><button className="btn" onClick={()=>void vm.refresh()}>重新读取</button>{(vm.reachable===false||!navigator.onLine||vm.expired)&&<LocalInputs/>}</div>}{apiReady&&!vm.expired&&(vm.ready||booted.current)&&page}</>,
  }}/>;
 }

@@ -187,7 +187,6 @@
   html[data-native-platform] .settings-panel button.tag.backup,
   html[data-native-platform] .settings-panel button.adv-btn { min-inline-size: 44px; min-block-size: 44px; }
   html[data-native-platform] .idea-card-actions { display: flex; position: static; flex-wrap: wrap; margin-block-end: 8px; }
-  html[data-native-platform] .session-actions { display: flex; }
   html[data-native-platform] .msg-actions { opacity: 1; flex-wrap: wrap; }
   html[data-native-platform] .idea-title { padding-inline-end: 0; }
   html[data-native-platform] .trend-save,

@@ -38,6 +38,7 @@ function load(name,{data={},vm={},choices=[],viewport={compact:false},react:reac
   if(specifier==='./common')return new Proxy({},{get:(_,name)=>name==='resultDocument'?record:function Component(){}});
   if(specifier==='./ExtensionDetails')return {ExtensionDetails:function ExtensionDetails(){}};
   if(specifier==='./VersionOperations')return {VersionOperations:function VersionOperations(){}};
+  if(specifier==='./PosterCopyActions')return {PosterCopyActions:function PosterCopyActions(){}};
   if(specifier==='./management')return {SkillTask:function SkillTask(){}};
   const component=specifier.split('/').at(-1);
   if(native[component])return native[component];

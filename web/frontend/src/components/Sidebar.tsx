@@ -2,7 +2,7 @@ import SettingsSelect from './SettingsSelect';
 import { useState } from 'react';
 import type { ChatSession } from '../lib/store';
 import type { PersonaItem } from '../lib/api';
-import type { ComponentType,ReactNode,Ref } from 'react';
+import type { ComponentType,ReactNode,Ref,HTMLAttributes } from 'react';
 import {
   IconChat, IconSkills, IconOutputs, IconAccounts, IconProfile,
   IconNewChat, IconEdit, IconArchive, IconUnarchive, IconTrash, IconChevron,
@@ -12,6 +12,8 @@ import { IconGear } from './settingsIcons';
 import ThemeToggle from './ThemeToggle';
 
 export type Page = 'dashboard' | 'chat' | 'trends' | 'ideas' | 'calendar' | 'publish' | 'breakdown' | 'skills' | 'outputs' | 'accounts' | 'profile';
+export interface SessionItemActions {rename:()=>void;archive:()=>void;delete?:()=>void}
+export interface SessionItemPresentation {itemProps?:HTMLAttributes<HTMLDivElement>;actions?:ReactNode}
 
 export interface SidebarProps {
   /** Optional host lifecycle/layout ports; native defaults remain unchanged. */
@@ -40,6 +42,8 @@ export interface SidebarProps {
   rootRef?:Ref<HTMLDivElement>;
   navigationLabel?:string;rootLabel?:string;personaOptions?:{value:string;label:string}[];
   statusText?:string;settingsTitle?:string;
+  sessionItemPresentation?:(session:ChatSession,actions:SessionItemActions)=>SessionItemPresentation;
+  onPanelVisibilityChange?:(visible:boolean)=>void;
   theme?:'light'|'dark';onThemeChange?:(theme:'light'|'dark')=>void;assetUrl?:(path:string)=>string;
 }
 
@@ -71,7 +75,7 @@ export default function Sidebar({
   apiDirect,
   agentRuntime,
   onOpenSettings,
-  navigation,hasMessages,canDeleteSession=true,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,theme,onThemeChange,assetUrl,
+  navigation,hasMessages,canDeleteSession=true,rootRef,navigationLabel,rootLabel,personaOptions,statusText,settingsTitle,theme,onThemeChange,assetUrl,sessionItemPresentation,
 }: SidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -105,23 +109,26 @@ export default function Sidebar({
         </div>
       );
     }
+    const actions:SessionItemActions={rename:()=>startRename(s),archive:()=>onSessionArchive(s.id,!isArchived),...(canDeleteSession?{delete:()=>onSessionDelete(s.id)}:{})};
+    const presentation=sessionItemPresentation?.(s,actions);
     return (
       <div
+        {...presentation?.itemProps}
         key={s.id}
-        className={`session-item ${s.id === activeSessionId ? 'active' : ''}`}
+        className={`session-item ${s.id === activeSessionId ? 'active' : ''} ${presentation?.itemProps?.className||''}`}
         onClick={() => onSessionSelect(s.id)}
       >
         <span className="session-item-title">{s.title}</span>
-        <div className="session-actions">
+        {presentation?.actions!==undefined?presentation.actions:<div className="session-actions">
           <button className="session-act" title="重命名"
-            onClick={(e) => { e.stopPropagation(); startRename(s); }}><IconEdit size={14} /></button>
+            onClick={(e) => { e.stopPropagation(); actions.rename(); }}><IconEdit size={14} /></button>
           <button className="session-act" title={isArchived ? '取消归档' : '归档'}
-            onClick={(e) => { e.stopPropagation(); onSessionArchive(s.id, !isArchived); }}>
+            onClick={(e) => { e.stopPropagation(); actions.archive(); }}>
             {isArchived ? <IconUnarchive size={14} /> : <IconArchive size={14} />}
           </button>
           {canDeleteSession&&<button className="session-act danger" title="删除"
-            onClick={(e) => { e.stopPropagation(); onSessionDelete(s.id); }}><IconTrash size={14} /></button>}
-        </div>
+            onClick={(e) => { e.stopPropagation(); actions.delete?.(); }}><IconTrash size={14} /></button>}
+        </div>}
       </div>
     );
   };

@@ -48,6 +48,18 @@ with sync_playwright() as p:
             with f['box'].store.connect() as c:
                 assert c.execute("SELECT count(*) FROM toolbox_jobs WHERE kind IN ('accept','reject')").fetchone()[0]==2
                 assert c.execute("SELECT candidate_id FROM toolbox_jobs WHERE kind='change'").fetchone()[0]
+                assert c.execute('SELECT count(*) FROM toolbox_local_tasks').fetchone()[0]==0
+            page.get_by_role('link',name='内容库 › 本版产物',exact=True).last.click()
+            details=page.locator('details').filter(has=page.locator('summary',has_text='版本与操作')).first
+            expect(details).to_be_visible();details.locator('summary').first.click()
+            page.get_by_role('button',name='采纳',exact=True).click()
+            expect(page.get_by_role('button',name='标记为已采纳',exact=True)).to_be_visible()
+            expect(page.get_by_text('完成并归档',exact=True)).to_have_count(0)
+            page.get_by_role('button',name='标记为已采纳',exact=True).click()
+            expect(page.get_by_role('button',name='标记为已采纳',exact=True)).to_have_count(0)
+            with f['box'].store.connect() as c:
+                assert c.execute('SELECT count(*) FROM toolbox_local_tasks').fetchone()[0]==0
+                assert c.execute('SELECT count(*) FROM toolbox_completions').fetchone()[0]==0
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
             page.screenshot(path=str(args.out/(layout+'.png')),full_page=True);checks.append(layout);context.close()
     browser.close()

@@ -7,6 +7,14 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
 
+def test_production_skills_ask_only_after_delivery_and_never_claim_unconfirmed_decisions():
+    for sid in ('oil-pig-poster','oil-pig-article'):
+        text=(ROOT/'skills/builtin'/sid/'SKILL.md').read_text(encoding='utf8')
+        assert '普通会话回复中简短询问' in text
+        assert '没有工作台准确版本决定回执时声称' in text
+        assert '修改保留原文件并另存' in text
+
+
 def test_separated_skills_keep_their_primary_standards_exact_and_local():
     from easel_workbench.skill_catalog import ProjectSkillCatalog
     entries={row['id']:row for row in ProjectSkillCatalog(ROOT).entries()}

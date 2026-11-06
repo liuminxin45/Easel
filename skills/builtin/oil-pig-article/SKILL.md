@@ -36,6 +36,10 @@ metadata:
 
 按请求交付提纲、局部修改或文章；完整文章包含正文和公众号 HTML，并说明真实来源、版本和检查结果。
 
+完整文章另交 `文章交付.json`，供现有工作台服务核对本版。字段为 `schema_version: 1`、`article_type: "general"` 或 `"product"`、`title`、`body_file`（本版正文文件名）和 `sources`（实际来源数组，每项含 `url`、`title`、`checked_at`）。不能把产品实测文章伪装为 general 绕过验证；product 还须按本版真实情况提供 test：status、environment、record_file、steps（action/expected/actual/evidence）、screenshots、recordings、recording_required、recording_reason、limitations。未完成真实实测则明确未完成，不伪造证据。最终回复列出此清单及实际正文、HTML和必要证据文件链接；提纲或局部讨论不冒充完整文章交付。
+
+完整文章已实际交付后，在普通会话回复中简短询问用户是采纳、继续讨论或修改，还是不采纳；交付失败或未完成时先如实说明，不冒称成品可采纳。用户只认可正文或配图时，只按明确范围理解；“可以”“不错”等含义不清时先确认。不得自行把讨论、局部认可或以往授权当成本版采纳，也不能在没有工作台准确版本决定回执时声称已记录采纳、不采纳或完成归档。修改保留原文件并另存。
+
 ## 本项目工具
 
 本项目适配后的原工具位于 `scripts/`。先阅读 `references/neo-source/工具/内容工作流/README.md` 与 `references/neo-source/工具/文章批注/README.md` 理解格式；将旧项目命令替换成本项目 `内容工作流/creative_review.py`、`内容工作流/article-check.mjs` 和 `文章批注/review.py`，作品与批注留在本项目，不调用旧工作台桥接。创作检查显式指定 `--root <项目根>`，文章校验绑定真实 HTML、配图及对应版本；程序检查与独立目视、公众号后台粘贴分别报告。文章批注服务仅监听服务器本机，手机不能把它当作已可访问的地址；未验证远程审阅时明确说明。Node Playwright 安装在项目 `.runtime/neo-poster-tools`；需要时运行 `python skills/builtin/oil-pig-article/scripts/install_oil_pig_tools.py`，缺失或安装失败时如实报告。

@@ -34,7 +34,7 @@ def business(tmp_path):
 
 def value(action='poster',tid='turn-one'):
     return {'sessionId':'test-chat','turnId':tid,'message':'说明本次具体变化，保留准确来源。',
-            'attachments':[],'context':{'skill_id':'topic-research' if action=='discuss' else 'content-production',
+            'attachments':[],'context':{'skill_id':'oil-pig-learn-article' if action=='discuss' else 'oil-pig-poster',
                                       'action_id':'native','profile_id':'oil-pig'}}
 
 
@@ -92,7 +92,7 @@ def test_explicit_project_skill_uses_same_official_native_message_and_no_plan(bu
     monkeypatch.setattr(b.creator,'resolve',lambda *a,**k:pytest.fail('project SKILL must not invoke private workflow resolution'))
     prepared=b.prepare(v)
     assert prepared['snapshot'] is None and prepared['work'] is None
-    assert '请执行 /content-production，内容如下：' in prepared['actual_prompt']
+    assert '请执行 /oil-pig-poster，内容如下：' in prepared['actual_prompt']
     assert prepared['actual_prompt'].split('内容如下：\n\n',1)[1].startswith(v['message']+'\n\n## 画像显式创作默认值')
     material=json.loads((b.root/'outputs/_sessions/inputs'/v['turnId']/'manifest.json').read_text(encoding='utf-8'))
     assert material['input_text'].startswith(v['message'])
@@ -169,7 +169,7 @@ def test_owner_http_ports_use_original_auth_origin_csrf_and_native_sse(business,
             assert (await client.get('/api/chat/sessions')).json()['sessions'][0]['message_count']==2
             assert (await client.get('/api/chat/jobs/http-one/stream')).status_code==200
             assert (await client.get('/api/skills')).json()[0]['name']
-            assert (await client.get('/api/skill/content-production')).json()['name']=='content-production'
+            assert (await client.get('/api/skill/oil-pig-poster')).json()['name']=='oil-pig-poster'
         await app.state.chat.close()
     asyncio.run(scenario())
 

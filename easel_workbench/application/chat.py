@@ -54,6 +54,14 @@ class ChatBusiness:
                 native=c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(message['turnId'],)).fetchone()
                 if native:
                     turn=json.loads(native[0])
+                    candidate=(turn.get('business_receipt') or {}).get('review_candidate')
+                    if candidate and candidate.get('status')=='completed':
+                        turn['work']={key:candidate[key] for key in ('work_id','version_id','format')}
+                        if turn['work'] not in result['linked_works']:result['linked_works'].append(copy.deepcopy(turn['work']))
+                        decided=c.execute("SELECT 1 FROM toolbox_jobs WHERE candidate_id=? AND kind IN ('accept','reject')",(candidate['version_id'],)).fetchone()
+                        ending=message.get('content','')[-200:]
+                        if not decided and not ('采纳' in ending and ('？' in ending or '?' in ending)):
+                            message['content']=message.get('content','')+'\n\n这版你想采纳、继续修改，还是暂不采纳？可以直接回复“采纳这版”“只采纳图片”“不采纳这版”，或说明修改意见。'
                     message['work']=copy.deepcopy(turn.get('work'))
                     message['business_receipt']=copy.deepcopy(turn.get('business_receipt'))
                     if turn.get('work'):message['library_path']='workbench-'+turn['work']['work_id']+'/'+turn['work']['version_id']
@@ -219,6 +227,9 @@ class ChatBusiness:
             if not message.strip() and not attachments:raise ValueError('请先输入目标或添加素材')
             from easel_workbench.features.creation_skills import PRODUCTION_SKILLS, FORMAT_BY_SKILL, LEGACY_SKILL
             skill_id=context.get('skill_id')
+            from easel_workbench.features.works.native_review import binding,instructions
+            review_frame=binding(self,value)
+            if review_frame:skill_id=review_frame['skill_id']
             if skill_id in PRODUCTION_SKILLS:
                 config=self.chat.execution_settings(session)
                 if config['runtime']=='api':raise PlanConflict('API 仅聊天模式不能制作，请新建 Agent 对话')
@@ -255,10 +266,10 @@ class ChatBusiness:
             if source_materials and self.chat.execution_settings(session)['runtime']=='api':
                 from easel_workbench.features.news_creation import NewsCreation
                 message+=NewsCreation(self.box).api_source_text(source_materials)
-            if context.get('skill_id'):
+            if skill_id:
                 if session.get('runtime')=='api':raise PlanConflict('API 仅聊天模式不能执行本机技能')
                 from easel_workbench.runtime.native_skills import service
-                message=service(self.box,self.chat).prepare_message(context['skill_id'],message,session['profile_id'])
+                message=service(self.box,self.chat).prepare_message(skill_id,message,session['profile_id'])
             else:
                 from easel_workbench.runtime.native_skills import service
                 message=service(self.box,self.chat).prepare_chat_message(message,session['profile_id'])
@@ -267,7 +278,8 @@ class ChatBusiness:
             if source_materials and context.get('creation'):
                 from easel_workbench.features.news_creation import NewsCreation
                 summary = NewsCreation(self.box).display_summary(source_materials, context.get('skill_id'))
-            return {'snapshot':None,'actual_prompt':message,'work':None,'frozen_instructions':self._workspace(session),
+            review_instructions=instructions(review_frame)
+            return {'snapshot':None,'actual_prompt':message+review_instructions,'work':None,'frozen_instructions':self._workspace(session)+review_instructions,
                     **({'display_summary':summary} if summary is not None else {})}
         from easel_workbench.features.skills.retirement import SkillFeatureRetired
         raise SkillFeatureRetired('legacy-skill-orchestration')
@@ -337,6 +349,8 @@ class ChatBusiness:
         from easel_workbench.features.conversations.generated_images import receive
         receive(self.root,self.store,turn)
         if not turn.get('snapshot'):
+            from easel_workbench.features.works.native_review import receive as receive_review
+            review=receive_review(self,turn)
             # Ordinary native runs can write files without creating private work
             # rows. Wake the existing metadata index, including partial outputs.
             if turn.get('status') in ('completed','stopped','failed','unknown'):
@@ -349,7 +363,7 @@ class ChatBusiness:
                 except Exception as error:
                     from easel_workbench.runtime.server_logging import exception
                     exception('library_refresh_signal_failed',error,phase='native_finish')
-            return {'session_id':turn['session_id'],'model_status':turn['status']}
+            return {'session_id':turn['session_id'],'model_status':turn['status'],**({'review_candidate':review} if review else {})}
         from easel_workbench.runtime.task_runtime import finish_call
         with self.store.connect() as c:
             calls=c.execute('SELECT id FROM creator_model_calls WHERE task_id=?',(turn.get('work',{}).get('version_id') if turn.get('work') else turn['id'],)).fetchall()

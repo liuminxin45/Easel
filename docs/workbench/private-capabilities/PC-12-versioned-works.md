@@ -6,6 +6,10 @@
 
 **贴图配文复制：** 用户要求在原文件预览中分别复制标题与正文。[nativePages.tsx](../../../web/frontend/src/workbench/ui/nativePages.tsx) 注入 [PosterCopyActions.tsx](../../../web/frontend/src/workbench/ui/PosterCopyActions.tsx)，仅处理已登记 `标题与配文.txt`，复用加载结果；不改写文件。共通 OutputsPage 只提供可选文本预览动作接缝，默认保持官方行为，异常格式不推测。
 
+**对话采纳：** 两个油猪制作技能冻结本轮专属目录、画像和身份；成品登记后使用原生会话文本询问。明确回复“采纳这版”“只采纳图片/配文/正文”“不采纳这版（可附原因）”调用既有决定服务，默认仅归档、不发布；模糊表态先确认。附件、来源、其他技能的输入不触发决定；复杂表达先沿原生讨论处理，模型口头认可不算持久决定。
+
+**私有桥接：** [native_review.py](../../../easel_workbench/features/works/native_review.py) 经 [chat.py](../../../easel_workbench/application/chat.py) 复用 capture_artifacts 和 production_outcome 登记准确文件，冻结父版与画像；修改另存子版。受理沿 [chat_admission.py](../../../easel_workbench/application/chat_admission.py)，本地决定沿 [service.py](../../../easel_workbench/features/conversations/service.py) 的原回合与事件仓库；不调用模型。复用 [local_operations.py](../../../easel_workbench/runtime/local_operations.py)，本入口不采纳保留原文件。验证见 [登记测试](../../../tests/test_workbench_native_review.py)、[贴图/文章闭环与重启恢复](../../../tests/test_workbench_native_review_flow.py)、[浏览器验收](../../../tests/workbench_native_review_browser.py)。旧对话缺可信版本关联时不推测历史归属；代码完成、检查与正式发布分别核验。
+
 **实际公共文件差异：** 见 [共通源码逐文件台账](../SHARED-SOURCE-CHANGES.md)，按 `PC-12` 查询实际关联路径、修改理由与同步核对点；纯复用或开发维护项不据此新增官方改动。
 
 - **状态：** 已确认保留；类型：私有业务。

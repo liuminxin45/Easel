@@ -36,6 +36,8 @@ metadata:
 
 交付实际贴图文件、可复制标题和配文，说明来源、工具及真实检查结果；修改另存版本。
 
+完整产物已实际交付后，在普通会话回复中简短询问用户是采纳、继续讨论或修改，还是不采纳；交付失败或未完成时先如实说明，不冒称成品可采纳。用户只认可图片或配文时，只按明确范围理解；“可以”“不错”等含义不清时先确认。不得自行把讨论、局部认可或以往授权当成本版采纳，也不能在没有工作台准确版本决定回执时声称已记录采纳、不采纳或完成归档。修改保留原文件并另存。
+
 ## 本项目工具
 
 本项目适配后的原工具位于 `scripts/`。使用 `内容工作流/creative_review.py` 在项目根加 `--root <项目根>` 创建、绑定和校验本版创作检查，再按需用 `贴图生产/cli.mjs check|render --manifest <草稿包> --require-creative-review`。先阅读 `references/neo-source/工具/内容工作流/README.md` 与 `references/neo-source/工具/贴图生产/README.md` 理解字段；把其中旧项目路径替换成以上本项目工具路径，不调用旧的采纳同步脚本。每版计划、实际文件、预览与反馈各自绑定，工具结果不得替代人的真实采纳。Node Playwright 安装在项目 `.runtime/neo-poster-tools`；需要时运行 `python skills/builtin/oil-pig-poster/scripts/install_oil_pig_tools.py`，缺失或安装失败时如实报告。

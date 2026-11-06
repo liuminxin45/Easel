@@ -40,7 +40,7 @@ def setup(business,monkeypatch):
 
 
 def request(tid='fast-one'):
-    value=fixtures.value('discuss',tid);value['context'].update(skill_id='topic-research');value['message']='  按原字继续\n保留来源  '
+    value=fixtures.value('discuss',tid);value['context'].update(skill_id='oil-pig-learn-article');value['message']='  按原字继续\n保留来源  '
     return value
 
 

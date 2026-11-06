@@ -137,11 +137,22 @@ class ChatAdmission:
     async def _process(self,tid):
         try:
             with self.store.connect() as c:
-                actual=c.execute('SELECT 1 FROM easel_chat_turns WHERE id=?',(tid,)).fetchone()
+                actual=c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(tid,)).fetchone()
             if actual:
+                turn=json.loads(actual[0])
+                if turn.get('local_review') and turn.get('status') not in ('completed','unknown','failed','stopped'):
+                    with self.store.connect() as c:original=self._row(c,tid)['request']
+                    await run_sync(self.chat.complete_review,original,turn['local_review'],self.business)
                 await run_sync(self._stage,tid,'dispatched');return
             row=await run_sync(self._stage,tid,'preparing',anchor=True)
             if not row:return
+            from easel_workbench.features.works.native_review import decision
+            command=await run_sync(decision,self.business,row['request'])
+            if command:
+                row=await run_sync(self._stage,tid,'admitting',anchor=True)
+                if not row:return
+                await run_sync(self.chat.complete_review,row['request'],command,self.business,tid)
+                await run_sync(self._stage,tid,'dispatched');return
             request,prepared=await run_sync(self._prepare,row)
             row=await run_sync(self._stage,tid,'admitting',anchor=True)
             if not row:return

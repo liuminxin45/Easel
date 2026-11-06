@@ -397,7 +397,7 @@ class ChatService:
             return self.get_turn(previous['id'])
         return None
 
-    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None, interactive=True, display_summary=None):
+    def _admit(self, value, *, snapshot, actual_prompt, work=None, frozen_instructions=None, admission_id=None, interactive=True, display_summary=None, local_review=None):
         if self._closing:
             raise ChatConflict('服务正在关闭，请保留草稿')
         if not isinstance(value, dict):
@@ -478,6 +478,7 @@ class ChatService:
                     'native_id': '', 'work': copy.deepcopy(work), 'hook_status': 'not_started'}
             if context.get('creation'):turn['profile_id']=session['profile_id']
             if display_summary is not None:turn['display_summary']=copy.deepcopy(display_summary)
+            if local_review is not None:turn['local_review']=copy.deepcopy(local_review)
             if self.on_accept:
                 accepted = self.on_accept(c, turn)
                 if inspect.isawaitable(accepted):
@@ -502,6 +503,40 @@ class ChatService:
             if not done.cancelled():done.exception()
         task.add_done_callback(finished)
         return await asyncio.shield(task)
+
+    def complete_review(self,value,command,business,admission_id=None):
+        """Durable local decision using the same turn and event journal owners."""
+        try:return self._complete_review(value,command,business,admission_id)
+        finally:self._release_owned(identity(value.get('turnId') or value.get('id')))
+
+    def _complete_review(self,value,command,business,admission_id=None):
+        tid=identity(value.get('turnId') or value.get('id'))
+        with self.store.connect() as c:
+            row=c.execute('SELECT document FROM easel_chat_turns WHERE id=?',(tid,)).fetchone()
+        old=json.loads(row[0]) if row else None
+        if old and old['request_signature']!=sha(value):raise ChatConflict('同一回合不能更换决定原话')
+        if old and old.get('status') in TERMINAL:return old
+        if old:
+            if old.get('local_review')!=command:raise ChatConflict('本地决定与原冻结输入不同')
+            turn=old
+        else:
+            turn,_=self._admit(value,snapshot=None,actual_prompt=value['message'],frozen_instructions='本地明确决定，不调用模型',admission_id=admission_id,local_review=command)
+        try:
+            from easel_workbench.features.works.native_review import apply_decision
+            output,receipt=apply_decision(business,command,tid)
+            turn.update(output=output,status='completed',hook_status='completed',delivery_state='local',business_receipt={'review_decision':receipt},updated_at=now())
+        except Exception:
+            turn.update(output='决定记录的结果尚待核对，原话和文件保留；没有重复执行。',status='unknown',hook_status='unknown',updated_at=now())
+        with self.store.connect() as c:
+            c.execute('BEGIN IMMEDIATE');self._put_turn(c,turn)
+            session=self._session(c,turn['session_id'])
+            if session.get('pendingTurnId')==tid and turn['status']=='completed':
+                session.update(pendingTurnId=None,updated=now(),revision=session['revision']+1);self._put_session(c,session)
+        path=self._event_path(tid);path.parent.mkdir(parents=True,exist_ok=True)
+        events=[{'id':1,'event':'token','data':turn['output']},{'id':2,'event':'done','data':{'sessionKey':turn['session_id']}}]
+        temporary=path.with_suffix('.local.tmp');temporary.write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in events),encoding='utf8');temporary.replace(path)
+        self._release_owned(tid);self._save_metadata(turn['session_id'])
+        return turn
 
     async def _submit_owned(self,value,*,snapshot,actual_prompt,work=None,frozen_instructions=None,admission_id=None,interactive=True,display_summary=None):
         from easel.web_services.concurrency import run_sync

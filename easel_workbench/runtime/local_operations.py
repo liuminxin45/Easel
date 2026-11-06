@@ -69,6 +69,7 @@ def queue_action(c,job):
  original={'schema_version':1,'work':dict(c.execute('SELECT * FROM toolbox_works WHERE id=?',(job['work_id'],)).fetchone()),'history':history,'attachments':[dict(c.execute('SELECT * FROM toolbox_files WHERE id=?',(fid,)).fetchone()) for fid in fileids],'annotations':[dict(r) for r in c.execute('SELECT * FROM toolbox_review_events WHERE work_id=? ORDER BY seq',(job['work_id'],))],'coverage':'工作台可取得的完整原话及过程；不补造未取得提示词或目视检查'}
  c.execute('INSERT OR IGNORE INTO toolbox_local_record_inputs VALUES(?,?)',(job['id'],pack(original)))
  kinds=['project_archive'] if job['kind']=='archive' else ['record']+(['project_archive'] if job['kind']=='accept' else ['cleanup'] if job['kind']=='reject' else [])
+ if job.get('_origin')=='native_review' and job['kind']=='reject':kinds=['record']
  return [_task(c,job,kind) for kind in kinds]
 
 def enqueue_delivery(c,job_or_id):

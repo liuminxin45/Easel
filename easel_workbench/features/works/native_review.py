@@ -22,6 +22,7 @@ def modifying(message):
 
 def binding(business,value):
     context=value.get('context') or {};skill=context.get('skill_id')
+    if skill and skill not in FORMATS:return None
     sid=value.get('sessionId') or value.get('session_id');parent=latest(business,sid) if modifying(value.get('message','')) else None
     if parent and skill not in FORMATS:skill=parent['skill_id']
     if skill not in FORMATS:return None

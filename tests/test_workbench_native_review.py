@@ -32,6 +32,8 @@ def test_learning_and_plain_chat_never_create_review_binding(commands):
     business=SimpleNamespace(root=commands.root)
     for skill in ('oil-pig-learn-poster','oil-pig-learn-article',None):
         assert binding(business,{'turnId':'test-turn','sessionId':'test-session','context':{'skill_id':skill}}) is None
+    for skill in ('oil-pig-learn-poster','oil-pig-learn-article'):
+        assert binding(business,{'turnId':'test-turn','sessionId':'test-session','message':'修改这版','context':{'skill_id':skill}}) is None
 
 def test_discussion_or_quoted_source_never_becomes_a_decision(commands):
     from easel_workbench.features.works.native_review import decision,modifying

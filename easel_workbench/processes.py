@@ -3,6 +3,7 @@ import ctypes
 import json
 from pathlib import Path
 import subprocess
+import hashlib
 from .runtime.scripts.windows_process_identity import ProcessIdentity
 
 
@@ -68,6 +69,35 @@ def descendant_pids(inventory,roots):
             more.add(pid)
         if not more:return selected
         selected|=more
+
+
+def drain_descendants(inventory, held, *, validate=None):
+    """Catch children spawned between inventory and termination; fail closed.
+
+    Keep the inspected handles open throughout so exited parent PIDs cannot
+    silently become permission to terminate another process's descendants.
+    """
+    anchors={handle.pid:inventory[handle.pid] for handle in held}
+    extra=[];proof=[]
+    try:
+        for _ in range(4):
+            current={**rows(),**anchors}
+            remaining=descendant_pids(current,set(anchors))-set(anchors)
+            if not remaining:
+                if not all(handle.exited() for handle in [*held,*extra]):
+                    raise ValueError('Owned process exit is not confirmed')
+                return proof
+            for pid in sorted(remaining):
+                row=current[pid]
+                if validate:validate(row)
+                handle=checked_identity(row);extra.append(handle);anchors[pid]=row
+                proof.append({'pid':pid,'creation_ticks':str(handle.creation_ticks),
+                              'kind':'native_descendant','command_sha256':hashlib.sha256((row.get('command') or '').encode()).hexdigest()})
+            for handle in extra:
+                if not handle.exited():handle.terminate(expected_creation_ticks=handle.creation_ticks)
+        raise ValueError('Owned process tree is not quiescent; no exit receipt issued')
+    finally:
+        for handle in extra:handle.close()
 
 
 def existing(root,release,role):

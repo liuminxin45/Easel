@@ -59,6 +59,7 @@ def stop_fixture(tmp_path,monkeypatch):
             assert expected_creation_ticks==self.creation_ticks
             terminated.append(self.pid)
             if self.pid in fail:raise TimeoutError('TEMP exit unconfirmed')
+        def exited(self):return self.pid in terminated and self.pid not in fail
         def close(self):self.closed=True
         def __enter__(self):return self
         def __exit__(self,*_):self.close()
@@ -136,3 +137,12 @@ def test_after_termination_is_attempted_an_unconfirmed_exit_keeps_the_fence(stop
     with pytest.raises(TimeoutError,match='unconfirmed'):module.stop_new_profile()
     assert terminated==[1] and all(h.closed for h in held)
     assert json.loads((state/'paused').read_text())['owner']=='runtime-stop'
+
+
+def test_reviewed_native_retirement_holds_exact_descendant_handles_and_returns_exit_proof(stop_fixture):
+    module,state,inventory,terminated,held,_=stop_fixture
+    inventory[4]=row(4,2,250,name='codex.exe',command='codex.exe app-server')
+    proof=module.stop_new_profile(native_retirement={'turn_id':'exact-reviewed-turn'})
+    assert proof['exited'] and proof['source']=='identity_fenced_profile_retirement'
+    assert {item['pid'] for item in proof['processes']}=={1,2,3,4}
+    assert terminated==[1,2,3,4] and all(h.closed for h in held)

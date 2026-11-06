@@ -55,7 +55,7 @@ class HistoricalAuditConnection:
         return self.connection.execute(sql,parameters)
 
 
-def idle(database=None):
+def idle(database=None, *, chat_retirement=None):
     base,automation=legacy()
     evidence=read(OLD/'evidence/simplify-workbench-20261029/activation-evidence.json')
     def audited(key):
@@ -82,6 +82,11 @@ def idle(database=None):
                         if value.get('status')=='unknown':
                             from native_chat_receipt_retention import retained as reviewed_chat_retention
                             retained=reviewed_chat_retention(ROOT,ident,raw)
+                            from easel_workbench.features.conversations.local_execution import closed
+                            from easel_workbench.features.conversations.retirement import retired, eligible
+                            if closed(value) or retired(value):retained={'id':ident,'local_execution_closed':True,'outcome':'unknown','replayed':False}
+                            if chat_retirement and eligible(chat_retirement,ident,raw):
+                                retained={'id':ident,'controlled_retirement_pending':True,'outcome':'unknown','replayed':False}
                             if retained:status.setdefault('retained_chat_unknown',[]).append(retained)
                         active=(active or (value.get('status')=='unknown' and not retained)
                                 or value.get('hook_status')=='pending' or value.get('start_hook_status')=='pending')
@@ -203,8 +208,8 @@ def queue_idle():
     return {'method':'thread/queue/list','empty':True,'read_only':True}
 
 
-def stop_new_profile(manager=None):
-    from easel_workbench.processes import rows,argv,descendant_pids
+def stop_new_profile(manager=None, *, native_retirement=None):
+    from easel_workbench.processes import rows,argv,descendant_pids,drain_descendants
     from easel_workbench.runtime.feedback_ledger import atomic_create
     import uuid
     marker={'schema':1,'owner':'runtime-stop','operation_id':uuid.uuid4().hex}
@@ -234,8 +239,9 @@ def stop_new_profile(manager=None):
         if not roots:raise ValueError('No owned process snapshot is available')
         selected=descendant_pids(inventory,roots)
         for pid in sorted(selected):
-            row=inventory[pid];kind=role_kind(row)
+            row=inventory[pid];kind='native_descendant' if native_retirement and pid not in roots else role_kind(row)
             held.append((checked_identity(row),kind))
+        proof=[{'pid':handle.pid,'creation_ticks':str(handle.creation_ticks),'kind':kind,'command_sha256':hashlib.sha256(inventory[handle.pid]['command'].encode()).hexdigest()} for handle,kind in held]
         for handle,kind in sorted(held,key=lambda item:0 if item[1]=='manager' else 1):
             termination_started=True
             handle.terminate(expected_creation_ticks=handle.creation_ticks)
@@ -248,6 +254,10 @@ def stop_new_profile(manager=None):
             with checked_identity(row) as handle:
                 termination_started=True
                 handle.terminate(expected_creation_ticks=handle.creation_ticks)
+                proof.append({'pid':handle.pid,'creation_ticks':str(handle.creation_ticks),'kind':kind,'command_sha256':hashlib.sha256(row['command'].encode()).hexdigest()})
+        if not all(handle.exited() for handle,_ in held):raise ValueError('Owned process exit was not confirmed')
+        proof.extend(drain_descendants(inventory,[handle for handle,_ in held],validate=None if native_retirement else role_kind))
+        return {'source':'identity_fenced_profile_retirement','exited':True,'processes':proof}
     except BaseException:
         if not termination_started and pause.exists():
             try:owned=read(pause)==marker

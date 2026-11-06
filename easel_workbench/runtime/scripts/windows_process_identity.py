@@ -18,6 +18,8 @@ kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 kernel.WaitForSingleObject.restype = wintypes.DWORD
 kernel.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
 kernel.TerminateProcess.restype = wintypes.BOOL
+kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+kernel.GetExitCodeProcess.restype = wintypes.BOOL
 
 
 class ProcessIdentity:
@@ -67,6 +69,13 @@ class ProcessIdentity:
             raise TimeoutError('Process exit not yet confirmed; retain ownership and do not replace')
         if result != 0:
             raise ctypes.WinError(ctypes.get_last_error())
+
+    def exit_code(self):
+        if not self.exited():raise ValueError('Process has not exited')
+        value=wintypes.DWORD()
+        if not kernel.GetExitCodeProcess(self.handle,ctypes.byref(value)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return value.value
 
     def close(self):
         if self.handle:

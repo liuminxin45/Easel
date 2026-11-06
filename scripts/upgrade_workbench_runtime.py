@@ -143,6 +143,20 @@ def reviewed_skill_retirement(root,package,acceptance_path,path,expected):
     return {'path':str(path),'sha256':sha(path),'plan_sha256':expected}
 
 
+def reviewed_chat_retirement(root, acceptance_path, path, expected):
+    if path is None and expected is None:return None
+    root=Path(root).resolve()
+    if path is None or not expected:raise ValueError('Chat retirement needs exact plan and SHA')
+    path=Path(path).resolve()
+    if not path.is_relative_to(root/'.local'):raise ValueError('Chat retirement must be local reviewed evidence')
+    plan=read(path)
+    if plan.get('plan_sha256')!=expected or read(acceptance_path).get('evidence',{}).get(path.relative_to(root).as_posix())!=sha(path):
+        raise ValueError('Chat retirement is not bound to candidate acceptance')
+    from easel_workbench.features.conversations.retirement import preview
+    if preview(root,plan['turn_id'])!=plan:raise ValueError('Original chat or process owner changed')
+    return plan
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--acceptance',type=Path,default=STATE/'upgrade-acceptance.json')
@@ -151,6 +165,8 @@ def main():
     parser.add_argument('--builtin-plan-sha256')
     parser.add_argument('--delivery-plan',type=Path)
     parser.add_argument('--delivery-plan-sha256')
+    parser.add_argument('--chat-retirement-plan',type=Path)
+    parser.add_argument('--chat-retirement-plan-sha256')
     parser.add_argument('--skill-retirement-plan',type=Path)
     parser.add_argument('--skill-retirement-plan-sha256')
     parser.add_argument('--authenticate-after-cutover',action='store_true',help='Recover a full legacy login-session table; authenticate before admitting workers')
@@ -184,6 +200,7 @@ def upgrade(options):
     builtin=reviewed_builtin_plan(ROOT,package,options.acceptance,options.builtin_plan,options.builtin_plan_sha256)
     delivery=reviewed_delivery_plan(ROOT,options.acceptance,getattr(options,'delivery_plan',None),getattr(options,'delivery_plan_sha256',None))
     retirement=reviewed_skill_retirement(ROOT,package,options.acceptance,getattr(options,'skill_retirement_plan',None),getattr(options,'skill_retirement_plan_sha256',None))
+    chat_retirement=reviewed_chat_retirement(ROOT,options.acceptance,getattr(options,'chat_retirement_plan',None),getattr(options,'chat_retirement_plan_sha256',None))
     if builtin is None and needs_builtin_activation(ROOT):
         raise ValueError('Legacy skill defaults require an explicit reviewed builtin migration plan')
     previous=read(ROOT/'data/active-workbench.json');owner=read(ROOT/'data/migration-owner.json')
@@ -193,7 +210,7 @@ def upgrade(options):
         raise ValueError('Reviewed deployment base changed; integrate the current live pair before retrying')
     if owner['target_root']!=str(ROOT) or any(owner[k]!=previous[k] for k in ('release','manifest_sha256')):
         raise ValueError('Business data ownership does not match the current runtime')
-    state=idle(ROOT/'data/desk.sqlite')
+    state=idle(ROOT/'data/desk.sqlite',chat_retirement=chat_retirement) if chat_retirement else idle(ROOT/'data/desk.sqlite')
     if state['busy']:print(json.dumps({'status':'waiting','busy':state}));return
     queue_idle();client=None;stopped=False
     if getattr(options,'authenticate_after_cutover',False):
@@ -210,15 +227,22 @@ def upgrade(options):
         import sqlite3
         with sqlite3.connect(ROOT/'data/desk.sqlite',timeout=30,isolation_level=None) as fence:
             fence.execute('BEGIN IMMEDIATE')
-            state=idle(ROOT/'data/desk.sqlite')
+            state=idle(ROOT/'data/desk.sqlite',chat_retirement=chat_retirement) if chat_retirement else idle(ROOT/'data/desk.sqlite')
             if state['busy']:
                 atomic(STATE/'admission.json',{'workers':True})
                 atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':previous})
                 print(json.dumps({'status':'waiting','busy':state}));return
             if read(ROOT/'data/active-workbench.json')!=previous or read(ROOT/'data/active-native.json')!=previous_native or read(ROOT/'data/migration-owner.json')!=owner:
                 raise ValueError('Active deployment changed during preflight; review the current pair before retrying')
-            stop_new_profile();stopped=True
+            if chat_retirement:
+                from easel_workbench.features.conversations.retirement import preview
+                if preview(ROOT,chat_retirement['turn_id'])!=chat_retirement:raise ValueError('Reviewed chat changed behind the fence')
+            process_exit=stop_new_profile(native_retirement=chat_retirement) if chat_retirement else stop_new_profile();stopped=True
             fence.execute('ROLLBACK')
+        chat_recovery=None
+        if chat_retirement:
+            from easel_workbench.features.conversations.retirement import apply as retire_chat
+            chat_recovery=retire_chat(ROOT,chat_retirement,process_exit)
         builtin_activation=activate_builtin_after_stop(ROOT,builtin)
         skill_retirement=None
         if retirement:
@@ -262,7 +286,7 @@ def upgrade(options):
         atomic(STATE/'cutover.json',{'source_root':str(OLD),'target_root':str(ROOT),'phase':'live','candidate':choice})
         result={'status':'live','candidate':choice,'previous_runtime':previous,'previous_native':previous_native,'data_root':str(ROOT/'data'),
             'database_copied':False,'database_restored':False,'manager':manager_pid,'manager_started_by':'windows-task-scheduler','smoke':ready,'idle':state,
-            'builtin_activation':builtin_activation,'delivery_reconciliation':delivery_reconciliation,'skill_retirement':skill_retirement}
+            'chat_recovery':chat_recovery,'builtin_activation':builtin_activation,'delivery_reconciliation':delivery_reconciliation,'skill_retirement':skill_retirement}
         atomic(STATE/'runtime-upgrade.json',result)
         atomic(STATE/'upgrades'/(choice['release']+'.json'),result)
         original=read(STATE/'deployment.json')

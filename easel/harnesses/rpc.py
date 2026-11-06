@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import signal
+import uuid
 from contextlib import asynccontextmanager
 
 from .base import HarnessError, RunRequest
@@ -82,6 +83,9 @@ async def connection(request: RunRequest, command: list[str], notify, respond, *
     entry["busy"] = True
     rpc.notify = notify
     rpc.respond = respond
+    rpc.receipt_callback = request.on_execution_receipt if request.stop_event is not None else None
+    if hasattr(rpc, "execution_receipt"):
+        rpc.execution_receipt("codex_process_attached")
     rpc.client_error = None
     try:
         yield rpc
@@ -98,6 +102,7 @@ async def connection(request: RunRequest, command: list[str], notify, respond, *
         if pool.get(key) is not entry:
             return
         rpc.notify = lambda method, params: None
+        rpc.receipt_callback = None
 
         async def reject_idle(method, params):
             raise HarnessError("会话空闲时不允许执行工具")
@@ -131,6 +136,13 @@ class RPC:
         self.reader_error = None
         self.initialized = None
         self.native_id = ""
+        self.process_token = uuid.uuid4().hex
+        self.receipt_callback = request.on_execution_receipt if request.stop_event is not None else None
+
+    def execution_receipt(self, kind, **data):
+        if self.receipt_callback and self.process is not None:
+            self.receipt_callback({"kind": kind, "process_token": self.process_token,
+                                   "pid": self.process.pid, "source": "owned_stdio", **data})
 
     async def __aenter__(self):
         env = {**self.request.env, "EASEL_ROOT": str(self.request.cwd.resolve()),
@@ -258,6 +270,7 @@ class RPC:
         raise self.reader_error or HarnessError("Agent 在本轮完成前退出，请检查 CLI 登录与模型配置")
 
     async def __aexit__(self, *arguments):
+        tree_closed = False
         for task in self.tasks:
             task.cancel()
         if self.tasks:
@@ -269,7 +282,7 @@ class RPC:
                         "taskkill", "/PID", str(self.process.pid), "/T", "/F",
                         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
                     try:
-                        await asyncio.wait_for(killer.wait(), 5)
+                        tree_closed = await asyncio.wait_for(killer.wait(), 5) == 0
                     except asyncio.TimeoutError:
                         killer.kill()
                         await killer.wait()
@@ -294,6 +307,9 @@ class RPC:
                     os.killpg(self.process.pid, signal.SIGKILL)
                 except (ProcessLookupError, PermissionError):
                     pass
+                tree_closed = True
+            if tree_closed and self.process.returncode is not None:
+                self.execution_receipt("codex_process_closed", returncode=self.process.returncode, tree_closed=True)
         for task in (self.reader, self.stderr):
             if task is not None:
                 task.cancel()

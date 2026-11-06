@@ -30,6 +30,8 @@ from easel.runtime_env import proxy_environment, web_environment
 from easel_workbench.paths import owned_output_path
 
 
+from .local_execution import closed as locally_closed, release as release_execution, history_context
+from .retirement import retired as locally_retired
 from .receipts import TERMINAL, ChatConflict, packed, sha, identity, text, now
 
 
@@ -54,6 +56,8 @@ class ChatService:
         self._ownership_generation = 0
         self._questions = {}
         self._stop_requested = set()
+        self._stop_events = {}
+        self._cooperative_stops = set()
         self._closing = False
         self._reconciliations = {}
         with self.store.connect() as c:
@@ -296,6 +300,7 @@ class ChatService:
             owned_before, generation = self._ownership_snapshot(turn_id)
             with self.store.connect() as c:
                 turn = self._turn(c, turn_id)
+                released = self._session(c,turn['session_id']).get('pendingTurnId') != turn_id
             owned_after, current_generation = self._ownership_snapshot(turn_id)
             if turn['status'] not in TERMINAL and not owned_before and not owned_after:
                 # An acceptance/completion may have crossed this database read.
@@ -305,6 +310,7 @@ class ChatService:
                     continue
                 turn.update(status='unknown', delivery_state='unknown', recovery='核对原生会话；不会自动重发。')
             break
+        turn['execution_closed'] = released and (locally_closed(turn) or bool(locally_retired(turn)))
         if not private:
             turn['skill_refs'] = [{'id': skill['id'], 'version': skill['version']}
                                   for skill in (turn.get('snapshot') or {}).get('skills', [])]
@@ -346,10 +352,37 @@ class ChatService:
         return result
 
     async def _reconcile_orphan(self, original):
+        native=original.get('native_terminal') or {}
+        persisted_terminal=(native.get('kind')=='codex_terminal' and native.get('thread_id')==original.get('native_id')
+                            and native.get('turn_id')==original.get('native_turn_id')
+                            and native.get('status') in ('completed','interrupted','failed'))
+        if not locally_closed(original) and not persisted_terminal:
+            from .local_execution import close_orphan
+            closure=await asyncio.to_thread(close_orphan,original)
+            if closure:
+                with self.store.connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    if self._turn(c,original['id'])!=original or self._ownership_snapshot(original['id'])[0]:
+                        return self._recovery_receipt(original['id'])
+                    original['local_execution_closed']=closure
+                    self._put_turn(c,original)
+        if locally_closed(original) and not persisted_terminal:
+            with self.store.connect() as c:
+                c.execute('BEGIN IMMEDIATE')
+                if self._turn(c,original['id'])!=original or self._ownership_snapshot(original['id'])[0]:
+                    return self._recovery_receipt(original['id'])
+                session=self._session(c,original['session_id'])
+                original.update(status='unknown',delivery_state='unknown',updated_at=now())
+                self._put_turn(c,original)
+                if release_execution(session,original):self._put_session(c,session)
+            self._save_metadata(original['session_id'])
+            return self._recovery_receipt(original['id'])
         from .native_receipts import terminal
         from .generated_images import _home
         environment=self._environment()
-        evidence=await asyncio.to_thread(terminal,environment.get('CODEX_HOME') or _home(),original)
+        evidence=({'status':{'completed':'completed','interrupted':'stopped','failed':'failed'}[native['status']],
+                   'output':None,'evidence':{**native,'kind':'persisted_codex_terminal','sha256':sha(native)}} if persisted_terminal else
+                  await asyncio.to_thread(terminal,environment.get('CODEX_HOME') or _home(),original))
         if not evidence:return self._recovery_receipt(original['id'])
         tid=original['id']
         with self.store.connect() as c:
@@ -539,7 +572,11 @@ class ChatService:
                     for row in c.execute('SELECT result FROM easel_chat_operations'))
                 if first and not legacy_manual and session.get('title_source', 'default') == 'default' and session['title'] in ('新对话', 'New Chat'):
                     session.update(title=initial_title, title_source='automatic')
-            turn = {'id': turn_id, 'operation_id': operation, 'session_id': session_id, 'runtime': runtime,
+            native_key = session.get('native_session_key', session_id)
+            if not harness_store.binding(self.sessions_dir,native_key).get('native_id'):
+                frozen_instructions += history_context(c, session_id, native_key)
+            signature = sha({'value':value,'snapshot':frozen,'actual_prompt':actual_prompt,'work':work,'frozen_instructions':frozen_instructions})
+            turn = {'id': turn_id, 'native_session_key': native_key, 'operation_id': operation, 'session_id': session_id, 'runtime': runtime,
                     'execution_settings': config,
                     'message': message, 'context': copy.deepcopy(context), 'snapshot': frozen, **({'interactive':False} if not interactive else {}),
                     'actual_prompt': actual_prompt, 'actual_prompt_sha256': hashlib.sha256(actual_prompt.encode()).hexdigest(),
@@ -764,11 +801,12 @@ class ChatService:
             current.update(stop_requested=True,stop_requested_at=now())
             self._put_turn(c,current)
         self._stop_requested.add(active)
+        if active in self._stop_events:self._stop_events[active].set()
         task = self._tasks.get(active)
         if not task or task.done():
             return {'stopped':False,'status':current['status'],'stop_requested':True,'turn_id':active,'session_id':session_id}
-        if (current.get('execution_identity') or current['runtime'] not in ('codex','acp','opencode')) and not task.cancelling():
-            control=self._native_controls.get(session_id)
+        if active not in self._cooperative_stops and (current.get('execution_identity') or current['runtime'] not in ('codex','acp','opencode')) and not task.cancelling():
+            control=self._native_controls.get(current.get('native_session_key',session_id))
             if control is not None and control._task is task:control.terminate()
             else:task.cancel()
         # A stop is owned by the server task, not the lifetime of this HTTP
@@ -790,7 +828,7 @@ class ChatService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         for session in self.list_sessions(include_internal=True)['sessions']:
-            await close_sessions(session['id'])
+            await close_sessions(session.get('native_session_key',session['id']))
 
     async def _run(self, turn_id, environment, started):
         started.set()
@@ -802,6 +840,10 @@ class ChatService:
         path.parent.mkdir(parents=True, exist_ok=True)
         started_hook_task = None
         native_invoked = False
+        native_key = turn.get('native_session_key',turn['session_id'])
+        stop_event = self._stop_events.setdefault(turn_id,asyncio.Event())
+        if turn.get('stop_requested') or turn_id in self._stop_requested:stop_event.set()
+        accepting_receipts = True
         def scrub(value):
             return self._scrub(value,environment)
 
@@ -817,6 +859,7 @@ class ChatService:
 
         def emit(kind, value):
             nonlocal sequence, last_flush
+            if not accepting_receipts:return
             value = scrub(value)
             if kind in ('token', 'thinking'):
                 turn['output' if kind == 'token' else 'thinking'] += value
@@ -833,8 +876,9 @@ class ChatService:
                 last_flush = current
 
         def bind(native_id):
+            if not accepting_receipts:return
             owned_output_path(self.root,'outputs/_sessions')
-            harness_store.bind(self.sessions_dir, turn['session_id'], turn['runtime'], native_id)
+            harness_store.bind(self.sessions_dir, native_key, turn['runtime'], native_id)
             turn['native_id'] = native_id
             persist()
 
@@ -847,6 +891,8 @@ class ChatService:
 
         def native_turn(thread_id, native_turn_id):
             nonlocal started_hook_task
+            if not accepting_receipts:return
+            turn['native_not_dispatched']=False
             if turn['native_id'] != thread_id:
                 raise HarnessError('实际回合与已绑定的原生会话不一致')
             if turn['runtime'] in ('acp','opencode'):
@@ -854,12 +900,12 @@ class ChatService:
             else:
                 turn.update(native_turn_id=native_turn_id,execution_identity={'kind':'native_turn','id':native_turn_id})
             start_execution()
-            if turn_id in self._stop_requested:
+            if turn_id in self._stop_requested and turn_id not in self._cooperative_stops:
                 task=self._tasks.get(turn_id)
                 if task and not task.done() and not task.cancelling():
                     # The adapter installs its interruption handler after this
                     # synchronous callback, before the next event-loop turn.
-                    control=self._native_controls.get(turn['session_id'])
+                    control=self._native_controls.get(native_key)
                     asyncio.get_running_loop().call_soon(control.terminate if control is not None and control._task is task else task.cancel)
 
         def start_execution():
@@ -878,12 +924,39 @@ class ChatService:
                     turn.update(start_hook_status='failed', start_hook_error_type=type(error).__name__)
 
         def execution_receipt(receipt):
+            if not accepting_receipts:return
+            kind=receipt.get('kind','')
+            if turn['runtime']=='codex' and kind.startswith('codex_'):
+                if kind=='codex_stop_ready':
+                    self._cooperative_stops.add(turn_id)
+                    turn['native_not_dispatched']=True
+                elif kind=='codex_dispatching':turn['native_not_dispatched']=False
+                elif kind=='codex_not_dispatched':turn['native_not_dispatched']=True
+                elif kind=='codex_process_attached':
+                    turn['local_process']={key:receipt[key] for key in ('pid','process_token')}
+                    if receipt.get('source')=='owned_stdio':
+                        from .local_execution import process_ownership
+                        turn['local_process'].update(process_ownership(receipt['pid']))
+                elif kind=='codex_process_closed':
+                    attached=turn.get('local_process') or {}
+                    if any(receipt.get(key)!=attached.get(key) for key in ('pid','process_token')):
+                        raise HarnessError('执行进程退出回执身份不一致')
+                    turn['local_execution_closed']={**receipt,'source':'owned_rpc_process','turn_id':turn_id,'observed_at':now()}
+                elif kind in ('codex_terminal','codex_stop_error'):
+                    if receipt.get('thread_id')!=turn['native_id'] or receipt.get('turn_id')!=turn.get('native_turn_id'):
+                        raise HarnessError('原生终态与本轮身份不一致')
+                    if kind=='codex_terminal':turn['native_terminal']=copy.deepcopy(receipt)
+                    else:turn['native_stop_error']=scrub(receipt.get('error',''))
+                else:raise HarnessError('未知的原生执行回执')
+                persist()
+                return
             if receipt.get('kind')!='openclaw_cli_result' or receipt.get('native_session_id')!=turn['native_id'] or not re.fullmatch(r'[0-9a-f]{64}',receipt.get('sha256','')):
                 raise HarnessError('原生 CLI 回执与准确会话不一致')
             turn.update(execution_receipt=copy.deepcopy(receipt),execution_identity={'kind':'cli_result_sha256','id':receipt['sha256']})
             start_execution()
 
         def native_interrupt(thread_id, native_turn_id):
+            if not accepting_receipts:return
             if turn['native_id'] != thread_id or (turn.get('execution_identity') or {}).get('id',turn.get('native_turn_id')) != native_turn_id:
                 raise HarnessError('停止回执与本轮原生会话不一致')
             turn.update(interrupt_confirmed=True, interrupt_confirmed_at=now())
@@ -921,18 +994,18 @@ class ChatService:
                 self._stop_requested.add(turn_id)
                 raise asyncio.CancelledError()
             owned_output_path(self.root,'outputs/_sessions')
-            record = harness_store.binding(self.sessions_dir, turn['session_id'])
+            record = harness_store.binding(self.sessions_dir, native_key)
             if record and record['runtime'] != turn['runtime']:
                 raise HarnessError('此会话属于其他底座，不能替换其历史')
             native_id = record.get('native_id', '')
-            harness_store.bind(self.sessions_dir, turn['session_id'], turn['runtime'], native_id)
+            harness_store.bind(self.sessions_dir, native_key, turn['runtime'], native_id)
             turn.update(status='submitting', delivery_state='submission_pending')
             persist()
             emit('activity', '已收到，正在连接 '+turn['runtime']+'…')
             configuration = turn.get('execution_settings') or {'sandbox':'workspace-write','codex_auto_approve':False}
             request = RunRequest(turn['actual_prompt'], self.root, environment, native_id,
                                  turn['model'], configuration['sandbox'], self.timeout,
-                                 session_key=turn['session_id'], codex_auto_approve=configuration['codex_auto_approve'],
+                                 session_key=native_key, stop_event=stop_event if turn['runtime']=='codex' else None, codex_auto_approve=configuration['codex_auto_approve'],
                                  on_native_turn=native_turn, on_native_interrupt=native_interrupt,
                                  on_execution_receipt=execution_receipt,
                                  frozen_instructions=turn['frozen_instructions'])
@@ -956,22 +1029,22 @@ class ChatService:
                     adapter=OpenClawAdapter()
                 native=create_chat_context(self.root,backend=lambda sid:turn['runtime'],
                     environment=environment,snapshot=lambda *args:None,ask=questions,scrub=scrub,running=self._native_controls)
-                await native._run_harness_chat(SimpleNamespace(turnId=turn_id),turn['session_id'],
+                await native._run_harness_chat(SimpleNamespace(turnId=turn_id),native_key,
                     turn['actual_prompt'],turn['runtime'],{'models':{turn['runtime']:turn['model']},**configuration},
                     emit,self.timeout,interactive=turn.get('interactive',True),run_request=request,
                     bind_native=bind,propagate_errors=True,stop_requested=lambda:turn_id in self._stop_requested,
                     on_dispatch=dispatch,adapter=adapter)
             turn.update(status='completed', delivery_state='accepted')
         except asyncio.CancelledError:
-            confirmed = turn_id in self._stop_requested and (not native_invoked or turn.get('interrupt_confirmed') is True)
+            confirmed = turn_id in self._stop_requested and (not native_invoked or turn.get('native_not_dispatched') is True or turn.get('interrupt_confirmed') is True)
             turn.update(status='stopped' if confirmed else 'unknown',
-                        delivery_state=('interrupted' if native_invoked else 'not_started') if confirmed else 'unknown')
+                        delivery_state=('not_started' if not native_invoked or turn.get('native_not_dispatched') else 'interrupted') if confirmed else 'unknown')
             emit('activity', '已停止' if confirmed else '未取得明确停止回执，原回合等待核对；不会自动重发。')
         except (HarnessError, asyncio.TimeoutError) as error:
             # wait_for cancels the native adapter before raising TimeoutError.
             # Its exact thread/turn interruption callback is positive evidence
             # of a stopped turn; an unacknowledged cancellation remains unknown.
-            confirmed_timeout = isinstance(error, asyncio.TimeoutError) and turn.get('interrupt_confirmed') is True
+            confirmed_timeout = turn.get('interrupt_confirmed') is True
             turn.update(status='stopped' if confirmed_timeout else 'unknown',
                         delivery_state='interrupted' if confirmed_timeout else 'unknown',
                         error=scrub(str(error)) if isinstance(error, HarnessError) else
@@ -982,6 +1055,16 @@ class ChatService:
             turn.update(status='unknown', delivery_state='unknown', error='执行或结果记录异常，请核对原回合。', error_type=type(error).__name__)
             emit('error', turn['error'])
         finally:
+            terminal=(turn.get('native_terminal') or {}).get('status')
+            if terminal in ('completed','interrupted','failed'):
+                turn.update(status={'completed':'completed','interrupted':'stopped','failed':'failed'}[terminal],
+                            delivery_state='interrupted' if terminal=='interrupted' else 'accepted',
+                            error=turn.get('error') if terminal=='failed' else None)
+            if turn.get('native_not_dispatched'):
+                stopping=turn_id in self._stop_requested
+                turn.update(status='stopped' if stopping else 'failed',delivery_state='not_started',
+                            error=None if stopping else turn.get('error'))
+            accepting_receipts=False
             if started_hook_task:
                 await asyncio.gather(started_hook_task, return_exceptions=True)
             persist()
@@ -1002,11 +1085,12 @@ class ChatService:
             with self.store.connect() as c:
                 c.execute('BEGIN IMMEDIATE')
                 session = self._session(c, turn['session_id'])
-                if session.get('pendingTurnId') == turn_id and turn['status'] in ('completed', 'stopped', 'failed'):
-                    session.update(pendingTurnId=None, updated=now(), revision=session['revision'] + 1)
+                if release_execution(session,turn):
                     self._put_session(c, session)
             sequence += 1
             with path.open('a', encoding='utf-8') as stream:
                 stream.write(json.dumps({'id': sequence, 'event': 'done', 'data': {'sessionKey': turn['session_id']}}, ensure_ascii=False) + '\n')
             self._save_metadata(turn['session_id'])
             self._stop_requested.discard(turn_id)
+            self._stop_events.pop(turn_id,None)
+            self._cooperative_stops.discard(turn_id)

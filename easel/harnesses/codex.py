@@ -11,6 +11,7 @@ from .base import Descriptor, HarnessError, RunRequest
 from .commands import base_command
 from .permissions import can_auto_approve
 from .rpc import connection
+from .codex_stop import prepare, dispatch, finish
 from .workspace import harness_instructions
 
 
@@ -31,6 +32,10 @@ class CodexAdapter:
             raise HarnessError('图片输入必须为已取得的绝对文件路径')
         if request.ephemeral is not None and (type(request.ephemeral) is not bool or request.native_id):
             raise HarnessError('临时会话选项仅适用于新建原生会话')
+        def receipt(kind, **data):
+            if request.on_execution_receipt:
+                request.on_execution_receipt({"kind": kind, **data})
+        receipt("codex_stop_ready")
         completion = asyncio.get_running_loop().create_future()
         thread_id = request.native_id
         turn_id = ""
@@ -80,7 +85,11 @@ class CodexAdapter:
                     for item in turn.get("items") or []:
                         if item.get("type") == "agentMessage":
                             request.on_agent_message(thread_id, turn_id, dict(item))
-                if turn.get("status") == "completed":
+                status = turn.get("status")
+                receipt("codex_terminal", thread_id=thread_id, turn_id=turn_id, status=status)
+                if status == "interrupted" and request.on_native_interrupt:
+                    request.on_native_interrupt(thread_id, turn_id)
+                if status == "completed":
                     completion.set_result(None)
                 else:
                     error = turn.get("error") or {}
@@ -115,24 +124,33 @@ class CodexAdapter:
 
         command = list(request.command) if request.command else base_command("codex") + ["app-server"]
         async with connection(request, command, notify, respond) as rpc:
-            if rpc.initialized is None:
-                rpc.initialized = await rpc.call("initialize", {
-                    "clientInfo": {"name": "easel", "version": __version__},
-                    "capabilities": {"experimentalApi": True}})
-                await rpc.send({"method": "initialized"})
-            options = {"cwd": str(request.cwd), "approvalPolicy": approval_policy,
-                       "sandbox": request.sandbox,
-                       "developerInstructions": harness_instructions(request)}
-            if request.model:
-                options["model"] = request.model
-            if request.ephemeral is not None:
-                options['ephemeral']=request.ephemeral
-            if thread_id and rpc.native_id == thread_id:
-                result = {"thread": {"id": thread_id}}
-            elif thread_id:
-                result = await rpc.call("thread/resume", {**options, "threadId": thread_id})
-            else:
-                result = await rpc.call("thread/start", options)
+            async def initialize_thread():
+                if rpc.initialized is None:
+                    rpc.initialized = await rpc.call("initialize", {
+                        "clientInfo": {"name": "easel", "version": __version__},
+                        "capabilities": {"experimentalApi": True}})
+                    await rpc.send({"method": "initialized"})
+                options = {"cwd": str(request.cwd), "approvalPolicy": approval_policy,
+                           "sandbox": request.sandbox,
+                           "developerInstructions": harness_instructions(request)}
+                if request.model:
+                    options["model"] = request.model
+                if request.ephemeral is not None:
+                    options['ephemeral']=request.ephemeral
+                if thread_id and rpc.native_id == thread_id:
+                    result = {"thread": {"id": thread_id}}
+                elif thread_id:
+                    result = await rpc.call("thread/resume", {**options, "threadId": thread_id})
+                else:
+                    result = await rpc.call("thread/start", options)
+                return result
+            try:
+                result = await prepare(initialize_thread(), request.stop_event)
+                if request.stop_event and request.stop_event.is_set():
+                    raise asyncio.CancelledError
+            except asyncio.CancelledError:
+                receipt("codex_not_dispatched")
+                raise
             resumed_id = (result.get("thread") or {}).get("id", "")
             if request.native_id and resumed_id != request.native_id:
                 raise HarnessError("Codex 返回了不同的原生会话 ID，不会替换已有历史")
@@ -161,7 +179,8 @@ class CodexAdapter:
             early: list[tuple[str, dict]] = []
             original_notify = rpc.notify
             rpc.notify = lambda method, data: early.append((method, data))
-            result = await rpc.call("turn/start", params)
+            receipt("codex_dispatching")
+            result = await dispatch(rpc.call("turn/start", params), request.stop_event)
             turn_id = (result.get("turn") or {}).get("id", "")
             if not turn_id:
                 raise HarnessError("Codex 未返回本轮 ID")
@@ -171,16 +190,7 @@ class CodexAdapter:
             for method, data in early:
                 notify(method, data)
             try:
-                await rpc.wait_notification(completion)
-            except asyncio.CancelledError:
-                try:
-                    await rpc.call("turn/interrupt", {"threadId": thread_id, "turnId": turn_id}, timeout=2)
-                except HarnessError:
-                    pass
-                else:
-                    if request.on_native_interrupt is not None:
-                        request.on_native_interrupt(thread_id, turn_id)
-                raise
+                await finish(rpc, completion, request, thread_id, turn_id, notify)
             finally:
                 if completion.done() and not completion.cancelled():
                     completion.exception()

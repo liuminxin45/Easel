@@ -62,12 +62,13 @@ def test_exact_native_terminal_recovers_same_session_and_allows_next_turn(servic
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('case',['wrong-turn','missing','running','partial-line','wrong-thread','wrong-cwd','null-complete','damaged','outside-home'])
+@pytest.mark.parametrize('case',['wrong-turn','missing','empty','running','partial-line','wrong-thread','wrong-cwd','null-complete','damaged','outside-home'])
 def test_insufficient_native_evidence_keeps_unknown_and_never_replays(service,tmp_path,monkeypatch,case):
     async def run():
         s,_=service;tid,calls=await orphan(s,monkeypatch)
         path=rollout(s,tmp_path,monkeypatch,'task_started' if case=='running' else 'task_complete',**({'turn_id':'another-turn'} if case=='wrong-turn' else {'last_agent_message':None} if case=='null-complete' else {}))
         if case=='missing':path.unlink()
+        elif case=='empty':path.write_bytes(b'')
         elif case=='partial-line':path.write_bytes(path.read_bytes().rstrip(b'\n'))
         elif case in ('wrong-thread','wrong-cwd'):
             rows=[json.loads(line) for line in path.read_text(encoding='utf8').splitlines()];rows[0]['payload']['id' if case=='wrong-thread' else 'cwd']='another-value';path.write_text('\n'.join(json.dumps(row) for row in rows)+'\n',encoding='utf8')

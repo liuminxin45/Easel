@@ -10,7 +10,7 @@
 - 首版源码盘点：`49193c821055841ad6930eafd81cd662ff349be6`，2026-11-05；本次仅记录已有差异，没有启用新能力。
 - 范围：`easel/**`、`web/app.py`、`web/frontend/src/**`，以及 `skills/shared/scripts/weixin_mp_stats.py`。
 - 排除私有宿主 `web/frontend/src/workbench/**` 和私有头像资产 `web/frontend/src/assets/workbench/**`；它们仍需按所属能力维护卡登记，并非豁免私有能力规则。
-- 共 **86** 个文件差异。官方PR来源及已审阅的私有blob仍以 [upstream-overlays.json](upstream-overlays.json) 为出处，不把官方选取补丁冒称全量同步。
+- 共 **87** 个文件差异。官方PR来源及已审阅的私有blob仍以 [upstream-overlays.json](upstream-overlays.json) 为出处，不把官方选取补丁冒称全量同步。
 
 ## 分类与维护边界
 

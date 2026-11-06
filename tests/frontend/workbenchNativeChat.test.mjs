@@ -666,3 +666,13 @@ test('news discussions and production show no creation-settings control',()=>{
  }
  assert.equal(f.calls.resources.some(p=>String(p).includes('/creation')),false);
 });
+
+
+test('proven local closure frees the composer while preserving an unknown native result',async()=>{
+ const f=fixture({receipt:{turn_id:'exact-turn',session_id:'session-one',execution_status:'unknown',delivery_state:'unknown',execution_closed:true}});
+ f.render().chat.onSend();await tick();f.calls.stream[0][4]();await tick();await tick();
+ assert.equal(f.draft.pending,undefined);assert.equal(f.recoveryCount,0);
+ assert.equal(f.runtime.sessionRuntime(f.vm.client,'session-one').state.getState().feedback,undefined);
+ assert.equal(f.calls.submit.length,1);
+ f.draft={text:'新的明确请求',files:[]};f.render().chat.onSend();await tick();assert.equal(f.calls.submit.length,2);
+});

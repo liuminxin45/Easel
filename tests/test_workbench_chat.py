@@ -375,6 +375,8 @@ def test_attachment_only_message_preserves_empty_user_text_and_rejects_empty_req
 
 @pytest.mark.parametrize('interrupt_fails', [False, True])
 def test_real_codex_adapter_uses_real_pool_store_and_native_turn_hook(commands,monkeypatch,interrupt_fails):
+    from easel.harnesses import codex_stop
+    monkeypatch.setattr(codex_stop,'STOP_GRACE_SECONDS',0.03)
     async def scenario():
         root=commands.root;workspace=root/'agents/workspace';workspace.mkdir(parents=True)
         (workspace/'AGENTS.md').write_text('Actual shared harness workspace.',encoding='utf-8')
@@ -402,7 +404,9 @@ def test_real_codex_adapter_uses_real_pool_store_and_native_turn_hook(commands,m
                     if complete_turns[0]:
                         self.notify('turn/completed',{'threadId':'upstream-native-thread','turnId':turn,'turn':{'id':turn,'status':'completed'}})
                     return {'turn':{'id':turn}}
+                if method=='thread/read':return {'thread':{'turns':[]}}
                 if method=='turn/interrupt':
+                    if not interrupt_fails:self.notify('turn/completed',{'threadId':'upstream-native-thread','turn':{'id':'upstream-turn-'+str(methods.count('turn/start')),'status':'interrupted'}})
                     if interrupt_fails:raise HarnessError('Synthetic missing interrupt acknowledgment')
                     return {}
                 raise AssertionError(method)

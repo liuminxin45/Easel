@@ -30,7 +30,7 @@ UPSTREAM_PATCH_ALLOWLIST={'easel/cli.py','web/frontend/package.json',
     'web/frontend/src/components/SettingsSelect.tsx','web/frontend/src/components/SettingsSelect.css',
     'web/frontend/package-lock.json','web/frontend/tsconfig.app.json',
     # Optional generic turn receipt/frozen instruction ports; defaults remain upstream-owned.
-    'easel/harnesses/base.py','easel/harnesses/codex.py','easel/harnesses/workspace.py',
+    'easel/harnesses/base.py','easel/harnesses/codex.py','easel/harnesses/codex_stop.py','easel/harnesses/workspace.py',
     # Generic Full access compatibility approvals; no private service dependency.
     'easel/harnesses/permissions.py',
     # Generic optional view ports; these files may not import private services.

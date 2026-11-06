@@ -56,8 +56,8 @@
         "PC-19"
       ],
       "kind": "host-port",
-      "reason": "RunRequest增加可选冻结指令、图片、推理/输出参数及原生回合/中断/消息/执行回执钩子。",
-      "upstream_check": "核对字段默认None和所有adapter调用；已有任务保留冻结参数，未传宿主钩子时不建立私有依赖。"
+      "reason": "RunRequest增加可选冻结指令、图片、推理/输出参数及原生回合/中断/消息/执行回执钩子。 2026-11-06 可选stop_event、准确原生终态与本次租用进程退出回执，停止不另建执行器。",
+      "upstream_check": "核对字段默认None和所有adapter调用；已有任务保留冻结参数，未传宿主钩子时不建立私有依赖。 核对协作停止和每次池租用的回执归属；退出不代表原生成功。"
     },
     {
       "path": "easel/harnesses/codex.py",
@@ -69,8 +69,8 @@
         "PC-19"
       ],
       "kind": "mixed",
-      "reason": "共用Codex RPC执行；补准确回合/停止/产物回调、原生图片与结构化参数，codex_auto_approve按已选策略映射Full access。",
-      "upstream_check": "核对原生协议、完成/中断事件所有权及参数校验；Full access仅随明确保存配置生效，不增加发布授权；隔离canary保持自己的权限。"
+      "reason": "共用Codex RPC执行；补准确回合/停止/产物回调、原生图片与结构化参数，codex_auto_approve按已选策略映射Full access。 2026-11-06 可选stop_event、准确原生终态与本次租用进程退出回执，停止不另建执行器。",
+      "upstream_check": "核对原生协议、完成/中断事件所有权及参数校验；Full access仅随明确保存配置生效，不增加发布授权；隔离canary保持自己的权限。 核对协作停止和每次池租用的回执归属；退出不代表原生成功。"
     },
     {
       "path": "easel/harnesses/openclaw.py",
@@ -100,8 +100,8 @@
         "PC-03"
       ],
       "kind": "host-port",
-      "reason": "RPC.call增加可选on_request，调用方在发送边界取得准确请求ID。",
-      "upstream_check": "核对ID产生、发送异常及pending清理时序；没有回调的原调用保持原行为。"
+      "reason": "RPC.call增加可选on_request，调用方在发送边界取得准确请求ID。 2026-11-06 可选stop_event、准确原生终态与本次租用进程退出回执，停止不另建执行器。",
+      "upstream_check": "核对ID产生、发送异常及pending清理时序；没有回调的原调用保持原行为。 核对协作停止和每次池租用的回执归属；退出不代表原生成功。"
     },
     {
       "path": "easel/harnesses/workspace.py",
@@ -951,6 +951,16 @@
       "kind": "mixed",
       "reason": "共享Drawer/状态卡/复制/产物/菜单等必要组件样式及移动可用性补丁；私有业务样式仍限宿主目录。",
       "upstream_check": "逐段对照官方默认主题/控件与上游新增样式；只保留共通组件或通用可用性修复，不能用样式覆盖隐藏官方区域。"
+    },
+    {
+      "path": "easel/harnesses/codex_stop.py",
+      "status": "A",
+      "capabilities": [
+        "PC-03"
+      ],
+      "kind": "host-port",
+      "reason": "原Codex适配器的可选协作停止：准备可取消、派发后等准确身份、终态优先和有界原生只读核对；无私有依赖。",
+      "upstream_check": "核对原生turn/interrupt、turn/completed及thread/read协议；无stop_event调用维持原取消合同，删除上游已吸收的接缝。"
     }
   ]
 }

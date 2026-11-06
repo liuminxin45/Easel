@@ -1,6 +1,7 @@
 """Internal contract for agent harness integrations."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable, Protocol
@@ -44,6 +45,7 @@ class RunRequest:
     on_native_interrupt: Callable[[str, str], None] | None = None
     on_agent_message: Callable[[str, str, dict], None] | None = None
     on_execution_receipt: Callable[[dict], None] | None = None
+    stop_event: asyncio.Event | None = None
 
 
 class Adapter(Protocol):

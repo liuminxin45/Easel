@@ -34,16 +34,18 @@ def binding(business,value):
     session=business._session(value)
     with business.store.connect() as c:profile=business.box.creator._profile(c,session['profile_id'])
     if parent and parent['format']!=FORMATS[skill]:raise ValueError('修改须使用原作品格式对应的技能')
-    references=[]
+    references=[];feedback=[]
     if parent:
         import hashlib
         with business.store.connect() as c:
             for row in c.execute('SELECT name,path FROM artifacts WHERE task_id=?',(parent['version_id'],)):
                 path=Path(row['path']);references.append({'name':row['name'],'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+            feedback=[dict(row) for row in c.execute("SELECT kind,text,scope,created_at FROM toolbox_jobs WHERE candidate_id=? AND kind IN ('accept','reject','feedback') ORDER BY rowid",(parent['version_id'],))]
     return {'schema':1,'skill_id':skill,'format':FORMATS[skill],'session_id':sid,'version_id':tid,
             'work_id':parent['work_id'] if parent else 'native-'+tid,'parent_version_id':parent['version_id'] if parent else None,
             'profile_id':profile['id'],'profile_revision':profile['revision'],
             'parent_files':references,
+            'parent_feedback':feedback,
             'product_directory':str(business.root/'outputs'/sid/tid/'products')}
 
 def instructions(frame):

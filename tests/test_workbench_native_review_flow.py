@@ -48,6 +48,9 @@ def test_native_production_decision_and_modification_are_version_bound(business,
             assert newer['work_id']==candidate['work_id'] and newer['parent_version_id']==candidate['version_id']
             rejected,reject_value=await send('review-reject','不采纳这版，保留原件')
             assert rejected['business_receipt']['review_decision']['kind']=='reject',rejected
+            from easel_workbench.features.works.native_review import binding
+            next_frame=binding(business,{'sessionId':'test-chat','turnId':'feedback-check','message':'修改这版，标题更具体','context':{}})
+            assert next_frame['parent_feedback'][-1]['text']=='不采纳这版，保留原件'
             await admissions.receive(reject_value)
             assert len(calls)==2
             assert '采纳' in business.history('test-chat')['session']['messages'][-1]['content']

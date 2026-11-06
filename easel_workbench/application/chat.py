@@ -61,7 +61,8 @@ class ChatBusiness:
                         decided=c.execute("SELECT 1 FROM toolbox_jobs WHERE candidate_id=? AND kind IN ('accept','reject')",(candidate['version_id'],)).fetchone()
                         ending=message.get('content','')[-200:]
                         if not decided and not ('采纳' in ending and ('？' in ending or '?' in ending)):
-                            message['content']=message.get('content','')+'\n\n这版你想采纳、继续修改，还是暂不采纳？可以直接回复“采纳这版”“只采纳图片”“不采纳这版”，或说明修改意见。'
+                            question='这版你想采纳、继续修改，还是暂不采纳？可以直接回复“采纳这版”“只采纳图片”“不采纳这版”，或说明修改意见。' if candidate.get('whole_ready') else '本版只收到部分成品。你想仅采纳已有的图片、配文或正文，还是继续补齐？也可以回复“不采纳这版”。'
+                            message['content']=message.get('content','')+'\n\n'+question
                     message['work']=copy.deepcopy(turn.get('work'))
                     message['business_receipt']=copy.deepcopy(turn.get('business_receipt'))
                     if turn.get('work'):message['library_path']='workbench-'+turn['work']['work_id']+'/'+turn['work']['version_id']

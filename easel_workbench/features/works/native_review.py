@@ -67,17 +67,23 @@ def receive(business,turn):
     from easel_workbench.paths import owned_output_path
     directory=owned_output_path(business.root,Path('outputs')/turn['session_id']/turn['id']/'products')
     if str(directory)!=frame['product_directory']:raise ValueError('本轮产物目录已变化')
-    from easel_workbench.runtime.bridge import capture_artifacts
+    from easel_workbench.runtime.bridge import capture_artifacts,delivery_paths,allowed_artifact
     identity=hashlib.sha256((turn['actual_prompt_sha256']+'\0'+turn.get('output','')).encode()).hexdigest()
     key='native-review:'+turn['id']
     with business.store.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
         old=c.execute('SELECT value FROM toolbox_meta WHERE key=?',(key,)).fetchone()
         if old:
             saved=json.loads(old[0])
             if saved['identity']!=identity:raise ValueError('已登记版本的原始回执不能变化')
-            for item in saved['files']:
+            for item in saved.get('files',saved.get('sources',[])):
                 if hashlib.sha256(Path(item['path']).read_bytes()).hexdigest()!=item['sha256']:raise ValueError('已登记版本原件已变化')
-            return saved['receipt']
+            if saved.get('receipt'):return saved['receipt']
+        else:
+            sources=[{'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for path in delivery_paths(turn.get('output','')) if allowed_artifact(path,[directory])]
+            if not sources:return None
+            saved={'identity':identity,'sources':sources}
+            c.execute('INSERT INTO toolbox_meta(key,value) VALUES(?,?)',(key,json.dumps(saved,ensure_ascii=False)))
     capture_artifacts(business.store,turn['id'],turn.get('output',''),root=business.root,product_roots=[directory])
     now=stamp();wid=frame['work_id'];tid=turn['id']
     with business.store.connect() as c:
@@ -99,9 +105,11 @@ def receive(business,turn):
         outcome=assess(business.box,c,dict(c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(tid,)).fetchone()))
         record(c,tid,outcome)
         c.execute('UPDATE toolbox_jobs SET status=? WHERE id=?',(outcome['status'],tid))
-        receipt={**frame,'status':outcome['status'],'available_scopes':outcome.get('available_scopes',[])}
+        scopes=outcome.get('available_scopes',[])
+        whole=all(scope in scopes for scope in ('images','copy')) if frame['format']=='poster' else 'article' in scopes and bool(c.execute("SELECT 1 FROM artifacts WHERE task_id=? AND mime='text/html'",(tid,)).fetchone())
+        receipt={**frame,'status':outcome['status'],'available_scopes':scopes,'whole_ready':whole}
         files=[{'path':row['path'],'sha256':hashlib.sha256(Path(row['path']).read_bytes()).hexdigest()} for row in c.execute('SELECT path FROM artifacts WHERE task_id=?',(tid,))]
-        c.execute('INSERT INTO toolbox_meta(key,value) VALUES(?,?)',(key,json.dumps({'identity':identity,'files':files,'receipt':receipt},ensure_ascii=False)))
+        c.execute('UPDATE toolbox_meta SET value=? WHERE key=?',(json.dumps({'identity':identity,'files':files,'receipt':receipt},ensure_ascii=False),key))
     return receipt
 
 def decision(business,value):
@@ -133,7 +141,7 @@ def apply_decision(business,command,tid):
         from easel_workbench.runtime.completion_service import service
         completion=service(business.box);options=completion.options(wid,vid)
         scope=command['scope'] if command['scope'] is not None else options['required_scopes']
-        if not scope or any(s not in options['available_scopes'] for s in scope):
+        if command['scope'] is None and not target.get('whole_ready',False) or not scope or any(s not in options['available_scopes'] for s in scope):
             return '这版尚未完整交付所选范围。你可以补齐后再采纳，或明确只采纳已有的图片、配文或正文；尚未记录采纳。',None
         plan={'mode':'archive','targets':[],'manual_publications':[]}
         preview=completion.preview(wid,vid,{'scope':scope,'completion':plan})

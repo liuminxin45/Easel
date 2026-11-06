@@ -19,3 +19,5 @@
 实施与验证进行中，证据目录`.local/workbench-validation/poster-presets-20261106/`。
 
 核对时发现两项新闻原生测试仍断言已退役的content-production组合；按既定双技能规则改为oil-pig-poster，继续核对准确附件、仅贴图默认及重试冻结，不恢复旧技能。81项前端回归与私有前端构建已通过。
+
+验证通过：103项后端/架构/技能回归、81项前端回归、20项冻结包真实Edge交互检查（TEMP，5种桌面/移动明暗布局）；私有build:workbench及原Easel独立build通过。候选workbench-20261106-102645 / native-poster-presets-20261106-r1，尚未切换；无真实模型调用。

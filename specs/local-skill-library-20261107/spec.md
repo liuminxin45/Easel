@@ -24,3 +24,18 @@
 ## 提交前核验
 
 最终后端相关223项通过，随后补充固定提交重建合同，本地库78项通过；前端40项通过。原Easel独立构建通过，私有最终前端为native-local-skills-20261107-r3，来源/选择请求均仅传所需摘要。29源安装均完整检出、303入口，Git链接只保留原指针，不重复登记别名；本轮29源SHA已写入config/local-skill-sources.json供重建。最终冻结配对和线上只读验收尚待执行。
+
+## 最终交付与上线
+
+- 产品源码提交：`40c33d8d0884ff9f9f30e43d9139a39d4acc1ba2`；已推送且用`git ls-remote origin refs/heads/main`核对自己的`liuminxin45/Easel`。没有向官方推私有代码或创建PR。
+- 正式后端：`workbench-20261106-165058`，manifest `cc5032c309bea7c46bc1f371e896f65f91e9775fe6a98678215216995693df5e`。
+- 正式前端：`native-local-skills-20261107-r3`，manifest `9f78ef8a0d6d96e3fb134ca044cffbaaa0c32d89d5b0422082fa1f76f1771ff1`。
+- 最终冻结配对在实际Edge/TEMP HTTPS复验16项全通过，覆盖桌面及390/320明暗主题、原Drawer、阶段选择和准确资源冻结。正式Tailscale HTTPS入口另行只读核对桌面/390/320三布局：303卡片与Star、作者/来源搜索、原详情抽屉、无横向溢出、无页面错误。
+- 正式API核对303条导入、29来源都有真实Star、13分类、27待配置条目；来源请求1327字节，生产选择视图32436字节，原技能列表378961字节，均不传全库正文/资源。详情仅读取选定正文。现场耗时为一次本机HTTPS测量，不等同实体手机或公网性能保证。
+- 42个既有回合document哈希保持，31会话/42回合/87作品/587附件/3535资讯及画像历史数量保持，数据库inode不变。保留未知回执，不重发旧任务；无需数据库迁移、版本回退、旧候选恢复或技能发布指针迁移。
+- 统一升级脚本完成准确配对、空闲/队列/身份围栏，当前管理器20840、server5616及七角色正常，workers准入恢复；自动化cutover_paused恢复false。
+- 从远端main新检出准确源码，按lock执行npm ci，官方和私有构建均通过，工作树干净。浅检出的第一次基线祖先检查缺少历史而失败；补齐fork历史后通过，未修改门禁。原件未随公开fork分发，需要本机固定来源清单另行安装。
+- 最终后端相关223项通过；新增固定提交重建后本地库78项通过；前端40项通过；原生harness106通过、4项环境跳过。原始技能175文件字节/登记门禁通过；pre-push还验证了强制暂存与先提交再删除历史的拦截，CI添加索引防原件泄漏及本地库合同。
+- 本轮没有真实模型制作、第三方CLI/发布服务实调、公开发布或实体vivo WebToApp验收；27待配置条目如实阻断，源码安装不冒称全工具已验证。构建保留现有bundle体积警告。
+
+证据集中于`.local/workbench-validation/local-skills-20261107/`：`candidate.json`、`acceptance.json`、`browser-final/report.json`、`deployment.log`、`postflight.json`、`live-browser-report.json`、`fresh-build-report.json`及各测试日志。证据与原件均保持本地，不提交用户业务原文或凭据。此后只提交本交付文档，不改变上述已上线产品源码。

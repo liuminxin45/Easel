@@ -23,3 +23,12 @@
 已通过后端相关185项、原引擎106项（4项环境跳过）、前端72项；最终恢复用例另复核23项通过。私有check/build与原Easel独立build通过。证据：`.local/workbench-validation/immediate-stop-recovery-20261106/` 的 backend-final.log、recovery-final.log、harness-tests.log、frontend-final.log、frontend-check.log、native-build.log、official-build.log。
 
 冻结候选、实际浏览器、Git远端及正式切换继续执行，尚不冒称上线。测试使用 TEMP 数据/假原生协议、真实本地 stdio 及受控子进程，不能冒称真实模型或实体手机验收。最终候选、推送、上线和当前旧会话恢复结果在执行后补全。
+
+
+## 最终候选验收
+
+产品源码6d2f6f24f0041447030dc402024bf67ec491fdb0；后端workbench-20261106-152722（547f23eb50d4042c5297abe5bec87f7e69390ba16fb842232aaf82a5219faad1），前端native-stop-recovery-20261106-r3（7e4e0fa630bffa9ca9aa5f7161c56eeb1322faab7ae47ecab72d4bef76328e13）。
+
+最终显示补充后，相关后端67项、前端73项通过；先前185项架构/业务及原引擎106项通过。最终两套实际Edge/TEMP HTTPS验收覆盖桌面、390/320明暗主题：停止/刷新/后写草稿/新原生代数/旧unknown保留/消息状态卡/无横向溢出五组全部通过；点按复制30项通过。准备阶段与原生阶段另由真实CodexAdapter+假协议回归覆盖，真实本地进程树及后端死亡回收也通过。浏览器发送验收等待原按钮可用后点击，不以测试脚本即时Enter取代用户触控。
+
+证据：同目录message-state-final.log、frontend-card-final.log、native-card-build.log、official-card-build.log、final-browser-stop-verified/report.json、final-browser-copy/report.json。旧空rollout不当作原生停止证明；准确退休计划SHA已记录，正式切换和上线后核对下一步执行。

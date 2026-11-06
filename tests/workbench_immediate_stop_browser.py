@@ -43,7 +43,7 @@ def main():
      page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.startsWith('/chat/')")
      sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1].split('?')[0]
      composer=page.get_by_role('textbox',name='对话输入',exact=True);expect(composer).to_be_visible()
-     before=len(adapter.requests);composer.fill('TEMP 发消息后立即停止');composer.press('Enter')
+     before=len(adapter.requests);composer.fill('TEMP 发消息后立即停止');send=page.get_by_role('button',name='发送',exact=True);expect(send).to_be_enabled();send.click()
      stop=page.locator('button[title="停止生成"]');expect(stop).to_be_visible()
      deadline=time.monotonic()+30
      while len(adapter.requests)==before:
@@ -56,7 +56,7 @@ def main():
      expect(page.get_by_role('status',name='会话恢复',exact=True)).to_have_count(0)
      page.reload(wait_until='domcontentloaded');expect(composer).to_have_value('TEMP 后写草稿')
      expect(page.get_by_role('button',name='发送',exact=True)).to_be_enabled()
-     adapter.mode='complete';composer.press('Enter')
+     adapter.mode='complete';expect(send).to_be_enabled();send.click()
      page.wait_for_function("sid=>!JSON.parse(localStorage.getItem('toolbox:draft:chat:'+sid)).pending",arg=sid)
      latest=page.request.get(f['origin']+'/api/chat/last/'+sid).json()
      assert latest['execution_status']=='completed' and len(adapter.requests)==before+2

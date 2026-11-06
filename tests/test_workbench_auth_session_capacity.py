@@ -10,7 +10,7 @@ def test_legacy_sessions_get_seven_day_grace_without_deleting_any(tmp_path,monke
     monkeypatch.setattr(auth_totp,'security',lambda _path:None)
     monkeypatch.setattr(auth_totp,'atomic',lambda path,text,_acl:path.write_text(text,encoding='utf8'))
     state=auth_totp.AuthState(path)
-    assert state.data['sessions']['legacy']['until']==now+7*86400
+    assert state.data['sessions']['legacy']['until']==now+7*86400+60
     assert state.data['sessions']['short']['until']==now+50
     assert len(state.data['sessions'])==2
 
@@ -38,14 +38,14 @@ def test_seven_day_sliding_expiry_is_bounded_and_expired_tokens_stay_expired(mon
     clock=[1_800_000_000];monkeypatch.setattr(auth_totp.time,'time',lambda:clock[0])
     state=auth_totp.AuthState.__new__(auth_totp.AuthState);state.lock=threading.RLock()
     token='test-session';key=auth_totp.token_hash(token);writes=[]
-    state.data={'sessions':{key:{'until':clock[0]+auth_totp.SESSION_AGE,'csrf':'keep'}}}
+    state.data={'sessions':{key:{'until':clock[0]+auth_totp.SESSION_COOKIE_AGE,'csrf':'keep'}}}
     state.save=lambda value:(writes.append(True),setattr(state,'data',value))
     assert auth_totp.SESSION_AGE==7*24*60*60
     assert not state.session(token)['_renew_cookie']
     clock[0]+=auth_totp.SESSION_TOUCH_INTERVAL
     value=state.session(token)
-    assert value['_renew_cookie'] and value['until']==clock[0]+auth_totp.SESSION_AGE and len(writes)==1
-    clock[0]+=auth_totp.SESSION_AGE
+    assert value['_renew_cookie'] and value['until']==clock[0]+auth_totp.SESSION_COOKIE_AGE and len(writes)==1
+    clock[0]+=auth_totp.SESSION_COOKIE_AGE
     assert state.session(token) is None
 
 
@@ -62,5 +62,5 @@ def test_renewed_auth_response_refreshes_secure_cookie(tmp_path):
         client.cookies.set('__Host-desk_session','fixture-owner')
         response=client.get('/api/config');assert response.status_code==200
         cookie=response.headers['set-cookie']
-        assert 'Max-Age=604800' in cookie and 'HttpOnly' in cookie and 'Secure' in cookie and 'SameSite=Strict' in cookie
+        assert 'Max-Age=604860' in cookie and 'HttpOnly' in cookie and 'Secure' in cookie and 'SameSite=Strict' in cookie
         assert response.headers['cache-control']=='private, no-store'

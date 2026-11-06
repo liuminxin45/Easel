@@ -1,7 +1,7 @@
 """Ente Auth code-only forms. Secrets are never rendered or logged."""
 import html, re, secrets, threading, time, urllib.parse, pathlib
 from http.cookies import SimpleCookie, CookieError
-from easel_workbench.runtime.auth_totp import SESSION_AGE, equal
+from easel_workbench.runtime.auth_totp import SESSION_COOKIE_AGE, equal
 SESSION='__Host-desk_session'
 PREFLIGHT='__Host-desk_login'
 
@@ -77,4 +77,4 @@ class Forms:
                 self.send(h,status,self.page(token,safe_next(fields.get('next','/')),error));return
             self.preflight.pop(token,None)
             getattr(h,'auth_event',lambda *a:None)('login_success',303)
-            self.send(h,303,location=safe_next(fields.get('next','/')),set_cookie=cookie(SESSION,session,SESSION_AGE))
+            self.send(h,303,location=safe_next(fields.get('next','/')),set_cookie=cookie(SESSION,session,SESSION_COOKIE_AGE))

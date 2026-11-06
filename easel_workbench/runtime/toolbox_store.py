@@ -113,6 +113,14 @@ class Toolbox:
                 news_feedback.enqueue(c,aid,guidance,task_id=jid,created_at=now)
         return {'id':jid,'work_id':wid,'status':'queued'}
     def action(self,wid,value,*,origin='web',_preview=False):
+        result=self._action(wid,value,origin=origin,_preview=_preview)
+        if not _preview and value.get('kind') in ('accept','reject'):
+            from easel_workbench.features.works.review_marker import project
+            marker=project(self,value['candidate_id'])
+            if marker:result={**result,'review_marker':marker}
+        return result
+
+    def _action(self,wid,value,*,origin='web',_preview=False):
         ident(wid);jid=ident(value.get('id'));kind=value.get('kind');candidate=ident(value.get('candidate_id'));note=text(value.get('text',''),10000)
         if kind not in KINDS-{'create'}:raise ValueError('不支持的制作操作')
         if _preview and kind!='change':raise ValueError('只有修改制作可预览')
@@ -120,7 +128,11 @@ class Toolbox:
         if not isinstance(scope,list) or len(scope)!=len(set(scope)) or kind=='accept' and not scope:raise ValueError('请选择本次采纳的范围')
         if kind!='accept' and 'completion' in value:raise ValueError('只有明确采纳可以设置完成方案')
         completion=None
-        if kind=='accept':
+        from easel_workbench.features.works.review_marker import receipt as marker_receipt
+        with self.store.connect() as marker_connection:marker_only=bool(marker_receipt(marker_connection,candidate))
+        marker_plan=value.get('completion') or {}
+        if marker_only and (not isinstance(marker_plan,dict) or marker_plan.get('mode','archive')!='archive'):raise ValueError('此版本采纳仅更新目录标记；发布请使用独立授权入口')
+        if kind=='accept' and not marker_only:
             from easel_workbench.runtime.completion_service import service as completion_service
             completion=completion_service(self)
         # A record is always a local transaction. Pausing archive/sync workers
@@ -174,7 +186,8 @@ class Toolbox:
             c.execute('INSERT INTO toolbox_jobs(id,work_id,kind,text,candidate_id,scope,files,signature,status,created_at,finished_at,reply) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(jid,wid,kind,note,candidate,pack(scope),files,signature,status,now,now if local else None,'系统已记录。' if local else None))
             from easel_workbench.runtime.local_operations import queue_action,mark_execution
             job=dict(c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(jid,)).fetchone())
-            if local:queue_action(c,{**job,'_origin':origin})
+            if local and marker_only and kind in ('accept','reject'):mark_execution(c,jid,'local',origin)
+            elif local:queue_action(c,{**job,'_origin':origin})
             else:mark_execution(c,jid,'agent',origin)
             if kind=='change':
                 document,revision=self._change_input(c,wid,candidate,files)
@@ -238,6 +251,9 @@ class Toolbox:
             rows=c.execute("SELECT id,status,created_at FROM toolbox_jobs WHERE work_id=? AND kind IN ('create','change') ORDER BY rowid",(wid,)).fetchall()
             result['version_summaries']=[{'id':r['id'],'label':'v'+str(i+1).zfill(2),'status':r['status'],'created_at':r['created_at']} for i,r in enumerate(rows)]
             if version_id and not result['versions']:raise ValueError('此准确版本不存在')
+            from easel_workbench.features.works.review_marker import receipt as marker_receipt
+            for version in result['versions']:
+                if marker_receipt(c,version['id']):version['decision_mode']='directory_marker'
             result.pop('material',None)
             if not include_history:result.pop('completion',None)
             return result

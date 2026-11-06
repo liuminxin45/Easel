@@ -32,7 +32,7 @@
 | [PC-09 油猪·做文章](private-capabilities/PC-09-oil-pig-article.md) | 业务 SKILL | 选题/提纲/完整文章或局部修改、按需配图与 HTML 等指定交付；以本技能正文和本轮要求为准。 | `skills.py`、`SkillDrawer.tsx` |
 | [PC-10 原生技能宿主、配置与私有图标](private-capabilities/PC-10-native-skill-host.md) | 共通适配 | 磁盘 SKILL 目录、详情/资源、配置修订、服务器操作身份和私有图标注入；支持技能另见 PC-22 至 PC-27。 | `skills.py`、`SkillPage.tsx`、`SkillDrawer.tsx` |
 | [PC-11 版本化画像、素材与账号绑定](private-capabilities/PC-11-profiles.md) | 私有业务 | 画像稳定 ID、修订/历史、素材绑定、账号归属、默认保护、明确导入及后台增强的安全存储。 | `profiles.py`、`ProfilePage.tsx`、`OnboardingWizard.tsx` |
-| [PC-12 准确作品版本、修改、采纳与反馈](private-capabilities/PC-12-versioned-works.md) | 私有业务 | 原生油猪成品登记准确版本，支持对话采纳/不采纳与父版修改；文件、原话及幂等回执保留。 | 原生会话与内容库，私有服务接入 |
+| [PC-12 准确作品版本、修改、采纳与反馈](private-capabilities/PC-12-versioned-works.md) | 私有业务 | 对话采纳/不采纳只更新准确产物目录状态标记，保留原话、范围和子版本；不触发归档或 Git。 | 原生会话与内容库，私有服务接入 |
 | [PC-13 内容索引、分层请求与返回性能](private-capabilities/PC-13-read-performance.md) | 可靠性适配 | 摘要/目录/详情/文件分层、会话历史窗口、内容索引、缓存代数、失效标签和有界读取。 | `OutputsPage.tsx`、`SkillPage.tsx`、`ProfilePage.tsx` |
 | [PC-14 真实账号身份与私有授权台账](private-capabilities/PC-14-account-ledger.md) | 共通适配 | 原生登录和退出与私有账号 ID/连接修订映射；历史凭据、授权与读回证据保持。 | `accounts.py`、`AccountsPage.tsx` |
 | [PC-15 准确渠道稿、交付授权与回执](private-capabilities/PC-15-authorized-delivery.md) | 私有业务 | 渠道稿修订、实际账号、动作批准、草稿/发布/读回回执与只读核对；保留已有交付记录。 | `PublishingPage.tsx`、`manual_publish.py`、`web_publisher.py` |

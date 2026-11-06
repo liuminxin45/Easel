@@ -41,13 +41,20 @@ def test_native_production_decision_and_modification_are_version_bound(business,
             turn,_=await send('review-produce','制作内容','oil-pig-'+format)
             assert turn['status']=='completed' and turn['hook_status']=='completed',turn
             candidate=turn['business_receipt']['review_candidate'];assert candidate['status']=='completed',candidate
+            from easel_workbench.features.works.review_marker import NAME
+            original_marker=Path(candidate['product_directory'])/NAME
+            assert original_marker.read_text(encoding='utf8').startswith('# 未处理')
             uncertain,_=await send('review-ambiguous','不错')
             assert uncertain['business_receipt']['review_decision'] is None and len(calls)==1
             changed,_=await send('review-change','修改这版，标题更具体')
             newer=changed['business_receipt']['review_candidate']
+            marker=Path(newer['product_directory'])/NAME
+            assert marker.read_text(encoding='utf8').startswith('# 未处理')
             assert newer['work_id']==candidate['work_id'] and newer['parent_version_id']==candidate['version_id']
             rejected,reject_value=await send('review-reject','不采纳这版，保留原件')
             assert rejected['business_receipt']['review_decision']['kind']=='reject',rejected
+            assert marker.read_text(encoding='utf8').startswith('# 未采纳')
+            assert original_marker.read_text(encoding='utf8').startswith('# 未处理')
             from easel_workbench.features.works.native_review import binding
             next_frame=binding(business,{'sessionId':'test-chat','turnId':'feedback-check','message':'修改这版，标题更具体','context':{}})
             assert next_frame['parent_feedback'][-1]['text']=='不采纳这版，保留原件'
@@ -56,10 +63,22 @@ def test_native_production_decision_and_modification_are_version_bound(business,
             assert '采纳' in business.history('test-chat')['session']['messages'][-1]['content']
             accepted,_=await send('review-accept','采纳这版')
             assert accepted['business_receipt']['review_decision']['kind']=='accept',accepted
+            assert marker.read_text(encoding='utf8').startswith('# 已采纳')
             assert len(calls)==2
             with business.store.connect() as c:
                 assert c.execute("SELECT count(*) FROM toolbox_jobs WHERE kind IN ('accept','reject')").fetchone()[0]==2
-                assert c.execute("SELECT count(*) FROM toolbox_local_tasks WHERE kind='cleanup'").fetchone()[0]==0
+                assert c.execute('SELECT count(*) FROM toolbox_local_tasks').fetchone()[0]==0
+                assert c.execute('SELECT count(*) FROM toolbox_completions').fetchone()[0]==0
+            # The existing private content-library entry must obey the same
+            # marker policy even when it does not use conversational origin.
+            business.box.action(newer['work_id'],{'id':'marker-web-reject','kind':'reject','candidate_id':newer['version_id'],'text':'直接页面决定','scope':[],'files':[]})
+            assert marker.read_text(encoding='utf8').startswith('# 未采纳')
+            marker.write_text('被打断的旧标记',encoding='utf8')
+            business.box.action(newer['work_id'],{'id':'marker-web-reject','kind':'reject','candidate_id':newer['version_id'],'text':'直接页面决定','scope':[],'files':[]})
+            assert marker.read_text(encoding='utf8').startswith('# 未采纳')
+            with business.store.connect() as c:
+                assert c.execute('SELECT count(*) FROM toolbox_local_tasks').fetchone()[0]==0
+                assert c.execute('SELECT count(*) FROM toolbox_completions').fetchone()[0]==0
             from easel_workbench.features.works.native_review import decision
             interrupted={'sessionId':'test-chat','turnId':'review-local-restart','message':'不采纳这版','context':{},'attachments':[]}
             row=admissions._receive(interrupted)

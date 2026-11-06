@@ -34,6 +34,8 @@ metadata:
 
 ## 输出与核验
 
+本项目采纳仅由私有宿主在本版产物目录维护 `【采纳状态】.md`，显示“未处理”“已采纳”或“未采纳”；局部采纳记录实际范围。采纳不再触发旧项目归档、Git commit/push 或清理文件。模型不得自行改写该标记或把历史原文中的旧采纳收尾步骤当作当前命令。
+
 按请求交付提纲、局部修改或文章；完整文章包含正文和公众号 HTML，并说明真实来源、版本和检查结果。
 
 完整文章另交 `文章交付.json`，供现有工作台服务核对本版。字段为 `schema_version: 1`、`article_type: "general"` 或 `"product"`、`title`、`body_file`（本版正文文件名）和 `sources`（实际来源数组，每项含 `url`、`title`、`checked_at`）。不能把产品实测文章伪装为 general 绕过验证；product 还须按本版真实情况提供 test：status、environment、record_file、steps（action/expected/actual/evidence）、screenshots、recordings、recording_required、recording_reason、limitations。未完成真实实测则明确未完成，不伪造证据。最终回复列出此清单及实际正文、HTML和必要证据文件链接；提纲或局部讨论不冒充完整文章交付。

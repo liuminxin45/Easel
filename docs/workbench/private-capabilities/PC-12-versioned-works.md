@@ -6,7 +6,9 @@
 
 **贴图配文复制：** 用户要求在原文件预览中分别复制标题与正文。[nativePages.tsx](../../../web/frontend/src/workbench/ui/nativePages.tsx) 注入 [PosterCopyActions.tsx](../../../web/frontend/src/workbench/ui/PosterCopyActions.tsx)，仅处理已登记 `标题与配文.txt`，复用加载结果；不改写文件。共通 OutputsPage 只提供可选文本预览动作接缝，默认保持官方行为，异常格式不推测。
 
-**对话采纳：** 两个油猪制作技能冻结本轮专属目录、画像和身份；成品登记后使用原生会话文本询问。明确回复“采纳这版”“只采纳图片/配文/正文”“不采纳这版（可附原因）”调用既有决定服务，默认仅归档、不发布；模糊表态先确认。附件、来源、其他技能的输入不触发决定；复杂表达先沿原生讨论处理，模型口头认可不算持久决定。
+**对话采纳：** 两个油猪制作技能冻结本轮专属目录、画像和身份；成品登记后使用原生会话文本询问。明确回复“采纳这版”“只采纳图片/配文/正文”“不采纳这版（可附原因）”保存准确决定，并在产物目录原子更新 `【采纳状态】.md`：未处理／已采纳／未采纳，局部采纳注明范围。按用户最新要求，不创建完成、项目归档、清理或 Git 提交同步任务；私有内容库入口执行同一策略。模糊表态先确认，不猜测来源或旧版。
+
+**标记适配：** [review_marker.py](../../../easel_workbench/features/works/review_marker.py) 将既有决定记录投影为醒目的目录标记，受版本路径校验和串行原子写入保护；[toolbox_store.py](../../../easel_workbench/runtime/toolbox_store.py) 识别已登记原生版本，复用原决定校验但绕过旧完成/队列。私有 [WorkCompletion.tsx](../../../web/frontend/src/workbench/ui/WorkCompletion.tsx) 简化对应版本确认，仍复用 Easel Drawer 和控件；没有官方源码改动。
 
 **私有桥接：** [native_review.py](../../../easel_workbench/features/works/native_review.py) 经 [chat.py](../../../easel_workbench/application/chat.py) 复用 capture_artifacts 和 production_outcome 登记准确文件，冻结父版与画像；修改另存子版。受理沿 [chat_admission.py](../../../easel_workbench/application/chat_admission.py)，本地决定沿 [service.py](../../../easel_workbench/features/conversations/service.py) 的原回合与事件仓库；不调用模型。复用 [local_operations.py](../../../easel_workbench/runtime/local_operations.py)，本入口不采纳保留原文件。验证见 [登记测试](../../../tests/test_workbench_native_review.py)、[贴图/文章闭环与重启恢复](../../../tests/test_workbench_native_review_flow.py)、[浏览器验收](../../../tests/workbench_native_review_browser.py)。旧对话缺可信版本关联时不推测历史归属；代码完成、检查与正式发布分别核验。
 

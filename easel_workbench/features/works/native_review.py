@@ -61,6 +61,13 @@ def read_binding(turn):
     return frame
 
 def receive(business,turn):
+    result=_receive(business,turn)
+    if result:
+        from easel_workbench.features.works.review_marker import project
+        project(business.box,result['version_id'])
+    return result
+
+def _receive(business,turn):
     frame=read_binding(turn)
     if not frame or turn.get('status')!='completed':return None
     execution=turn.get('execution_identity') or {}
@@ -140,17 +147,23 @@ def apply_decision(business,command,tid):
         old=c.execute('SELECT * FROM toolbox_jobs WHERE id=?',(operation,)).fetchone()
         if old:
             if old['work_id']!=wid or old['candidate_id']!=vid or old['kind']!=command['kind'] or old['text']!=command['text']:raise ValueError('决定回执与原始输入不一致')
-            return ('已记录此版本的采纳；归档进度以内容库实际回执为准。' if command['kind']=='accept' else '已记录此版本不采纳，原文件保留。'),{'operation_id':operation,'work_id':wid,'version_id':vid,'kind':command['kind']}
+            reused=True
+        else:reused=False
+    if reused:
+        from easel_workbench.features.works.review_marker import project
+        marker=project(business.box,vid)
+        return ('已标记此版本为“已采纳”。' if command['kind']=='accept' else '已标记此版本为“未采纳”，原文件保留。'),{'operation_id':operation,'work_id':wid,'version_id':vid,'kind':command['kind'],'review_marker':marker}
     payload={'id':operation,'kind':command['kind'],'candidate_id':vid,'text':command['text'],'files':[],'scope':command['scope'] or []}
     if command['kind']=='accept':
-        from easel_workbench.runtime.completion_service import service
-        completion=service(business.box);options=completion.options(wid,vid)
-        scope=command['scope'] if command['scope'] is not None else options['required_scopes']
-        if command['scope'] is None and not target.get('whole_ready',False) or not scope or any(s not in options['available_scopes'] for s in scope):
+        from easel_workbench.runtime.production_outcome import assess
+        with business.store.connect() as c:
+            job=c.execute('SELECT * FROM toolbox_jobs WHERE id=? AND work_id=?',(vid,wid)).fetchone()
+            available=assess(business.box,c,dict(job))['available_scopes'] if job else []
+        required=['images','copy'] if target['format']=='poster' else ['article']+(['images'] if 'images' in available else [])
+        scope=command['scope'] if command['scope'] is not None else required
+        if command['scope'] is None and not target.get('whole_ready',False) or not scope or any(s not in available for s in scope):
             return '这版尚未完整交付所选范围。你可以补齐后再采纳，或明确只采纳已有的图片、配文或正文；尚未记录采纳。',None
-        plan={'mode':'archive','targets':[],'manual_publications':[]}
-        preview=completion.preview(wid,vid,{'scope':scope,'completion':plan})
-        payload.update(scope=scope,completion={**plan,'plan_hash':preview['plan_hash']})
+        payload.update(scope=scope)
     try:result=business.box.action(wid,payload,origin='native_review')
     except ValueError as error:return '尚未记录本次决定：'+str(error)+'。可以继续讨论或修改；原文件保留。',None
-    return ('已记录此版本的采纳；归档进度以内容库实际回执为准。' if command['kind']=='accept' else '已记录此版本不采纳，原文件保留。'),{'operation_id':operation,'work_id':wid,'version_id':vid,'kind':command['kind'],'receipt':result}
+    return ('已标记此版本为“已采纳”。' if command['kind']=='accept' else '已标记此版本为“未采纳”，原文件保留。'),{'operation_id':operation,'work_id':wid,'version_id':vid,'kind':command['kind'],'receipt':result}

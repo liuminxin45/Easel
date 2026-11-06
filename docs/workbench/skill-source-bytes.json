@@ -2,7 +2,7 @@
   "schema": 1,
   "purpose": "ci_exact_byte_lock_not_runtime_registry",
   "files": {
-    "skills/builtin/oil-pig-article/SKILL.md": "b5f9a19ab9160ec9924efbcf42f168efc2c1ce5c4dfab4457b5e9646004f2c54",
+    "skills/builtin/oil-pig-article/SKILL.md": "96c1ee06d51c036e6734d3444314baa76e9be25042a680d2697b19373d9a858a",
     "skills/builtin/oil-pig-article/references/absorbed/content-writing.md": "92a5da1ed4fc9e44eb906140503d26c8985906f929acbab5188d448952ce6f4a",
     "skills/builtin/oil-pig-article/references/absorbed/delivery-review.md": "6d234bee3d8bef45cf33f2234ab7a020a74a1f256f7932418a7c50ee09d98c1e",
     "skills/builtin/oil-pig-article/references/absorbed/image-production.md": "365858e6d7c3fdf15ea41e1ec6b30fe87a8c707641f9ca9ea068b95c1280dfb6",
@@ -91,7 +91,7 @@
     "skills/builtin/oil-pig-article/scripts/文章批注/review.py": "e44b63c38c6483406e18f9c4a81c776100a4553b0286ccb2cdbdc9d309a99c59",
     "skills/builtin/oil-pig-learn-article/SKILL.md": "94045d9e65d5a9120692f03d2a3ed8bf519e6e3990e97d5622b40b1b1c32c53d",
     "skills/builtin/oil-pig-learn-poster/SKILL.md": "d3137d9c2794c7c1dce43b78bef2b2503402fcb7c71738c339d696fdcb80b4dc",
-    "skills/builtin/oil-pig-poster/SKILL.md": "0c6a25571fc65ede51c6cee193270d1100580c3efe23f14d8a746e1055ec2d7d",
+    "skills/builtin/oil-pig-poster/SKILL.md": "fb8c8b651b19bb9784f8e650bd1412fcc427fe17dc9a804ce330811350bd4c3f",
     "skills/builtin/oil-pig-poster/references/absorbed/content-writing.md": "92a5da1ed4fc9e44eb906140503d26c8985906f929acbab5188d448952ce6f4a",
     "skills/builtin/oil-pig-poster/references/absorbed/delivery-review.md": "6d234bee3d8bef45cf33f2234ab7a020a74a1f256f7932418a7c50ee09d98c1e",
     "skills/builtin/oil-pig-poster/references/absorbed/image-production.md": "365858e6d7c3fdf15ea41e1ec6b30fe87a8c707641f9ca9ea068b95c1280dfb6",

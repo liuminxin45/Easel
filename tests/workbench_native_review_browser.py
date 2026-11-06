@@ -36,14 +36,14 @@ with sync_playwright() as p:
             composer.fill('制作贴图');page.get_by_role('button',name='发送',exact=True).click()
             expect(page.get_by_text('这版你想采纳、继续修改，还是暂不采纳？',exact=False)).to_be_visible(timeout=60000)
             composer.fill('采纳这版');page.get_by_role('button',name='发送',exact=True).click()
-            expect(page.get_by_text('已记录此版本的采纳；归档进度以内容库实际回执为准。',exact=True)).to_be_visible(timeout=60000)
+            expect(page.get_by_text('已标记此版本为“已采纳”。',exact=True)).to_be_visible(timeout=60000)
             assert len(calls)==1
             page.reload(wait_until='domcontentloaded')
-            expect(page.get_by_text('已记录此版本的采纳；归档进度以内容库实际回执为准。',exact=True)).to_be_visible()
+            expect(page.get_by_text('已标记此版本为“已采纳”。',exact=True)).to_be_visible()
             composer.fill('修改这版，标题更具体');page.get_by_role('button',name='发送',exact=True).click()
             expect(page.get_by_text('这版你想采纳、继续修改，还是暂不采纳？',exact=False).last).to_be_visible(timeout=60000)
             composer.fill('不采纳这版，保留原件');page.get_by_role('button',name='发送',exact=True).click()
-            expect(page.get_by_text('已记录此版本不采纳，原文件保留。',exact=True)).to_be_visible(timeout=60000)
+            expect(page.get_by_text('已标记此版本为“未采纳”，原文件保留。',exact=True)).to_be_visible(timeout=60000)
             assert len(calls)==2
             with f['box'].store.connect() as c:
                 assert c.execute("SELECT count(*) FROM toolbox_jobs WHERE kind IN ('accept','reject')").fetchone()[0]==2

@@ -16,8 +16,25 @@
 模拟移动/桌面明暗主题经原新闻入口打开抽屉，验证默认→改为精致角色→恢复上次简笔→恢复默认。
 使用TEMP记录及假执行器，不重新制作正式贴图。构建、架构/技能及本批回归通过后冻结配对、推送自有fork并部署。
 
-实施与验证进行中，证据目录`.local/workbench-validation/poster-presets-20261106/`。
+实现、提交推送与部署验收已完成，证据目录`.local/workbench-validation/poster-presets-20261106/`。
 
 核对时发现两项新闻原生测试仍断言已退役的content-production组合；按既定双技能规则改为oil-pig-poster，继续核对准确附件、仅贴图默认及重试冻结，不恢复旧技能。81项前端回归与私有前端构建已通过。
 
 验证通过：103项后端/架构/技能回归、81项前端回归、20项冻结包真实Edge交互检查（TEMP，5种桌面/移动明暗布局）；私有build:workbench及原Easel独立build通过。候选workbench-20261106-102645 / native-poster-presets-20261106-r1，尚未切换；无真实模型调用。
+
+
+## 正式上线
+
+- 实现提交7b8bc4d；自有fork/main推送并核对，未向官方推送。
+- 活动配对：workbench-20261106-102645（6ca0f96f92936d87665914a3d20b44efd54af7f9abb19fd49de627a1ce26f9f4），native-poster-presets-20261106-r1（4b47d08173468ca13517540544988635381ccea6d7e81f37d00211ac136dc89f）。
+- 103项后端/架构/技能、81项前端、20项TEMP冻结包交互检查通过；两种入口构建均通过。
+- 实际线上Edge验收3种布局：1280桌面、390浅色、320深色，默认/恢复最近/恢复默认均通过。
+  通过真实小型context GET取得服务器记录，不发业务POST、不调用模型、不保存画像。
+  初次线上检查的5秒断言未等到恢复读取完成，复核API两次分别91/87毫秒、响应2870字节；
+  使用30秒远端验收等待后3种布局全部通过，无脚本错误。不能据此推断实体vivo网络性能。
+- 空闲切换前等待18:30采集/摘要的准确回执，暂用原cutover_paused停止下一批进入；
+  收尾脚本一次导入路径错误已修正并按原子写入恢复原设置，自动任务全部原值保持。
+- 正式数据库inode及会话/回合/画像与历史/作品/附件/新闻数量保持；本功能不改历史任务。
+  原HTTPS入口、中控活动版本及独立公网探测通过；实体WebToApp未直接实测。
+- 证据位于本Spec本地目录：tests.xml/log、frontend-tests.log、build.log、official-build.log、
+  browser/report.json/PNG、preflight.json、acceptance.json、deploy.log、drain-restored.json、live-browser.json/PNG、delivery.json。

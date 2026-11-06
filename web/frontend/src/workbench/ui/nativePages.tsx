@@ -1,4 +1,5 @@
 import {VersionOperations} from './VersionOperations';
+import PosterCopyActions,{posterCopyParts} from './PosterCopyActions';
 import {useCallback,useMemo,useSyncExternalStore} from 'react';
 import DashboardPage,{type DashboardViewState} from '../../components/DashboardPage';
 import OutputsPage from '../../components/OutputsPage';
@@ -48,7 +49,8 @@ export function NativeLibrary({jumpPath}:{jumpPath?:string}){
  const onContentReady=useCallback(()=>vm.navigation.contentReady?.({entryId:vm.navigation.entryKey}),[vm.navigation.entryKey,vm.navigation.contentReady]);
  const dataSource=useMemo(()=>libraryDataSource(vm.client),[vm.client,vm.client.authenticationEpoch]);
  const renderProject=useCallback((project:OutputNode)=><ProjectVersion project={project}/>,[]);
- return <OutputsPage jumpPath={jumpPath} dataSource={dataSource} renderProjectDetails={renderProject} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
+ const renderTextActions=useCallback((file:OutputNode,text:string)=>{const parts=posterCopyParts(file,text);return parts?<PosterCopyActions key={file.path} {...parts}/>:null},[]);
+ return <OutputsPage jumpPath={jumpPath} dataSource={dataSource} renderProjectDetails={renderProject} renderTextActions={renderTextActions} registerLayer={vm.navigation?.registerLayer} viewState={viewState} onContentReady={onContentReady}/>;
 }
 
 export function NativeTopics({onUseTopic}:{onUseTopic:(title:string,sourceId?:string,note?:string)=>void}){

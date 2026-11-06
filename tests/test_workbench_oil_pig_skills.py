@@ -87,12 +87,17 @@ def test_native_catalog_has_two_distinct_skill_entries_and_retired_entries_are_n
     entries={row['id']:row for row in ProjectSkillCatalog(ROOT).entries()}
     assert entries['oil-pig-poster']['tasks']==['poster','change']
     assert entries['oil-pig-article']['tasks']==['article','change']
-    assert set(entries)=={'oil-pig-poster','oil-pig-article'}
+    assert set(entries)=={'oil-pig-poster','oil-pig-article','oil-pig-learn-poster','oil-pig-learn-article'}
+    for sid in ('oil-pig-learn-poster','oil-pig-learn-article'):
+        assert entries[sid]['tasks']==['reference']
+        assert entries[sid]['resources']==[]
     assert (ROOT/'skills/builtin/content-production/SKILL.retired.md').is_file()
     from easel.web_services.skills import create_skills_context
     context=create_skills_context(ROOT,environment=lambda:{},execute=lambda *_:None,persona=lambda _:'',direct_api=lambda:False)
     assert context.find_skill('oil-pig-poster')=='oil-pig-poster'
     assert context.find_skill('oil-pig-article')=='oil-pig-article'
+    assert context.find_skill('oil-pig-learn-poster')=='oil-pig-learn-poster'
+    assert context.find_skill('oil-pig-learn-article')=='oil-pig-learn-article'
     assert context.find_skill('content-production') is None
 
 

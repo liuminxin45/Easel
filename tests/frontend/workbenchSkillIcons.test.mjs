@@ -10,7 +10,7 @@ function icons(){let sequence=0;return moduleLoader({imports:{react:{useId:()=>'
 
 test('all current private skills share the Oil Pig prefix and official names stay unchanged',()=>{
  const {displayName}=moduleLoader()('lib/skillDisplayNames.ts');
- for(const id of ['oil-pig-poster','oil-pig-article','topic-research','content-writing','image-production','delivery-review','reference-analysis','publication-analysis'])assert.ok(displayName(id).startsWith('油猪·'),id);
+ for(const id of ['oil-pig-poster','oil-pig-article','oil-pig-learn-poster','oil-pig-learn-article','topic-research','content-writing','image-production','delivery-review','reference-analysis','publication-analysis'])assert.ok(displayName(id).startsWith('油猪·'),id);
  assert.equal(displayName('skill-wechat-publisher'),'公众号');
 });
 

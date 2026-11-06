@@ -90,6 +90,8 @@ interface OutputsPageProps {
   onJumpHandled?: () => void;
   /** Host-owned metadata and lifecycle actions; the native gallery stays shared. */
   renderProjectDetails?: (project: OutputNode) => ReactNode;
+  /** Optional host-owned actions for an already loaded text preview. */
+  renderTextActions?: (file: OutputNode, content: string) => ReactNode;
   canDelete?: (node: OutputNode) => boolean;
   registerLayer?: (close:()=>void)=>()=>void;
   viewState?:ViewStateStore<OutputsViewState>;
@@ -97,7 +99,7 @@ interface OutputsPageProps {
   dataSource?:OutputsDataSource;
 }
 
-export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, canDelete = () => true, registerLayer,viewState,onContentReady,dataSource }: OutputsPageProps) {
+export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDetails, renderTextActions, canDelete = () => true, registerLayer,viewState,onContentReady,dataSource }: OutputsPageProps) {
   const [roots, setRoots] = useState<OutputNode[]>(()=>dataSource?[]:peekApiData<OutputNode[]>('/api/outputs')??[]);
   const [legacyTreeError, setTreeError] = useState('');
   const [legacyTreeLoading, setTreeLoading] = useState(()=>!dataSource&&peekApiData('/api/outputs')===undefined);
@@ -256,7 +258,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled, renderProjectDeta
     );
     if (selected.kind === 'text') {
       if (loading) return <div className="loading"><div className="spinner" />加载中…</div>;
-      return <>{contentError&&<StatusCard className="ew-status-card-compact" tone="error">{contentError} <button className="btn btn-sm" onClick={()=>open(selected,true)}>重试预览</button></StatusCard>}<div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
+      return <>{contentError&&<StatusCard className="ew-status-card-compact" tone="error">{contentError} <button className="btn btn-sm" onClick={()=>open(selected,true)}>重试预览</button></StatusCard>}{!contentError&&renderTextActions?.(selected,content)}<div className="outputs-viewer-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} /><DownloadLink href={url} download={selected.name}>下载原件</DownloadLink></>;
     }
     return <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>无法预览。<DownloadLink href={url} download={selected.name} style={{ color: 'var(--accent-start)' }}>下载 {selected.name}</DownloadLink></div>;
   };

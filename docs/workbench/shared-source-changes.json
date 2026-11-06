@@ -564,8 +564,8 @@
         "PC-17"
       ],
       "kind": "host-port",
-      "reason": "原内容库接可选分层dataSource、视图恢复、版本详情扩展和文件下载服务。",
-      "upstream_check": "核对无dataSource原树模式，按需目录/详情/预览、准确删除和父目录定位，不能把私有列表覆盖原页面。"
+      "reason": "原内容库接可选分层dataSource、视图恢复、版本详情、文本预览动作扩展和文件下载服务。",
+      "upstream_check": "核对无扩展时原树模式，按需目录/详情/预览、准确删除和父目录定位；文本动作仅接收已读取内容，不改变官方预览。"
     },
     {
       "path": "web/frontend/src/components/ProfilePage.tsx",

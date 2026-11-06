@@ -18,6 +18,8 @@ scripts/git-hooks/* text eol=lf
 /skills/builtin/content-production/** -text
 /skills/builtin/oil-pig-poster/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /skills/builtin/oil-pig-article/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/skills/builtin/oil-pig-learn-poster/** -text
+/skills/builtin/oil-pig-learn-article/** -text
 /skills/builtin/content-writing/** -text
 /skills/builtin/delivery-review/** -text
 /skills/builtin/experience-distillation/** -text

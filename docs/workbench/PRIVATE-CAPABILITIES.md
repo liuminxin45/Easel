@@ -15,7 +15,7 @@
 - **存量核对记录（U）**：保留初版核对ID及本轮结论；已核对/已分类不等于新能力批准，仍保留各调用的限制，不授予新增许可或直接删除授权。
 - 文档描述的能力状态不等同于每个函数都正确实现或已通过本轮运行验收。首版是按页面组装、服务入口、SKILL 与既有记录建立的能力级清单，不是逐行代码合规证明。新发现的遗漏必须补登记，不因“首版没列”自动删除或默认获批。
 
-## 已确认能力（28 项）
+## 已确认能力（30 项）
 
 表内的“官方复用／共通接缝”列是阅读入口，完整代码、合同与验证入口见各维护卡。文件被引用不表示它全部属于私有代码；改动官方文件时还须核对实际 diff。
 
@@ -49,10 +49,12 @@
 | [PC-26 油猪·参考拆解](private-capabilities/PC-26-reference-analysis.md) | 新选择入口停用，历史兼容 | 读取明确指定的参考、保留事实和判断边界；分析不自动发布为长期技能或经验。 | `skills.py`、`SkillDrawer.tsx` |
 | [PC-27 油猪·发布复盘](private-capabilities/PC-27-publication-analysis.md) | 新选择入口停用，历史兼容 | 基于实际发布/反馈证据复盘，不凭生成结果虚构曝光或平台回执，不自动改规则。 | `skills.py`、`SkillDrawer.tsx` |
 | [PC-28 页面性能诊断](private-capabilities/PC-28-page-performance.md) | 可靠性诊断 | 首屏、导航和慢请求的脱敏有界汇总与中控内存观察，不触碰草稿或业务操作。 | 私有宿主与原页面就绪接缝 |
+| [PC-29 油猪·学习贴图](private-capabilities/PC-29-oil-pig-learn-poster.md) | 业务 SKILL | 独立分析指定贴图，学习不触发制作或规则更改。 | Easel 原生技能页 |
+| [PC-30 油猪·学习文章](private-capabilities/PC-30-oil-pig-learn-article.md) | 业务 SKILL | 独立分析指定文章，学习不触发写稿或规则更改。 | Easel 原生技能页 |
 
 ### 技能登记边界
 
-当前 `ProjectSkillCatalog` 只读取两个油猪业务技能。旧组合及六个辅助技能原文已重命名为 `SKILL.retired.md` 归档，不再作为技能发现或执行；旧业务数据保留，但不提供旧技能历史兼容入口。其余官方内置技能继续由官方目录和流程管理，不因存在于本仓库就登记成私有能力。
+当前 `ProjectSkillCatalog` 读取两个油猪制作技能和两个独立学习技能：[PC-29 学习贴图](private-capabilities/PC-29-oil-pig-learn-poster.md)、[PC-30 学习文章](private-capabilities/PC-30-oil-pig-learn-article.md)。旧组合及六个辅助技能原文已归档，不再作为技能发现或执行；旧业务数据保留，但不提供旧技能历史兼容入口。其余官方内置技能继续由官方目录和流程管理。
 
 油猪·做贴图与油猪·做文章分别维护，互不套用流程。方法正文、资源和组合依赖以各自 `SKILL.md` 为准；本表仅登记业务边界和接入位置。开发技能 `codex-spec`、`easel-upstream-sync` 与产品内容技能分开登记。
 

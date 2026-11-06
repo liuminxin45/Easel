@@ -42,6 +42,7 @@ def main():
                     context=browser.new_context(ignore_https_errors=True,viewport={'width':width,'height':900},is_mobile=width<600,has_touch=width<600,color_scheme=theme,accept_downloads=True)
                     context.add_cookies([{'name':'__Host-desk_session','value':'fixture-owner','url':f['origin'],'secure':True,'httpOnly':True,'sameSite':'Strict'}])
                     page=context.new_page();page.set_default_timeout(25000);errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+                    page.add_init_script("Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{window.__copiedText=text}}})")
                     try:
                         page.goto(f['origin']+'/native/chat?fresh=1',wait_until='domcontentloaded');page.wait_for_function("()=>new URLSearchParams(location.search).get('path')?.startsWith('/chat/')")
                         sid=parse_qs(urlsplit(page.url).query)['path'][0].split('/chat/')[1].split('?')[0]
@@ -65,6 +66,10 @@ def main():
                         copy_link=helper.turn_view(page,history).get_by_role('link',name='标题与配文',exact=True)
                         check(label,'the shared formatter opens text in the native registered-file preview',copy_link.get_attribute('href').startswith('#/outputs/__workbench__/'))
                         copy_link.click();expect(page.locator('.drawer-body')).to_contain_text('TEMP 分开的准确配文。')
+                        page.get_by_role('button',name='复制标题',exact=True).click()
+                        check(label,'caption preview copies the exact title',page.evaluate('window.__copiedText')=='AI调用量大，怎样判断有没有用？')
+                        page.get_by_role('button',name='复制正文',exact=True).click()
+                        check(label,'caption preview copies the exact body without its title',page.evaluate('window.__copiedText')=='TEMP 分开的准确配文。')
                         page.get_by_role('button',name='关闭预览',exact=True).click()
                         page.goto(f['origin']+'/native/chat/'+sid,wait_until='domcontentloaded')
                         link=helper.turn_view(page,history).get_by_role('link',name='内容库 › 本版产物',exact=True)

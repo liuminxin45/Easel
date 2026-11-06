@@ -12,7 +12,7 @@
 
 **接口与状态归属：** 接口由 NativeSkills 绑定共享技能服务；当前内容来自磁盘 SKILL 与资源，保存配置经现有修订机制；旧技能发布版本不作为新执行前提，不新增另一套技能状态机。
 
-**私有技能名称：** 八个当前私有技能均以“油猪·”开头；继续使用原技能 ID，卡片、原生抽屉和选择器共用既有 [技能名称映射](../../../web/frontend/src/lib/skillDisplayNames.ts)。这六处名称补丁与原油猪两个名称集中维护，官方技能映射不变，更新官方时按overlay记录核对并尽量减少共通文件差异。
+**私有技能名称：** 油猪制作技能与学习技能均以“油猪·”开头；卡片、原生抽屉和选择器共用既有 [技能名称映射](../../../web/frontend/src/lib/skillDisplayNames.ts)。官方技能映射不变，更新官方时按overlay记录核对并尽量减少共通文件差异。
 
 **私有入口／资源：** [easel_workbench/runtime/native_skills.py](../../../easel_workbench/runtime/native_skills.py)、[easel_workbench/skill_catalog.py](../../../easel_workbench/skill_catalog.py)、[web/frontend/src/workbench/ui/NativeSkills.tsx](../../../web/frontend/src/workbench/ui/NativeSkills.tsx)、[web/frontend/src/workbench/ui/skillIcons.tsx](../../../web/frontend/src/workbench/ui/skillIcons.tsx)
 

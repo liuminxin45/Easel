@@ -669,24 +669,22 @@
       "status": "M",
       "capabilities": [
         "PC-10",
-        "PC-02",
-        "PC-33"
+        "PC-02"
       ],
       "kind": "mixed",
-      "reason": "原技能详情复用共通Drawer并接配置/执行服务，保留原依赖、原结果与问题区域。 可选headerExtra、display_name和executionBlocked仅用于同一原抽屉的来源说明与真实阻塞，不隐藏原配置/依赖/结果。",
-      "upstream_check": "核对默认详情与执行布局、配置父修订、真实QuestionCards、unknown恢复；宿主不得隐藏官方共通区域。 核对默认头部、配置、执行及结果保持；缺失工具不得仅因原件已安装而显示可执行。"
+      "reason": "原技能详情复用共通Drawer并接配置/执行服务，保留原依赖、原结果与问题区域。",
+      "upstream_check": "核对默认详情与执行布局、配置父修订、真实QuestionCards、unknown恢复；宿主不得隐藏官方共通区域。"
     },
     {
       "path": "web/frontend/src/components/SkillPage.tsx",
       "status": "M",
       "capabilities": [
         "PC-10",
-        "PC-13",
-        "PC-33"
+        "PC-13"
       ],
       "kind": "host-port",
-      "reason": "原技能列表接图标、视图/就绪及读取生命周期端口，详情仍使用原SkillDrawer。 可选presentation提供控件、筛选/排序/搜索文本、卡片/详情元信息及图标，业务分类和Star留在私有宿主。",
-      "upstream_check": "核对目录摘要与详情分层、保存后读到当前配置，私有头像只由宿主注入，不引入私有图标依赖。 核对无presentation时官方六层、搜索和详情默认行为，禁止公共页面引入私有分类/网络缓存或复制页面。"
+      "reason": "原技能列表接图标、视图/就绪及读取生命周期端口，详情仍使用原SkillDrawer。",
+      "upstream_check": "核对目录摘要与详情分层、保存后读到当前配置，私有头像只由宿主注入，不引入私有图标依赖。"
     },
     {
       "path": "web/frontend/src/components/TextArtifact.tsx",
@@ -807,12 +805,11 @@
         "PC-03",
         "PC-10",
         "PC-13",
-        "PC-16",
-        "PC-33"
+        "PC-16"
       ],
       "kind": "host-port",
-      "reason": "原API函数接可选传输/缓存绑定与认证代数，统一操作身份并保留默认fetch。；流读取增加可选 onStreamActivity 字节活动回调，私有看门狗沿用原流传输。 SkillItem/SkillDetail补可选display_name与executionBlocked字段，由宿主适配数据。",
-      "upstream_check": "核对首屏绑定顺序、401/身份切换及迟到响应隔离、原请求/响应和支持路径一致。 保留可选活动回调，无宿主时不改变默认流行为。 核对可选字段不改变官方请求响应默认合同，私有来源字段不进入通用业务判断。"
+      "reason": "原API函数接可选传输/缓存绑定与认证代数，统一操作身份并保留默认fetch。；流读取增加可选 onStreamActivity 字节活动回调，私有看门狗沿用原流传输。",
+      "upstream_check": "核对首屏绑定顺序、401/身份切换及迟到响应隔离、原请求/响应和支持路径一致。 保留可选活动回调，无宿主时不改变默认流行为。"
     },
     {
       "path": "web/frontend/src/lib/artifacts.ts",

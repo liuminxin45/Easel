@@ -33,5 +33,3 @@
 **预设交互验收：** [workbench_poster_presets_browser.py](../../../tests/workbench_poster_presets_browser.py) 覆盖原新闻抽屉的桌面/320px/390px明暗主题、默认选项、打开后新增服务器记录再恢复、补充原字、无自动执行/画像写入及文章隔离。
 
 **更新记录：** 2026-11-06 优秀模板通过 PC-32 私有服务附加到既有制作请求，原 SettingsSelect/Drawer 与默认及恢复上次风格保留；仅显式选择后冻结模板修订、方法及参考，不自动选择或自动制作。
-
-**更新记录：** 2026-11-07 在原私有[制作抽屉](../../../web/frontend/src/workbench/ui/NewsCreationDrawer.tsx)内以原SettingsSelect选择写作与辅助方法；[请求数据](../../../web/frontend/src/workbench/ui/newsCreation.ts)仅传阶段ID及准确库修订，[服务边界](../../../easel_workbench/features/news_creation.py)验证后交原生执行。未选择沿用现有油猪风格、预设和优秀模板；贴图禁止文章排版。来源/资源及Star维护归[PC-33](PC-33-local-skill-library.md)，不另建制作弹窗或自动发送。 验证进展及部署事实见[本轮Spec](../../../specs/local-skill-library-20261107/spec.md)。

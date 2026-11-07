@@ -37,3 +37,5 @@
 **新闻后台CI回归：** [workbench-mobile-state.yml](../../../.github/workflows/workbench-mobile-state.yml) 纳入退役技能解析禁止下的后台合同、筛选/中文标题真实服务边界与原生只读回执测试。见 [后台合同Spec](../../../specs/background-news-contracts-20261106/spec.md)，自有fork远端Actions是否可运行需另行核验，不冒称CI通过。
 
 **更新记录：** 2026-11-06 共通差异核对范围显式增加 skills/shared/scripts/weixin_mp_stats.py，登记现有宿主身份接缝和本次逐文章统计通用补丁；其余skills共享目录未因此获豁免或扩大变更许可。
+
+**更新记录：** 第三方技能库回撤时，删除源码可用父提交维护卡证明既有归属。当前维护卡仍核对真实存在的路径。

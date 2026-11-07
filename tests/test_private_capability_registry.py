@@ -114,6 +114,16 @@ def test_existing_bugfix_can_use_maintenance_without_rewriting_card(repository):
     assert check(repository, before) == []
 
 
+def test_deleted_source_uses_parent_ownership(repository):
+    root, before = repository
+    (root / 'easel_workbench/feature.py').unlink()
+    card = root / checker.CARDS / 'PC-01-demo.md'
+    card.write_text(card.read_text(encoding='utf-8').replace(
+        '[source](../../../easel_workbench/feature.py)', 'Source removed.'), encoding='utf-8')
+    commit(root, impact())
+    assert check(repository, before) == []
+
+
 def test_source_change_without_impact_trailers_is_rejected(repository):
     root, before = repository
     write(root, 'easel_workbench/feature.py', 'value = 2\n')

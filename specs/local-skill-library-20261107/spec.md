@@ -39,3 +39,5 @@
 - 本轮没有真实模型制作、第三方CLI/发布服务实调、公开发布或实体vivo WebToApp验收；27待配置条目如实阻断，源码安装不冒称全工具已验证。构建保留现有bundle体积警告。
 
 证据集中于`.local/workbench-validation/local-skills-20261107/`：`candidate.json`、`acceptance.json`、`browser-final/report.json`、`deployment.log`、`postflight.json`、`live-browser-report.json`、`fresh-build-report.json`及各测试日志。证据与原件均保持本地，不提交用户业务原文或凭据。此后只提交本交付文档，不改变上述已上线产品源码。
+
+后续用户明确撤回本功能，见[后续交付](../retire-local-skill-library/spec.md)。本文件保留历史证据。

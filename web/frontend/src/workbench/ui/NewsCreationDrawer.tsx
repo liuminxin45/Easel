@@ -1,4 +1,3 @@
-import {AuxiliarySkills} from './LocalSkillLibrary';
 import {useRef,useState} from 'react';
 import Drawer from '../../components/Drawer';
 import SettingsSelect from '../../components/SettingsSelect';
@@ -62,7 +61,6 @@ function CreationForm({context,format,reload,onAcknowledged,...props}:NewsCreati
   finally{lock.current=false;setBusy(false)}
  };
  return <div className="ew-news-creation-form">
-  <AuxiliarySkills value={draft.auxiliary_skills||{}} format={format} disabled={busy} onChange={(auxiliary_skills,auxiliary_revision)=>patch({auxiliary_skills,auxiliary_revision})}/>
   {(templates.length>0||draft.template_id)&&<label className="ew-news-field">优秀制作模板<SettingsSelect label="优秀制作模板" value={draft.template_id??''} disabled={busy} options={[{value:'',label:'不使用优秀模板'},...templates.filter(template=>template.available&&!(invalidTemplate&&template.id===draft.template_id)).map(template=>({value:template.id,label:template.name})),...(invalidTemplate?[{value:draft.template_id!,label:(selectedTemplate?.name??'原模板')+' · 请重新核对'}]:[])]} onChange={id=>{try{const next=creationWithTemplate(context,format,draft,id);patch(next);setIllustrations(!!(next.style.visual||next.style.character));setSaved(false);setError('')}catch(reason){setError(reason instanceof Error?reason.message:'模板不可用')}}}/><span className="ew-news-muted">仅使用你已确认的制作方法和规范，本轮仍可调整风格与要求。</span></label>}
   {invalidTemplate&&<StatusCard className="ew-status-card-compact" tone="warning">{selectedTemplate?.reason||'原模板已更新或不可用，请重新选择模板，或选择不使用优秀模板。本次要求已保留。'}</StatusCard>}
   {selectedTemplate&&!invalidTemplate&&<TemplateDetails key={selectedTemplate.id+':'+selectedTemplate.revision} template={selectedTemplate} profileId={props.profileId}/>}

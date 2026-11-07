@@ -128,8 +128,6 @@ export interface PersonaDetail {
 }
 
 export interface SkillItem {
-  display_name?: string;
-  executionBlocked?: string;
   name: string;
   description: string;
   layer: string;
@@ -160,8 +158,6 @@ export interface ApiSpec {
 }
 
 export interface SkillDetail {
-  display_name?: string;
-  executionBlocked?: string;
   name: string;
   layer: string;
   description: string;

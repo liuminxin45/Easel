@@ -34,5 +34,3 @@ const projectIcon=(skillId:string,badge:string):Icon=>function WorkbenchSkillIco
  </svg>;
 };
 export const workbenchSkillIcons:Record<string,Icon>=Object.fromEntries(Object.entries(badges).map(([id,path])=>[id,projectIcon(id,path)]));
-
-export const localSkillIcon=(id:string,category:string):Icon=>projectIcon(id,badges[category==='image'?'oil-pig-poster':category==='research'?'reference-analysis':category==='review'?'delivery-review':category==='analytics'?'publication-analysis':'oil-pig-article']);

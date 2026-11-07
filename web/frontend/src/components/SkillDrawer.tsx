@@ -1,5 +1,5 @@
 import SettingsSelect from './SettingsSelect';
-import { useState, useEffect, useMemo, useRef,type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Drawer from './Drawer';
 import { fetchSkillDetail, executeSkill, saveEnv } from '../lib/api';
 import type { SkillDetail } from '../lib/api';
@@ -7,14 +7,13 @@ import { renderMarkdown } from '../lib/sanitize';
 import { displayName } from '../lib/skillDisplayNames';
 
 interface SkillDrawerProps {
-  headerExtra?:ReactNode;
   skillName: string;
   persona: string;
   onClose: () => void;
   onConfigured: () => void;   // 保存 API 后通知父组件刷新卡片状态
 }
 
-export default function SkillDrawer({ skillName, persona, onClose, onConfigured,headerExtra }: SkillDrawerProps) {
+export default function SkillDrawer({ skillName, persona, onClose, onConfigured }: SkillDrawerProps) {
   const [detail, setDetail] = useState<SkillDetail | null>(null);
   const [loadErr, setLoadErr] = useState('');
 
@@ -82,14 +81,13 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
     }
   };
 
-  const blocked = !!detail?.executionBlocked || !!(detail?.needsApi && !detail.apiConfigured);
+  const blocked = detail?.needsApi && !detail.apiConfigured;
 
   return (
-    <Drawer label={detail?.display_name||displayName(skillName)} onClose={onClose} header={
+    <Drawer label={displayName(skillName)} onClose={onClose} header={
             <div>
-              <div className="skill-detail-title">{detail?.display_name||displayName(skillName)}</div>
+              <div className="skill-detail-title">{displayName(skillName)}</div>
               <div className="skill-detail-rawname">{skillName}</div>
-              {headerExtra}
               <div className="skill-detail-meta">
                 {detail?.layer && <span className="badge badge-accent">{{discover:'发现',plan:'策划',produce:'制作',publish:'发布',attribute:'归因',general:'通用'}[detail.layer] || detail.layer}</span>}
                 {detail?.needsApi && (
@@ -190,7 +188,7 @@ export default function SkillDrawer({ skillName, persona, onClose, onConfigured,
             <div className="panel-title">▶ 运行</div>
             {blocked && (
               <div style={{ fontSize: 13, color: 'var(--amber)', marginBottom: 10 }}>
-                {detail?.executionBlocked||'该 SKILL 需要先配置上面的 API 才能运行。'}
+                该 SKILL 需要先配置上面的 API 才能运行。
               </div>
             )}
             <textarea

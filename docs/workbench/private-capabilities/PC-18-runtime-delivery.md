@@ -31,5 +31,3 @@
 进程证明复用 [原生句柄](../../../easel_workbench/runtime/scripts/windows_process_identity.py) 和 [后代归属及收尾](../../../easel_workbench/processes.py)，后端死亡后仅凭已持久PID/创建时间回收准确旧执行，仍存活的原所有者不会被接管。收尾复查终止窗口中新生后代；无法证明退出则不发退出回执。
 
 [部署准入与准确进程退休](../../../scripts/activate_workbench.py) 同属本卡；停止未知的放行只限验收绑定的准确计划，普通未知继续阻止切换。
-
-**更新记录：** 2026-11-07 [发布脚本](../../../scripts/workbench_release.py)排除本地生成的第三方入口，不将本地原件或依赖装入公开fork；候选记录并校验[PC-33](PC-33-local-skill-library.md)本机技能库准确指纹，Star显示缓存不作为内容版本。当前服务器仍从本机私有库读取原件；部署前校验本地原件哈希，历史输入不因本次安装变化。原有空闲、准确进程身份、写入围栏和不可变前后端配对准入保持。 验证进展及部署事实见[本轮Spec](../../../specs/local-skill-library-20261107/spec.md)。

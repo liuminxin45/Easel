@@ -33,7 +33,7 @@ def git(root: Path, *args: str) -> str:
     return result.stdout
 
 
-def local_links(root: Path, document: Path, text: str, errors: list[str]) -> set[str]:
+def local_links(root: Path, document: Path, text: str, errors: list[str], *, historical=False) -> set[str]:
     found = set()
     for raw in LINK.findall(text):
         raw = raw.strip('<>')
@@ -43,7 +43,7 @@ def local_links(root: Path, document: Path, text: str, errors: list[str]) -> set
         target = (document.parent / unquote(parsed.path)).resolve()
         if not target.is_relative_to(root):
             errors.append(f'{document.relative_to(root)}: link escapes repository: {raw}')
-        elif not target.exists():
+        elif not historical and not target.exists():
             errors.append(f'{document.relative_to(root)}: broken local link: {raw}')
         else:
             found.add(target.relative_to(root).as_posix())
@@ -228,6 +228,17 @@ def check_impact(root, commit, changed, entries, owners, shared, scope, errors):
                 associated = {'PC-20'}
         else:
             associated = {i for i, paths in owners.items() if any(path == p or path.startswith(p.rstrip('/') + '/') for p in paths)}
+            if status == 'D' and not associated:
+                parent = commit + '^'
+                for identifier in identifiers.intersection(entries):
+                    card = entries[identifier]
+                    try:
+                        previous = git(root, 'show', f'{parent}:{card}')
+                    except ValueError:
+                        continue
+                    links = local_links(root, root / card, previous, [], historical=True)
+                    if any(path == link or path.startswith(link.rstrip('/') + '/') for link in links):
+                        associated.add(identifier)
         if not associated.intersection(identifiers):
             errors.append(prefix + f'production path lacks a declared owning capability: {path}')
         if status == 'A' and not in_scope(path, scope):
